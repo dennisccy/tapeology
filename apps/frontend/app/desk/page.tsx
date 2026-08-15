@@ -43,6 +43,9 @@ import {
   triggerDeskScreenCompute,
   triggerDeskTopupCompute,
   triggerDeskUniverseFetch,
+  fetchRefereeRegistry,
+  fetchRefereeShortlist,
+  postRefereeRegistryHypothesis,
 } from "@/lib/api";
 import type {
   DeskDeepBackfillComputeSnapshot,
@@ -106,6 +109,10 @@ import type {
   DeskTopupRun,
   DeskTopupRunMeta,
   DeskTopupRunsListResult,
+  RefereeHypothesis,
+  RefereeRegistryResponse,
+  RefereeShortlistCandidate,
+  RefereeShortlistResponse,
 } from "@/lib/types";
 import { Metric, Panel } from "@/components/Panel";
 import {
@@ -333,7 +340,8 @@ type DeskCollapsibleSection =
   | "screenRuns"
   | "screenComparison"
   | "provenance"
-  | "playbookEvidence";
+  | "playbookEvidence"
+  | "refereeRegistry";
 // DESK-COLLAPSED-END
 
 const PRIMARY_BUTTON_CLASS =
@@ -341,6 +349,17 @@ const PRIMARY_BUTTON_CLASS =
 
 const CANCEL_BUTTON_CLASS =
   "mt-1 rounded-md border border-slate-700 bg-transparent px-2.5 py-1 text-xs font-medium text-slate-400 transition-colors hover:border-slate-500 hover:text-slate-200 focus:outline-none focus:ring-1 focus:ring-red-500 disabled:cursor-not-allowed disabled:opacity-50";
+
+// goal-referee-iter-8 (J-07): the starter family's own registration-mechanics constants -- the
+// shortlist response (RefereeShortlistCandidate) carries every OTHER field a registration payload
+// needs verbatim, but not these three (spec Sec7's shortlist describes research QUESTIONS, not
+// registration mechanics). `family_q` mirrors REFEREE_DEFAULT_Q (0.10,
+// docs/referee-statistical-spec.md Sec1) -- the same value test_referee_registry.py's own
+// `_starter_family_payloads()` fixture already uses for all five candidates. The candidate id SET
+// itself is never hard-coded here — it is read live off the fetched shortlist's own
+// `candidate_id`s at submit time (goal.md J-07 Step 2: "no hard-coded hypothesis set").
+const REFEREE_STARTER_FAMILY_ID = "referee-starter-family";
+const REFEREE_STARTER_FAMILY_Q = 0.1;
 
 // The as-of day text fields (forward-test era) — mirrors structure/page.tsx's own `INPUT_CLASS`
 // shape (each page owns its own copy of this tiny constant per this project's established
@@ -4664,6 +4683,247 @@ function PlaybookEvidenceSection({
   );
 }
 
+// goal-referee-iter-8 (J-07): the Referee Registry section -- Era 6's FIRST Referee UI slice. The
+// shortlist (spec Sec7's five pinned candidates + live readiness) sits above the registered-
+// hypotheses table, matching runs/goal-session-referee/state/blueprint.md's own pre-planned
+// Information Architecture row for this journey. Plain dense tables throughout (this house style
+// is explicitly "tables and text, no dashboard cards/gauges") -- no client-side arithmetic on any
+// served numeric field (test_desk_ui_guards.py's extended _PRICE_ARITHMETIC_FIELDS covers every
+// one this component reads).
+function RefereeRegistrySection({
+  shortlistResult,
+  registryResult,
+  selectedCandidateId,
+  onSelect,
+  onCancel,
+  onConfirm,
+  registering,
+  registerError,
+}: {
+  shortlistResult: { ok: boolean; data: RefereeShortlistResponse | null; error?: string } | null;
+  registryResult: { ok: boolean; data: RefereeRegistryResponse | null; error?: string } | null;
+  selectedCandidateId: string | null;
+  onSelect: (candidateId: string) => void;
+  onCancel: () => void;
+  onConfirm: (candidate: RefereeShortlistCandidate) => void;
+  registering: boolean;
+  registerError: string | null;
+}) {
+  if (shortlistResult === null || registryResult === null) {
+    return <LoadingPanel testid="referee-registry-loading" />;
+  }
+  if (!shortlistResult.ok || shortlistResult.data === null) {
+    return (
+      <UnavailablePanel
+        testid="referee-shortlist-unavailable"
+        message={shortlistResult.error ?? "The starter-family shortlist could not be loaded."}
+      />
+    );
+  }
+  const shortlist = shortlistResult.data;
+  const registeredIds = new Set(
+    registryResult.ok && registryResult.data
+      ? registryResult.data.hypotheses.map((h) => h.hypothesis_id)
+      : [],
+  );
+  const selectedCandidate =
+    shortlist.candidates.find((c) => c.candidate_id === selectedCandidateId) ?? null;
+
+  return (
+    <div data-testid="referee-registry-section">
+      <p className="mb-3 text-xs text-slate-500">
+        Spec-pinned starter-family candidates (docs/referee-statistical-spec.md §7) beside their
+        live sample-size readiness. Registering one writes a permanent, boundary-stamped
+        hypothesis — historical observations before that boundary are discovery, never
+        confirmation.
+      </p>
+      <div className="overflow-x-auto">
+        <table
+          data-testid="referee-shortlist-table"
+          className="w-full min-w-[980px] border-collapse text-xs"
+        >
+          <thead>
+            <tr className="border-b border-slate-800 text-[10px] uppercase tracking-wider text-slate-500">
+              <th className="px-1.5 py-1 text-left">Candidate</th>
+              <th className="px-1.5 py-1 text-left">Estimand</th>
+              <th className="px-1.5 py-1 text-left">Setup / Side</th>
+              <th className="px-1.5 py-1 text-left">Primary</th>
+              <th className="px-1.5 py-1 text-left">Rationale</th>
+              <th className="px-1.5 py-1 text-right">n</th>
+              <th className="px-1.5 py-1 text-right">Sessions</th>
+              <th className="px-1.5 py-1 text-right">Accrual / day</th>
+              <th className="px-1.5 py-1 text-right">Projected days</th>
+              <th className="px-1.5 py-1 text-center">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {shortlist.candidates.map((candidate) => {
+              const alreadyRegistered = registeredIds.has(candidate.candidate_id);
+              return (
+                <tr
+                  key={candidate.candidate_id}
+                  data-testid={`referee-shortlist-row-${candidate.candidate_id}`}
+                  className="border-b border-slate-900"
+                >
+                  <td className="px-1.5 py-1.5 font-mono text-slate-300">{candidate.candidate_id}</td>
+                  <td className="px-1.5 py-1.5 text-slate-400">{candidate.estimand}</td>
+                  <td className="px-1.5 py-1.5 text-slate-400">
+                    {candidate.setup_id}:{candidate.side}
+                    {candidate.context_predicate
+                      ? ` (${candidate.context_predicate.backing_bucket})`
+                      : ""}
+                  </td>
+                  <td className="px-1.5 py-1.5 text-slate-400">{candidate.primary_horizon}</td>
+                  <td className="px-1.5 py-1.5 text-slate-500">{candidate.rationale}</td>
+                  <td className="px-1.5 py-1.5 text-right font-mono text-slate-300">{candidate.n}</td>
+                  <td className="px-1.5 py-1.5 text-right font-mono text-slate-300">
+                    {candidate.n_sessions}
+                  </td>
+                  <td className="px-1.5 py-1.5 text-right font-mono text-slate-300">
+                    {candidate.accrual_rate_sessions_per_day.toFixed(2)}
+                  </td>
+                  <td className="px-1.5 py-1.5 text-right font-mono text-slate-300">
+                    {candidate.projected_days_to_target === null
+                      ? "—"
+                      : candidate.projected_days_to_target.toFixed(0)}
+                  </td>
+                  <td className="px-1.5 py-1.5 text-center">
+                    <button
+                      type="button"
+                      data-testid={`referee-shortlist-select-${candidate.candidate_id}`}
+                      onClick={() => onSelect(candidate.candidate_id)}
+                      disabled={alreadyRegistered}
+                      className={PRIMARY_BUTTON_CLASS}
+                    >
+                      {alreadyRegistered ? "Registered" : "Select"}
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {selectedCandidate && (
+        <div
+          data-testid="referee-registration-confirm-panel"
+          className="mt-3 rounded-md border border-slate-700 bg-slate-900/60 p-3"
+        >
+          <p className="text-xs text-slate-300">
+            Register <span className="font-mono">{selectedCandidate.candidate_id}</span> (
+            {selectedCandidate.setup_id}:{selectedCandidate.side}, Estimand{" "}
+            {selectedCandidate.estimand})? This records a permanent, boundary-stamped hypothesis —
+            the boundary is stamped at registration time and can never move.
+          </p>
+          <div className="mt-2 flex items-center gap-2">
+            <button
+              type="button"
+              data-testid="referee-registration-confirm-button"
+              onClick={() => onConfirm(selectedCandidate)}
+              disabled={registering}
+              className={PRIMARY_BUTTON_CLASS}
+            >
+              {registering ? "Registering…" : "Confirm Registration"}
+            </button>
+            <button
+              type="button"
+              data-testid="referee-registration-cancel-button"
+              onClick={onCancel}
+              disabled={registering}
+              className={CANCEL_BUTTON_CLASS}
+            >
+              Cancel
+            </button>
+          </div>
+          {registerError && (
+            <p data-testid="referee-registration-error" className="mt-2 text-xs text-red-300">
+              {registerError}
+            </p>
+          )}
+        </div>
+      )}
+
+      <div className="mt-4 border-t border-slate-800 pt-4">
+        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+          Registered Hypotheses
+        </h3>
+        <RefereeHypothesesTable registryResult={registryResult} />
+      </div>
+    </div>
+  );
+}
+
+function RefereeHypothesesTable({
+  registryResult,
+}: {
+  registryResult: { ok: boolean; data: RefereeRegistryResponse | null; error?: string } | null;
+}) {
+  if (!registryResult || !registryResult.ok || registryResult.data === null) {
+    return (
+      <UnavailablePanel
+        testid="referee-hypotheses-unavailable"
+        message={registryResult?.error ?? "The referee registry could not be loaded."}
+      />
+    );
+  }
+  const hypotheses = registryResult.data.hypotheses;
+  if (hypotheses.length === 0) {
+    return <EmptyState testid="referee-hypotheses-empty" title="No hypotheses registered." />;
+  }
+  return (
+    <div className="overflow-x-auto">
+      <table
+        data-testid="referee-hypotheses-table"
+        className="w-full min-w-[900px] border-collapse text-xs"
+      >
+        <thead>
+          <tr className="border-b border-slate-800 text-[10px] uppercase tracking-wider text-slate-500">
+            <th className="px-1.5 py-1 text-left">Hypothesis</th>
+            <th className="px-1.5 py-1 text-left">Setup / Side</th>
+            <th className="px-1.5 py-1 text-left">Boundary</th>
+            <th className="px-1.5 py-1 text-left">Origin</th>
+            <th className="px-1.5 py-1 text-left">Status</th>
+            <th className="px-1.5 py-1 text-right">Accrual</th>
+            <th className="px-1.5 py-1 text-right">Discovery</th>
+          </tr>
+        </thead>
+        <tbody>
+          {hypotheses.map((hyp) => (
+            <tr
+              key={hyp.hypothesis_id}
+              data-testid={`referee-hypotheses-row-${hyp.hypothesis_id}`}
+              className="border-b border-slate-900"
+            >
+              <td className="px-1.5 py-1.5 font-mono text-slate-300">{hyp.hypothesis_id}</td>
+              <td className="px-1.5 py-1.5 text-slate-400">
+                {hyp.setup_id}:{hyp.side}
+              </td>
+              <td className="px-1.5 py-1.5 font-mono text-slate-400">
+                {hyp.confirmation_start_boundary}
+              </td>
+              <td className="px-1.5 py-1.5 text-slate-500">{hyp.origin}</td>
+              <td className="px-1.5 py-1.5 text-slate-400">{hyp.status}</td>
+              <td className="px-1.5 py-1.5 text-right font-mono text-slate-300">
+                {hyp.accrual.informative_post_boundary_sessions} / {hyp.accrual.target_sessions}
+              </td>
+              <td
+                className="px-1.5 py-1.5 text-right text-slate-500"
+                data-testid={`referee-discovery-${hyp.hypothesis_id}`}
+              >
+                <span className="font-mono text-slate-400">
+                  {hyp.discovery.n} / {hyp.discovery.n_sessions}
+                </span>{" "}
+                <span className="italic">{hyp.discovery.label}</span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 // era-desk-iter-14 (J-10): a third compute control, wired exactly like `TopupComputeControl` — the
 // operation has no per-pair counters (it is a single classify-repair-verify walk, not a walk over
 // many pairs), so the running indicator shows the compute's own `progress.phase` label instead of
@@ -7439,6 +7699,24 @@ export default function DeskPage() {
     error?: string;
   } | null>(null);
 
+  // goal-referee-iter-8 (J-07): the Referee Registry section's own state — two independent
+  // deferred reads (shortlist + registry) issued together on first expand (T-8: GETs never
+  // compute), plus the select -> confirm -> submit registration flow's own local state. No compute
+  // manager, no poll — the registration act is a single POST, resolved synchronously.
+  const [refereeShortlistResult, setRefereeShortlistResult] = useState<{
+    ok: boolean;
+    data: RefereeShortlistResponse | null;
+    error?: string;
+  } | null>(null);
+  const [refereeRegistryResult, setRefereeRegistryResult] = useState<{
+    ok: boolean;
+    data: RefereeRegistryResponse | null;
+    error?: string;
+  } | null>(null);
+  const [refereeSelectedCandidateId, setRefereeSelectedCandidateId] = useState<string | null>(null);
+  const [refereeRegistering, setRefereeRegistering] = useState(false);
+  const [refereeRegisterError, setRefereeRegisterError] = useState<string | null>(null);
+
   // --- the six collapsed sections (see the DESK-COLLAPSED block at the top of this file) ---------
   // Which are currently open. A Set keyed by section, mirroring `PlaybookSummaryView`'s own
   // `expandedPools` — nothing outside this component reads it, and it is deliberately NOT
@@ -7474,7 +7752,48 @@ export default function DeskPage() {
       fetchDeskReconcileRuns().then(setReconcileRunsResult);
     } else if (section === "playbookEvidence") {
       fetchDeskPlaybookEvidence().then(setEvidenceResult);
+    } else if (section === "refereeRegistry") {
+      fetchRefereeShortlist().then(setRefereeShortlistResult);
+      fetchRefereeRegistry().then(setRefereeRegistryResult);
     }
+  }
+
+  // goal-referee-iter-8 (J-07): the registration act -- a plain async handler (never an effect;
+  // this page pins an exact effect census, test_desk_refresh_chain_guard.py). Submits the
+  // candidate's OWN fields verbatim (never hand-typed or re-derived) plus the caller's own family
+  // framing; on success, re-fetches the registry so the new row renders complete with its
+  // status/accrual/discovery fold additions (which the POST response itself does not carry).
+  async function handleRegisterRefereeCandidate(candidate: RefereeShortlistCandidate) {
+    const shortlist = refereeShortlistResult?.data;
+    if (!shortlist) return;
+    setRefereeRegistering(true);
+    setRefereeRegisterError(null);
+    const result = await postRefereeRegistryHypothesis({
+      confirm: true,
+      hypothesis_id: candidate.candidate_id,
+      family_id: REFEREE_STARTER_FAMILY_ID,
+      family_q: REFEREE_STARTER_FAMILY_Q,
+      family_candidate_hypothesis_ids: shortlist.candidates.map((c) => c.candidate_id),
+      evidence_family: candidate.evidence_family,
+      estimand: candidate.estimand,
+      setup_id: candidate.setup_id,
+      side: candidate.side,
+      context_predicate: candidate.context_predicate,
+      primary_measure_key: candidate.primary_measure_key,
+      primary_horizon: candidate.primary_horizon,
+      sidedness: candidate.sidedness,
+      null_spec_id: candidate.null_spec_id,
+      test_spec_id: candidate.test_spec_id,
+      target_sessions: candidate.target_sessions,
+      min_occurrences: candidate.min_occurrences,
+    });
+    setRefereeRegistering(false);
+    if (!result.ok) {
+      setRefereeRegisterError(result.error ?? "The hypothesis could not be registered.");
+      return;
+    }
+    setRefereeSelectedCandidateId(null);
+    fetchRefereeRegistry().then(setRefereeRegistryResult);
   }
 
   // The chained refresh (see the REFRESH-CHAIN block above). `refreshChain` is plain state and is
@@ -9267,6 +9586,34 @@ export default function DeskPage() {
             onToggle={() => toggleSection("playbookEvidence")}
           >
             <PlaybookEvidenceSection result={evidenceResult} />
+          </CollapsibleSection>
+        </section>
+
+        {/* goal-referee-iter-8 (J-07): the Referee Registry section -- Era 6's FIRST Referee UI
+            slice, rendered directly BELOW the shipped Playbook Evidence section above (the current
+            last section) -- runs/goal-session-referee/state/blueprint.md's own pre-planned
+            "Referee Registry" slot. New data-testids only (T-11); no shipped section, column, or
+            behavior changes anywhere else on this page. */}
+        <section aria-label="Referee Registry" className="mt-6">
+          <CollapsibleSection
+            id="refereeRegistry"
+            title="Referee Registry"
+            open={expandedSections.has("refereeRegistry")}
+            onToggle={() => toggleSection("refereeRegistry")}
+          >
+            <RefereeRegistrySection
+              shortlistResult={refereeShortlistResult}
+              registryResult={refereeRegistryResult}
+              selectedCandidateId={refereeSelectedCandidateId}
+              onSelect={setRefereeSelectedCandidateId}
+              onCancel={() => {
+                setRefereeSelectedCandidateId(null);
+                setRefereeRegisterError(null);
+              }}
+              onConfirm={handleRegisterRefereeCandidate}
+              registering={refereeRegistering}
+              registerError={refereeRegisterError}
+            />
           </CollapsibleSection>
         </section>
       </main>

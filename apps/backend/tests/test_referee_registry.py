@@ -20,11 +20,13 @@ from fastapi.testclient import TestClient
 import app.research.referee_registry as referee_registry_module
 from app.config import CONFIG
 from app.main import app
+from app.research.bars import BarStore
 from app.research.desk_playbook import PLAYBOOK_REGISTER, PlaybookStore, playbook_parameters
 from app.research.referee_null import REFEREE_NULL_TOD_SPEC_ID, REFEREE_TEST_PERM_SPEC_ID
 from app.research.referee_registry import (
     REFEREE_MIN_OCCURRENCES,
     REFEREE_MIN_SESSIONS,
+    REFEREE_STARTER_FAMILY_SHORTLIST,
     CertificateAlreadyRecorded,
     CertificateStore,
     ConfirmationRequired,
@@ -39,6 +41,7 @@ from app.research.referee_registry import (
     WithdrawalStore,
     register_hypothesis,
     registry_response,
+    shortlist_response,
     withdraw_hypothesis,
 )
 
@@ -98,6 +101,15 @@ def stores(tmp_path):
     certificate_store = CertificateStore(tmp_path / "registry")
     playbook_store = PlaybookStore(tmp_path / "playbook")
     return family_store, hypothesis_store, withdrawal_store, certificate_store, playbook_store
+
+
+@pytest.fixture
+def bar_store(tmp_path):
+    """A SEPARATE fixture (rather than growing ``stores``' own tuple, which every existing test in
+    this file already destructures at a fixed length) -- only the iter-8 shortlist tests need a
+    ``BarStore`` (``shortlist_response``'s S-4/S-5 band-context lookup requires one to construct a
+    ``BandMapResolver``)."""
+    return BarStore(tmp_path / "referee_bars")
 
 
 def _plant_playbook_signals(
@@ -415,6 +427,16 @@ def test_tc11_accrual_matches_a_hand_counted_value_over_two_distinct_setup_side_
     assert folded_cap["accrual"]["basis_current"] is True
     assert folded_jbe["accrual"]["basis_current"] is True
 
+    # iter-8 (J-07): discovery is the exact pre-boundary COMPLEMENT of accrual, over the SAME
+    # planted corpus -- 2026-06-09 is the only pre-boundary date, and it carries capitulation:long
+    # only (never jbe:long); it must never contribute to either hypothesis's accrual above.
+    assert folded_cap["discovery"] == {
+        "n": 1, "n_sessions": 1, "label": "discovery (exploratory)",
+    }
+    assert folded_jbe["discovery"] == {
+        "n": 0, "n_sessions": 0, "label": "discovery (exploratory)",
+    }
+
     assert set(response) == {
         "families", "hypotheses", "withdrawals", "certificates", "integrity_errors",
     }
@@ -585,6 +607,249 @@ def test_tc14_all_five_starter_candidates_register_cleanly_with_distinct_ids(sto
     families, _errors = family_store.list()
     assert len(families) == 1  # one shared family -- the starter family
     assert families[0]["candidate_hypothesis_ids"] == ["hyp-s1", "hyp-s2", "hyp-s3", "hyp-s4", "hyp-s5"]
+
+
+# === J-07 (iter-8): the starter-family shortlist -- GET .../registry/shortlist =========================
+#
+# spec Sec7's five PINNED module candidates beside LIVE readiness (goal.md J-07 Step 1). n/
+# n_sessions for S-1..S-3 (estimand A) reuse playbook_occurrence_readiness()'s existing
+# per_setup_side pooling; S-4/S-5 (at_wall context) reuse the referee-era's own band-context
+# primitive (referee_null.resolve_occurrence_backing_bucket) -- see
+# test_starter_context_readiness_discriminates_at_wall_from_off_wall_and_dedupes_sessions below for
+# the non-vacuous proof that the S-4/S-5 wiring genuinely discriminates.
+
+
+def test_tc1_shortlist_serves_exactly_five_pinned_candidates_with_non_negative_readiness(
+    stores, bar_store,
+):
+    _fam, _hyp, _wd, _cert, playbook_store = stores  # an EMPTY corpus -- the honest baseline
+    response = shortlist_response(
+        playbook_store=playbook_store, config_fingerprint=CONFIG.config_fingerprint(),
+        bar_store=bar_store, config=CONFIG,
+    )
+    candidates = response["candidates"]
+    assert [c["candidate_id"] for c in candidates] == ["S-1", "S-2", "S-3", "S-4", "S-5"]
+    for candidate in candidates:
+        assert candidate["n"] >= 0
+        assert candidate["n_sessions"] >= 0
+        assert candidate["accrual_rate_sessions_per_day"] >= 0
+        assert candidate["target_sessions"] == REFEREE_MIN_SESSIONS
+        assert candidate["min_occurrences"] == REFEREE_MIN_OCCURRENCES
+        assert candidate["test_spec_id"] == REFEREE_TEST_PERM_SPEC_ID
+        assert candidate["rationale"]  # a non-empty semantic sentence, per candidate
+
+    by_id = {c["candidate_id"]: c for c in candidates}
+    assert (by_id["S-1"]["estimand"], by_id["S-1"]["setup_id"], by_id["S-1"]["side"]) == (
+        "A", "capitulation", "long",
+    )
+    assert (by_id["S-2"]["estimand"], by_id["S-2"]["setup_id"], by_id["S-2"]["side"]) == (
+        "A", "jbe", "long",
+    )
+    assert (by_id["S-3"]["estimand"], by_id["S-3"]["setup_id"], by_id["S-3"]["side"]) == (
+        "A", "double_top", "short",
+    )
+    assert by_id["S-4"]["estimand"] == "B" and by_id["S-4"]["context_predicate"] == {
+        "backing_bucket": "at_wall",
+    }
+    assert by_id["S-4"]["null_spec_id"] is None  # Estimand B: no null population (spec Sec3.2)
+    assert by_id["S-5"]["estimand"] == "C" and by_id["S-5"]["null_spec_id"] == "referee-null-context-v1"
+
+    # These five are the exact SAME pinned definitions test_tc14 already registers through the
+    # write path -- proof the shortlist's own module constants and the registration fixture stay
+    # in lockstep (never two independently-drifting copies).
+    assert [c["candidate_id"] for c in REFEREE_STARTER_FAMILY_SHORTLIST] == [
+        "S-1", "S-2", "S-3", "S-4", "S-5",
+    ]
+
+
+def test_tc2_zero_jbe_long_signals_amid_a_nonempty_corpus_serves_zero_never_a_divide_by_zero(
+    stores, bar_store,
+):
+    _fam, _hyp, _wd, _cert, playbook_store = stores
+    # A nonempty corpus that carries NO jbe:long signal at all -- proves S-2's own zero reading is
+    # a genuine per-cell fact, not an artifact of an all-empty store (the iter-5 lesson: a test
+    # must exercise the regime where the assertion is actually discriminating).
+    _plant_playbook_signals(playbook_store, "2026-06-01", [_signal("capitulation", "long")])
+
+    response = shortlist_response(
+        playbook_store=playbook_store, config_fingerprint=CONFIG.config_fingerprint(),
+        bar_store=bar_store, config=CONFIG,
+    )
+    by_id = {c["candidate_id"]: c for c in response["candidates"]}
+    assert by_id["S-1"]["n"] == 1 and by_id["S-1"]["n_sessions"] == 1  # genuinely nonzero elsewhere
+
+    s2 = by_id["S-2"]
+    assert s2["setup_id"] == "jbe" and s2["side"] == "long"
+    assert s2["n"] == 0
+    assert s2["n_sessions"] == 0
+    assert s2["accrual_rate_sessions_per_day"] == 0
+    assert s2["projected_days_to_target"] is None  # never a divide-by-zero value
+
+
+def test_shortlist_projected_days_is_measured_from_zero_never_net_of_historical_sessions(
+    stores, bar_store,
+):
+    """iter-8 audit (B2), replacing the earlier "zero once the cell is already at target" pinning:
+    ``target_sessions`` is a POST-boundary count everywhere it is used, and registering stamps the
+    boundary at that instant -- so a candidate's own HISTORICAL ``n_sessions`` can never count
+    toward it, and the projection must be measured from zero (``target_sessions / rate``). The
+    old net-of-history reading served ``0.0`` ("ready now") for exactly the richest candidates,
+    understating a real 50-120 day wait against the operator's own corpus, and counted historical
+    observations as progress toward a confirmatory target."""
+    _fam, _hyp, _wd, _cert, playbook_store = stores
+    for i in range(REFEREE_MIN_SESSIONS + 3):
+        _plant_playbook_signals(
+            playbook_store, f"2026-05-{i + 1:02d}", [_signal("capitulation", "long")],
+        )
+    response = shortlist_response(
+        playbook_store=playbook_store, config_fingerprint=CONFIG.config_fingerprint(),
+        bar_store=bar_store, config=CONFIG,
+    )
+    s1 = next(c for c in response["candidates"] if c["candidate_id"] == "S-1")
+    # A cell ALREADY well past its own target -- the regime where the two readings disagree most.
+    assert s1["n_sessions"] >= s1["target_sessions"]
+    rate = s1["accrual_rate_sessions_per_day"]
+    assert rate > 0
+    assert s1["projected_days_to_target"] == pytest.approx(s1["target_sessions"] / rate)
+    assert s1["projected_days_to_target"] > 0.0  # never "ready now" on historical evidence alone
+
+
+def test_get_registry_shortlist_route_honest_state_against_a_real_empty_store(route_ctx):
+    """TC-6 (the shortlist half): against the real store, with no operator action taken, the
+    shortlist still serves 5 candidates and the registry's own hypotheses list stays empty -- the
+    honest not-yet-acted state, never fabricated."""
+    client, _tmp = route_ctx
+    resp = client.get("/research/desk/referee/registry/shortlist")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert [c["candidate_id"] for c in body["candidates"]] == ["S-1", "S-2", "S-3", "S-4", "S-5"]
+
+    registry = client.get("/research/desk/referee/registry")
+    assert registry.json()["hypotheses"] == []
+
+
+class _FakeWallResolver:
+    """The wall at [99.9, 100.1] -- prices INSIDE it (or within 70bps of it) resolve ``at_wall``,
+    prices far from it resolve ``off_wall`` (the ``test_referee_adjudicate.py``
+    ``_FakeContextResolver`` pattern, reused here verbatim -- never a second fake-resolver
+    implementation)."""
+
+    def resolve(self, symbol, as_of_epoch):
+        return {
+            "bands": [
+                {
+                    "side": "support", "class": "A", "price_low": 99.9, "price_high": 100.1,
+                    "quality_score": 1.0, "round_number": False, "member_count": 1,
+                }
+            ],
+            "basis_as_of": "2026-06-21",
+        }
+
+
+def _context_signal(*, entry: float, symbol: str) -> dict:
+    return {
+        "setup_id": "range_trade", "side": "long", "symbol": symbol,
+        "trigger_ts": _et_instant_iso(2026, 6, 21, 10, 0),  # fixed instant -- irrelevant to the fake
+        "entry": entry, "invalidation_price": entry - 0.5,
+    }
+
+
+def test_starter_context_readiness_discriminates_at_wall_from_off_wall_and_dedupes_sessions(stores):
+    """The non-vacuous proof S-4/S-5's own live readiness genuinely discriminates (not just "zero
+    everywhere"): two ``at_wall`` occurrences on the SAME session (deduping to one date), one
+    ``at_wall`` occurrence on a second session, and one ``off_wall`` occurrence that must NEVER
+    count."""
+    _fam, _hyp, _wd, _cert, playbook_store = stores
+    _plant_playbook_signals(
+        playbook_store, "2026-06-21",
+        [
+            _context_signal(entry=100.0, symbol="RTA"),   # containing the band -> at_wall
+            _context_signal(entry=99.95, symbol="RTB"),    # containing the band -> at_wall
+        ],
+    )
+    _plant_playbook_signals(
+        playbook_store, "2026-06-22", [_context_signal(entry=100.05, symbol="RTC")],  # at_wall
+    )
+    _plant_playbook_signals(
+        playbook_store, "2026-06-23", [_context_signal(entry=110.0, symbol="RTD")],  # off_wall
+    )
+    records, _errors = playbook_store.list()
+    newest_by_date = referee_registry_module._newest_per_session_date(records)
+    n, n_sessions = referee_registry_module._starter_context_readiness(
+        newest_by_date, CONFIG.config_fingerprint(),
+        setup_id="range_trade", side="long", backing_bucket="at_wall",
+        context_resolver=_FakeWallResolver(),
+    )
+    assert n == 3  # RTA, RTB, RTC -- RTD (off_wall) never counts
+    assert n_sessions == 2  # 2026-06-21 and 2026-06-22 -- the same-session pair dedupes to one date
+
+
+def test_shortlist_s4_s5_readiness_reflects_the_at_wall_context_resolve(
+    stores, bar_store, monkeypatch,
+):
+    """End-to-end wiring proof (not just the isolated helper above): ``shortlist_response()``
+    itself serves nonzero S-4/S-5 readiness when the corpus genuinely carries ``at_wall``
+    ``range_trade:long`` occurrences, by constructing a REAL ``BandMapResolver`` whose class this
+    test monkeypatches to the fake wall (the class-level substitution ``referee_adjudicate.py``'s
+    own estimand-B/C tests never needed, since those call the pooling function directly with an
+    injected resolver instead of letting it construct one)."""
+    _fam, _hyp, _wd, _cert, playbook_store = stores
+    _plant_playbook_signals(
+        playbook_store, "2026-06-21", [_context_signal(entry=100.0, symbol="RTA")],
+    )
+    monkeypatch.setattr(
+        referee_registry_module, "BandMapResolver", lambda *args, **kwargs: _FakeWallResolver()
+    )
+    response = shortlist_response(
+        playbook_store=playbook_store, config_fingerprint=CONFIG.config_fingerprint(),
+        bar_store=bar_store, config=CONFIG,
+    )
+    by_id = {c["candidate_id"]: c for c in response["candidates"]}
+    assert by_id["S-4"]["n"] == 1 and by_id["S-4"]["n_sessions"] == 1
+    assert by_id["S-5"]["n"] == 1 and by_id["S-5"]["n_sessions"] == 1
+
+
+# === TC-9 / TC-10 (iter-8): the write path stays generic; discovery is boundary-gated on
+# session_date, never recorded_at ======================================================================
+
+
+def test_tc9_a_non_shortlist_setup_side_still_registers_the_write_path_stays_generic(route_ctx):
+    """TC-9: a hypothesis payload for a setup/side combination NOT among S-1..S-5 (``dbi:short``,
+    estimand A, per the plan's own example) registers successfully -- the write path accepts any
+    valid hypothesis, never only the five shortlist candidates."""
+    client, _tmp = route_ctx
+    payload = _estimand_a_payload("hyp-dbi-short", "fam-dbi-short", setup_id="dbi", side="short")
+    resp = client.post(
+        "/research/desk/referee/registry/hypotheses", json={**payload, "confirm": True}
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["setup_id"] == "dbi" and body["side"] == "short"
+
+
+def test_tc10_a_deep_backfilled_pre_boundary_record_lands_in_discovery_never_accrual(stores):
+    """TC-10: a deep-backfilled record for a ``session_date`` before the boundary, recorded
+    (written to disk) AFTER registration, contributes to ``discovery.n_sessions`` -- never to
+    ``accrual.informative_post_boundary_sessions`` -- proving ``session_date``, not
+    ``recorded_at``, gates the boundary. Also covers the boundary-INCLUSIVE edge: a record dated
+    exactly ON the boundary date itself is discovery too (accrual admits only strictly-after)."""
+    family_store, hypothesis_store, withdrawal_store, cert_store, playbook_store = stores
+    payload = _estimand_a_payload("hyp-tc10-disc", "fam-tc10-disc")  # boundary == _BOUNDARY
+    register_hypothesis(family_store, hypothesis_store, payload, confirm=True)
+
+    _plant_playbook_signals(playbook_store, "2026-05-01", [_signal("capitulation", "long")])  # deep-backfilled
+    _plant_playbook_signals(playbook_store, _BOUNDARY, [_signal("capitulation", "long")])  # ON the boundary
+    _plant_playbook_signals(playbook_store, "2026-06-11", [_signal("capitulation", "long")])  # post-boundary
+
+    response = registry_response(
+        family_store=family_store, hypothesis_store=hypothesis_store,
+        withdrawal_store=withdrawal_store, certificate_store=cert_store,
+        playbook_store=playbook_store, config_fingerprint=CONFIG.config_fingerprint(),
+    )
+    folded = next(h for h in response["hypotheses"] if h["hypothesis_id"] == "hyp-tc10-disc")
+    assert folded["discovery"]["n_sessions"] == 2  # 2026-05-01 and _BOUNDARY itself
+    assert folded["discovery"]["n"] == 2
+    assert folded["accrual"]["informative_post_boundary_sessions"] == 1  # 2026-06-11 only
 
 
 # === family/hypothesis coupling: consistency + "no candidate joins retroactively" =====================

@@ -513,3 +513,107 @@ appearing in code, which would make spec §7 unimplementable.
 **Reversible:** yes — the shortlist fold is a pure read with no persisted output; if a future
 owner ruling wants the five candidates sourced from a config file or the registry instead of
 module constants, that is a one-line refactor with nothing stored to migrate.
+
+## iter-8 — developer
+
+**Ambiguity:** The plan's own Notes flagged that `accrual_rate_sessions_per_day`'s exact formula
+is not pinned anywhere: `docs/referee-statistical-spec.md` §7 lists only static
+authoring-time corpus counts (n / sessions) for each candidate, never an accrual-rate
+methodology, and no existing helper in `referee_evidence.py`/`referee_registry.py` computes
+"sessions per day" for anything. goal.md's own J-07 Step 1 names the concept only in prose:
+"informative-session accrual rate (sessions/day over the trailing corpus)".
+**We chose:** `accrual_rate_sessions_per_day = candidate.n_sessions / corpus_span_days`, where
+`corpus_span_days` is the WHOLE recorded playbook corpus's own calendar-day span (earliest
+recorded `session_date` to the latest, inclusive, across every record on file regardless of
+setup/side) — one shared denominator computed ONCE per `shortlist_response()` call
+(`_corpus_session_span_days`), not per candidate. `projected_days_to_target` is then
+`max(0.0, (target_sessions - n_sessions) / accrual_rate)` when the rate is positive, floored at
+`0.0` (never negative once a cell already meets or exceeds its own target) and `null` when the
+rate is `0` (an empty corpus or a genuinely zero-eligible cell) — TC-2's own divide-by-zero
+guard. This reads "over the trailing corpus" as the corpus's own elapsed calendar span (a
+literal, defensible reading), not a rolling/windowed rate a future spec revision might define
+differently.
+**Reversible:** yes — `accrual_rate_sessions_per_day`/`projected_days_to_target` are pure
+read-side numbers with zero persisted output (the shortlist writes nothing); if a future owner
+ruling prefers a different accrual-rate basis (e.g. a trailing N-day window, or a per-cell rather
+than whole-corpus span), that is a self-contained change to `_corpus_session_span_days`/
+`shortlist_response()` with nothing stored to migrate.
+
+## iter-8 — developer
+
+**Ambiguity:** The plan's own Notes flagged a second open call: whether the new `discovery` fold
+should apply the SAME stale-`detector_basis` exclusion `_hypothesis_accrual` already applies
+(T-6: pool only at the current `(detector_basis, config_fingerprint)`), or should count every
+pre-boundary record regardless of basis. The blueprint note only says `discovery` reuses "the
+SAME shared pooling primitives `_hypothesis_accrual` already uses," which argues for yes, but
+does not spell it out letter-by-letter for the stale-basis case specifically.
+**We chose:** Yes — `_hypothesis_discovery` applies the IDENTICAL `_is_stale_basis` check
+`_hypothesis_accrual` applies, walking the SAME already-scanned `newest_by_date` map with the
+filter direction inverted (`session_date <= boundary` kept, instead of `> boundary`).
+Consistency with accrual was weighted higher than a looser reading (counting every basis) would
+have been, since a stale-basis record's own signals were already excluded from the CURRENT
+detector's pooled identity everywhere else this era (J-01's `per_setup_side`, J-06's
+eligible-occurrence gather) — letting discovery alone count them would make the SAME record
+simultaneously "not current evidence" for accrual purposes and "current evidence" for discovery
+purposes, an inconsistency the spec never asks for and T-6 exists specifically to prevent.
+**Reversible:** yes — zero consumers beyond this iteration's own UI reader exist yet; a future
+owner ruling to include stale-basis records in `discovery` specifically is a one-line change
+(drop the `_is_stale_basis` check inside `_hypothesis_discovery` alone) with nothing stored to
+migrate, since `discovery` is a pure read-side fold with no persisted record of its own.
+
+## iter-8 — auditor (supersedes the `projected_days_to_target` half of the first iter-8 entry above)
+
+**Ambiguity:** the same one the developer entry above logged — no spec pins
+`projected_days_to_target`'s formula. That entry settled the RATE's denominator (whole-corpus
+calendar span) and, without flagging it as a second call, also settled the NUMERATOR as
+`target_sessions - n_sessions` (days to close the remaining gap), floored at `0.0`.
+**We chose (audit correction, finding B2):** `projected_days_to_target = target_sessions /
+accrual_rate` — measured from ZERO, never net of the candidate's own historical `n_sessions`.
+`target_sessions` is a POST-boundary count everywhere else it is used (`_hypothesis_accrual`'s
+`informative_post_boundary_sessions`, `run_evaluation_and_record`'s `confirmatory_eligible`), and
+registering stamps the boundary at that instant, so not one historical session can ever count
+toward it. Measured against the operator's own corpus on 2026-08-15, the net-of-history reading
+served `0.0` — "ready now" — for all three estimand-A candidates (S-1 71 sessions, S-2 44, S-3
+105, all at or above the 12-session target) when the honest waits are ~74 / ~119 / ~50 days; it
+also counted historical observations as progress toward a confirmatory target, which "the
+historical atlas is exploratory forever" forbids. The `None`-on-zero-rate divide-by-zero guard
+(TC-2) is unchanged; the `max(0.0, ...)` floor is gone because the corrected value is never
+negative.
+**Reversible:** yes — still a pure read-side number with zero persisted output; the change is
+confined to one expression in `shortlist_response()` plus its own test.
+
+## iter-8 — goal-evaluator
+
+**Ambiguity:** J-07's acceptance says "the shortlist renders with readiness numbers and rationales
+(screenshot)" without pinning any value. The iteration's own hard audit then CORRECTED one of those
+numbers (`projected_days_to_target`, finding B2) AFTER the browser pass captured it, so the
+J-07 screenshots show 517 in the "Projected days" column where the shipped code now serves 564
+(I reproduced both on an isolated copy of the rig's 47-day / 1-session corpus). The goal text does
+not say whether a screenshot whose numbers the same iteration later changed still evidences the
+journey.
+**We chose:** Read the acceptance as asserting rendering BEHAVIOR (the five candidates, their
+rationales, and live readiness columns render; the registration writes; the discovery label shows)
+— all of which the screenshots still evidence, and none of which the B2 fix touches — and treated
+the stale column as a capture defect (methodology A.7): J-07 scores `passing` with
+`evidence_makeup: true`, so a re-capture rides the next iteration as a passenger task rather than
+becoming its goal. Consequence if the owner disagrees: J-07 would be `unknown` until re-captured,
+and no iteration could be scored GOAL_ACHIEVED before that re-capture.
+**Reversible:** yes — J-09 rebuilds and re-renders the same `/desk` section, so a fresh capture
+lands there anyway and clears the flag whatever it shows.
+
+## iter-8 — goal-evaluator
+
+**Ambiguity:** The era's critical anti-goal "The historical atlas is exploratory forever. No
+historical observation is ever served, labeled, or counted as forward confirmation" does not say
+whether a SERVED PROJECTION that arithmetically subtracts pre-boundary historical sessions from a
+post-boundary target counts as "counting a historical observation as forward confirmation". The
+shipped-then-fixed `projected_days_to_target` did exactly that, and its output ("0 days — ready
+now") is what an operator would have read when choosing which question to register.
+**We chose:** Scored it MINOR, not critical — so the verdict is CONTINUE, not REGRESSION — because
+it was found and fixed INSIDE the same iteration by that iteration's own audit lane, the value is a
+pure read-side projection with zero persisted output, no recorded number ever counted it toward
+confirmation, and it never reached the operator's real screen (the only capture of it is the QA
+rig's screenshot). Recorded in `journey-history.json`'s `anti_goal_violations` as a resolved minor
+entry so the trail is not lost.
+**Reversible:** yes — nothing is stored; if the owner reads the rail as covering served projections
+too, the entry's severity is a one-word edit and the fix is already shipped either way.

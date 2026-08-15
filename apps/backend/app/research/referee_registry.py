@@ -82,7 +82,18 @@ POST-BOUNDARY ``session_date``s carrying >=1 observation in the hypothesis's own
 (``_newest_per_session_date``, ``_is_stale_basis``, ``current_playbook_detector_basis``) --
 never a second, independently-written date/basis loop, and never a second ``PlaybookStore``
 scan per hypothesis: ``registry_response`` scans the store exactly ONCE per call and folds every
-hypothesis's own accrual against that single scan."""
+hypothesis's own accrual against that single scan.
+
+**iter-8 (J-07) additions -- the starter-family shortlist + the discovery fold, plus two
+write-side riders.** ``shortlist_response()`` serves spec Sec7's five PINNED candidates
+(``REFEREE_STARTER_FAMILY_SHORTLIST``) beside LIVE readiness (``GET .../registry/shortlist``) --
+the FIRST real, browser-usable Referee action of the whole era. ``registry_response()``'s
+per-hypothesis fold gains a ``discovery`` block (``_hypothesis_discovery``): the exact
+PRE-boundary complement of ``accrual``, over the SAME pooling primitives -- never a confirmatory
+count, always labeled ``"discovery (exploratory)"``. Neither addition writes anything; both are
+pure reads over the identical already-scanned corpus. This module's own two write-side riders
+(a failed-attestation write gate, an integrity-error disclosure) live in ``referee_adjudicate.py``
+instead, since that is where the affected writer/reader actually is."""
 
 from __future__ import annotations
 
@@ -90,10 +101,11 @@ import argparse
 import hashlib
 import json
 import os
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
-from ..config import CONFIG
+from ..config import CONFIG, Config
+from .bars import BarStore
 from .desk_playbook import PlaybookStore
 from .referee_evidence import (
     _epoch_from_iso,
@@ -102,19 +114,24 @@ from .referee_evidence import (
     _newest_per_session_date,
     _record_detector_basis,
     current_playbook_detector_basis,
+    playbook_occurrence_readiness,
 )
 from .referee_null import (
+    AT_WALL,
     PLAYBOOK_CONTEXT_ALGORITHM_VERSION,
     PLAYBOOK_CONTEXT_BACKING_BUCKETS,
     REFEREE_NULL_CONTEXT_SPEC_ID,
     REFEREE_NULL_TOD_SPEC_ID,
     REFEREE_TEST_PERM_SPEC_ID,
+    BandMapResolver,
+    resolve_occurrence_backing_bucket,
 )
 
 __all__ = [
     "REFEREE_MIN_SESSIONS",
     "REFEREE_MIN_OCCURRENCES",
     "REFEREE_HYPOTHESIS_ORIGIN",
+    "REFEREE_STARTER_FAMILY_SHORTLIST",
     "resolve_referee_registry_dir",
     "RegistryIntegrityError",
     "FamilyAlreadyRecorded",
@@ -132,6 +149,7 @@ __all__ = [
     "register_hypothesis",
     "withdraw_hypothesis",
     "registry_response",
+    "shortlist_response",
 ]
 
 # === spec Sec1: the two floors this module is the first consumer of (module constants, never
@@ -815,6 +833,43 @@ def _hypothesis_accrual(
     }
 
 
+def _hypothesis_discovery(
+    hypothesis: dict,
+    newest_by_date: dict[str, dict],
+    *,
+    live_basis: str,
+    config_fingerprint: str,
+) -> dict:
+    """The ``discovery (exploratory)`` block (goal.md J-07 Step 4): pre-boundary (``session_date
+    <= confirmation_start_boundary``) observations in the hypothesis's own ``(setup_id, side)``
+    cell -- the exact COMPLEMENT of ``_hypothesis_accrual``'s own post-boundary walk, over the
+    SAME already-scanned ``newest_by_date`` map and the SAME current-basis filter (never a second
+    pooling implementation). ``state/assumptions.md`` (iter-8) rules the stale-basis exclusion
+    applies here too, for consistency with ``accrual``. Never contributes to the ``accrual``
+    block; a deep-backfilled pre-boundary record recorded AFTER registration still lands here,
+    keyed on ``session_date`` alone -- never ``recorded_at`` (TC-10)."""
+    boundary = hypothesis["confirmation_start_boundary"]
+    setup_id = hypothesis["setup_id"]
+    side = hypothesis["side"]
+    n = 0
+    discovery_dates: set[str] = set()
+    for session_date, record in newest_by_date.items():
+        if session_date > boundary:
+            continue  # discovery is PRE-boundary only -- accrual's own filter, inverted
+        if _is_stale_basis(
+            _record_detector_basis(record),
+            record["config_fingerprint"],
+            live_basis=live_basis,
+            live_config_fingerprint=config_fingerprint,
+        ):
+            continue  # T-6: pool only at the current (detector_basis, config_fingerprint)
+        for signal in record["signals"]:
+            if signal["setup_id"] == setup_id and signal["side"] == side:
+                n += 1
+                discovery_dates.add(session_date)
+    return {"n": n, "n_sessions": len(discovery_dates), "label": "discovery (exploratory)"}
+
+
 def registry_response(
     *,
     family_store: FamilyStore,
@@ -825,9 +880,10 @@ def registry_response(
     config_fingerprint: str,
 ) -> dict:
     """The whole ``GET /research/desk/referee/registry`` body -- the pinned five-key shape
-    (``runs/goal-session-referee/state/blueprint.md`` iter-6/iter-7 notes): ``families``,
-    ``hypotheses`` (each folded with ``status`` + ``accrual``), ``withdrawals``, ``certificates``,
-    plus ``integrity_errors`` (iter-7 Rider 2, audit gap B4). Never 404/500 on an empty or
+    (``runs/goal-session-referee/state/blueprint.md`` iter-6/iter-7/iter-8 notes): ``families``,
+    ``hypotheses`` (each folded with ``status`` + ``accrual`` + ``discovery``, iter-8 J-07),
+    ``withdrawals``, ``certificates``, plus ``integrity_errors`` (iter-7 Rider 2, audit gap B4).
+    Never 404/500 on an empty or
     partially-corrupted registry (the desk router's established never-404-on-absence convention;
     ``get_referee_nulls``'s own ``{"records": [...], "integrity_errors": [...]}`` disclosure
     pattern, reused here rather than inventing a second shape -- each of the four stores' own
@@ -858,8 +914,13 @@ def registry_response(
         accrual = _hypothesis_accrual(
             hypothesis, newest_by_date, live_basis=live_basis, config_fingerprint=config_fingerprint
         )
+        discovery = _hypothesis_discovery(
+            hypothesis, newest_by_date, live_basis=live_basis, config_fingerprint=config_fingerprint
+        )
         status = "withdrawn" if hypothesis["hypothesis_id"] in withdrawn_ids else "active"
-        folded_hypotheses.append({**hypothesis, "status": status, "accrual": accrual})
+        folded_hypotheses.append(
+            {**hypothesis, "status": status, "accrual": accrual, "discovery": discovery}
+        )
 
     return {
         "families": families,
@@ -868,6 +929,222 @@ def registry_response(
         "certificates": certificates,
         "integrity_errors": integrity_errors,
     }
+
+
+# === J-07: the starter-family shortlist -- GET /research/desk/referee/registry/shortlist ==============
+#
+# goal.md J-07 Step 1 ("serve the shortlist... beside LIVE readiness"). spec Sec7's five candidates
+# as PINNED module constants (T-1: never derived, never tunable) -- the exact same field values
+# ``test_referee_registry.py``'s own already-established ``_starter_family_payloads()`` helper
+# already uses to test the write path (that helper builds REGISTRATION-payload fixtures; these are
+# the shortlist's own read-side PRODUCTION constants -- the two serve different purposes,
+# state/assumptions.md iter-8). "No hard-coded hypothesis set" (goal.md J-07 Step 2) governs the
+# REGISTRATION WRITE PATH staying generic (``register_hypothesis`` already accepts any valid
+# hypothesis, never only these five) -- it does not forbid the shortlist's own spec-pinned list from
+# existing as a module constant, exactly like ``REFEREE_MIN_SESSIONS`` or the null-spec ids already
+# do (state/assumptions.md iter-8).
+
+REFEREE_STARTER_FAMILY_SHORTLIST: tuple[dict, ...] = (
+    {
+        "candidate_id": "S-1", "estimand": "A", "evidence_family": "playbook",
+        "setup_id": "capitulation", "side": "long", "context_predicate": None,
+        "primary_measure_key": "5m", "primary_horizon": "5m", "sidedness": "greater",
+        "null_spec_id": REFEREE_NULL_TOD_SPEC_ID, "test_spec_id": REFEREE_TEST_PERM_SPEC_ID,
+        "target_sessions": REFEREE_MIN_SESSIONS, "min_occurrences": REFEREE_MIN_OCCURRENCES,
+        "rationale": (
+            "the book's capitulation claim is the immediate reflexive snapback off climax "
+            "exhaustion -- minutes-scale, not session-scale"
+        ),
+    },
+    {
+        "candidate_id": "S-2", "estimand": "A", "evidence_family": "playbook",
+        "setup_id": "jbe", "side": "long", "context_predicate": None,
+        "primary_measure_key": "1h", "primary_horizon": "1h", "sidedness": "greater",
+        "null_spec_id": REFEREE_NULL_TOD_SPEC_ID, "test_spec_id": REFEREE_TEST_PERM_SPEC_ID,
+        "target_sessions": REFEREE_MIN_SESSIONS, "min_occurrences": REFEREE_MIN_OCCURRENCES,
+        "rationale": (
+            "jump-base-explosion claims continuation of an established leg -- the follow-through "
+            "hour after the base resolves"
+        ),
+    },
+    {
+        "candidate_id": "S-3", "estimand": "A", "evidence_family": "playbook",
+        "setup_id": "double_top", "side": "short", "context_predicate": None,
+        "primary_measure_key": "to_close", "primary_horizon": "to_close", "sidedness": "greater",
+        "null_spec_id": REFEREE_NULL_TOD_SPEC_ID, "test_spec_id": REFEREE_TEST_PERM_SPEC_ID,
+        "target_sessions": REFEREE_MIN_SESSIONS, "min_occurrences": REFEREE_MIN_OCCURRENCES,
+        "rationale": (
+            "a completed reversal structure claims the session's trend has turned -- always "
+            "measurable by construction"
+        ),
+    },
+    {
+        "candidate_id": "S-4", "estimand": "B", "evidence_family": "playbook",
+        "setup_id": "range_trade", "side": "long",
+        "context_predicate": {"backing_bucket": AT_WALL},
+        "primary_measure_key": "1h", "primary_horizon": "1h", "sidedness": "greater",
+        "null_spec_id": None, "test_spec_id": REFEREE_TEST_PERM_SPEC_ID,
+        "target_sessions": REFEREE_MIN_SESSIONS, "min_occurrences": REFEREE_MIN_OCCURRENCES,
+        "rationale": (
+            "a range bounce plays out over the traverse toward the opposite boundary -- to_close "
+            "would contaminate with post-breakout regimes"
+        ),
+    },
+    {
+        "candidate_id": "S-5", "estimand": "C", "evidence_family": "playbook",
+        "setup_id": "range_trade", "side": "long",
+        "context_predicate": {"backing_bucket": AT_WALL},
+        "primary_measure_key": "1h", "primary_horizon": "1h", "sidedness": "greater",
+        "null_spec_id": REFEREE_NULL_CONTEXT_SPEC_ID, "test_spec_id": REFEREE_TEST_PERM_SPEC_ID,
+        "target_sessions": REFEREE_MIN_SESSIONS, "min_occurrences": REFEREE_MIN_OCCURRENCES,
+        "rationale": (
+            "the combined claim: a wall-backed bounce is priced better than chance at that time "
+            "and place"
+        ),
+    },
+)
+
+
+def _corpus_session_span_days(newest_by_date: dict[str, dict]) -> int:
+    """The recorded corpus's own calendar-day span -- earliest recorded ``session_date`` to the
+    latest, inclusive -- the denominator each shortlist candidate's own
+    ``accrual_rate_sessions_per_day`` divides by. No spec-pinned accrual-rate methodology exists
+    (``docs/referee-statistical-spec.md`` Sec7 lists only static authoring-time corpus counts, not
+    a formula); this basis -- a candidate's OWN ``n_sessions`` over the WHOLE corpus's own
+    trailing day-span -- is disclosed here, not hidden (state/assumptions.md iter-8). Zero when
+    the corpus is empty (no session dates recorded at all) -- the caller reads this as its own
+    divide-by-zero guard, never crashing (TC-2)."""
+    if not newest_by_date:
+        return 0
+    dates = sorted(newest_by_date)
+    earliest = date.fromisoformat(dates[0])
+    latest = date.fromisoformat(dates[-1])
+    return (latest - earliest).days + 1
+
+
+def _starter_context_readiness(
+    newest_by_date: dict[str, dict],
+    config_fingerprint: str,
+    *,
+    setup_id: str,
+    side: str,
+    backing_bucket: str,
+    context_resolver: BandMapResolver,
+) -> tuple[int, int]:
+    """LIVE ``(n, n_sessions)`` among ``(setup_id, side)`` occurrences at the CURRENT detector
+    basis (T-6) whose OWN entry resolves into ``backing_bucket`` -- the S-4/S-5 shortlist
+    candidates' own readiness. Walks the IDENTICAL newest-per-date, current-basis-only raw-record
+    set ``playbook_occurrence_readiness()`` already walks (never a second pooling
+    implementation), adding ONE per-signal context resolve via the referee-era's own
+    already-imported band-context primitive -- ``referee_null.resolve_occurrence_backing_bucket``
+    over a ``compute=False`` ``BandMapResolver`` (a RECORDED-band-map lookup, never a fresh
+    compute, T-8) -- the SAME primitive ``referee_adjudicate.py``'s own Estimand B/C pooling
+    (``_pool_cell_vs_complement``) already calls."""
+    live_basis = current_playbook_detector_basis()
+    n = 0
+    sessions: set[str] = set()
+    for session_date, record in newest_by_date.items():
+        if _is_stale_basis(
+            _record_detector_basis(record),
+            record["config_fingerprint"],
+            live_basis=live_basis,
+            live_config_fingerprint=config_fingerprint,
+        ):
+            continue  # T-6: pool only at the current (detector_basis, config_fingerprint)
+        for signal in record["signals"]:
+            if signal["setup_id"] != setup_id or signal["side"] != side:
+                continue
+            cell = resolve_occurrence_backing_bucket(
+                signal, signal["symbol"], _epoch_from_iso(signal["trigger_ts"]),
+                signal.get("entry"), side, context_resolver,
+            )
+            if cell == backing_bucket:
+                n += 1
+                sessions.add(session_date)
+    return n, len(sessions)
+
+
+def shortlist_response(
+    *,
+    playbook_store: PlaybookStore,
+    config_fingerprint: str,
+    bar_store: BarStore,
+    config: Config,
+) -> dict:
+    """The whole ``GET /research/desk/referee/registry/shortlist`` body (J-07): spec Sec7's five
+    PINNED candidates (``REFEREE_STARTER_FAMILY_SHORTLIST``) beside LIVE readiness computed fresh
+    on every call -- a plain read (GET never computes, T-8; the band-context lookup below is
+    ``compute=False``, a lookup over the ALREADY-RECORDED band map, never a fresh map build). n/
+    n_sessions for S-1..S-3 (estimand A, no context) reuse ``playbook_occurrence_readiness()``'s
+    existing ``per_setup_side`` pooling verbatim; S-4/S-5 (``at_wall`` context) reuse
+    ``_starter_context_readiness`` above. ``accrual_rate_sessions_per_day``/
+    ``projected_days_to_target`` never divide by zero (TC-2): both read ``0``/``None`` on an empty
+    corpus or a zero-eligible cell.
+
+    ``projected_days_to_target`` is ``target_sessions / accrual_rate`` -- measured from ZERO, never
+    net of the candidate's own historical ``n_sessions`` (iter-8 audit, finding B2). ``target_
+    sessions`` is a POST-BOUNDARY count everywhere it is used (``_hypothesis_accrual``'s
+    ``informative_post_boundary_sessions``, ``run_evaluation_and_record``'s own
+    ``confirmatory_eligible``), and registering stamps the boundary at that instant -- so not one
+    of the historical sessions counted in ``n``/``n_sessions`` above can ever count toward it. A
+    projection net of them read ``0.0`` for every candidate whose cell is already rich (all three
+    estimand-A candidates, against the real corpus), i.e. "ready now" for a wait that is really
+    ``target_sessions`` post-boundary sessions away -- and counted historical observations as
+    progress toward a confirmatory target, which the era's own "the historical atlas is exploratory
+    forever" anti-goal forbids."""
+    readiness = playbook_occurrence_readiness(playbook_store, config_fingerprint)
+    per_setup_side = {(cell["setup"], cell["side"]): cell for cell in readiness["per_setup_side"]}
+
+    records, _errors = playbook_store.list()
+    newest_by_date = _newest_per_session_date(records)
+    corpus_span_days = _corpus_session_span_days(newest_by_date)
+    context_resolver = BandMapResolver(bar_store, config, compute=False)
+
+    candidates = []
+    for spec in REFEREE_STARTER_FAMILY_SHORTLIST:
+        context_predicate = spec["context_predicate"]
+        if context_predicate is None:
+            cell = per_setup_side.get((spec["setup_id"], spec["side"]))
+            n = cell["n"] if cell is not None else 0
+            n_sessions = cell["n_sessions"] if cell is not None else 0
+        else:
+            n, n_sessions = _starter_context_readiness(
+                newest_by_date, config_fingerprint,
+                setup_id=spec["setup_id"], side=spec["side"],
+                backing_bucket=context_predicate["backing_bucket"],
+                context_resolver=context_resolver,
+            )
+        accrual_rate = (n_sessions / corpus_span_days) if corpus_span_days > 0 else 0.0
+        projected_days = (
+            # From ZERO, never net of the historical n_sessions above -- see the docstring
+            # (iter-8 audit, finding B2): the target is a POST-boundary count, and registering
+            # stamps the boundary now.
+            spec["target_sessions"] / accrual_rate
+            if accrual_rate > 0 else None
+        )
+        candidates.append(
+            {
+                "candidate_id": spec["candidate_id"],
+                "estimand": spec["estimand"],
+                "evidence_family": spec["evidence_family"],
+                "setup_id": spec["setup_id"],
+                "side": spec["side"],
+                "context_predicate": context_predicate,
+                "primary_measure_key": spec["primary_measure_key"],
+                "primary_horizon": spec["primary_horizon"],
+                "sidedness": spec["sidedness"],
+                "null_spec_id": spec["null_spec_id"],
+                "test_spec_id": spec["test_spec_id"],
+                "rationale": spec["rationale"],
+                "n": n,
+                "n_sessions": n_sessions,
+                "target_sessions": spec["target_sessions"],
+                "min_occurrences": spec["min_occurrences"],
+                "accrual_rate_sessions_per_day": accrual_rate,
+                "projected_days_to_target": projected_days,
+            }
+        )
+    return {"candidates": candidates}
 
 
 # --- The CLI (register / withdraw) --------------------------------------------------------------------

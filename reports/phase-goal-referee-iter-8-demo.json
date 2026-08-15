@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-referee-iter-8",
+  "base_url": "http://localhost:3301",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the Desk page",
+      "narration": "The Desk is where operators screen setups with the playbook and manage research hypotheses.",
+      "point_out": "The Desk page has loaded, showing the title and navigation.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/desk" },
+      "expect": { "text": "Desk" }
+    },
+    {
+      "n": 2,
+      "title": "Expand the Referee Registry section",
+      "narration": "The Referee Registry is the new section at the bottom of the page where operators review candidate research questions and register permanent hypotheses.",
+      "point_out": "The Referee Registry section expands, revealing a table with five shortlist candidates (S-1 through S-5), each showing their estimand, setup/side, rationale, and live readiness numbers—including S-4 and S-5 which currently have zero recorded evidence but render honestly with 0.00 accrual and '—' projected days.",
+      "journey": "J-07",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Referee Registry" } },
+      "expect": { "text": "S-5" }
+    },
+    {
+      "n": 3,
+      "title": "Select a candidate to review registration",
+      "narration": "Click Select on candidate S-4 to see what registering a hypothesis looks like—a confirmation panel with the candidate's setup details and a reminder that registration writes a permanent, boundary-stamped hypothesis.",
+      "point_out": "A confirmation panel appears below the table with the candidate details (S-4, range_trade:long, Estimand B) and two action buttons: Confirm Registration and Cancel.",
+      "journey": "J-07",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "css": "[data-testid=\"referee-shortlist-select-S-4\"]" } },
+      "expect": { "text": "Register S-4" }
+    },
+    {
+      "n": 4,
+      "title": "Cancel the pending registration",
+      "narration": "Click Cancel to dismiss the confirmation panel without writing anything—every action before confirmation is fully reversible.",
+      "point_out": "The confirmation panel closes; the S-4 button still reads Select, confirming no write occurred.",
+      "journey": "J-07",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "css": "[data-testid=\"referee-registration-cancel-button\"]" } },
+      "expect": { "text": "S-4" }
+    },
+    {
+      "n": 5,
+      "title": "Verify the Playbook Evidence section is unaffected",
+      "narration": "Scroll up to the Playbook Evidence section to confirm the new Referee Registry did not disturb any existing page content.",
+      "point_out": "The Playbook Evidence section expands and displays its content exactly as before—no layout shifts or missing data.",
+      "journey": "J-10",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "click", "target": { "role": "button", "name": "Playbook Evidence" } },
+      "expect": { "text": "Playbook Evidence" }
+    }
+  ]
+}

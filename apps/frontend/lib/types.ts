@@ -2116,3 +2116,141 @@ export interface DeskUniverseSnapshotMeta {
   members: string[];
   raw_members: Record<string, string>;
 }
+
+// --- Era 6 "The Referee" (goal-referee-iter-8, J-07) -- the FIRST Referee UI slice. Nothing
+// referee-related existed in this file before this iteration. Every field below is served
+// VERBATIM by its owning backend fold (referee_registry.py) -- no client-side arithmetic on any
+// of them (test_desk_ui_guards.py's extended _PRICE_ARITHMETIC_FIELDS covers the ones this
+// iteration's JSX actually reads).
+
+export type RefereeEstimand = "A" | "B" | "C";
+export type RefereeSidedness = "greater" | "less" | "two-sided";
+export type RefereeEvidenceFamily = "playbook" | "strategy";
+export type RefereeSide = "long" | "short";
+
+export interface RefereeContextPredicate {
+  backing_bucket: string;
+}
+
+// GET /research/desk/referee/registry/shortlist -- spec Sec7's five pre-registered candidates
+// (S-1..S-5, pinned module constants on the backend) beside LIVE sample-size readiness.
+export interface RefereeShortlistCandidate {
+  candidate_id: string;
+  estimand: RefereeEstimand;
+  evidence_family: RefereeEvidenceFamily;
+  setup_id: string;
+  side: RefereeSide;
+  context_predicate: RefereeContextPredicate | null;
+  primary_measure_key: string;
+  primary_horizon: string;
+  sidedness: RefereeSidedness;
+  null_spec_id: string | null;
+  test_spec_id: string;
+  rationale: string;
+  n: number;
+  n_sessions: number;
+  target_sessions: number;
+  min_occurrences: number;
+  accrual_rate_sessions_per_day: number;
+  // `null` only when `accrual_rate_sessions_per_day` is 0 -- never a divide-by-zero value.
+  projected_days_to_target: number | null;
+}
+
+export interface RefereeShortlistResponse {
+  candidates: RefereeShortlistCandidate[];
+}
+
+// The read-side fold additions GET /research/desk/referee/registry adds to every hypothesis
+// entry -- never persisted on the record itself.
+export interface RefereeAccrual {
+  informative_post_boundary_sessions: number;
+  target_sessions: number;
+  is_proxy: boolean;
+  basis_current: boolean;
+}
+
+// The `discovery (exploratory)` block (goal-referee-iter-8, J-07 Step 4) -- pre-boundary
+// historical observations in the hypothesis's own cell, visibly distinct from `accrual`. NEVER a
+// confirmatory count (the historical atlas is exploratory forever).
+export interface RefereeDiscovery {
+  n: number;
+  n_sessions: number;
+  label: string;
+}
+
+export interface RefereeHypothesis {
+  hypothesis_id: string;
+  family_id: string;
+  registered_at: string;
+  evidence_family: RefereeEvidenceFamily;
+  estimand: RefereeEstimand;
+  setup_id: string;
+  side: RefereeSide;
+  context_predicate: RefereeContextPredicate | null;
+  primary_measure_key: string;
+  primary_horizon: string;
+  sidedness: RefereeSidedness;
+  null_spec_id: string | null;
+  test_spec_id: string;
+  detector_basis: string | null;
+  context_algorithm_version: string | null;
+  confirmation_start_boundary: string;
+  target_sessions: number;
+  min_occurrences: number;
+  origin: string;
+  status: "active" | "withdrawn";
+  accrual: RefereeAccrual;
+  discovery: RefereeDiscovery;
+}
+
+export interface RefereeFamily {
+  family_id: string;
+  q: number;
+  candidate_hypothesis_ids: string[];
+  registered_at: string;
+}
+
+export interface RefereeWithdrawal {
+  hypothesis_id: string;
+  withdrawn_at: string;
+  reason: string | null;
+}
+
+export interface RefereeIntegrityError {
+  store: string;
+  file: string;
+  error: string;
+}
+
+// GET /research/desk/referee/registry -- the pinned five-key registry fold, served verbatim.
+export interface RefereeRegistryResponse {
+  families: RefereeFamily[];
+  hypotheses: RefereeHypothesis[];
+  withdrawals: RefereeWithdrawal[];
+  certificates: unknown[];
+  integrity_errors: RefereeIntegrityError[];
+}
+
+// POST /research/desk/referee/registry/hypotheses -- the real registration act's own request
+// body. `confirm: true` is the explicit-confirmation-required gate every write on this page
+// carries; the rest are the candidate's OWN fields, read verbatim off a shortlist entry (never
+// hand-typed) plus the caller's own family framing.
+export interface RefereeHypothesisRegistrationPayload {
+  confirm: true;
+  hypothesis_id: string;
+  family_id: string;
+  family_q: number;
+  family_candidate_hypothesis_ids: string[];
+  evidence_family: RefereeEvidenceFamily;
+  estimand: RefereeEstimand;
+  setup_id: string;
+  side: RefereeSide;
+  context_predicate: RefereeContextPredicate | null;
+  primary_measure_key: string;
+  primary_horizon: string;
+  sidedness: RefereeSidedness;
+  null_spec_id: string | null;
+  test_spec_id: string;
+  target_sessions: number;
+  min_occurrences: number;
+}

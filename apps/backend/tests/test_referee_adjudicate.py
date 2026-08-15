@@ -66,7 +66,8 @@ from app.research.referee_registry import (
     withdraw_hypothesis,
 )
 from app.research.referee_routes import get_referee_eval_compute_manager
-from app.research.referee_stats import run_oracle_attestation
+import app.research.referee_stats as referee_stats_module
+from app.research.referee_stats import run_oracle_attestation, verify_oracle_attestation
 
 _ET = ZoneInfo("America/New_York")
 
@@ -385,6 +386,128 @@ def test_tc9_below_target_reports_the_real_recount_never_the_registry_proxy(stor
     assert record["coverage"]["post_boundary_informative_sessions"] == 5
     assert record["role"] == "pending"
     assert record["confirmatory_eligible"] is False
+
+
+# === iter-8 Rider 1: a failed oracle attestation must never mint a checkpoint or its snapshot =========
+
+
+def test_iter8_rider1_a_failed_attestation_never_mints_a_checkpoint_or_a_snapshot(stores, monkeypatch):
+    """iter-8 Rider 1 (evaluator-diagnosed, iteration 7): ``run_evaluation_and_record`` must never
+    mint ``role: "checkpoint"`` -- and therefore never write the hypothesis's ONE permanent
+    adjudication snapshot -- when ``attestation["passed"]`` is ``False``. Forces the SAME
+    otherwise-checkpoint-eligible fixture ``test_known_positive_corpus_round_trip_checkpoints_
+    corroborated`` uses to hit a deliberately failing oracle attestation (the module's own
+    ``run_oracle_attestation``, monkeypatched at its call site inside ``referee_adjudicate.py``).
+    The honest computed statistics (T/permutation_p/CIs) stay served regardless -- only the
+    permanent-write eligibility is gated (the write side needs the SAME gate the read side
+    (``_snapshot_fold``, via ``verify_oracle_attestation``) already carries)."""
+    _plant_known_corpus(
+        stores, "hyp-rider1", "fam-rider1", n_sessions=13, trigger_close=100.0, flat_close=102.0,
+    )
+    real_attestation = run_oracle_attestation()
+    assert real_attestation["passed"] is True  # sanity: the real attestation genuinely passes
+    failing_attestation = {**real_attestation, "passed": False}
+    monkeypatch.setattr(
+        referee_adjudicate_module, "run_oracle_attestation", lambda: failing_attestation
+    )
+
+    result = _run_eval(stores, "hyp-rider1")
+    record = result["record"]
+    assert record["confirmatory_eligible"] is True  # coverage floors WERE met
+    assert record["role"] == "pending"  # never "checkpoint" -- the write-side gate
+    assert record["attestation"]["passed"] is False
+    assert record["permutation_p"] is not None  # the honest computed stats stay served
+    assert result["snapshot"] is None
+
+    snapshots, errors = stores["snapshot_store"].list()
+    assert errors == []
+    assert snapshots == []  # no permanent record was ever minted
+
+    # A second evaluation act against the SAME (still attestation-failing) store must not reuse a
+    # phantom checkpoint either -- it dedupes on the identical evaluation_basis and still reports
+    # no snapshot.
+    second = _run_eval(stores, "hyp-rider1")
+    assert second["reused"] is True
+    assert second["record"]["role"] == "pending"
+    assert second["snapshot"] is None
+
+
+def test_iter8_rider1_a_passing_attestation_still_mints_the_checkpoint_can_fail_counter_test(stores):
+    """The can-fail companion to Rider 1's own test above: with the REAL (passing) attestation,
+    the identical fixture still checkpoints -- proving Rider 1's gate is discriminating, not a
+    blanket refusal."""
+    _plant_known_corpus(
+        stores, "hyp-rider1-ok", "fam-rider1-ok", n_sessions=13, trigger_close=100.0, flat_close=102.0,
+    )
+    result = _run_eval(stores, "hyp-rider1-ok")
+    assert result["record"]["role"] == "checkpoint"
+    assert result["snapshot"] is not None
+    assert result["snapshot"]["verdict"] == "corroborated"
+
+
+def test_iter8_audit_b1_the_self_heal_branch_never_mints_a_snapshot_from_a_stale_attestation(
+    stores, monkeypatch,
+):
+    """iter-8 audit finding B1: the dedup/self-heal branch is the SECOND site that writes a
+    hypothesis's ONE permanent snapshot, and Rider 1 gated only the fresh-compute site. An
+    already-recorded ``role == "checkpoint"`` evaluation whose snapshot write did not complete,
+    and whose attestation has since gone VERSION-STALE (the read side's own
+    ``verify_oracle_attestation`` refuses it), must not mint that permanent snapshot on a re-run --
+    doing so burns the hypothesis's single checkpoint on a ``corroborated`` record the read fold
+    then refuses forever, and no later, genuinely-attested evaluation can ever replace it
+    (``checkpoint_exists`` would already be true)."""
+    _plant_known_corpus(
+        stores, "hyp-b1", "fam-b1", n_sessions=13, trigger_close=100.0, flat_close=102.0,
+    )
+    first = _run_eval(stores, "hyp-b1")
+    assert first["record"]["role"] == "checkpoint"
+    assert first["snapshot"] is not None  # the honest, attested checkpoint
+
+    # The snapshot write "did not complete" -- this branch's own documented scenario.
+    for path in stores["snapshot_store"].root.glob("snapshot-*.json"):
+        path.unlink()
+    assert stores["snapshot_store"].get_for_hypothesis("hyp-b1") is None
+
+    # ... and the stats core has since moved on, so the recorded attestation no longer verifies.
+    monkeypatch.setattr(referee_stats_module, "STATS_CORE_VERSION", "referee-stats-core-vNEXT")
+    assert verify_oracle_attestation(first["record"]["attestation"]) is False
+
+    second = _run_eval(stores, "hyp-b1")
+    assert second["reused"] is True
+    assert second["snapshot"] is None  # nothing permanent was written
+    snapshots, errors = stores["snapshot_store"].list()
+    assert errors == []
+    assert snapshots == []
+
+    # The read side stays honest rather than serving a refusal minted from the stale record: with
+    # no snapshot on file the fold falls back to its live (pre-checkpoint) state.
+    fold = adjudications_response(
+        hypothesis_store=stores["hypothesis_store"], snapshot_store=stores["snapshot_store"],
+        playbook_store=stores["playbook_store"], config_fingerprint=CONFIG.config_fingerprint(),
+    )
+    entry = next(e for e in fold["entries"] if e["hypothesis_id"] == "hyp-b1")
+    assert entry["snapshot"] is None
+    assert entry["verdict"] != "corroborated"
+
+
+def test_iter8_audit_b1_the_self_heal_branch_still_completes_an_attested_interrupted_write(stores):
+    """The can-fail companion to B1's own test above: with the attestation still verifying, the
+    self-heal branch genuinely does complete an interrupted snapshot write -- proving the new gate
+    is discriminating, not a blanket disabling of the self-heal path."""
+    _plant_known_corpus(
+        stores, "hyp-b1-ok", "fam-b1-ok", n_sessions=13, trigger_close=100.0, flat_close=102.0,
+    )
+    first = _run_eval(stores, "hyp-b1-ok")
+    assert first["snapshot"] is not None
+    for path in stores["snapshot_store"].root.glob("snapshot-*.json"):
+        path.unlink()
+    assert stores["snapshot_store"].get_for_hypothesis("hyp-b1-ok") is None
+
+    second = _run_eval(stores, "hyp-b1-ok")
+    assert second["reused"] is True
+    assert second["snapshot"] is not None  # the interrupted write is completed, as before
+    assert second["snapshot"]["verdict"] == "corroborated"
+    assert stores["snapshot_store"].get_for_hypothesis("hyp-b1-ok") is not None
 
 
 def test_tc13_an_extra_payload_field_never_influences_the_recorded_coverage(stores):
@@ -848,6 +971,62 @@ def test_tc25_zero_hypotheses_registered_returns_200_with_empty_lists(stores):
         playbook_store=stores["playbook_store"], config_fingerprint=CONFIG.config_fingerprint(),
     )
     assert fold["entries"] == []
+    assert fold["integrity_errors"] == []
+
+
+# === iter-8 Rider 2: a corrupted hypothesis file is surfaced on GET /adjudications, never dropped ======
+
+
+def test_iter8_rider2_a_corrupted_hypothesis_file_is_surfaced_in_adjudications_integrity_errors(
+    stores,
+):
+    """iter-8 Rider 2 (evaluator-diagnosed, iteration 7): ``adjudications_response()`` must
+    surface ``hypothesis_store.list()``'s integrity errors the same way ``GET /registry`` already
+    does (``referee_registry.py``'s own iteration-7 Rider-2 precedent) -- a corrupted hypothesis
+    file alongside a healthy, already-checkpointed one is NAMED, not silently dropped, and the
+    healthy hypothesis's own entry still folds correctly."""
+    _plant_known_corpus(
+        stores, "hyp-rider2-ok", "fam-rider2", n_sessions=13, trigger_close=100.0, flat_close=102.0,
+    )
+    checkpoint = _run_eval(stores, "hyp-rider2-ok")
+    assert checkpoint["snapshot"]["verdict"] == "corroborated"
+
+    hypothesis_dir = stores["hypothesis_store"].root
+    (hypothesis_dir / "hypothesis-corrupt.json").write_text("not valid json at all")
+
+    fold = adjudications_response(
+        hypothesis_store=stores["hypothesis_store"], snapshot_store=stores["snapshot_store"],
+        playbook_store=stores["playbook_store"], config_fingerprint=CONFIG.config_fingerprint(),
+    )
+    assert len(fold["entries"]) == 1  # the healthy, checkpointed hypothesis still folds
+    assert fold["entries"][0]["hypothesis_id"] == "hyp-rider2-ok"
+    assert fold["entries"][0]["verdict"] == "corroborated"
+
+    assert len(fold["integrity_errors"]) == 1
+    error = fold["integrity_errors"][0]
+    assert error["file"] == "hypothesis-corrupt.json"
+    assert "error" in error and error["error"]
+
+
+def test_get_adjudications_route_serves_integrity_errors_key_on_a_healthy_store(stores):
+    """The route-level companion (never 404/500, TC-25's own established honest-empty pattern):
+    the key exists and is an empty list on a healthy, uncorrupted store."""
+    app.dependency_overrides.clear()
+    from app.research.desk_routes import get_playbook_store
+    from app.research.referee_routes import get_referee_hypothesis_store, get_referee_snapshot_store
+
+    app.dependency_overrides[get_referee_hypothesis_store] = lambda: stores["hypothesis_store"]
+    app.dependency_overrides[get_referee_snapshot_store] = lambda: stores["snapshot_store"]
+    app.dependency_overrides[get_playbook_store] = lambda: stores["playbook_store"]
+    try:
+        with TestClient(app) as client:
+            resp = client.get("/research/desk/referee/adjudications")
+    finally:
+        app.dependency_overrides.clear()
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["integrity_errors"] == []
+    assert set(body) == {"entries", "register", "integrity_errors"}
 
 
 # === TC-26, TC-27, TC-28: authorize_promotion ==========================================================

@@ -41,6 +41,10 @@ import type {
   PnlLedger,
   ProfilesPayload,
   RecordBarSeriesResult,
+  RefereeHypothesis,
+  RefereeHypothesisRegistrationPayload,
+  RefereeRegistryResponse,
+  RefereeShortlistResponse,
   ResearchTaxonomy,
   SetupDetailResult,
   SetupsListResult,
@@ -2040,6 +2044,92 @@ export async function fetchDeskPlaybookEvidence(): Promise<{
       return { ok: true, data: (await res.json()) as DeskPlaybookEvidence };
     }
     let error = "The playbook evidence view could not be loaded.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, data: null, error };
+  } catch {
+    return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// --- Era 6 "The Referee" (goal-referee-iter-8, J-07) -- the FIRST-EVER frontend bindings for any
+// referee endpoint. Every function below mirrors the established `{ok, data, error?}` shape and
+// `detail`-surfacing convention every other function in this file already uses.
+
+// GET /research/desk/referee/registry/shortlist -- spec Sec7's five pre-registered starter-family
+// candidates beside LIVE readiness, served VERBATIM (no client-side arithmetic anywhere downstream
+// — every number the Referee Registry section renders is a straight pass-through of this body). A
+// plain read (T-8: GETs never compute) — the band-context lookup behind S-4/S-5 is a lookup over
+// the already-recorded band map, never a fresh compute.
+export async function fetchRefereeShortlist(): Promise<{
+  ok: boolean;
+  data: RefereeShortlistResponse | null;
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/referee/registry/shortlist`);
+    if (res.ok) {
+      return { ok: true, data: (await res.json()) as RefereeShortlistResponse };
+    }
+    let error = "The starter-family shortlist could not be loaded.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, data: null, error };
+  } catch {
+    return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// GET /research/desk/referee/registry — families/hypotheses (each folded with status/accrual/
+// discovery)/withdrawals/certificates/integrity_errors, served VERBATIM.
+export async function fetchRefereeRegistry(): Promise<{
+  ok: boolean;
+  data: RefereeRegistryResponse | null;
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/referee/registry`);
+    if (res.ok) {
+      return { ok: true, data: (await res.json()) as RefereeRegistryResponse };
+    }
+    let error = "The referee registry could not be loaded.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, data: null, error };
+  } catch {
+    return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// POST /research/desk/referee/registry/hypotheses — the real registration act (goal.md J-07 Step
+// 3): registers ONE hypothesis (through its family, create-if-absent) only when `confirm: true`.
+// The backend's 422 (malformed / unrecognised spec id / retroactive boundary) and 409 (duplicate
+// family_id/hypothesis_id) `detail` are surfaced VERBATIM, never a client-fabricated message.
+export async function postRefereeRegistryHypothesis(
+  payload: RefereeHypothesisRegistrationPayload,
+): Promise<{ ok: boolean; data: RefereeHypothesis | null; error?: string }> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/referee/registry/hypotheses`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      return { ok: true, data: (await res.json()) as RefereeHypothesis };
+    }
+    let error = "The hypothesis could not be registered.";
     try {
       const data = await res.json();
       if (typeof data?.detail === "string") error = data.detail;

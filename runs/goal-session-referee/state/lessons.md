@@ -141,3 +141,21 @@ just the endpoint whose audit finding named it — Rider 2 fixed `GET /registry`
 **Applies to:** any iteration touching the `referee_*` append-only stores (evaluations,
 adjudication snapshots, registry, nulls, certificates) — especially J-07/J-08, which add the first
 real operator write acts and the certificate mint path.
+
+## iter-8 — 2026-08-15T15:35:00Z
+
+**Verdict:** CONTINUE
+**Lesson:** The fixture-scoped browser rig can STRUCTURALLY hide an arithmetic defect: the
+shortlist's `projected_days_to_target` bug (audit B2) rendered a plausible 517 on the rig's
+one-session corpus and only became "0 days — ready now" on the operator's real 210-record corpus,
+because the two candidate formulas only diverge once a cell already exceeds its target. Any served
+number whose formula has a subtraction, a floor, or a saturation point must be hand-checked against
+REAL-corpus magnitudes (or a fixture deliberately built past the saturation point) — a green
+browser pass on the rig proves rendering, never arithmetic. Second, related: when a new fold is
+described as "the exact complement" of an existing one, check WHICH filters it inherited —
+`_hypothesis_discovery` copied `_hypothesis_accrual`'s setup/side proxy but not the context
+predicate that `shortlist_response` applies to the same candidate, so `/desk` can show 0 in one
+table and 3 in the other for the same wall-based candidate (evaluator probe, iter-8).
+**Applies to:** any iteration adding a served numeric to `referee_registry.py` /
+`referee_adjudicate.py`, any "complement/mirror of an existing fold" work, and every browser
+acceptance that reads numbers off the fixture-scoped rig.

@@ -371,3 +371,70 @@ when it now has five, and the builder's write-up claims it was already updated w
 Approve building J-07 next at full depth; nothing needs a human unblock. Still outstanding for a
 person, from iteration 2 and outside this project: the unrelated trendora backend on port 8255 has
 not been restarted.
+
+## Iteration 8 — goal-referee-iter-8
+
+**Date:** 2026-08-15T15:35:00Z
+**Verdict:** CONTINUE
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: J-07 "The starter family — historical exploration becomes registered questions"
+- Newly failing: none
+- Regressed: none
+- Partial: J-10 "The kept product stands" (unchanged status; its kept half was re-checked green by
+  the replay lane with a fresh dated picture, and I ran the whole test suite myself; its era-end
+  clauses — three Referee sections and 22 tools for the Claude connector — still wait on J-09)
+- Re-verified directly rather than carried: J-05 "The registry" and J-06 "Estimand engines and
+  adjudication" — the browser lane skipped both for time, but both of their own source files
+  changed this run, so I checked the changes and their tests myself
+- Not re-tested this run: J-01 "The era transition stands", J-02 "The evidence contract", J-03 "The
+  statistics core" and J-04 "Matched nulls" — all four marked DEFERRED-BUDGET in the results file,
+  so all four keep their recorded passing status. None of their own source files changed
+- Anti-goal violations: one minor, found AND fixed inside this same iteration, then reproduced by
+  me — recorded resolved (details below). Iteration 6's critical one stays closed, re-confirmed
+  from a third side.
+
+**Reasoning:** The new screen really does what it claims, and I checked it myself instead of
+reading a report. A person can now open the Desk page, scroll to the bottom, open "Referee
+Registry", and see the five candidate research questions with a plain-English reason for each and
+live counts of how much evidence exists; picking one opens a confirmation panel, and confirming
+writes a permanent record whose start date the server stamps itself. I opened the pictures rather
+than trusting the words: one shows all five rows with their numbers and the honest "No hypotheses
+registered." message; another shows the finished registration — a new row reading "S-1,
+capitulation:long, 2026-08-15, historical-exploration, active, 0 of 12, 1 / 1 discovery
+(exploratory)" — and the S-1 button greyed out to "Registered". A later check reloads the page and
+the button is still greyed, which proves the write really reached the server and was not a screen
+trick. I ran the whole test suite myself (2,657 collected, 2,649 passed, 8 skipped, none failed),
+printed the settings pin myself (08e471b10130e1e2), counted the Claude connector's tools myself
+(still 20), and confirmed the guard over the owner's saved data reports all 11,274 files unchanged.
+No question was written into the owner's real records — that store does not exist on disk at all,
+so nothing was faked. The deeper checking lane earned its place for the third time: it found that
+the "projected days until enough evidence" number was subtracting evidence from BEFORE registration
+from a target that can only ever count days AFTER it, so every rich candidate read "0 days — ready
+now" against the owner's real data when the honest waits are 50 to 119 days. It was fixed inside
+this same round; I reproduced both the old and the new number myself on a copy of the test data
+(old 517, new 564). Then I found two things nobody else did. First: the "discovery (exploratory)"
+count on a registered row ignores the wall condition that the same candidate's shortlist row
+applies, so for the two wall-based candidates the same page can show 0 in one table and 3 in the
+other for what looks like the same thing — and unlike its neighbour it carries no "this is an
+estimate" marker. Second: the written specification asks for the wall-based candidate to be offered
+for each side, and only the long side was built; the short side was dropped without anyone
+recording the drop. Neither harms any stored number today.
+
+**Next-step recommendation:** Build J-08 "The strategy family and the promotion interlock" next, on
+its own, at full depth — the part that refuses to crown a new trading strategy unless a valid,
+strategy-specific certificate from this era's judging machinery exists. Full depth is not optional
+here: this rule must fail closed with no way around it, it rewrites existing tests that today allow
+promotion, and the deeper lane has now caught a real fault in three of the three rounds it actually
+ran. Please do not let the time trimmer cut it back to the short pipeline the way it cut rounds 6
+and 7. Four small items ride inside that round instead of becoming their own: (1) make the
+"discovery" count respect the same wall condition the shortlist uses, or mark it plainly as an
+estimate, so the two tables stop disagreeing; (2) get an owner ruling on the missing short side of
+the wall-based candidate, and record the answer; (3) move the family's error-rate setting (0.1) out
+of the browser file and into the back end where every other statistical constant lives; (4) extend
+the display guard to the two accrual numbers now shown on screen. One thing a person should do:
+this round finished blocked because an automatic paperwork check misread the phrase "backend-only"
+inside a sentence that was actually describing the new visible screen, so the round's nine changed
+files are still uncommitted — they should be committed, and that check's wording rule loosened.
+Still outstanding for a person, from iteration 2 and outside this project: the unrelated trendora
+backend on port 8255 has not been restarted.

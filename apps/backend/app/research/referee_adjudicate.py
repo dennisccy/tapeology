@@ -1016,7 +1016,25 @@ def run_evaluation_and_record(
         existing = evaluation_store.find_by_key(hypothesis_id, evaluation_basis)
         if existing is not None:
             snapshot = None
-            if existing["role"] == "checkpoint" and snapshot_store.get_for_hypothesis(hypothesis_id) is None:
+            # iter-8 audit (B1): this dedup/self-heal branch is the OTHER of the TWO sites that
+            # write a hypothesis's ONE permanent snapshot -- Rider 1 below gated only the
+            # fresh-compute site, so an ALREADY-RECORDED checkpoint reached this branch with NO
+            # attestation check at all. Gated here with the read side's own re-derivation
+            # (`verify_oracle_attestation`, never the stored `passed` flag, T-8), because the
+            # realistic case is an attestation that has since gone version-stale: minting the
+            # permanent snapshot from it burns the hypothesis's single checkpoint on a verdict the
+            # read fold must then refuse forever. When it does not verify, nothing is written and
+            # the fold serves its honest live (pre-checkpoint) state instead.
+            existing_attested = (
+                isinstance(existing.get("attestation"), dict)
+                and existing["attestation"].get("passed") is True
+                and verify_oracle_attestation(existing["attestation"])
+            )
+            if (
+                existing["role"] == "checkpoint"
+                and existing_attested
+                and snapshot_store.get_for_hypothesis(hypothesis_id) is None
+            ):
                 snapshot = _build_and_record_snapshot(
                     existing, family_store=family_store, evaluation_store=evaluation_store,
                     snapshot_store=snapshot_store,
@@ -1131,6 +1149,18 @@ def run_evaluation_and_record(
                 if primary_t is not None:
                     fields["entry_basis_sign_flip"] = _signs_differ(entry_t, primary_t)
         _tick()
+
+        # iter-8 Rider 1 (evaluator-diagnosed, iteration 7): a failed oracle attestation must
+        # never mint the hypothesis's ONE permanent checkpoint snapshot -- the WRITE side needs
+        # the SAME gate the READ side (`_snapshot_fold`, via `verify_oracle_attestation`) already
+        # carries, because the read side can be re-run and an append-only record cannot.
+        # Downgrades ONLY the "checkpoint" case: "monitoring"/"pending" never write a snapshot
+        # regardless (only `role == "checkpoint"` reaches `_build_and_record_snapshot` below), so
+        # nothing else changes. Every other field (T/permutation_p/CIs/etc.) stays exactly as
+        # computed above -- they are honest descriptive numbers regardless of attestation state;
+        # only the permanent-write eligibility is gated.
+        if fields["role"] == "checkpoint" and not fields["attestation"]["passed"]:
+            fields["role"] = "pending"
 
         recorded = evaluation_store.record(fields)
     except Exception as exc:  # noqa: BLE001 -- logged, then re-raised verbatim, never swallowed
@@ -1403,8 +1433,13 @@ def adjudications_response(
     pure-function fold (TC-23: byte-stable across calls against an unchanged store). A hypothesis
     whose OWN snapshot file exists but fails its integrity check folds to a dedicated refusal
     (never silently treated as "no snapshot", which would misrepresent an already-checkpointed
-    hypothesis). Never 404/500 on an empty or partially-corrupted registry (TC-25)."""
-    hypotheses, _errors = hypothesis_store.list()
+    hypothesis). Never 404/500 on an empty or partially-corrupted registry (TC-25). Also carries
+    ``integrity_errors`` (iter-8 Rider 2, evaluator-diagnosed iteration 7): ``hypothesis_store.
+    list()``'s own errors, surfaced the SAME way ``referee_registry.registry_response()`` already
+    surfaces its four stores' errors, instead of the ``_errors`` this function used to discard
+    silently -- an integrity-error disclosure belongs on EVERY reader of a store, not just the one
+    an audit happened to name."""
+    hypotheses, hypothesis_errors = hypothesis_store.list()
     live_basis = current_playbook_detector_basis()
     snapshot_records, snapshot_errors = snapshot_store.list()
     snapshot_by_hypothesis_id = {r["hypothesis_id"]: r for r in snapshot_records}
@@ -1422,7 +1457,11 @@ def adjudications_response(
             live_basis=live_basis, snapshot_unverifiable=hypothesis_id in unverifiable_hypothesis_ids,
         )
         entries.append({"hypothesis_id": hypothesis_id, **folded})
-    return {"entries": entries, "register": REFEREE_REGISTER}
+    return {
+        "entries": entries,
+        "register": REFEREE_REGISTER,
+        "integrity_errors": hypothesis_errors,
+    }
 
 
 # === authorize_promotion: the J-08 interlock's pure decision function (unwired this iteration) ========

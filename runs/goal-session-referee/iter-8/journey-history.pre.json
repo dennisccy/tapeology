@@ -1,0 +1,125 @@
+{
+  "journeys": {
+    "J-01": {
+      "id": "J-01",
+      "name": "The era transition stands — reconciliation made testable",
+      "status": "passing",
+      "last_verified_iter": "goal-referee-iter-2",
+      "last_passing_iter": "goal-referee-iter-2",
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/qa/goal-referee-iter-2-evidence/UT-J-01-result.png",
+      "spec_hash": "9fe67344e7c7ae71546d205bbd134263e172265ee542963f4b483f564c0e228e",
+      "notes": "NOT re-verified through the journey lane this iteration: reports/phase-goal-referee-iter-7-ui-test-results.md carries an explicit DEFERRED-BUDGET row for UT-J-01 (wall-clock trim rung 2 — telemetry iter_budget budget=3600 elapsed=6581, iter_budget_trim rung=replay-narrow), so the recorded status carries per methodology A.4. Durability alone does NOT cover it — J-01's own surfaces DID change (referee_evidence.py Rider 1; referee_routes.py gained 6 new J-06 route mounts) — so the evaluator re-verified the code directly instead of carrying it: tests/test_referee_evidence.py + tests/test_referee_registry.py + tests/test_referee_null.py + tests/test_referee_guards.py + tests/test_referee_adjudicate.py = 157 tests, 0 failures, 0 errors (evaluator's own --junit-xml run, 5.3s), and the readiness-fold endpoints are additive-only (no shipped route body touched). Carried, non-blocking: nothing specific to J-01."
+    },
+    "J-02": {
+      "id": "J-02",
+      "name": "The evidence contract — two families, one observation shape",
+      "status": "passing",
+      "last_verified_iter": "goal-referee-iter-2",
+      "last_passing_iter": "goal-referee-iter-2",
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/phase-goal-referee-iter-2-ui-test-results.md#UT-J-02",
+      "spec_hash": "853e7be61a1ba27f0c8baf57dff1914d3aa54c01f82471f990133afab378850a",
+      "notes": "DEFERRED-BUDGET row this iteration (see J-01). Its own module DID change (referee_evidence.py, Rider 1), so the evaluator re-verified directly rather than carrying: the iter-7 diff hunk was read line by line — `epoch_anchor = dataset.get('epoch_anchor') or 0.0` becomes an explicit `is None` exclusion returning `None`, counted in a new `excluded_missing_epoch_anchor` field; an EXPLICIT 0.0 anchor still anchors normally (the conflation, not the value, was the bug). tests/test_referee_evidence.py green inside the evaluator's own 157-test referee run. THE LONG-CARRIED 'epoch_anchor-or-0.0 / 1969-date' LEAD IS NOW CLOSED (open since iter-2). Note: strategy_observations() has zero production callers today (grep: tests only), so the return-shape addition breaks nothing."
+    },
+    "J-03": {
+      "id": "J-03",
+      "name": "The statistics core — calibrated, seeded, oracle-proven, fail-closed",
+      "status": "passing",
+      "last_verified_iter": "goal-referee-iter-5",
+      "last_passing_iter": "goal-referee-iter-5",
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/phase-goal-referee-iter-5-ui-test-results.md#UT-J-05-stats",
+      "spec_hash": "f00b804c40b2b60e1b9bf6209033d53796c98d86c14248ea079ef3a507291ae0",
+      "notes": "DEFERRED-BUDGET row this iteration. Evidence durability (methodology A.6) genuinely applies: referee_stats.py is NOT in this iteration's changed-file set (git status --porcelain + runs/goal-session-referee/iter-7/iter-diff.md list only referee_adjudicate.py [new], referee_null.py, referee_registry.py, referee_evidence.py, referee_routes.py and 5 test files). J-06 consumes it verbatim — the evaluator confirmed by grep that permutation_test/benjamini_hochberg/bootstrap_ci_*/sign_flip_result/equal_weight_t/run_oracle_attestation/verify_oracle_attestation each have exactly ONE definition site, all in referee_stats.py, with zero re-implementation in referee_adjudicate.py (the coherence auditor found the same independently). tests/test_referee_stats.py + test_referee_oracles.py green inside the evaluator's own full-suite run this iteration."
+    },
+    "J-04": {
+      "id": "J-04",
+      "name": "Matched nulls — comparable times, identical measurement",
+      "status": "passing",
+      "last_verified_iter": "goal-referee-iter-6",
+      "last_passing_iter": "goal-referee-iter-6",
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "runs/goal-session-referee/iter-6/iter-diff.md (referee_null.py hunk @529-537 + tests/test_referee_null.py riders)",
+      "spec_hash": "c16455f3b0356910d9d0e1062edea7531b45b5ee68f58df527ba8d182516e611",
+      "notes": "DEFERRED-BUDGET row this iteration, but its own module changed again (referee_null.py gained the `resolve_occurrence_backing_bucket` export), so the evaluator re-verified directly: the new export is additive and calls the SAME desk_playbook_context.band_context_block the existing context branch already calls (single source of truth — confirmed independently in iter-7/coherence.md); no existing function body changed. tests/test_referee_null.py green in the evaluator's own 157-test run. ITER-6's RESIDUAL T1 IS NOW CLOSED: Rider 3 re-pinned TC-15's seeded-draw expectation to the hand-captured literal [3, 4, 5, 7] instead of re-deriving it by calling the production selector (the fix landed in test_referee_null.py, not test_referee_registry.py as the spec's prose said — the developer flagged the file-name slip openly and the audit finding T1 names the same file)."
+    },
+    "J-05": {
+      "id": "J-05",
+      "name": "The registry — pre-registration with an immutable boundary",
+      "status": "passing",
+      "last_verified_iter": "goal-referee-iter-6",
+      "last_passing_iter": "goal-referee-iter-6",
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "docs/handoffs/goal-referee-iter-6-audit.md (PASS_WITH_GAPS, B1/B2 fixed) + evaluator's own 27-check acceptance probe, all pass",
+      "spec_hash": "2af99b40b3062ff02f0d57470dbb3085479c4232b5f509e4361bbf3e8562aa5e",
+      "notes": "DEFERRED-BUDGET row this iteration; its own module changed (referee_registry.py Riders 2+3), so the evaluator re-verified directly. B4 IS NOW CLOSED: registry_response() surfaces all four stores' integrity_errors as a fifth top-level key, reusing the get_referee_nulls disclosure shape (verified in the diff and by the coherence auditor); B5's three dead imports removed. tests/test_referee_registry.py green in the evaluator's own 157-test run. J-05's own 'a late withdrawal folds as p=1' clause — forward-deferred to J-06 at iter-6 — IS NOW REAL AND VERIFIED: referee_adjudicate._family_p_values iterates the family's FROZEN candidate_hypothesis_ids and fills 1.0 for any sibling with no checkpoint on file, so m can never shrink (TC-15/TC-16 green in the evaluator's own run; the fill-in is also the most conservative choice for the hypothesis's own BH rank). STILL OPEN, carried: B3 (WithdrawalStore.record() reports a corrupted file as 'already withdrawn'); B6 (_resolve_boundary compares a string override, so 'not-a-date' is ignored rather than refused)."
+    },
+    "J-06": {
+      "id": "J-06",
+      "name": "Estimand engines + adjudication — one checkpoint, recorded forever",
+      "status": "passing",
+      "last_verified_iter": "goal-referee-iter-7",
+      "last_passing_iter": "goal-referee-iter-7",
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/phase-goal-referee-iter-7-ui-test-results.md#UT-J-06 (keyless — no browser surface) + evaluator's own tests/test_referee_adjudicate.py run: 40/40 green, own --junit-xml",
+      "spec_hash": "f0a370fab0515b423625b8fbe8694180875d0839d8ca105230bcc0179b8ca2e8",
+      "notes": "TARGET this iteration; failing -> passing. Acceptance is '(Keyless; automated.)' so the T-10 no-screenshot rail does not apply (same standard as J-02..J-05 in this session); UT-J-06's SKIPPED row states the reason honestly (no browser-observable surface, Frontend Present: no). EVALUATOR'S OWN VERIFICATION, nothing accepted from the handoff/review: (1) ran tests/test_referee_adjudicate.py itself — 40 tests, 0 failures (junit parsed, not read from prose), and read the two DoD round-trip tests line by line: they plant real bars + real PlaybookStore records, build REAL matched-null records, register through the real registry and call the real run_evaluation_and_record — known-positive checkpoints `corroborated` with p<0.05, known-null folds `no_evidence` with T == 0.0 exactly; (2) read TC-8's assertions: an ON-boundary date and a deep-backfilled 2026-05-01 date (recorded_at = today, i.e. after registration) both yield coverage 0 and role 'pending' — the counter-test can genuinely fail; (3) read the BH fold: m is the family's frozen planned count, unevaluated/withdrawn siblings fold as literal 1.0, never dropped; (4) checkpoint immutability is asserted as byte-equality of the served entry before/after a later 'monitoring' run, with the snapshot count pinned at exactly 1; (5) append-only discipline read directly — every store's record() raises on an existing key AND refuses to overwrite an existing path; no update/delete method exists on any of the three new stores; (6) ran my own probe (deleted afterwards): a deliberately TAMPERED attestation injected at evaluation time — the served fold refuses (confirmatory_output_refused: true, verdict insufficient_sample, never a confirmatory token). TWO FINDINGS THE LEAN LANE MISSED, both proved by that probe, both non-blocking today (zero real hypotheses exist; no consumer): (A) an evaluation whose oracle attestation FAILS still mints the hypothesis's ONE permanent checkpoint snapshot with verdict 'corroborated' — the served rail refuses, but the append-only record is wrong forever and the single checkpoint can never be re-earned; the fix is to record role 'pending' with an honest reason when the attestation does not verify at evaluation time; (B) a corrupted hypothesis record file silently vanishes from GET /research/desk/referee/adjudications — the store reports the integrity error, adjudications_response() discards it and the response has no integrity_errors key at all (the same gap class Rider 2 just closed for GET /registry; note the module DOES handle a corrupted SNAPSHOT file honestly, so this is an asymmetry, and a hypothesis with an already-recorded permanent verdict would disappear entirely). Also open, from the reviewer/coherence auditor: the dev handoff's claim that blueprint.md's four-key registry shape 'is now five keys — updated as part of this fix' is factually false (grep: zero integrity_errors mentions in blueprint.md)."
+    },
+    "J-07": {
+      "id": "J-07",
+      "name": "The starter family — historical exploration becomes registered questions",
+      "status": "failing",
+      "last_verified_iter": "goal-referee-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/qa/goal-referee-iter-0-evidence/J-07-fail.png",
+      "spec_hash": "473e2966a4c3fc78ec62b1ce97a0a6ada59891a625c9c88daf0964e8ec1c9f66",
+      "notes": "Not targeted this iteration; unchanged. Now fully unblocked — registration (J-05) and evaluation/adjudication (J-06) both exist. What remains: the shortlist served with live readiness, the /desk registration UI (first Referee UI slice, browser-verifiable), and the operator's real approval act. Zero apps/frontend/ files changed this iteration (git status --porcelain)."
+    },
+    "J-08": {
+      "id": "J-08",
+      "name": "The strategy family + the promotion interlock — fail closed, no bypass",
+      "status": "failing",
+      "last_verified_iter": "goal-referee-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/phase-goal-referee-iter-0-ui-test-results.md#UT-J-08",
+      "spec_hash": "04cecc16df051077401e5a4c694d6d81422554e3d45fccfcf3615b2722de9808",
+      "notes": "Not targeted this iteration. authorize_promotion() now EXISTS as a pure, unwired function with all 6 named refusal classes (evaluator confirmed by grep that pnl_scan.py is untouched — no interlock is wired yet, exactly as the spec scoped it). Its refusal-class partition is a developer interpretation call logged in state/assumptions.md and must be reviewed before J-08 mints certificates against it. No bypass flag / env override exists in the function (evaluator grepped its body for getenv/environ/bypass: none)."
+    },
+    "J-09": {
+      "id": "J-09",
+      "name": "The Referee on /desk + MCP contract v5 — 22 read-only tools",
+      "status": "failing",
+      "last_verified_iter": "goal-referee-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/qa/goal-referee-iter-0-evidence/J-09-fail.png",
+      "spec_hash": "26f414b65f170424797c6c23ab3c013a3648e2db090af16db72c52d2b781bf9d",
+      "notes": "Not targeted this iteration. Independently re-confirmed unbuilt by the evaluator: tests/test_mcp_server.py EXPECTED_TOOLS parses to exactly 20 tool names (not 22) and zero frontend files appear in this iteration's diff. J-09 now has real payloads to render (registry + adjudications + evaluation runs)."
+    },
+    "J-10": {
+      "id": "J-10",
+      "name": "The kept product stands — regression sentinel",
+      "status": "partial",
+      "last_verified_iter": "goal-referee-iter-7",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/qa/goal-referee-iter-7-evidence/J-10-verify.png",
+      "spec_hash": "d14682891de7794bb3728ade717e6a1ed805f44384087a9bf18d75d09348fd9a",
+      "notes": "Kept-product half RE-VERIFIED GREEN this iteration by the deterministic replay lane with a genuinely fresh dated screenshot (reports/phase-goal-referee-iter-7-regression-replay-results.md UT-J-10 PASS; reports/qa/goal-referee-iter-7-evidence/J-10-verify.png, 2026-08-15 12:01, opened by the evaluator: the /desk page renders its three-route nav plus the shipped Playbook panels — 'Playbook not computed for this session.' honest empty state, Run Playbook, Backscan, back-scan runs, and Playbook Evidence with its signature 70c76fc829513e62 and pooled-record basis line). This closes iteration 6's evidence hole (the lane did not run at all there) and satisfies this iteration's DoD clause verbatim. Supporting checks the evaluator ran itself: full backend suite green (see the iteration-7 eval.md for the exact count) with test_no_execution_path / test_copy_discipline / test_desk_ui_guards / test_mcp_server / test_desk_refresh_chain_guard / test_pnl_scan all included; Config().config_fingerprint() printed live as 08e471b10130e1e2; EXPECTED_TOOLS parsed to exactly 20; store-scope guard CLEAN — all 11,274 protected files byte-size and mtime unchanged (reports/qa/goal-referee-iter-7-store-scope-guard.md); zero apps/frontend/ diff and pnl_scan.py/desk_forward.py/desk_playbook*.py/levels.py/config.py untouched. STILL PARTIAL: the era-completion clauses are structurally unmeetable until J-09 — the three Referee /desk sections do not exist and MCP advertises 20 tools, not 22."
+    }
+  },
+  "anti_goal_violations": [
+    {
+      "iter": "goal-referee-iter-6",
+      "anti_goal": "The historical atlas is exploratory forever. No historical observation is ever served, labeled, or counted as forward confirmation; discovery data renders only under its exploratory label. (critical)",
+      "severity": "critical",
+      "evidence": "docs/handoffs/goal-referee-iter-6-audit.md finding B1 — apps/backend/app/research/referee_routes.py exposed `registered_at: Optional[str]` on the registration body and forwarded it into register_hypothesis, where apps/backend/app/research/referee_registry.py:665 makes it the sole input to the boundary derivation; the CLI carried the same `--registered-at` knob. Proven live pre-fix: a POST with registered_at 2025-01-01 stored confirmation_start_boundary 2024-12-31 and made three pre-existing historical sessions accrue as post-boundary confirmation, in an append-only record with no delete path.",
+      "resolved": true,
+      "resolution": "Fixed inside iteration 6 by the full pipeline's hard-audit lane and re-verified live by the evaluator there (a caller-supplied 2025-01-01 instant is ignored; today's honest ET date is stored). RE-CONFIRMED STILL CLOSED IN ITERATION 7: the iter-7 diff touches referee_registry.py only for Rider 2 (integrity_errors disclosure) and Rider 3 (dead-import removal) — no boundary-derivation code changed, and iteration 7 independently re-verifies the same rail from the other side (TC-8: an on-boundary and a deep-backfilled record both contribute zero to coverage and to T)."
+    }
+  ],
+  "updated_at": "2026-08-15T12:40:00Z"
+}

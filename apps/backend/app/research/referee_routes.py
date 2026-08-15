@@ -63,6 +63,7 @@ from .referee_registry import (
     register_hypothesis,
     registry_response,
     resolve_referee_registry_dir,
+    shortlist_response,
 )
 from .routes import ResearchRegistry, get_bar_store, get_dataset_store, get_registry
 
@@ -268,6 +269,22 @@ def get_referee_registry(
         certificate_store=certificate_store,
         playbook_store=playbook_store,
         config_fingerprint=CONFIG.config_fingerprint(),
+    )
+
+
+@router.get("/registry/shortlist")
+def get_referee_registry_shortlist(
+    playbook_store: PlaybookStore = Depends(get_playbook_store),
+    bar_store: BarStore = Depends(get_bar_store),
+) -> dict:
+    """J-07's starter-family shortlist: spec Sec7's five pre-registered candidates (S-1..S-5)
+    beside LIVE readiness (a plain read; GET never computes, T-8 -- the band-context lookup
+    behind S-4/S-5 is ``compute=False``, over the ALREADY-RECORDED band map)."""
+    return shortlist_response(
+        playbook_store=playbook_store,
+        config_fingerprint=CONFIG.config_fingerprint(),
+        bar_store=bar_store,
+        config=CONFIG,
     )
 
 

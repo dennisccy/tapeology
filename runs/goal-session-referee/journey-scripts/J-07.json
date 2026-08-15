@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "journey": "J-07",
+  "name": "The starter family — historical exploration becomes registered questions",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {"n": 1, "journey": "J-07", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Referee Registry"}},
+    {"n": 2, "journey": "J-07", "action": {"type": "click", "target": {"testid": "desk-section-expand-refereeRegistry"}}, "expect": {"text": "capitulation:long"}},
+    {"n": 3, "journey": "J-07", "action": {"type": "click", "target": {"testid": "referee-shortlist-select-S-1"}}, "expect": {"text": "Register S-1 (capitulation:long, Estimand A)?"}},
+    {"n": 4, "journey": "J-07", "action": {"type": "click", "target": {"testid": "referee-registration-confirm-button"}}, "expect": {"text": "discovery (exploratory)"}}
+  ]
+}

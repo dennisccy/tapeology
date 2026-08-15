@@ -245,6 +245,12 @@ _PRICE_ARITHMETIC_FIELDS = (
     r"|breach\.(?:breached_count|total_count)"
     r"|basis\.(?:n_records)"
     r"|(?:compute|tick|snapshot)\.(?:signals_done|signals_total)"
+    # goal-referee-iter-8 (J-07): the Referee Registry section's own served numerics -- a
+    # shortlist candidate's live readiness (never divide/subtract these client-side; the backend
+    # already served accrual_rate_sessions_per_day/projected_days_to_target as computed numbers)
+    # and a registered hypothesis's discovery count (never combined with its accrual siblings).
+    r"|candidate\.(?:n|n_sessions|accrual_rate_sessions_per_day|projected_days_to_target)"
+    r"|hyp\.discovery\.(?:n|n_sessions)"
 )
 _PRICE_ARITHMETIC_PATTERN = re.compile(
     rf"({_PRICE_ARITHMETIC_FIELDS})\s*[-+*/]|[-+*/]\s*({_PRICE_ARITHMETIC_FIELDS})"
@@ -445,6 +451,37 @@ def test_desk_page_price_arithmetic_guard_catches_evidence_basis_field_arithmeti
     # And the pattern does NOT over-match: the real page's own guard test below still finds zero
     # hits, so this new coverage does not accidentally flag legitimate, non-arithmetic JSX.
     assert _PRICE_ARITHMETIC_PATTERN.search("const label = `${basis.n_records} records`;") is None
+
+
+def test_desk_page_price_arithmetic_guard_catches_referee_shortlist_and_discovery_field_arithmetic():
+    """goal-referee-iter-8 (J-07) counter-test: the extended guard catches arithmetic on the new
+    Referee Registry section's own `candidate.*` (shortlist readiness) and `hyp.discovery.*`
+    bindings -- these numbers are computed once, on the backend (referee_registry.py's
+    `shortlist_response()`/`_hypothesis_discovery()`), and must never be re-derived client-side."""
+    seeded_days = (
+        "const days = (candidate.target_sessions - candidate.n_sessions) / "
+        "candidate.accrual_rate_sessions_per_day;"
+    )
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_days) is not None
+
+    seeded_n_diff = "const untested = candidate.n - candidate.n_sessions;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_n_diff) is not None
+
+    seeded_projected = "const soon = candidate.projected_days_to_target * 2;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_projected) is not None
+
+    seeded_discovery_total = "const total = hyp.discovery.n + hyp.accrual.informative_post_boundary_sessions;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_discovery_total) is not None
+
+    seeded_discovery_sessions = "const ratio = hyp.discovery.n_sessions / hyp.discovery.n;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_discovery_sessions) is not None
+
+    # And the pattern does NOT over-match: rendering the two numbers side by side as plain text
+    # (never an arithmetic operator between the field accesses themselves) stays clean -- exactly
+    # the SAME "X / Y" display idiom this component actually uses.
+    assert _PRICE_ARITHMETIC_PATTERN.search(
+        "const label = `${hyp.discovery.n} / ${hyp.discovery.n_sessions}`;"
+    ) is None
 
 
 # goal-playbook-iter-4 audit (F1): `base_lows_ascending` is ONE served field name carrying the
