@@ -103,3 +103,49 @@ Both records are recorded by referee_null.py this iteration but are not yet rend
 (J-09 is their first UI consumer, per the Information Architecture row above) -- no WARN needed,
 this value is registered same-iteration as it is introduced. Not consumed yet by GET
 /research/desk/referee/evidence or any other already-registered row. -->
+
+<!-- iter-6 note: the "Registry (families, hypotheses, withdrawals, certificates)" row (owner
+referee_registry.py, endpoints GET/POST /research/desk/referee/registry[/hypotheses] --
+unchanged from the baseline registration above) gains its first field-level shape this
+iteration -- the row existed as an owner+endpoint stub since iter-0; nothing about its owner or
+endpoint changes. Still not rendered anywhere (J-09 remains its first UI consumer, per the IA
+table above); J-07 (next) is its first real caller (the registration act).
+
+Family record (immutable, append-only): family_id: str, q: float (0 < q <= 1),
+candidate_hypothesis_ids: list[str] (the COMPLETE planned list -- the BH denominator m,
+forever), registered_at: str (ISO-8601 UTC).
+
+Hypothesis record (immutable, append-only): hypothesis_id: str, family_id: str, registered_at:
+str (ISO-8601 UTC), evidence_family: "playbook"|"strategy", estimand: "A"|"B"|"C", setup_id:
+str, side: "long"|"short", context_predicate: dict|None (B/C only), primary_measure_key: str,
+primary_horizon: str, sidedness: "greater"|"less"|"two-sided", null_spec_id: str|None (None for
+evidence_family="strategy" -- the strategy analog uses the recorded random_null, not
+referee_null.py), test_spec_id: str ("referee-test-perm-v1" today), detector_basis: str|None
+(None for strategy, mirroring referee_evidence.py's existing convention), context_algorithm_version:
+str|None (B/C only), confirmation_start_boundary: str ("YYYY-MM-DD", the ET calendar date of
+registered_at; sessions admitted strictly after), target_sessions: int (>= REFEREE_MIN_SESSIONS),
+min_occurrences: int (>= REFEREE_MIN_OCCURRENCES), origin: "historical-exploration". Fold-only
+(read-side, never persisted on the record itself): status: "active"|"withdrawn"; accrual:
+{informative_post_boundary_sessions: int, target_sessions: int, is_proxy: true, basis_current:
+bool} -- a disclosed READINESS PROXY (distinct post-boundary session_dates carrying >=1
+observation in the hypothesis's own (setup_id, side) cell, reusing
+referee_evidence.playbook_occurrence_readiness()'s existing per-cell pooling), NOT yet spec
+§3.1's exact "eligible occurrence with eligible anchor" informative-session count -- J-06's real
+evaluation-time count supersedes it as the only number that ever gates a confirmatory
+evaluation (see state/assumptions.md iter-6 entry).
+
+Withdrawal record (immutable, append-only; permitted only while no post-boundary evaluation of
+the hypothesis exists): hypothesis_id: str, withdrawn_at: str (ISO-8601 UTC), reason: str|None.
+
+Certificate record (immutable, append-only store defined this iteration; SHAPE per
+docs/referee-statistical-spec.md §8 -- store-only, no writer/mint path until J-08, per
+docs/goal.md's own "mintable only through the real evaluation rail" law; served as an empty
+certificates: [] this iteration): candidate: {strategy_id: str, profile: str},
+champion_identity_at_scan_time: dict, train_dataset: {id: str, checksum: str, split: str},
+holdout_dataset: {id: str, checksum: str, split: str}, config_fingerprint: str, gate_version:
+str, referee_parameters_hash: str, family_id: str, hypothesis_id: str, gate_results:
+{calibrated_p: float, bh_pass: bool, ci: [float, float], floors_met: bool}.
+
+GET /research/desk/referee/registry response: {families: [FamilyRecord...], hypotheses:
+[HypothesisRecord + status + accrual...], withdrawals: [WithdrawalRecord...], certificates:
+[CertificateRecord...] (empty this iteration)}. -->

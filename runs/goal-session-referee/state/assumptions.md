@@ -207,3 +207,48 @@ module whose records are append-only forever; that test gap is carried as a bind
 next iteration rather than as a blocker. If the owner prefers the literal reading, J-04 can be
 held until a >K-eligible golden with a pinned expected subset exists.
 **Reversible:** yes
+
+## iter-6 — goal-decomposer
+
+**Ambiguity:** J-05's Steps require `GET .../registry` to serve "per-hypothesis accrual
+(informative post-boundary sessions vs target)". `docs/referee-statistical-spec.md` §3.1
+defines "informative session" precisely as "≥1 eligible occurrence with ≥1 eligible anchor" —
+a definition that requires the estimand engine (J-06, not yet built) to pair each occurrence
+against real matched-null anchors. Computing that pairing inside the registry now would either
+duplicate J-06's not-yet-built statistical logic, or require a null build (an explicit J-04
+operator act goal.md says never runs automatically) to already exist for every freshly
+registered hypothesis before the registry page could show anything.
+**We chose:** Registry accrual is served as an honestly-labeled, cheaper PROXY: the count of
+distinct post-boundary `session_date`s carrying ≥1 observation in the hypothesis's own
+`(setup_id, side)` cell, reusing `referee_evidence.py`'s existing
+`playbook_occurrence_readiness()` per-cell pooling (current `detector_basis`) rather than the
+estimand engine's exact eligible-occurrence/eligible-anchor test — matching how J-07's own
+Steps already describe shortlist readiness as coming from "the J-01 fold", not a live estimand
+run. The response marks this `is_proxy: true` so nothing downstream can mistake it for a
+confirmatory-eligible count; J-06's real evaluation-time count (computed against actual null
+records, per §3.1) becomes authoritative once J-06 exists and remains the only number that ever
+gates a confirmatory evaluation — the registry never computes or serves a verdict.
+**Reversible:** yes — the proxy is a read-side display convenience with zero persisted state
+and no consumer beyond this GET; J-06 introduces the real count independently, on its own
+evaluation records, and nothing here forecloses or contradicts it.
+
+## iter-6 — goal-decomposer
+
+**Ambiguity:** Iteration 5's evaluator next-step recommendation asked to "decide whether
+comparison sets [null records] should be filed under a real question id [hypothesis_id] once
+questions exist (today they borrow the comparison-rule's own name)". J-05 is the first
+iteration where hypothesis_ids actually exist, so the question becomes decidable, but neither
+goal.md nor the statistical spec states whether null-record identity or filing should change
+once hypotheses exist.
+**We chose:** Keep null records keyed exactly as J-04 shipped them —
+`(observation_id, null_spec_signature)`, filed by null-spec id — with NO `hypothesis_id` field
+added and no re-keying. Null anchors are a shared, hypothesis-independent measurement
+(comparable moments for one occurrence under one matched-null rule); multiple hypotheses (e.g.
+an Estimand A candidate and a later Estimand C candidate on the same setup/side) can legitimately
+reuse the identical null record once built, and filing by hypothesis_id would force needless
+rebuilds and contradict the era's own reuse/no-second-implementation discipline. A hypothesis's
+evaluation (J-06) looks a null record UP by null-spec id + observation; it never owns or files
+one.
+**Reversible:** yes — this is a storage/query-key decision, not a statistical redefinition; no
+null record has ever been filed any other way, so there is nothing to migrate if a future owner
+ruling disagrees.
