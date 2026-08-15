@@ -158,3 +158,31 @@ smaller p is reachable than the method can reach, which could let a hypothesis b
 a target it can never meet. The fix is one line plus two test assertions if the owner rules for the
 "attainable" reading; J-04–J-08 are its first readers, so it must be settled before then.
 **Reversible:** yes
+
+## iter-5 — goal-decomposer
+
+**Ambiguity:** `docs/referee-statistical-spec.md:168` says "the minimum attainable p
+(granularity) is served beside every p," and `permutation_test`'s exact-enumeration branch
+serves `min_attainable_p = 1/(draws_used+1)` — a value the iteration-3/4-fixed method can never
+actually produce, since the observed grouping is always one guaranteed member of the enumerated
+space and therefore always self-extreme, making the TRUE floor `2/(draws_used+1)` (iteration 4's
+own 2,500-case sweep found zero violations, 448 landing exactly on this floor). Iteration 4's own
+evaluator carried this as an explicit "OWNER RULING" rider for iteration 5, and goal mode is
+headless — no human ruling is available before this iteration builds J-04, the field's first real
+consumer-adjacent journey.
+**We chose:** Ruled for the field's own literal name — "minimum ATTAINABLE" — over the spec
+prose's looser "granularity" gloss: `min_attainable_p` now reads `2.0/(draws_used+1)` in
+exact-enumeration mode (unchanged at `1.0/(draws_used+1)` in the seeded/Monte-Carlo branch, which
+was already correct). This matches the era's own fail-closed/honesty ethos more directly than the
+alternative — a disclosure that overstates reachability could let a future hypothesis register a
+target p it can never meet, the same failure shape (silent over-confidence) iteration 3's finding
+was about. Verified zero blast radius before ruling: `_ATTESTATION_EXPECTED` pins exactly
+`{permutation_p, permutation_enumeration, ci_low, ci_high}` — `min_attainable_p` is not one of
+the four attestation-checked fields, so this fix requires no `STATS_CORE_VERSION` bump and no
+attestation re-pin. Consequence: the fix is a one-line conditional plus two direct test
+assertions, landing inside iteration 5 rather than blocking on an unavailable human.
+**Reversible:** yes — zero consumers exist yet (J-04 is the first real journey to touch
+`referee_stats.py` again after this field); a future explicit owner ruling can still override
+this reading by editing the one conditional line, and per the spec's own change-control rule,
+doing so after any real evaluation record exists would be a named revision that re-keys results,
+never a silent edit.

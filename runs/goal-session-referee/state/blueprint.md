@@ -79,3 +79,27 @@ one shared helper both call. Discloses a date whose newest Playbook record's own
 (detector_basis, config_fingerprint) does not match the live values, instead of that record
 silently contributing zero. No existing field's value changes; the row's owner/endpoint stay
 exactly as above — this is a field addition, not a new value or a new canonical source. -->
+
+<!-- iter-5 note: the "Matched-null records" and "Null compute progress + runs" rows (owner
+referee_null.py, unchanged from the baseline registration above) gain their first field-level
+shape this iteration -- both rows existed as owner+endpoint stubs since iter-0; nothing about
+either row's owner or endpoint changes.
+
+Null record: null_record_id: str (pure function of (observation_id, null_spec_signature)),
+null_spec_id: "referee-null-tod-v1"|"referee-null-context-v1", null_spec_signature: str
+(sha256[:16] of that id's full parameter blob), observation_id: str, symbol: str, session_date:
+"YYYY-MM-DD", side: "long"|"short", tod_bucket: "open"|"mid"|"close", k_requested: int,
+k_drawn: int, eligible_count: int, excluded: bool, anchors: list[{anchor_ts: str (ISO-8601
+UTC), measure_key: str, value: float, window_overlap_fraction: float, backing_bucket_match:
+bool|None}], mean_window_overlap: float|None, non_finite_excluded_count: int,
+backing_bucket_eligibility_rate: float|None (context variant only), context_algorithm_version:
+str|None, provenance: {config_fingerprint: str, computed_at: str (ISO-8601 UTC)}.
+
+Run-ledger record: run_id: str, null_spec_id: str, state:
+"running"|"completed"|"failed"|"cancelled", started_at: str, finished_at: str|None, progress:
+{done: int, total: int}, error: str|None.
+
+Both records are recorded by referee_null.py this iteration but are not yet rendered anywhere
+(J-09 is their first UI consumer, per the Information Architecture row above) -- no WARN needed,
+this value is registered same-iteration as it is introduced. Not consumed yet by GET
+/research/desk/referee/evidence or any other already-registered row. -->
