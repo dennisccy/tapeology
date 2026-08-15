@@ -617,3 +617,23 @@ rig's screenshot). Recorded in `journey-history.json`'s `anti_goal_violations` a
 entry so the trail is not lost.
 **Reversible:** yes — nothing is stored; if the owner reads the rail as covering served projections
 too, the entry's severity is a one-word edit and the fix is already shipped either way.
+
+## iter-9 — goal-decomposer
+
+**Ambiguity:** Iteration 8's evaluator next-step recommendation asked to "get an owner ruling
+on the missing short side of the wall-based candidate" — spec §7's own table row for S-4 reads
+`range_trade (registered per side) at_wall vs other same-setup contexts`, but only the long-side
+candidate (`range_trade:long at_wall`, estimand B) exists in `REFEREE_STARTER_FAMILY_SHORTLIST`;
+the short side was silently dropped in iteration 8 with no recorded reason. It is unclear whether
+"get an owner ruling" means this genuinely needs a human decision, or whether the spec text
+already settles it.
+**We chose:** Read spec §7's "(registered per side)" as a plain, unambiguous instruction rather
+than a values judgment requiring a human — S-4 is the only shortlist row carrying that qualifier,
+and its own corpus-count column already anticipates both populations ("subset of 469+459 / ~80").
+This iteration therefore scopes ADDING the missing `range_trade:short at_wall` candidate as a
+sixth `REFEREE_STARTER_FAMILY_SHORTLIST` module constant (reusing `_starter_context_readiness`
+verbatim), rather than escalating for a human ruling or leaving the drop unrecorded a second time.
+**Reversible:** yes — the shortlist fold is a pure read with no persisted output; the new
+candidate is only ever SELECTABLE, never auto-registered, so nothing is written until an operator
+explicitly approves it through the real registration act. If a future owner ruling disagrees,
+removing the sixth module-constant entry is a one-line change with nothing stored to migrate.

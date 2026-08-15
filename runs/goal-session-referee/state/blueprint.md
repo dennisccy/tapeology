@@ -248,3 +248,49 @@ confirmation_start_boundary field (iter-6's RetroactiveBoundary hardening covers
 discovery fold reads it, never re-derives or accepts a client-supplied alternative). Never
 contributes to the existing accrual block; a deep-backfilled pre-boundary record recorded after
 registration still contributes to discovery, never to accrual (counter-tested). -->
+
+<!-- iter-9 note (J-08): field-level additions/writer completions, all under ALREADY-registered
+Data Contract rows -- no new row.
+
+1. "Promotion authorization verdict" row (owner referee_adjudicate.py's authorize_promotion,
+built unwired at iter-7; endpoint unchanged: surfaced inside pnl_scan._promote / the scan
+report's promotion block) is WIRED for real this iteration. The promotion block gains three
+fields alongside its existing candidate_id/promoted/note/enhancement_id: promotion_eligible:
+bool, refusal_class: "no_certificate"|"stale"|"wrong_candidate"|"mismatched_datasets"|
+"failed_gates"|"malformed_unverifiable"|None, reason: str|None. A non-promoting sweep's report
+stays byte-compatible outside these three fields (goal.md J-08 acceptance).
+
+2. Certificate record (shape unchanged from the iter-6 note above -- candidate,
+champion_identity_at_scan_time, train_dataset, holdout_dataset, config_fingerprint, gate_version,
+referee_parameters_hash, family_id, hypothesis_id, gate_results) gains its first REAL WRITER this
+iteration: minted only at a strategy-family hypothesis's attested, gate-passing confirmatory
+checkpoint, through the real evaluation rail (never a hand-written or fixture path in production
+code). GET /research/desk/referee/registry's certificates array can now be non-empty; stays []
+against the operator's real store this era (goal.md: "no strategy certificate can honestly exist
+this era").
+
+3. Evaluation record's already-declared evidence_family: "playbook"|"strategy" enum (iter-7 note)
+gains a real "strategy" branch for the first time -- pools referee_evidence.strategy_observations()'s
+primary/null trade lists by cluster_key = dataset id (never session_date), spec Sec3.7's per-dataset
+delta, reusing referee_stats.py's permutation/BH primitives with zero diff to that module. No new
+field.
+
+4. shortlist_response() (GET /research/desk/referee/registry/shortlist, endpoint cell registered
+at iter-8) gains two new top-level response fields: family_id: str (the existing
+REFEREE_STARTER_FAMILY_ID literal, moved backend-side) and family_q: float, 0 < family_q <= 1 (a
+new REFEREE_DEFAULT_Q = 0.10 module constant, spec Sec1's own pinned value) -- closes the iter-8
+coherence-audit F1 WARN (the value existed only as an unowned apps/frontend/app/desk/page.tsx
+literal). apps/frontend/app/desk/page.tsx's registration POST body reads both from the fetched
+shortlist response instead of a local literal; no rendered value changes.
+
+5. REFEREE_STARTER_FAMILY_SHORTLIST gains a sixth candidate (same shape as S-1..S-5, no new
+field): range_trade:short at_wall, estimand B -- spec Sec7's own "(registered per side)" wording
+for S-4, dropped without a recorded reason at iter-8 (state/assumptions.md iter-9 entry). Reuses
+_starter_context_readiness verbatim.
+
+6. The "Registry" row's per-hypothesis accrual/discovery blocks (iter-6/iter-8 notes, no new
+field): for a B/C hypothesis, both now apply the SAME context_predicate/backing-bucket check
+_starter_context_readiness already uses, via one shared helper -- closing the iter-8
+evaluator-found gap where a context-based candidate's registered-row numbers (ignoring context)
+could disagree with its own shortlist row's live readiness (which already applied it) for the
+identical cell. -->
