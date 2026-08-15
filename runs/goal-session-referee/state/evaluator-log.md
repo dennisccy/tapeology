@@ -564,3 +564,50 @@ For a person: approve one short verification round; nothing needs a human unbloc
 items, neither blocking — this round's eleven changed files are still uncommitted (iterations 8 and
 9 are already committed), and, from iteration 2 and outside this project, the unrelated trendora
 backend on port 8255 has still not been restarted.
+
+## Iteration 11 — goal-referee-iter-11
+
+**Date:** 2026-08-15T23:35:00Z
+**Verdict:** GOAL_ACHIEVED
+**Depth dispatched:** evidence
+**Journey deltas:**
+- Newly passing: none — all ten were already recorded passing; this round replaced evidence, not status
+- Newly failing: none
+- Regressed: none
+- Deferred rows CLEARED: J-01 "The era transition stands", J-02 "The evidence contract", J-03 "The
+  statistics core", J-04 "Matched nulls", J-05 "The registry", J-06 "Estimand engines and
+  adjudication" and J-08 "The strategy family and the promotion lock" — each now carries a real
+  PASS row from its own named test file, not a "not run" row
+- Owed picture delivered: J-09 "The Referee on the Desk page" — the stale-picture flag is cleared
+- Re-checked by replay with fresh pictures: J-07 "The starter family", J-10 "The kept product stands"
+- Anti-goal violations: none new; the three earlier ones stay recorded as resolved, and no code
+  changed this round so none could re-open
+
+**Reasoning:** This round wrote no code; it only had to prove what was already built. I did not take
+the round's word for any of it. I re-ran the entire test suite myself — 2,688 tests collected, 2,680
+passed, 8 skipped, nothing failed — and then pulled the per-part counts out of my own machine
+result file rather than reading them from the round's log: 19 guard tests, 26 evidence-contract
+tests, 48 statistics tests, 11 oracle tests, 36 matched-null tests, 47 registry tests, 57
+adjudication tests and 30 promotion tests. Every single number matches the round's own claim, and
+the named promotion-refusal tests are all present and passing. I printed the settings pin myself
+(08e471b10130e1e2). For the one owed picture I went further, because a picture is easy to fake: I
+recomputed its checksum (5baf7d31fdc1b73101ed7ec264d97a94 — genuinely different from the old shared
+one), opened it and zoomed in until I could read the red sentence "Refused — a null build is already
+running for this spec." beside a live progress of 57 of 126 and a greyed-out "Building…" button; then
+I read the page's own code and confirmed that sentence can only appear when the server itself
+answers "not started", so the picture proves a real refusal rather than a screen trick. I also traced
+where the round's writes actually landed: 24,923 new job records sit in a throwaway folder inside
+this round's temporary directory, the owner's real data folder contains no Referee folders at all,
+and the guard reports its 11,274 protected files unchanged. Finally I confirmed by hand that nothing
+was built: no change anywhere under the application folders. With every journey holding current
+evidence, no open rule violation, a clean structural check, and unchanged goal text, the era is done.
+
+**Next-step recommendation:** Halt — goal achieved. For a person, three non-product items remain:
+commit this round's evidence files; fix the shared walk-through recorder, which still cannot play a
+"scroll" step and so left the era with no video walk-through (it lives in the shared tooling folder,
+not in this project); and, whenever someone is next working in this area, four small clean-ups —
+add the four Referee storage folders to the guard that watches the owner's real data, make a
+certificate with no name at all fail instead of matching, show a clear word instead of a plain dash
+when a second data request fails, and correct a stale comment. Still outstanding from round 2 and
+outside this project: the unrelated trendora backend on port 8255 has not been restarted. Approve
+closing the era and committing the files.

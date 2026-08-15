@@ -197,3 +197,30 @@ state is unreachable through the natural click flow — the refusal copy in `pag
 appears when a run was started elsewhere (second tab, CLI) — and no test asserts that string.
 **Applies to:** any iteration whose acceptance enumerates several distinct screenshots; any
 single-flight/idempotency acceptance on a UI that guards the control client-side.
+
+## iter-11 — 2026-08-15T23:35:00Z
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** A single-flight refusal can be impossible to photograph by hand when the job it guards
+is fast: on the fixture rig a `referee-null-tod-v1` build finishes in ~88 ms, so no navigate +
+expand + click sequence can ever land inside it. The capture only worked by holding the manager
+busy from a SECOND channel — a bounded, stop-file-controlled loop of direct
+`POST /research/desk/referee/nulls/compute` calls against the same backend process (single-flight
+state is per-process and in-memory, `referee_null.py:983`, so a CLI in its own process would not
+have worked) — and it cost 24,923 append-only run-ledger rows on the throwaway rig. Next time,
+prefer a slower job (a bigger spec or a deliberately large corpus) over a hot loop, and always
+confirm the rig with `assert_scoped_qa_backend.py` first, because these writes have no delete path.
+**Applies to:** any future iteration that must photograph a single-flight refusal, a cancel, or any
+other in-flight compute state on `/desk`; and any capture task that triggers real append-only writes.
+
+## iter-11 — 2026-08-15T23:35:00Z
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** A `Depth: evidence` round is enough to clear `DEFERRED-BUDGET` rows for keyless
+journeys — each one's own named pytest module, run live and recorded as a real PASS row, satisfies
+`goal_gate.py`'s results gate — but it cannot fix tooling: the walkthrough recorder still rejects
+the `scroll` action (`incredible_auto_dev/.../demo_runner.py` `_VALID_ACTIONS`), so the era closes
+with no demo recording at all. If a walkthrough matters for an era's finish, the recorder fix has
+to happen in a round that dispatches a developer, or outside goal mode entirely.
+**Applies to:** any session planning an evidence-depth round to clear deferred rows, and any era
+whose closure artifacts are expected to include a demo recording.

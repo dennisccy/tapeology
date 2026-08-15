@@ -881,3 +881,24 @@ in NOTES/OUT OF SCOPE for a human or a future framework-maintenance pass instead
 framework-maintenance session outside goal-mode) can fix `demo_runner.py`'s action vocabulary (or
 change what the demo-narrator emits) independent of any Tapeology store/schema, and re-recording
 the walkthrough costs nothing stored today.
+
+## iter-11 — goal-evaluator
+
+**Ambiguity:** goal.md J-09's third acceptance screenshot is worded "an in-flight second
+**evaluation** trigger is refused single-flight (screenshot)". The artifact captured this round is
+the in-flight second **null-build** trigger being refused (`page.tsx:8545-8547`,
+`data-testid="referee-null-build-trigger-error-referee-null-tod-v1"`), not the evaluate trigger
+(`page.tsx:8604-8606`, "Refused — an evaluation is already running for this hypothesis."). Both live
+in the same Referee Runs panel, both are set ONLY from a server response carrying `started: false`,
+and both are literally the same code shape; iteration 10's evaluator and this iteration's spec
+(TC-8) both defined the owed capture as the null-build variant.
+**We chose:** read "evaluation trigger" as "a Referee Runs compute trigger" and accept the
+null-build refusal capture as satisfying the clause — so J-09 stays `passing` with
+`evidence_makeup` CLEARED. Weighted by: the clause's substance is that a single-flight refusal
+reaches the screen with honest copy, which the picture proves for real (I read the exact sentence at
+3x zoom beside a live 57/126 progress); the evaluate-side refusal is covered by its own unit test
+(TC-32, `tests/test_referee_adjudicate.py:1744`) and its own reachable render path; and the era's
+own rule that an evidence gap on confirmed behaviour never blocks (methodology A.7).
+**Reversible:** yes — if the owner reads the clause strictly, the remedy is one more capture of the
+evaluate-side refusal on the fixture rig (a hypothesis is already registered there, S-1); nothing
+stored anywhere depends on this reading.

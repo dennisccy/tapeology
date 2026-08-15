@@ -1,0 +1,142 @@
+{
+  "journeys": {
+    "J-01": {
+      "id": "J-01",
+      "name": "The era transition stands — reconciliation made testable",
+      "status": "passing",
+      "last_verified_iter": "goal-referee-iter-2",
+      "last_passing_iter": "goal-referee-iter-2",
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/phase-goal-referee-iter-2-ui-test-results.md",
+      "spec_hash": "9fe67344e7c7ae71546d205bbd134263e172265ee542963f4b483f564c0e228e",
+      "note": "iter-10: DEFERRED-BUDGET row in reports/phase-goal-referee-iter-10-ui-test-results.md:49 — NOT re-tested this run, keeps its recorded status (never regressed/unknown on that row alone). Its own source (referee_evidence.py) has ZERO diff this iteration (evaluator's own `git diff --stat bf6e3b9` over 11 files), so its prior evidence stays valid under evidence durability. Its stored golden is J-01.json.invalid, so a future re-verification must run the LLM/keyless lane, not the replay lane. The evaluator's own full-suite run (2,688 collected / 2,680 passed / 8 skipped / 0 failed) exercised its backend acceptance tests green."
+    },
+    "J-02": {
+      "id": "J-02",
+      "name": "The evidence contract — two families, one observation shape",
+      "status": "passing",
+      "last_verified_iter": "goal-referee-iter-2",
+      "last_passing_iter": "goal-referee-iter-2",
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/phase-goal-referee-iter-2-ui-test-results.md",
+      "spec_hash": "853e7be61a1ba27f0c8baf57dff1914d3aa54c01f82471f990133afab378850a",
+      "note": "iter-10: DEFERRED-BUDGET row (results file :50) — NOT re-tested, keeps its recorded status. referee_evidence.py is unchanged this iteration (only imported by the rider-1 pooling filter, never edited — verified in the evaluator's own diff file list). Golden is J-02.json.invalid — future re-verification rides the keyless/LLM lane."
+    },
+    "J-03": {
+      "id": "J-03",
+      "name": "The statistics core — calibrated, seeded, oracle-proven, fail-closed",
+      "status": "passing",
+      "last_verified_iter": "goal-referee-iter-10",
+      "last_passing_iter": "goal-referee-iter-10",
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "runs/goal-session-referee/iter-10/eval.md#j-03",
+      "spec_hash": "f00b804c40b2b60e1b9bf6209033d53796c98d86c14248ea079ef3a507291ae0",
+      "note": "iter-10: its browser row is DEFERRED-BUDGET (results file :51), but the evaluator spot-checked it directly instead of only carrying it: referee_stats.py has ZERO diff this iteration, and the evaluator called run_oracle_attestation() live — passed=True with its stats_core_version/expected/actual/tolerance block intact. Its oracle suite also ran green inside the evaluator's own full-suite run (2,688 / 2,680 passed / 8 skipped / 0 failed)."
+    },
+    "J-04": {
+      "id": "J-04",
+      "name": "Matched nulls — comparable times, identical measurement",
+      "status": "passing",
+      "last_verified_iter": "goal-referee-iter-6",
+      "last_passing_iter": "goal-referee-iter-6",
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/phase-goal-referee-iter-6-ui-test-results.md",
+      "spec_hash": "c16455f3b0356910d9d0e1062edea7531b45b5ee68f58df527ba8d182516e611",
+      "note": "iter-10: DEFERRED-BUDGET row (results file :52) — NOT re-tested, keeps its recorded status. referee_null.py has ZERO diff this iteration (only imported); prior evidence stays valid. Its real null-build path WAS exercised end-to-end on the fixture rig this run (UT-07: 126/126 completions plus 7 genuinely cancelled partial runs in the same ledger), which is corroborating, not a substitute for its own acceptance."
+    },
+    "J-05": {
+      "id": "J-05",
+      "name": "The registry — pre-registration with an immutable boundary",
+      "status": "passing",
+      "last_verified_iter": "goal-referee-iter-9",
+      "last_passing_iter": "goal-referee-iter-9",
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/qa/goal-referee-iter-9-evidence/J-07-verify.png",
+      "spec_hash": "2af99b40b3062ff02f0d57470dbb3085479c4232b5f509e4361bbf3e8562aa5e",
+      "note": "iter-10: DEFERRED-BUDGET row (results file :53) — NOT re-tested, keeps its recorded status. referee_registry.py has ZERO diff this iteration (evaluator's own diff file list: only mcp/__init__.py, referee_adjudicate.py, 6 test files and 3 frontend files changed), except one DELETED duplicate assertion in its test file (rider 4). Its 47 tests ran green in the evaluator's own full-suite run, and the fixture rig's registry rendered its shortlist + registered rows in this iteration's own screenshots (UT-02, UT-04)."
+    },
+    "J-06": {
+      "id": "J-06",
+      "name": "Estimand engines + adjudication — one checkpoint, recorded forever",
+      "status": "passing",
+      "last_verified_iter": "goal-referee-iter-10",
+      "last_passing_iter": "goal-referee-iter-10",
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "runs/goal-session-referee/iter-10/eval.md#j-06",
+      "spec_hash": "f0a370fab0515b423625b8fbe8694180875d0839d8ca105230bcc0179b8ca2e8",
+      "note": "iter-10: its browser row is DEFERRED-BUDGET (results file :54), but referee_adjudicate.py DID change this run, so the evaluator re-verified it directly rather than carrying it. The change is the rider-1 candidate filter plus two docstring edits; the evaluator ran its own pooling probe (12 planted v1/default backtests: unfiltered pools 12, an unrelated candidate pools 0, the true candidate pools 12), read the diff, and confirmed the Playbook estimand path, the one-checkpoint gate and the attestation gate are untouched. All test_referee_adjudicate.py tests green in the evaluator's own full-suite run. The fixture rig also rendered a real recorded checkpoint (QA-FRAGILE-1, verdict `fragile`) and a real attestation refusal (QA-REFUSED-1) in UT-04-result.png."
+    },
+    "J-07": {
+      "id": "J-07",
+      "name": "The starter family — historical exploration becomes registered questions",
+      "status": "passing",
+      "last_verified_iter": "goal-referee-iter-10",
+      "last_passing_iter": "goal-referee-iter-10",
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/qa/goal-referee-iter-10-evidence/J-07-verify.png",
+      "spec_hash": "473e2966a4c3fc78ec62b1ce97a0a6ada59891a625c9c88daf0964e8ec1c9f66",
+      "note": "iter-10: golden replay PASS with a fresh dated capture (reports/phase-goal-referee-iter-10-regression-replay-results.md, 1/1 PASS; J-07.json is the era's one valid golden). Corroborated by this iteration's own UT-02 screenshot, which shows the full six-candidate shortlist (including S-6 range_trade:short at_wall) with live readiness columns and the honest 'No hypotheses registered.' empty state on a zero-hypothesis rig instance."
+    },
+    "J-08": {
+      "id": "J-08",
+      "name": "The strategy family + the promotion interlock — fail closed, no bypass",
+      "status": "passing",
+      "last_verified_iter": "goal-referee-iter-10",
+      "last_passing_iter": "goal-referee-iter-10",
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "runs/goal-session-referee/iter-10/eval.md#j-08",
+      "spec_hash": "04cecc16df051077401e5a4c694d6d81422554e3d45fccfcf3615b2722de9808",
+      "note": "iter-10: its browser row is DEFERRED-BUDGET (results file :55) — goal.md scopes it '(Keyless; automated.)', so it has no browser acceptance — and the evaluator spot-checked it directly. Live probe: authorize_promotion with an empty CertificateStore returns {'authorized': False, 'refusal_class': 'no_certificate'}; the gate still sits before pnl_scan's append_validation_row (pnl_scan.py imports authorize_promotion and calls it BEFORE the ledger write). The iter-9 open MINOR anti-goal entry against this journey is now CLOSED by the rider-1 fix, reproduced by the evaluator's own pooling probe."
+    },
+    "J-09": {
+      "id": "J-09",
+      "name": "The Referee on /desk + MCP contract v5 — 22 read-only tools",
+      "status": "passing",
+      "last_verified_iter": "goal-referee-iter-10",
+      "last_passing_iter": "goal-referee-iter-10",
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/qa/goal-referee-iter-10-evidence/UT-04-result.png",
+      "spec_hash": "26f414b65f170424797c6c23ab3c013a3648e2db090af16db72c52d2b781bf9d",
+      "evidence_makeup": true,
+      "note": "iter-10 target, newly passing. Screenshots the evaluator opened personally: UT-02 (zero-hypothesis rig — Referee Registry shortlist + 'No hypotheses registered.' in BOTH Registry and Adjudications, with the REFEREE_REGISTER disclosure rendered), UT-05 (Referee Runs' four honest empty texts), UT-04 (populated rig — QA-FRAGILE-1 chip `fragile` with trigger cluster_ci_includes_zero, QA-REFUSED-1 chip `insufficient_sample` with the exact attestation-refusal sentence and attestation: fail, S-1 `registered` 0/12 sessions, each with basis hash / null spec / test spec / seed identity provenance), UT-09 (Referee Runs populated — 18-row null ledger with completed 126/126 rows AND 7 genuinely cancelled rows at partial progress, plus the evaluation ledger row for S-1 at 8/8), UT-13 (every shipped /desk section unchanged), UT-01 (three collapsed Referee sections in order). MCP: the evaluator listed the tools in-process — exactly 22, including desk_referee and desk_referee_registry, all GET proxies (call_tool only ever calls _proxy_get). Suite/pin verified by the evaluator: 2,688 collected / 2,680 passed / 8 skipped / 0 failed; Config().config_fingerprint() = 08e471b10130e1e2. CAPTURE DEFECT (evidence_makeup, methodology A.7): the acceptance's third screenshot — an in-flight second trigger visibly refused single-flight — was never captured. UT-09 cites an image byte-identical to UT-07's and UT-10's (md5 d3065788c71ecfcc5623b7704ad6de73, confirmed by the evaluator) that shows no refusal text. The BEHAVIOUR is confirmed three ways: TC-32 (tests/test_referee_adjudicate.py:1744) asserts a second trigger for the same hypothesis returns started=False with the same compute id while a different hypothesis still starts; QA's 5-concurrent-POST probe on .../nulls/compute produced exactly one started:true and four started:false with no duplicate ledger row; and the UI's own refusal render path exists and is reachable (page.tsx:8547/8606 set triggerError on started=false; page.tsx:5170/5280 render it with data-testid referee-null-build-trigger-error-* / referee-evaluate-trigger-error-*). What is missing is only the pixel proof that that red line reaches the screen — no test asserts the string either. Make-up capture rides the next iteration."
+    },
+    "J-10": {
+      "id": "J-10",
+      "name": "The kept product stands — regression sentinel",
+      "status": "passing",
+      "last_verified_iter": "goal-referee-iter-10",
+      "last_passing_iter": "goal-referee-iter-10",
+      "first_seen_iter": "goal-referee-iter-0",
+      "last_evidence_path": "reports/qa/goal-referee-iter-10-evidence/UT-14-structure-result.png",
+      "spec_hash": "d14682891de7794bb3728ade717e6a1ed805f44384087a9bf18d75d09348fd9a",
+      "note": "iter-10: newly passing — its era-end clauses (three Referee sections rendered, MCP = 22 tools) are now met and the kept walk is evidenced. Screenshots the evaluator opened: UT-14-cockpit (SIM-BUYER watched, tape state 'Buyer Control' at 0.937 confidence, chart/quote/features/recent-trades/observations/event-log all populated), UT-14-structure (AAPL as-of 2026-06-22 12:00:00 Load → tradable band map with 9 scored bands + candles + the case-studies table with real forward returns back to 2023), UT-13 (Top-up Runs, Index Reconciliation, Screen Runs, Playbook Signals, Backscan, Back-scan Runs, Playbook Evidence with its real signal table — every shipped section as shipped), plus the three Referee sections in UT-02/UT-04/UT-05/UT-09. Evaluator-run checks: full suite 2,688 / 2,680 passed / 8 skipped / 0 failed; Config().config_fingerprint() = 08e471b10130e1e2; MCP tool list = exactly 22 in-process; store-scope guard CLEAN (reports/qa/goal-referee-iter-10-store-scope-guard.md — all 11,274 protected files byte-size and mtime unchanged) and apps/backend/.data/ contains no referee directory at all, so nothing was written into the operator's real store. Kept-route identity: the evaluator ran the ERA-CUMULATIVE product diff (git diff --stat e875972 → working tree over apps/backend/app + apps/frontend/app + apps/frontend/lib) — 12 files, 8,641 insertions, 6 deletions, and the ONLY non-new-referee files touched in the whole era are main.py (+7, route registration), mcp/__init__.py (20→22 tools, named exemption a), pnl_scan.py (the J-08 interlock, named exemption c) and the /desk page + api/types (exemption d). Zero diff to levels.py, tradability.py, setups.py, desk_forward.py, desk_playbook*.py, backtests.py, store.py or the engine, so every kept route handler is byte-identical at source level. INTERPRETATION on record (assumptions.md, iter-10 goal-evaluator): the /desk walk ran on the fixture-scoped rig, where the screen-dependent panels (Screen History, Forward Returns, Briefing, Skipped Members, Screen Comparison, Provenance) render their shipped 'Desk screen not computed yet.' state rather than populated tables."
+    }
+  },
+  "anti_goal_violations": [
+    {
+      "iter": "goal-referee-iter-6",
+      "anti_goal": "The historical atlas is exploratory forever. No historical observation is ever served, labeled, or counted as forward confirmation; discovery data renders only under its exploratory label. (critical)",
+      "severity": "critical",
+      "evidence": "docs/handoffs/goal-referee-iter-6-audit.md finding B1 — apps/backend/app/research/referee_routes.py exposed `registered_at: Optional[str]` on the registration body and forwarded it into register_hypothesis, where apps/backend/app/research/referee_registry.py:665 makes it the sole input to the boundary derivation; the CLI carried the same `--registered-at` knob. Proven live pre-fix: a POST with registered_at 2025-01-01 stored confirmation_start_boundary 2024-12-31 and made three pre-existing historical sessions accrue as post-boundary confirmation, in an append-only record with no delete path.",
+      "resolved": true,
+      "resolution": "Fixed inside iteration 6 by the full pipeline's hard-audit lane and re-verified live by the evaluator there. RE-CONFIRMED CLOSED in iterations 7, 8 and 9 from three further sides. ITERATION 10: referee_registry.py and referee_routes.py have ZERO diff this run (evaluator's own diff file list), so nothing could re-open it; the fixture rig's registered S-1 row still shows its server-stamped boundary and 0/12 post-boundary accrual in UT-04-result.png."
+    },
+    {
+      "iter": "goal-referee-iter-8",
+      "anti_goal": "The historical atlas is exploratory forever. No historical observation is ever served, labeled, or counted as forward confirmation; discovery data renders only under its exploratory label. (critical)",
+      "severity": "minor",
+      "evidence": "docs/handoffs/goal-referee-iter-8-audit.md finding B2 — referee_registry.shortlist_response served `projected_days_to_target = max(0.0, (target_sessions - n_sessions) / accrual_rate)`, subtracting a candidate's PRE-boundary historical sessions from a target that is a post-boundary count everywhere else it is used.",
+      "resolved": true,
+      "resolution": "Fixed inside iteration 8, reproduced by that iteration's evaluator (517 -> 564), and confirmed visible in iteration 9's fresh capture. ITERATION 10: referee_registry.py unchanged; UT-02-result.png shows the shortlist's Projected-days column serving 564 for the three rich candidates and an em dash where the accrual rate is zero."
+    },
+    {
+      "iter": "goal-referee-iter-9",
+      "anti_goal": "Promotion is certificate-locked. No champion promotion without a valid candidate-specific Referee certificate; no bypass flag, env override, or default-allow path exists (source-scan guard-tested); a Playbook certificate can never satisfy a strategy promotion. (critical)",
+      "severity": "minor",
+      "evidence": "The certificate's 'candidate-specific' property was enforced only against the MINT CALLER'S OWN DECLARED PIN, never against the evidence the statistics were computed from: `_pool_strategy_trades(journal_store)` pooled EVERY recorded backtest report's trades unfiltered by result['strategy_id']/['profile']. Demonstrated end-to-end by the iter-9 evaluator: 12 planted v1/default backtests minted an attested, gate-passing certificate naming an unrelated strategy, and authorize_promotion then authorized that unrelated candidate.",
+      "resolved": true,
+      "resolution": "CLOSED in iteration 10 by the rider-1 fix, re-verified by this iteration's evaluator rather than read from the handoff. `_pool_strategy_trades` gains an optional `candidate` filter matched against the strategy_id/profile fields backtests.py already stamps on every journal record (apps/backend/app/research/referee_adjudicate.py:533-596), and run_evaluation_and_record passes certificate_mint['candidate'] through it on the only path that can ever mint (referee_adjudicate.py:1266-1269). The evaluator's own probe on 12 planted v1/default backtests: unfiltered pools 12 observations, the unrelated candidate pools 0, the true candidate pools 12 — so an unrelated candidate is never even confirmatory-eligible and the mint call site is unreachable for it. TC-13/TC-14/TC-15 (tests/test_referee_adjudicate.py:1404-1509) encode the same three cases and were green in the evaluator's own full-suite run. Residual hardening noted by the iteration-10 audit (finding B1), NOT a violation and unreachable today: a candidate dict missing BOTH keys would match an identity-less observation; the evaluator reproduced that `candidate={}` pools 0 against records that carry real identity strings, and authorize_promotion still requires an exact match against a live scan identity."
+    }
+  ],
+  "updated_at": "2026-08-15T22:40:00Z"
+}
