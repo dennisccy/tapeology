@@ -1,0 +1,75 @@
+# App Blueprint — rapid-microscope
+
+<!--
+Coherence contract for the whole app. Drafted at baseline (iter-0) from docs/goal.md's
+Product Shape + Must-have journeys + Key Capabilities. Auto-approved by default; the
+coherence-auditor enforces it every iteration; the goal-decomposer keeps it current with
+additive edits (new value rows, new pages under an existing nav section) as the era builds.
+-->
+
+## Information Architecture
+
+**Layout shell:** persistent top nav + single main-content column per page; dark-only, dense,
+terminal-grade (house style carried unchanged from Era B onward).
+
+**Navigation skeleton** (unchanged this era — `app/meta.py` `UI_ROUTES` untouched):
+
+```
+Tapeology
+├── Cockpit              /            live tape + chart
+├── Structure            /structure   levels/zones, tradable map, S/R bands
+└── Desk                 /desk
+    ├── Playbook · Band Context · Cohorts          (Era B2, shipped — unchanged this era)
+    ├── Referee: Registry · Adjudications · Runs    (Era 6, shipped — unchanged this era)
+    └── Rapid Microscope (NEW this era, rendered BELOW the Referee sections, in this order):
+        ├── Microscope Readiness   (J-01)
+        ├── Scout Ledger           (J-04; J-09 pilot-study results render here too)
+        ├── Walk-Forward           (J-05; J-09 pilot-study results render here too)
+        └── Validation Vault       (J-06)
+```
+
+**Feature / journey homes** (each reachable in ≤2 clicks from the persistent nav):
+
+| Feature / journey | Canonical home (route) | Nav section |
+|---|---|---|
+| Era transition + corpus readiness truth (J-01) | `/desk` → Microscope Readiness | Desk |
+| Micro observer + snapshots (J-02) | keyless/automated; snapshot metadata surfaces via Microscope Readiness | Desk |
+| Structure × flow join (J-03) | keyless/automated; joinable-corpus count surfaces via Microscope Readiness | Desk |
+| Scout + candidate ledger (J-04) | `/desk` → Scout Ledger | Desk |
+| Walk-forward engine + diagnostic run (J-05) | `/desk` → Walk-Forward | Desk |
+| Recorder + Validation Vault (J-06) | `/desk` → Validation Vault | Desk |
+| Graduation states (J-07) | keyless/automated; states surface via the Scout Ledger / Walk-Forward / Vault rows they attach to | Desk |
+| Rapid-Microscope surface + MCP v6 (J-08) | `/desk` → all four new sections above | Desk |
+| Pilot studies (J-09) | `/desk` → Scout Ledger / Walk-Forward (results render through J-08's sections, no new page) | Desk |
+| Kept-product sentinel (J-10) | `/`, `/structure`, `/desk` (every existing section, unchanged) | Cockpit / Structure / Desk |
+
+## Data Contract
+
+Every value below is computed once, owned by one module, served by one endpoint; no page may
+recompute or re-fetch it from anywhere else. **New rows this era** (transcribed verbatim from
+`docs/goal.md` §Product Shape, the canonical statement):
+
+| Value | Owner (module) | Serving endpoint |
+|---|---|---|
+| Corpus readiness truth (inventory, floors, exposure states) | new `app/research/micro_readiness.py` | `GET /research/desk/micro/readiness` |
+| Feature snapshot metadata + build progress/runs | new `app/research/micro_snapshots.py` (+ manager) | `GET /research/desk/micro/snapshots`, `POST/GET/POST-cancel /research/desk/micro/snapshots/compute`, `GET .../snapshots/runs` |
+| Scout trials, kills, denominators, screens | new `app/research/scout_ledger.py` + `scout.py` | `GET /research/desk/micro/scout`, `POST/GET/POST-cancel /research/desk/micro/scout/compute`, `GET .../scout/runs` |
+| Fold specs, folds, sequences, decay view | new `app/research/walkforward.py` + its ledger | `GET /research/desk/micro/walkforward`, `POST/GET/POST-cancel /research/desk/micro/walkforward/compute`, `GET .../walkforward/runs` |
+| Vault shards, universes, exposure ledger | new `app/research/vault.py` | `GET /research/desk/micro/vault` |
+| Recorder job + tranche progress/runs | new `app/research/tick_recorder.py` | `POST/GET/POST-cancel /research/desk/micro/recorder/compute`, `GET .../recorder/runs` |
+| Graduation states + export bundles | new `app/research/micro_graduation.py` | `GET /research/desk/micro/graduation` |
+
+**Unchanged owners** (this era reads them verbatim, never recomputes, never re-serves from a
+second endpoint): datasets/replay → `datasets.py` (`DatasetStore.replay`; gains one additive
+default-`None` `observer=` kwarg only, counter-tested byte-identical when absent); engine
+features/side → the engine snapshot (`app/engine/features.py`); playbook records →
+`desk_playbook.py`; band maps → `desk_playbook_context.BandMapResolver`; referee
+registry/adjudications → the `referee_*` family (`referee_registry.py`,
+`referee_adjudicate.py`, `referee_evidence.py`, `referee_null.py`, `referee_stats.py`,
+`referee_routes.py`); every other value shipped by an earlier era exactly as its own contract
+lists (full history in `docs/goal-archive/goal-2026-08-16.md` — not re-enumerated here).
+
+**Canonical values (single source of truth):** a candidate's trial history (scout ledger); a
+fold/sequence result and its evidence class (walkforward ledger); a shard's exposure state
+(vault ledger); the corpus readiness floors (`micro_readiness`) — each computed once, served
+from its one endpoint, read verbatim by UI/MCP/reports.
