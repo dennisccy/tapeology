@@ -266,3 +266,31 @@ leaked `trade_count=873` straight from the operator's real journal and would hav
 browser pass, not after.
 **Applies to:** any iteration that builds an isolated or empty-corpus backend rig, and any
 acceptance clause of the form "renders the honest all-zero/absent state".
+
+## iter-14 — 2026-08-16T04:15:00Z
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** A `fullpage: true` capture silently TRUNCATES at the tool's 4,320px cap, and the
+artifact gives no sign of it — iterations 12 and 13 both cited 1683x4320 images (the cap,
+exactly) for `/desk` clauses that render near the bottom, so the Strategy Family block was never
+actually photographed for two rounds; the tell that finally exposed it was two "different"
+journey captures sharing one SHA-256. The technique that worked: get `scrollHeight` UNDER the cap
+first (collapse sections), take the fullpage shot, then crop to the element's
+`getBoundingClientRect()` — programmatic `scrollIntoView` + viewport capture reproducibly
+rendered blank or garbled on this tall page (headless-Chrome raster desync), even though
+`eval`/`extract` confirmed the DOM was correct at that same moment.
+**Applies to:** any iteration whose acceptance names a clause rendered low on `/desk` (or any
+page taller than ~4,000px) — plan an element-scoped capture from birth, and always check a
+capture's pixel HEIGHT against the cap before trusting it.
+
+## iter-14 — 2026-08-16T04:16:00Z
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** Raising a golden-replay timeout does not fix a latency defect — it hides the trend.
+J-05's replay failed at 8s (iter-13), the wait was raised to 12s, and it failed again at 12s
+(iter-14) with a BYTE-IDENTICAL failure frame, while a live hand-drive of the same page found the
+text in ~3.06s: the Referee Registry panel's expand now fires three server requests and its
+first, cold open is the slow one. Byte-identical replay artifacts across iterations are a
+determinism signal, not a stale-file smell — check the file's mtime before suspecting reuse.
+**Applies to:** any future iteration touching the `/desk` Referee Registry expand path — treat
+the cold-open latency as the defect to fix, never raise the wait a third time.

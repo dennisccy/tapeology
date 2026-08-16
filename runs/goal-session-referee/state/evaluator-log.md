@@ -749,3 +749,74 @@ files are uncommitted; the era still has no video walkthrough because the shared
 cannot play a "scroll" step (it lives in the shared framework folder, not this project); and,
 from round 2 and outside this project, the unrelated trendora backend on port 8255 has still not
 been restarted.
+
+## Iteration 14 — goal-referee-iter-14
+
+**Date:** 2026-08-16T04:15:00Z
+**Verdict:** GOAL_ACHIEVED
+**Depth dispatched:** evidence
+**Journey deltas:**
+- Newly passing: none — all twelve were already recorded passing; this round replaced evidence,
+  not status
+- Newly failing: none
+- Regressed: none
+- Deferred rows CLEARED (the two rows that mechanically blocked the finish check): J-01 "The era
+  transition stands" and J-02 "The evidence contract" — each now carries a real PASS row from a
+  live run of its own named test file, not a "not run, over budget" row
+- Owed picture DELIVERED: J-12 "The readiness fold gets its reader" — the strategy family's
+  tick-gate sentence and no-lookahead caveat are photographed at last; its picture flag is
+  cleared and re-set for a different, non-blocking item (see below)
+- Overturned again: J-05 "The registry" — the automatic replay recorded a failure for the second
+  round running; I checked it myself and it is a false alarm, so J-05 stays passing
+- Re-checked by replay with fresh pictures: J-07 "The starter family", J-09 "The Referee on the
+  Desk page", J-10 "The kept product stands", J-11 "The accrual projection states its own basis"
+- Re-proved by running their own test files inside my own full suite run: J-03 "The statistics
+  core", J-04 "Matched nulls", J-06 "Estimand engines and adjudication", J-08 "The strategy
+  family and the promotion lock" — none of their sources changed
+- Owed captures still open, neither blocking: the video walkthroughs for J-11 and J-12
+- Anti-goal violations: none new; no code changed at all this round, so none could be created
+  and none of the three earlier ones could re-open
+
+**Reasoning:** This round wrote no code; it only had to prove two things, and I proved both
+myself rather than reading them in a report. First, the two questions skipped for time last
+round are now really tested. I ran the whole test suite myself with a machine-readable result
+file — 2,699 collected, 2,691 passed, 8 skipped, nothing failed, 261.7 seconds — then pulled
+each journey's own file count out of it: 19 for the era-transition guards and 29 for the
+evidence contract, matching the round's claims exactly. Second, the picture that was missing
+since last round is taken, and it is real. It shows the strategy family's honest sentence that
+the tick-data gate is unmet and 150 short, and the whole paragraph warning that today's
+measurements can include a bar that had not finished forming. I matched both sentences
+character-for-character against the single place in the backend that writes them; I searched
+every front-end file and neither sentence exists there, so they can only have arrived from the
+server; I read the screen's own code and it prints the values plainly with no arithmetic of its
+own; and the image's exact size matches the stated crop of that block. Its checksum differs from
+all three earlier files — and I confirmed that two of those three are one and the same file,
+which is exactly why this block had never been photographed before. I also traced what was
+written: nothing. The owner's protected records still number 11,274 with none touched today, no
+Referee storage folder exists anywhere in the project, and the file holding the champion trading
+pointer has not moved since 24 July. Finally I did not inherit either lane's opinion on J-05:
+the replay said the registry text was missing, so I opened the failure picture (panel open,
+first table filled, the button that changes only after the second answer arrives still
+unchanged — the answer had not come back in time) and then the live re-check picture, where the
+registered row reads in full. No timeout and no expected text was weakened this round. With
+every journey holding current evidence, no open rule violation, a clean structural check and
+unchanged goal text, the era is done.
+
+**Next-step recommendation:** Halt — goal achieved. Four items are left for a person, none of
+them a product fault. First, commit this session's outstanding files from rounds 8 to 14.
+Second, the era still has no video walkthrough: the shared recording tool cannot play a "scroll"
+step and produced nothing again this round; it lives in the shared framework folder, not in this
+project, and two journeys' walkthroughs — J-11 "The accrual projection" and J-12 "The readiness
+fold gets its reader" — are waiting on that one fix, with their scripts already written using
+only allowed steps. Third, watch the Referee Registry panel's speed: opening it now makes three
+server requests and the automatic replay has failed twice in a row waiting for them, even after
+the wait was raised from eight to twelve seconds last round; driving the page by hand takes about
+three seconds, so the page is not broken, but the first cold opening is slow — do not raise the
+wait again, treat the slowness itself as the thing to fix. Fourth, five small clean-ups can ride
+along whenever a builder is next in those files: add the four Referee storage folders to the
+guard watching the owner's saved data; make a certificate with no name at all fail instead of
+matching; show a clear word instead of a plain dash when a second data request fails; correct a
+stale comment quoting 19/7/1; and move a stray two-line assertion in test_desk_ui_guards.py back
+into the test it belongs to. Still outstanding from round 2 and outside this project: the
+unrelated trendora backend on port 8255 has not been restarted. For a person: approve closing
+the era and committing the files.

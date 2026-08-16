@@ -1039,3 +1039,28 @@ heading plus Playbook Family block (J-12). The two J-12 captures themselves are 
 different files, which is what TC-9's "not reused from TC-1..TC-7's rig" actually asks for.
 **Reversible:** yes — a second capture cropped to either journey costs nothing and changes no
 recorded status.
+
+## iter-14 — goal-evaluator
+
+**Ambiguity:** J-11's and J-12's acceptance text each names a `[NEW]`-flagged demo-narrator
+walkthrough, and goal.md's proposer anti-goal requires every proposed journey to "include a
+`[NEW]`-flagged walkthrough". Neither recording exists: the shared vendored recorder
+(`incredible_auto_dev/scripts/automation/lib/demo_runner.py:36`,
+`_VALID_ACTIONS = {goto, click, fill, expect, wait_for}` — read at source this round) cannot play
+a `scroll` action, so iteration 11's demo recorded zero steps, iterations 12/13 ran no demo step
+at all, and iteration 14's demo verdict is again `NOT_YET` with zero steps. It is unclear whether
+an era may be declared achieved with two acceptance-named recordings never produced.
+**We chose:** read the anti-goal's "include a walkthrough" as binding on the journey SPEC (which
+both journeys satisfy — their scripts are written using only supported actions), and the missing
+RECORDING as a capture defect under methodology A.7, which names "the walkthrough recording is
+missing" verbatim as a defect that must never block and must never become an iteration's goal.
+Scored both journeys `passing` with `evidence_makeup: true` tracking only the recording, and
+named it as a human/framework item. Weighted by: the behaviour behind both journeys is proven by
+fresh screenshots I opened plus their own green backend guards; the blocker is vendored framework
+tooling outside this project that no goal-mode iteration may edit (the iteration-11 precedent,
+re-affirmed in the iteration-14 spec's OUT OF SCOPE); and the framework's own #1 anti-pattern is
+looping forever on an unmet capture task.
+**Reversible:** yes — the flags stay set until fresh recordings land. If the owner reads J-11's
+and J-12's acceptance clause-by-clause, both drop to `partial` with the identical next step (fix
+the shared recorder's action vocabulary, then record in one pass), and nothing stored anywhere
+changes either way.
