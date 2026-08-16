@@ -135,9 +135,11 @@ compared against — the same math anchored at random minutes of the same sessio
 null that answers *"did touching the wall beat any random moment of that day?"*. Bars that gap
 entirely beyond the band are disclosed, not counted as touches (a resting order would have
 filled; the measurement says so rather than pretending). Compute is operator-triggered,
-pollable, cancellable, and versioned append-only — never run by Refresh Data. Touch detection
+pollable, cancellable, and versioned append-only — from its own button, or as step 5 of the
+Refresh Data chain, which measures every snapshot that click recorded. Touch detection
 needs 1m (or 5m) bars for the screen date — the extended Top-up supplies them for recent dates
-(Yahoo serves ~30 days of 1m, ~60 of 5m); older screens honestly read "—". One screen day yields
+(Yahoo serves ~30 days of 1m, ~60 of 5m) and **Deep Backfill** reaches the older ones from the
+credentialed vendor; a screen date covered by neither honestly reads "—". One screen day yields
 a handful of touches per row — the panel proves the method, not an edge; the evidence
 accumulates by running the as-of range across many days and computing forward on each.
 
@@ -156,12 +158,12 @@ relabelling it.
 
 ### Refreshing the data
 
-Making the briefing current takes four acts, and **the order matters**: a screen's
+Making the briefing current takes seven acts, and **the order matters**: a screen's
 `bar_store_signature` pin is derived from the bar index and resolved *before* the member walk
 starts, so a screen run that precedes the bars and the index records a snapshot pinned to data it
 did not read.
 
-**Refresh Data** runs all four in that order from one click:
+**Refresh Data** runs all seven in that order from one click:
 
 | # | Step | What it does |
 |---|---|---|
@@ -169,10 +171,21 @@ did not read.
 | 2 | Bar top-up | Fills in missing bars across the universe. Store-first, so already-held pairs cost no vendor call |
 | 3 | Bar index | Reconciles the index against what is actually on disk, which is what the coverage badges read |
 | 4 | Screen | Walks the universe and records one ranked snapshot **per day of the chosen as-of range** |
+| 5 | Forward returns | Measures every snapshot this run recorded — the same compute the Forward Returns panel's own button triggers |
+| 6 | Playbook detection | Detects and measures the playbook setups for each day in the range, one day at a time. A day the store holds no session for is refused with a 422, counted and stepped over — never a failed step |
+| 7 | Playbook back-scan | One scan across the whole range, over the range **the run was clicked with** — not the Backscan section's own two fields. By now each day resolves as a reuse, so this is a disclosure pass: the per-date account (recorded / reused / refused as a non-session / failed) plus a durable ledger row |
+
+Steps 6–7 are why the referee's evidence accrues from this one click: they are what turn recorded
+bars into the playbook occurrences a registered hypothesis counts.
 
 **The as-of range**: two fields govern the screen step — From and To (UTC days, `YYYY-MM-DD`).
 To blank = today; From blank = the To day. The chain records one screen per day in the range,
-oldest first — already-recorded days answer as honest reuses — capped at 31 days per click. The
+oldest first — already-recorded days answer as honest reuses. There is deliberately **no
+per-click day ceiling**: one existed (31 days) back when every day paid for a full ~101-member
+walk, but a day whose bars already reach it now resolves as a reuse in tens of milliseconds
+without walking a member, so a long range over covered ground is nearly free and only the
+genuinely-missing days cost anything. The range stays bounded in the two ways that matter — a To
+day after the upcoming US session date is refused, and **Stop** ends a run between days. The
 standalone Run Screen button runs the To day only. A future day, From after To, or a malformed
 day is refused inline and both buttons disable. Days in the range that weren't trading days still
 record a screen — its basis falls back to the last completed session (a Saturday shares Friday's
@@ -183,14 +196,19 @@ steps honestly un-run. If a step's job is already running — you clicked Top-up
 ago — it **joins that run** rather than starting a second one, so single-flight is never bypassed.
 **Stop** cancels the current step's job and stops the sequence.
 
-The three individual controls remain below it — Run Screen, Top-up and Reconcile Index — and stay
-enabled while a sequence runs; step 1 is the one act with no button of its own. Re-clicking after
+The individual controls remain below it — Run Screen, Top-up, Reconcile Index and **Deep
+Backfill**, plus the Forward Returns, Playbook and Backscan sections' own buttons — and stay
+enabled while a sequence runs; step 1 is the one act with no button of its own. Deep Backfill is
+the one act deliberately kept *out* of the chain: it is credentialed, expensive (a full sweep
+back to 2025 is ~3,900 chunks and tens of millions of bars over hours), and a decision about a
+range rather than about today, so it takes its own From/To and discloses its plan before the
+click. Re-clicking after
 an interruption is cheap: the membership answers 409, the top-up reuses what it holds, and a
 screen under identical pins short-circuits to a reuse. Nothing is persisted across a reload — a
 refresh sequence is never resumed automatically, so an interrupted one is restarted by clicking
 again, not continued.
 
-The same four acts are available from the command line:
+The same acts are available from the command line:
 
 ```bash
 cd apps/backend
@@ -200,11 +218,23 @@ curl -X POST $BE/research/desk/universe/fetch                        # 1 — mem
 .venv/bin/python -m app.research.desk_topup_compute                  # 2 — bars (unattended)
 curl -X POST $BE/research/desk/coverage/reconcile/compute            # 3 — index
 .venv/bin/python -m app.research.desk_screen_compute --date "$(date -u +%F)"   # 4 — screen
+.venv/bin/python -m app.research.desk_forward_compute --screen-id <id>         # 5 — forward
+.venv/bin/python -m app.research.desk_playbook_compute --session-date "$(date -u +%F)"  # 6 — playbook
+
+# and the deep fine-bar backfill, which is not part of the chain:
+.venv/bin/python -m app.research.desk_deep_backfill --from 2025-01-01 --to 2025-12-31
 ```
 
-The two compute steps also have background-job endpoints (`POST .../topup/compute`,
-`POST .../screen/compute`) that return immediately and are polled with the matching `GET`; the
-CLI forms above run to completion in the foreground instead.
+Step 7 (the back-scan) has no CLI module of its own — it is reached through
+`POST $BE/research/desk/playbook/backscan/compute`, and
+`GET $BE/research/desk/playbook/backscan/plan?from=<day>&to=<day>` previews which dates in a range
+are already recorded at the current signature before you commit to one.
+
+Every compute step also has a background-job endpoint (`POST .../topup/compute`,
+`.../screen/compute`, `.../forward/compute`, `.../playbook/compute`,
+`.../playbook/backscan/compute`, `.../backfill/compute`) that returns immediately and is polled
+with the matching `GET`, each single-flight and cancellable via its `.../cancel` sibling; the CLI
+forms above run to completion in the foreground instead.
 
 `--date` is required on the screen CLI and on `POST /research/desk/screen/compute` — neither ever
 defaults to today's wall clock, because the screen's `as_of` is a determinism pin. The forward
