@@ -306,6 +306,14 @@ forward + UI (5.5–5.9).
   "fixes"); do not let the engine's feature/classifier code read them (frozen surface, T11).
 
 #### Card 5.2 — The backfill recorder job + the frozen 15-symbol panel `[infra] [F1] [L]`
+
+> *(Status note 2026-08-16: BROUGHT FORWARD into the rapid-microscope era — the recorder job,
+> the deterministic sha256 split rule, and the panel below are built there (goal.md J-06), with
+> two additions the era's spec owns: pre-registered recording universes (no cherry-picked
+> symbol-days) and an orthogonal opaque HMAC seal assignment feeding the new Validation Vault.
+> The card's ≥150-symbol-day library target is NOT satisfied by that era's ~30–50-symbol-day
+> starter tranche — W1 top-ups continue toward it afterward. The card text below stands.)*
+
 - **Purpose**: an automated, resumable, free-tier recorder that grows the library to hundreds of
   full-session symbol-days. The interactive record endpoint CANNOT do this: it runs a single-shot
   fetch under a ~6s vendor deadline (`vendor_http_timeout_seconds` /
@@ -1051,6 +1059,36 @@ pass (never a second replay, never a second source of truth — T10). An engine-
 is allowed ONLY with proof the equivalence test's pinned scope is unaffected, and is otherwise
 a documented basis decision.
 
+> **RAPID-MICROSCOPE OPENING NOTE (2026-08-16, operator pivot, under §5.6 "goal.md wins").**
+> The operator opened **"The Rapid Microscope"** (session `rapid-microscope`, constitution
+> `docs/goal.md`, canonical methodology `docs/rapid-validation-spec.md`) — an operator-directed
+> era outside the router's numbering (the Era-B/B2 precedent) that brings **Wave 1 of this era
+> forward NOW** and adds the rapid-validation machinery this catalog never specified (Scout +
+> exploratory candidate ledger, origin-fenced chronological walk-forward, sealed Validation
+> Vault, graduation contract). Dispositions, card by card:
+>
+> - **Brought forward into the rapid-microscope era**: 9.1 (session cumulative delta +
+>   divergence-at-level — the formula is used verbatim; it is pilot study 2), 9.3 (top-of-book
+>   imbalance — quote-size features), 9.4 (burst/climax — event-time burst features + the
+>   capitulation-exhaustion pilot), 9.5 (spread dynamics — spread level/change features),
+>   9.6 (same-side flow-runs — the run-persistence feature; its seeded within-session shuffle
+>   null is SUPERSEDED by the spec's session-clustered block permutation, which is strictly
+>   more dependence-honest), 9.7 (event-time feature windows — last-N-trades / last-X-shares
+>   are first-class representations).
+> - **Deferred unchanged**: 9.2 (delta-by-price profile; still needs Card 8.2's binning).
+> - **Wave 2 (9.8–9.11) stays gated.** The 6.9 "atlas" this era's gate names was never built
+>   (executed era 6 re-scoped per evidence family). The gate is therefore RE-POINTED, not
+>   waived: Wave-2 detector cards open only on `historical_oos`-class Scout/walk-forward
+>   evidence from the rapid-microscope machinery meeting the same thresholds in spirit
+>   (`|median ρ| ≥ 0.03` AND `sign_consistency ≥ 0.7` on discovery-class data, per-family).
+>   Card 9.10 additionally stays blocked on condition codes, which the current `RawTrade`
+>   (epoch/price/size) cannot carry — a future re-recorded data family.
+> - The era-9 polish cards (chart markers, replay annotation) remain future work (Era C for
+>   the annotation tool).
+>
+> The catalog-era-6 atlas concept (6.9) is superseded by the rapid-microscope Scout +
+> temporal-stability views; this note is the dated record required by §5.6.
+
 ---
 
 ### Wave 1 — features + studies
@@ -1658,6 +1696,14 @@ purchase happens ONLY if 15.3 shows depth beating its L1 proxies. **Prerequisite
 era 9's L1 results (they are the comparison baseline — and if 9.3/9.8 died at the atlas, say
 so in the purchase decision: a dead L1 imbalance LOWERS the depth prior).
 
+> *(Amendment 2026-08-16, rapid-microscope opening: the "era 9's L1 results" prerequisite now
+> reads through the rapid-microscope machinery — the exact evidence that would justify opening
+> this era is an L1 LIQUIDITY-family candidate (quote imbalance / depletion /
+> `refill_consistent` replenishment) reaching `walkforward_survivor` on
+> `historical_oos`-class evidence there, which both raises the depth prior and becomes 15.3's
+> named comparison baseline. Those families dying at the Scout LOWERS the prior, exactly as
+> Card 9.3's kill note already says. Diagnostic-class results count for neither direction.)*
+
 ---
 
 #### Card 15.1 — Databento adapter + depth events `[infra] [F3] [L]`
@@ -1914,6 +1960,7 @@ Columns: `date · era/workstream · session id · verdict (done | killed | split
 | 2026-07-31 | B (operator pivot, outside catalog) — "The Desk" | `desk` | done | `/desk`: fetched S&P100 universe, append-only screen ledger + ranked briefing, touch-anchored forward-return rail v2, deep fine-bar backfill; 21 journeys. | none |
 | 2026-08-11 | B2 (operator pivot, outside catalog) — "The Playbook" | `playbook` | done | Nine pre-registered Graifer/Schumacher intraday detectors on the desk's own 5m/1m bars; append-only playbook corpus + back-scan + descriptive evidence view with seeded same-session anchors; zero statistics gates (deliberately era-6's). | none |
 | 2026-08-13 | operator interlude (outside catalog) — band context | main `9e65bb0`…`83c24a8` | done | Read-side band-context lens v1→v2 (bracket frame)→v3 (basis-bounded cache) + the 9-key cohort vocabulary + refresh-chain steps 6–7 + `/desk` context columns/filters/drill-ins; ratified as R-4 in the era-6 goal. | `docs/playbook-detector-spec.md` §6 version string reconciled v2→v3 (2026-08-14). |
+| 2026-08-16 | 6 (The Referee) | `referee` | done | Fail-closed confirmatory layer shipped (evidence contract, seeded permutation/CI/BH core with oracle attestation, ToD/context-matched nulls, immutable pre-registration boundary, one permanent checkpoint per hypothesis, `pnl_scan` certificate interlock, 3 `/desk` sections, MCP v5 = 22 tools); 12 journeys, zero `corroborated` at close — the system working as designed. | Row appended 2026-08-16 at the rapid-microscope opening (the referee session's closing agent omitted it); §5.3 proposer amendment applied in the same commit. |
 | _(next session appends here)_ | | | | | |
 
 Protocol: the row is written by the human operator or the session's closing agent AT session

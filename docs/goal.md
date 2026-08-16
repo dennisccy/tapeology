@@ -1,880 +1,629 @@
-# Tapeology — Project Goal (Era 6: The Referee — the statistics that try to disprove our own evidence)
+# Tapeology — Project Goal (The Rapid Microscope — many candidates in, few survivors out, every kill on the record)
 
-> Eras 1–5D, B, and B2 are the **foundation** of this goal. Eras 1–2 are archived at
+> Eras 1–6 are the **foundation** of this goal. Eras 1–2 are archived at
 > [`docs/goal-archive/goal-2026-07-03.md`](goal-archive/goal-2026-07-03.md); the structure-UI
 > interlude at [`docs/goal-archive/goal-2026-07-07.md`](goal-archive/goal-2026-07-07.md);
 > **Era 5 "The Library"** at [`docs/goal-archive/goal-2026-07-14.md`](goal-archive/goal-2026-07-14.md);
 > the **"Fast Wall" interlude** at [`docs/goal-archive/goal-2026-07-17.md`](goal-archive/goal-2026-07-17.md);
 > the **"Clean Slate" demolition** at [`docs/goal-archive/goal-2026-07-25.md`](goal-archive/goal-2026-07-25.md);
 > **Era B "The Desk"** at [`docs/goal-archive/goal-2026-08-10.md`](goal-archive/goal-2026-08-10.md);
-> and **Era B2 "The Playbook" (GOAL_ACHIEVED 2026-08-11, session `playbook`, J-01–J-12)** at
-> [`docs/goal-archive/goal-2026-08-14.md`](goal-archive/goal-2026-08-14.md). Eras 3, 4, 5B, and
+> **Era B2 "The Playbook"** at [`docs/goal-archive/goal-2026-08-14.md`](goal-archive/goal-2026-08-14.md);
+> and **Era 6 "The Referee" (GOAL_ACHIEVED 2026-08-16, session `referee`, J-01–J-12)** at
+> [`docs/goal-archive/goal-2026-08-16.md`](goal-archive/goal-2026-08-16.md). Eras 3, 4, 5B, and
 > 5C are frozen foundation; their records live in git history and `reports/`.
 >
-> **This chapter is Era 6 of the research catalog — "The Referee"
-> ([`docs/research-directions.md`](research-directions.md) §504), opened under §5.6 (goal.md
-> wins for the running era) with the catalog reconciled in this era's opening commit.** The
-> product today is exactly **Cockpit (`/`) + Structure (`/structure`) + Desk (`/desk`)**, the
-> fingerprint epoch is `08e471b10130e1e2`, the MCP surface is **20 read-only tools**, and the
-> honesty machinery (stores, gates, registry, PnL promotion ledger) is fully intact. Era 6 is a
-> BUILDING era on top of two frozen evidence families: it adds Tapeology's first **inferential
-> statistics program** — an adjudication layer that tries to DISPROVE the evidence the desk has
-> recorded, and that can say "no edge" confidently instead of manufacturing one from noise.
+> **This chapter is "The Rapid Microscope" — an operator-directed era
+> ([`docs/research-directions.md`](research-directions.md) §5.6, the Era-B/B2 operator-pivot
+> precedent) that brings the catalog's Era-9 Wave 1 and Card 5.2 forward and adds the
+> rapid-validation machinery the catalog never had.** The product today is exactly
+> **Cockpit (`/`) + Structure (`/structure`) + Desk (`/desk`)**, the fingerprint epoch is
+> `08e471b10130e1e2`, the MCP surface is **22 read-only tools**, and the honesty machinery
+> (stores, gates, registry, Referee, PnL promotion interlock) is fully intact. The Referee is
+> deliberately conservative — a registered hypothesis waits ~50–120 calendar days for genuinely
+> new sessions, and that is right for FINAL claims. What is missing is the FRONT of the funnel:
+> a way to try many intraday microstructure candidate mechanisms and kill most of them quickly
+> on historical evidence, so only genuinely promising, provenance-complete candidates ever
+> consume real future calendar time. This era builds that funnel:
+> **many candidates → cheap Scout falsification → chronological pseudo-forward survival →
+> sealed-vault OOS → the untouched Referee.**
 >
-> **This era adds exactly one new research discipline — calibrated statistics — under two hard
-> rails:** (1) every statistical constant, null definition, test procedure, estimand, and
-> verdict rule is fixed in advance in
-> [`docs/referee-statistical-spec.md`](referee-statistical-spec.md) (the canonical spec;
-> developers implement from it, never re-derive or re-tune — a change is a named revision that
-> re-keys future results, never a sweep); (2) the Referee is READ-SIDE over the recorded
-> corpus: it never writes to, re-keys, or reinterprets any existing record, and it never feeds
-> back into detectors, context, or thresholds. The Playbook detector family and the
-> `playbook-band-context-v3` context revision are FROZEN research vocabulary for this whole
-> era (genuine bug fixes excepted, each its own named revision).
+> **Two hard rails govern everything:** (1) every constant, contract, fold rule, sealing rule,
+> ledger schema, graduation gate, and trap test is fixed in advance in
+> [`docs/rapid-validation-spec.md`](rapid-validation-spec.md) (the canonical spec; developers
+> implement from it, never re-derive or re-tune — a change is a named revision that re-keys
+> future results, never a sweep); (2) every research output carries its **evidence class**
+> (`historical_exposed_diagnostic` / `historical_oos` / `live_confirmatory`) and classes never
+> mix — nothing in this era emits `live_confirmatory`, which remains the untouched Referee's
+> exclusive territory. The Playbook detector family, the band-context revision, the engine, and
+> every `referee_*` module are FROZEN research vocabulary for this whole era (genuine bug fixes
+> excepted, each its own named revision). **The era succeeds if it kills bad ideas honestly; it
+> does NOT need to discover an edge.**
 
 ## Vision
 
-Era B2 taught the desk to read the tape the way the book teaches and to write every signal
-down with honest descriptive distributions. The operator has looked at those tables — 270
-evidence cells, 1,080 band-context cells, the cohort views — and seen patterns worth taking
-seriously: range trades at a wall, capitulation snapbacks. But a pattern in an inspected table
-is a hypothesis, not a finding, and today Tapeology has NO machinery that can tell the two
-apart: no confidence interval, no calibrated p-value, no multiple-testing control, no
-dependence-aware uncertainty, no pre-registration, and no vocabulary for "we looked, and there
-is nothing here". Era 6 builds that machinery — the Referee:
+Era B2 taught the desk to detect the book's chart patterns; the band-context interlude placed
+them against the wall map; Era 6 built the judge. But the judge's docket is starved: candidate
+mechanisms arrive one hand-written hypothesis at a time, wait months, and (honestly) mostly die.
+Meanwhile the project's refined objective — short-horizon, low-capacity intraday microstructure
+effects suitable for small capital — lives at a layer the product has never measured: what order
+flow DOES inside the structural states the desk already detects. This era builds the Rapid
+Microscope in five pillars:
 
-1. **One evidence contract, two families.** A typed read-side observation contract that carries
-   Playbook occurrences (bar-measured forward returns, session-clustered) and strategy/backtest
-   trades (net-R, dataset-clustered) into ONE shared statistical layer through per-family
-   adapters — preserving each family's semantics and provenance, forcing neither to pretend to
-   be the other.
-2. **Statistics that are calibrated, or refuse to speak.** Seeded bootstrap confidence
-   intervals (occurrence-level AND session-clustered, always side by side); formal p-values
-   from within-session randomization tests whose null distribution is constructed under H0 by
-   design; Benjamini–Hochberg over pre-registered families with the planned count as the
-   denominator; every procedure proven by seeded oracles with known answers — and a fail-closed
-   attestation: statistics whose oracle cannot be reproduced never emit a confirmatory verdict.
-3. **Nulls that are matched, not convenient.** The shipped seeded same-session anchors stay as
-   the descriptive baseline; the Referee adds time-of-day-matched nulls (and context-matched
-   nulls for combined claims) measured through the identical forward rail with
-   remaining-time-matched eligibility — so "beats chance" means "beats chance at comparable
-   times under identical measurement", not "beats a strawman".
-4. **Pre-registration with an immutable boundary.** An append-only registry of hypothesis
-   families where every candidate is written down BEFORE its confirmation data exists; the
-   historical atlas is exploratory forever; confirmation counts only sessions strictly after
-   the registration boundary; one confirmatory checkpoint per hypothesis, recorded as an
-   append-only snapshot no later evaluation can change.
-5. **A verdict vocabulary where "corroborated" is earned.** Registered → pending →
-   insufficient_sample / fragile / no_evidence / corroborated / killed — each a pure function
-   of recorded facts; a positive mean, a beaten baseline, or an ordinary bootstrap CI excluding
-   zero is NEVER enough. And the champion promotion gate gains a fail-closed interlock: no
-   strategy candidate can ever be promoted again without a valid, candidate-specific Referee
-   certificate.
+1. **The honest corpus truth.** A readiness surface that states, from disk, what the tick corpus
+   actually is (today: 12 symbol-days ≈ 3 full-session equivalents, every one of them exposed
+   discovery data; splits hand-assigned; aggressor labels 29–76% tick-test fallbacks) and which
+   predeclared study floors are met — so no downstream claim can pretend to power that does not
+   exist.
+2. **One observer, one pass, honest features.** A research micro-observer on the engine's
+   sanctioned observer seam reads the SAME canonical replay stream (never a second replay, never
+   a recomputed side), and persists prefix-disciplined feature snapshots: flow (cumulative
+   delta, event-time imbalance, runs, bursts), price-response (impact efficiency and its trend,
+   failed aggression, response asymmetry), and L1 liquidity (spread change, quote imbalance,
+   microprice, depletion, `refill_consistent` replenishment) — each with per-row `side_source`
+   and per-window fallback/unknown fractions, because an inferred aggressor label is never
+   ground truth.
+3. **Structure × Flow × Price Response.** The frozen structural vocabulary (playbook signals,
+   band-map walls) joined read-side and lookahead-clean to event-level flow — so the research
+   question becomes "what does flow do inside this structural state, and does the interaction
+   predict the response?", not "chart pattern → buy/sell" and not "flow feature alone →
+   buy/sell".
+4. **Validation that replays the research process.** A Scout that screens cheaply against
+   dependence-honest nulls and ledgers EVERY trial (the denominator never disappears); a
+   chronological walk-forward engine with origin-fenced discovery, exact purge, derived embargo,
+   frozen fold geometry, and a temporal-stability view that makes decay visible; a Validation
+   Vault whose shards seal at ingest under an opaque committed-secret assignment and expose
+   exactly once per family; and a recorder (Card 5.2, at last) that grows the tick corpus with
+   pre-registered universes instead of cherry-picked days.
+5. **Graduation into the untouched Referee.** Stage vocabulary `exploratory →
+   walkforward_survivor → sealed_survivor → referee_handoff_ready`, where only
+   `historical_oos`-class evidence advances anything, and the export bundle carries the complete
+   exposure history — every trial, every kill, every fold, every shard, every failure — so the
+   Referee (byte-untouched this era) receives candidates with nothing laundered.
 
-The deliverable: Tapeology moves from a system that can generate plausible tape-reading
-evidence to a system that can rigorously try to disprove it — and whose "no edge" is as
-trustworthy as any "edge" it will ever claim.
+The deliverable: Tapeology moves from "one hypothesis, months of waiting" to a funnel that can
+try many microstructure mechanisms against history, kill most of them in days with auditable
+reasons, and hand the survivors to the Referee with their full paper trail. Zero survivors is a
+passing grade.
 
 ## Target Users
 
-- The project owner (a discretionary intraday trader) who reads the shortlist, approves 2–3
-  starter hypotheses through the real registration act, runs evaluations as sessions accrue,
-  and reads verdicts on `/desk` — knowing every verdict survived the full gauntlet or says
-  honestly why it cannot yet speak.
-- The same owner operating through **Claude + MCP**: `desk_referee` /
-  `desk_referee_registry` (plus the existing 20 tools) make the registry and adjudications
-  readable from a conversation end to end.
+- The project owner (a discretionary intraday trader) who reads the readiness truth, registers
+  recording universes, runs the recorder/Scout/fold computes as explicit acts, and reads the
+  candidate ledger, decay views, and vault states on `/desk` — knowing every number's evidence
+  class and every denominator.
+- The same owner through **Claude + MCP**: four new read-only tools beside the existing 22 make
+  the readiness, ledger, folds, and vault readable from a conversation.
 - AI dev-chain agents (the goal-mode chain) building and browser-verifying the era.
 
-## Foundation invariants (still law — eras 1–5D, B, B2, and the R-4 interlude)
+## Foundation invariants (still law — eras 1–6, B, B2, and R-1…R-4)
 
 The era-1–2 constitution ([`docs/goal-archive/goal-2026-07-03.md`](goal-archive/goal-2026-07-03.md))
 remains binding on all KEPT code — price-impact-over-aggression; honest uncertainty; **no
 fabricated data**; single source of truth; no magic numbers; provider-agnostic engine;
 deterministic & reproducible; no secrets in source; research read-only over the engine; record
-integrity; source/feed/`config_fingerprint` honesty. The surface inventory is the post-B2 one:
-`/`, `/structure`, and `/desk` (this era adds sections to `/desk`, no new route).
+integrity; source/feed/`config_fingerprint` honesty. Ratifications R-1…R-4 carry forward
+unchanged (full text in the archived B2 and Referee goals). The surface inventory is the
+post-Referee one: `/`, `/structure`, and `/desk` (this era adds sections to `/desk`, no new
+route).
 
 1. The **tape engine** (`app/engine/`) emits byte-identical output under `default` on identical
-   inputs. `config_fingerprint` stays **`08e471b10130e1e2`** for this WHOLE era. This era needs
-   **zero new `Config` fields** (the `desk_forward`/playbook precedent: every referee constant
-   is a module constant embedded in `referee_parameters()` and hashed into referee result
-   identities); if the build genuinely needs one, it takes §0.4 **Path A** (exclusion +
-   stability test + counter-test) — a pin movement is a defect, full stop.
-2. The **frozen research vocabulary**: the nine Playbook detectors, all 42+6 spec constants,
-   `playbook_input_signature`, the band-context revision `playbook-band-context-v3`, the cohort
-   vocabulary `playbook-cohort-v1`, `levels.py`/`tradability.py`/`setups.py`/`edge_report*.py`/
-   `backtests.py`/the strategy registry/`profiles.py`/the champion pointer — all behaviorally
-   byte-identical. The Referee READS them; it never touches, re-implements, re-tunes, or feeds
-   back into any of them. **The one deliberate exception, in inventory:** `pnl_scan.py` gains
-   the J-08 promotion interlock (authorization before any write; everything else
-   byte-compatible).
+   inputs; `config_fingerprint` stays **`08e471b10130e1e2`** for this WHOLE era — **zero new
+   `Config` fields** (every rapid-microscope constant is a module constant embedded in
+   `micro_parameters()` and hashed into result identities); if one is genuinely unavoidable it
+   takes §0.4 Path A, and a pin movement is a defect, full stop. The observer attachment is the
+   engine's EXISTING `add_observer` seam — proven byte-equivalent by
+   `tests/test_observer_equivalence.py`, which stays green unmodified.
+2. The **frozen research vocabulary** now includes the whole Referee: the nine Playbook
+   detectors and all spec constants, `playbook-band-context-v3`, `playbook-cohort-v1`,
+   `levels.py`/`tradability.py`/`setups.py`/`edge_report*.py`/`backtests.py`/`profiles.py`/the
+   strategy registry/the champion pointer, **and every `referee_*` module, the referee spec, and
+   the `pnl_scan` promotion interlock — all behaviorally byte-identical.** This era READS them;
+   it never touches, re-implements, re-tunes, or feeds back into any of them. There is NO
+   deliberate exception this era.
 3. The **stores** — `BarStore` + `DatasetStore` formats, checksums, append-only immutability,
-   frozen splits, the accelerator DBs, the desk universe/screen/forward stores, the playbook
-   store and its ledgers — are untouched in format and discipline. The era ADDS the referee
-   store family (registry, nulls, evaluations, adjudication snapshots, run ledgers + one
-   derived observation cache) under the same discipline.
-4. The **PnL promotion ledger** stays append-only and intact; the champion pointer does not
-   move this era — and after J-08 it CANNOT move without a valid Referee certificate.
+   frozen splits, the accelerator DBs, the desk stores, the playbook store, the referee store
+   family — are untouched in format and discipline. The era ADDS the micro store family
+   (snapshots, scout ledger, fold ledger, vault + exposure ledger, recorder runs, graduation
+   ledger) under the same discipline, plus one additive default-`None` `observer=` kwarg on
+   `DatasetStore.replay` (counter-tested byte-identical when absent).
+4. The **PnL promotion ledger** stays append-only and intact; the champion pointer does not move
+   this era; `authorize_promotion` keeps its fail-closed contract untouched.
 5. The **kept surfaces as shipped**: the cockpit, `/structure`, and every shipped `/desk`
-   section (including all Playbook sections, the band-context columns, filters, and cohort
-   views) keep working exactly as shipped. Referee sections land as NEW sections below the
-   shipped ones; no shipped section, column, or behavior changes.
-6. The **read-only MCP server** keeps its byte-identical GET-proxy contract; this era adds two
-   GET-proxy tools (**20 → 22**) and never adds writes.
-
-### OWNER RATIFICATION — carried and new
-
-**R-1 (2026-07-27, price-less-bar repair)**, **R-2 (2026-08-10, the post-Era-B interlude)**,
-and **R-3 (2026-08-11, the playbook spec rulings R-3.1–R-3.3)** remain ratified history; their
-terms carry forward unchanged (see the archived B2 goal for their full text).
-
-**R-4 (2026-08-14, the post-B2 band-context interlude) — ratified and IN INVENTORY for this
-era.** Between B2's GOAL_ACHIEVED (iteration 12, `0ab5a11`) and this era's opening, the
-operator's interactive sessions landed a body of Playbook work no B2 journey describes. It is
-ratified as foundation, comprising the eleven `main` commits `9e65bb0` → `83c24a8`:
-
-- `app/research/desk_playbook_context.py` — the band-context read-side lens (v1 → v2 bracket
-  frame → v3 basis-bounded cache key; `PLAYBOOK_CONTEXT_ALGORITHM_VERSION =
-  "playbook-band-context-v3"`), its cache, warmer CLI, and
-  `GET /research/desk/playbook/context`;
-- `app/research/desk_playbook_cohort.py` — the 9-key cohort vocabulary
-  (`playbook-cohort-v1`) and the `?cohorts=true` read;
-- the refresh-chain steps 6–7 (playbook detection + back-scan inside the desk refresh);
-- the occurrence expansion + `geometry.anchors` persistence + chart shape drill-ins (a named
-  signature re-key, old records kept);
-- the `/desk` surfacing: context columns (trade-relative BEHIND/AHEAD), near-band and
-  inside/not-inside filters, sort/collapse primitives, screen-history → playbook date link;
-- `docs/playbook-detector-spec.md` §6 (band context) and §7 (cohorts).
-
-Where clauses below say "untouched", "as shipped", or "out-of-inventory", they are read
-subject to **R-1, R-2, R-3, and R-4**.
+   section (Playbook, band context, cohorts, Referee Registry/Adjudications/Runs) keep working
+   exactly as shipped. Rapid-Microscope sections land as NEW sections below the shipped ones;
+   no shipped section, column, or behavior changes.
+6. The **read-only MCP server** keeps its byte-identical GET-proxy contract; this era adds four
+   GET-proxy tools (**22 → 26**, contract v6) and never adds writes.
 
 ## Success Criteria
 
-In priority order — kept-value integrity outranks machinery completeness outranks surface
-convenience:
+In priority order — and under scope pressure the order is law: **the scientific core (observer,
+recorder/vault, Scout, walk-forward, provenance, leakage traps) is never weakened to save the
+product surface; UI/MCP polish and up to two of the three pilot studies are the deferrable
+items, in that order.**
 
-1. **Nothing kept regresses.** Full backend suite green (2,418 pass / 8 skip at authoring —
-   iteration 0 records the era-open count; grows, never shrinks); engine equivalence proves
-   byte-identical `default` outputs; `Config().config_fingerprint()` prints `08e471b10130e1e2`
-   every iteration; every kept `/`, `/structure`, and `/desk` behavior browser-verified as
-   shipped; every guard test passes extended-not-edited (subject to R-1/R-2/R-4 and the J-08
-   enumerated pnl_scan amendments); every previously recorded store file byte-identical
-   (SHA-256 listings).
-2. **The statistics are proven, or silent.** Every statistical procedure passes its seeded
-   oracle suite (null calibration on iid-skewed, heavy-tailed, AND session-clustered
-   generators; the demonstrated failure cases; power; BH sweep; CI coverage) within its
-   pre-registered runtime budget; evaluation records carry a pass attestation; adjudication
-   refuses confirmatory output without a matching attestation (fail closed, honestly served).
-3. **Exploratory and confirmatory never mix.** The historical atlas is served as exploratory
-   forever; confirmation pools contain only completed-session records with `session_date`
-   strictly after the hypothesis's registered boundary (deep-backfilled older dates can never
-   enter — counter-tested); the BH denominator is the registered planned count; one
-   confirmatory checkpoint per hypothesis, recorded append-only, immutable under later
-   evaluations.
-4. **Every number is reproducible from append-only records.** Registry, null, evaluation, and
-   adjudication-snapshot records are frozen, checksummed, append-only; `evaluation_basis`
-   content-hashes the exact evaluated inputs (record ids + coverage, null records, spec ids,
-   seeds, stats-core version); identical stores fold to byte-identical served bodies.
-5. **The starter family is real and clean.** The shortlist is served with live readiness; 2–3
-   hypotheses are registered through the real registration act with explicit operator
-   approval, `origin: "historical-exploration"` labels, one semantically-chosen primary
-   (measure, horizon) each, and estimand coverage per the shortlist constraints; their
-   confirmation state contains zero-or-only genuinely post-boundary sessions at era end — an
-   era ending with every real verdict `registered`/`pending_forward_confirmation` and ZERO
-   `corroborated` is the system working, not a failure.
-6. **Promotion is interlocked.** `pnl_scan` promotion requires a valid candidate-specific
-   Referee certificate and refuses closed on absent/stale/mismatched/malformed/failed-gates —
-   with no bypass of any kind — while sweep computation, survivor labelling, and reports keep
-   working without one.
-7. **The Referee is a real surface.** Registry, adjudications, and referee runs render on
-   `/desk` with honest empty states and full provenance (browser-verified with screenshots);
-   `desk_referee` + `desk_referee_registry` are byte-identical GET proxies (22-tool contract).
+1. **Nothing kept regresses.** Full backend suite green (2,691 pass / 8 skip at authoring —
+   iteration 0 records the era-open count; grows, never shrinks); engine equivalence and the
+   golden feature trace pass byte-unmodified; `Config().config_fingerprint()` prints
+   `08e471b10130e1e2` every iteration; every `referee_*` module byte-identical to `main` at
+   era open (SHA-256 listing recorded at iteration 0 and re-checked); every kept `/`,
+   `/structure`, `/desk` behavior browser-verified as shipped.
+2. **No leakage trap fails, ever.** The TR-1…TR-16 suite of
+   [`docs/rapid-validation-spec.md`](rapid-validation-spec.md) §9 is implemented and green:
+   prefix discipline, origin fencing, sealed-shard sweeps, cherry-pick refusal, class-mixing
+   refusal, purge exactness, screening calibration, pool invariance, ledger chain integrity,
+   single-shot sealed exposure, geometry freeze, rule identity, tick-corpus refusal, and the
+   synthetic known-null / known-effect end-to-end oracles.
+3. **Every trial is on the record.** The scout ledger is hash-chained append-only; every
+   evaluated variant — every kill, with its closed-vocabulary reason — is a permanent row; the
+   union-N denominator is served beside every family; "statistically above null" and
+   "economically large enough to pursue" are separate served columns, the latter always with
+   the cost-proxy sentence.
+4. **Evidence classes never mix.** Every study/fold/screen payload carries
+   `historical_exposed_diagnostic` / `historical_oos` verbatim; diagnostic-class results award
+   zero graduation credit and satisfy zero gates (counter-tested); nothing this era emits
+   `live_confirmatory`.
+5. **The recorder and the vault are real.** The Card-5.2 recorder proves
+   restart/resume/idempotency/failure behavior against real Alpaca historical trades+quotes;
+   the starter tranche exists on disk meeting every §7.6 diversity minimum; genuine sealed
+   shards exist (sealed at ingest, before any exploratory read, under the HMAC committed-secret
+   assignment); the 12 legacy symbol-days are served as permanently exploratory; the
+   ~150-symbol-day research gate is reported honestly unmet.
+6. **The diagnostic walk-forward run is delivered — and worth zero credit.** The 155-session
+   playbook-corpus run completes under the predeclared geometry (40/5/20/20 → 5 folds), its
+   every output labeled `historical_exposed_diagnostic`, its fold ledger and temporal-stability
+   view rendered, and its results feeding no gate, no certificate, no promotion, no graduation.
+7. **The pilot studies run honestly.** The three predeclared studies (range-wall failed
+   aggression; delta divergence at level tests; capitulation exhaustion) execute through the
+   Scout on the joinable corpus with predeclared mechanism/outcome/comparator, every variant
+   ledgered; `no survivor`, `wrong direction`, and `insufficient_n` are all passing outcomes.
+8. **Graduation is provenance-complete.** The stage vocabulary and export bundle are
+   implemented and proven on fixtures end to end; `referee_handoff_ready` explicitly does not
+   claim current-Referee registrability for flow predicates (a future named referee-spec
+   revision owns that); the Era-15 evidence line (what would justify the Depth purchase) is
+   recorded in the roadmap.
 
 ## Key Capabilities
 
-1. **The evidence contract (`referee_evidence.py`).** A typed read-side observation —
-   `{evidence_family, observation_id, symbol, session_date, anchor_ts, side, measure_key,
-   value, cluster_key, provenance{detector_basis, config_fingerprint,
-   context_algorithm_version?, source_record_id, basis_caveats[]}}` — with two adapters:
-   Playbook occurrences (pooling key = `(detector_basis, config_fingerprint)` where
-   `detector_basis = sha256(canonical(record.parameters))[:16]`, one record per `session_date`
-   by newest `(recorded_at, id)` — the identity that SURVIVES daily bar top-ups and honestly
-   re-keys on genuine detector revisions) and strategy trades (joined to their enclosing
-   report's dataset/strategy identity; cluster = dataset id; split carried; the Card-6.4
-   forming-bar caveat stamped as a served `basis_caveats` entry). Units and side→MDD binding
-   stated ONCE here. Plus the readiness fold: per-family data-readiness truth served honestly.
-2. **The statistics core (`referee_stats.py`) + the canonical spec.** Stdlib + `random.Random`
-   per-row streams (numpy only where already idiomatic; scipy stays absent; `math.fsum`-class
-   accumulation for persisted numbers). Percentile bootstrap CIs — occurrence-level AND
-   session-clustered, always both; within-session group-label permutation as THE primary
-   confirmatory test (exact under within-session exchangeability for any group-size ratio and
-   any skew); session-level sign-flip and equal-weight variants as robustness disclosures;
-   BH (registered q) + BY disclosure; MDE and discrete-p granularity served; the oracle suite
-   and the evaluation-time attestation.
-3. **Matched nulls (`referee_null.py`).** ToD-bucket same-session nulls (K seeded anchors per
-   occurrence — same symbol, same measurement series, remaining-time-matched eligibility,
-   without replacement, trigger bar excluded) and context-matched nulls (anchor must satisfy
-   the registered backing-bucket predicate via the recorded band map; room via the paired
-   signal's risk distance) — measured through the imported `desk_forward` rail with the
-   signal's side; recorded append-only, keyed by null-spec signature; shortfall, eligibility,
-   and window-overlap disclosures served.
-4. **The registry (`referee_registry.py`).** Append-only family / hypothesis / withdrawal /
-   certificate records; registration as an explicit operator act (CLI + POST with
-   confirmation); immutable confirmation boundaries (`registered_at` UTC → ET calendar date;
-   sessions strictly after); withdrawal only while no post-boundary evaluation exists (else
-   the hypothesis stays in the BH denominator as p=1).
-5. **Estimand engines + adjudication (`referee_adjudicate.py`).** Estimand A (setup effect vs
-   ToD-matched null), B (context-ASSOCIATED difference within setup — named honestly), C
-   (combined effect vs context/ToD-matched null); evaluation as a recorded operator act; the
-   single confirmatory checkpoint; the read-side adjudication fold (BH within family, m =
-   planned) serving the verdict vocabulary — every verdict a pure function of recorded facts;
-   `authorize_promotion` for the J-08 interlock; `REFEREE_REGISTER`.
-6. **The `/desk` Referee sections + MCP contract v5 (22 tools).** Referee Registry (families,
-   hypotheses, boundaries, accrual), Referee Adjudications (verdict chips + provenance),
-   Referee Runs (null/evaluation compute controls + ledgers) — rendered BELOW the shipped
-   sections; `desk_referee` + `desk_referee_registry` in `_STATIC_PATHS` (full payloads, no
-   selectors — parameterized reads stay on `get_endpoint`).
+1. **The readiness truth (`micro_readiness.py`).** Served-from-disk corpus inventory: per-shard
+   symbol/date/feed/window/counts/coverage/`fallback_frac`/checksum/exposure state; honest
+   distinct-symbol-day and RTH-minute totals beside the referee's file-count gate; per-study
+   predeclared floors met/unmet; the legacy-corpus exposure statement.
+2. **The micro observer + snapshots (`micro_observer.py`, `micro_snapshots.py`).** The additive
+   `observer=` seam; prefix-disciplined streaming feature extraction in the ONE replay pass;
+   snapshot identity `(dataset_id, dataset_checksum, MICRO_ALGO_VERSION,
+   SNAPSHOT_FORMAT_VERSION, feature_source_hash, config_fingerprint, params_hash)` with
+   load-time verification; the granularity benchmark that CHOOSES the representation before it
+   is frozen.
+3. **Wave-1 primitives (`micro_features.py`).** F-FLOW / F-RESPONSE / F-LIQUIDITY per spec §3,
+   each with a hand-derived oracle fixture; engine values reused from the snapshot, never
+   recomputed; `refill_consistent` as the strongest permitted liquidity label; the closed
+   outcome set of spec §4 (mid-basis, session-truncated, spread-proxy column beside).
+4. **The structure × flow join (`micro_join.py`).** Frozen playbook signals and band-map wall
+   touches joined to snapshot rows at their trigger instants, as-of-clean (features from events
+   at or before the trigger only; band basis stays the prior-session discipline); zero diff to
+   any detector or context module.
+5. **The Scout + exploratory candidate ledger (`scout.py`, `scout_ledger.py`).** Frozen
+   candidate specs from bounded pre-registered grids; hash-chained append-only trials with the
+   union-N denominator; block-permutation screening (session-clustered, dependence-honest);
+   concentration/ToD/fallback-tercile disclosures; the pre-registered economic-relevance floor
+   served as its own column with the proxy sentence; the closed kill vocabulary.
+6. **The chronological walk-forward engine (`walkforward.py`, `micro_accessor.py`).** The
+   origin-fenced accessor as the only data door; Mode A rolling-origin discovery where the
+   frozen identity is the fitting RULE (realized fitted values are fold provenance); Mode B
+   fixed-hypothesis evaluation; exact purge by session-truncation, per-spec derived embargo
+   (E=0 legitimate when no dependency crosses); frozen fold geometry with voiding semantics;
+   fail-closed floors; the per-sequence temporal-stability/decay view; evidence-class labeling
+   throughout; the 155-session diagnostic acceptance run.
+7. **The recorder + Validation Vault (`tick_recorder.py`, `vault.py`).** The Card-5.2 chunked,
+   throttled, resumable, operator-gated recorder through the unchanged `DatasetStore.record`;
+   pre-registered recording universes with cherry-pick refusal; the published sha256 split
+   beside the NEW opaque HMAC seal assignment (committed secret outside the repo); one-way
+   `sealed → assigned → exposed` with a hash-chained exposure ledger, sealed-metadata
+   minimization, and single-shot family-level exposure; the starter tranche under the §7.6
+   minimums; paired bar backfill so band context joins.
+8. **Graduation (`micro_graduation.py`).** `exploratory → walkforward_survivor →
+   sealed_survivor → referee_handoff_ready` with class-2-only advancement, permanent failed
+   verdicts, and the provenance-complete export bundle.
+9. **The `/desk` Rapid-Microscope sections + MCP contract v6 (26 tools).** Microscope
+   Readiness, Scout Ledger, Walk-Forward, and Validation Vault sections rendered BELOW the
+   shipped Referee sections; `desk_micro_readiness` + `desk_scout` + `desk_walkforward` +
+   `desk_vault` as byte-identical GET proxies; page-load GETs never compute.
 
 ## Non-Goals
 
-- **No new trading signals, detectors, setups, or alpha dimensions.** No new Graifer setups,
-  no VWAP/relative-strength/premarket/overnight/L2/news features. The Referee judges what
-  exists; it creates nothing to judge.
-- **No threshold or definition tuning, anywhere, ever.** Detector constants, band-context
-  constants (`70 bps`, `(1R, 2R)` edges), and cohort vocabulary are frozen; `room_r`, backing,
-  headroom never become detector gates; no code path iterates any threshold against outcomes
-  (source-scan guard-tested). A genuine bug fix is a named revision that re-keys, never an
-  edit of recorded meaning.
-- **No rewriting of history.** No existing record is rewritten, re-keyed, backfilled, or
-  reinterpreted; no historical observation is ever served as forward confirmation; the
-  historical atlas is exploratory permanently.
-- **No trading, no advice, no sizing.** Verdicts are statistical statements about recorded
-  history. No live/paper trading, no execution path, no "expected profit", no annualized
-  anything (guard-tested), no imperative or prediction language.
-- **No Card 6.4 forming-bar fix this era** (operator decision 2026-08-14): the intraday
-  forming-bar admission in `levels._bars_as_of` stays as-is, documented as a served
-  `basis_caveats` disclosure on strategy-family evidence; the fix remains Card 6.4, the
-  opening gate of the next structure-measurement era. No `levels.py`/`tradability.py`/
-  `setups.py` behavior change of any kind.
-- **No strategy-family statistics buildout beyond the adapter.** Card 6.1 metrics, Card 6.6
-  strategy matched nulls, Card 6.4 Part 2 walk-forward, Cards 6.5/6.7–6.11 stay gated on
-  their own (tick-family) data readiness — reconciled honestly in the catalog, not smuggled
-  in. The strategy family is adjudicated with what exists; the expected honest verdict today
-  is `insufficient_sample`.
-- **No annotation layer** (Era C remains a separate future chapter). No manual-input write
-  paths into research records.
-- **No new vendor, no new data purchases, no new runtime dependency** (scipy stays out; the
-  statistics are auditable hand implementations). No paid services.
-- **No scheduling.** Every null build, evaluation, registration, and certificate act is an
-  explicit operator act; page-load GETs never compute.
+- **No L2/depth data, no depth purchase, no heatmap.** `BookLevelEvent` stays reserved; Era 15
+  remains gated on its own operator act; this era only RECORDS the survivor evidence that would
+  inform that decision.
+- **No detector, threshold, or context change of any kind.** The nine detectors, the 42+6 spec
+  constants, `playbook-band-context-v3`, and the cohort vocabulary are untouched; no recorded
+  playbook file is rewritten; microstructure features join READ-SIDE only.
+- **No engine change.** No new engine feature, no classifier change, no `FEATURE_NAMES`
+  movement; the observer consumes the existing seam; the golden trace and frozen-default
+  equivalence pass byte-unmodified.
+- **No Referee change.** Every `referee_*` module, the referee spec, and the promotion
+  interlock are byte-identical this era; a flow-context referee predicate is explicitly FUTURE
+  work (a named referee-spec revision), and `referee_handoff_ready` says so.
+- **No sequential-inference rewrite.** Anytime-valid live monitoring / futility stopping is
+  recorded as a candidate future era in the roadmap amendment, not built here.
+- **No annotation layer** (Era C remains separate). No manual-input write paths into research
+  records.
+- **No new vendor, no data purchases, no new runtime dependency.** Alpaca (already
+  credentialed) and Yahoo (keyless) only; scipy stays out; stdlib + existing numpy idioms.
+- **No universe widening beyond the Card-5.2 panel.** The recorder records the frozen panel
+  (Tier A/B/C as specified, with the Tier-B re-screen recorded); no survivorship-blind
+  "today's constituents" backfill masquerading as history.
+- **No trading, no advice, no sizing, no annualized anything** (guard-tested). Every number is
+  a statistical statement about recorded history under stated assumptions.
+- **No scheduling.** Every recording, snapshot build, screen, fold run, seal, exposure, and
+  graduation act is an explicit operator act; page-load GETs never compute.
 - **No fingerprint epoch movement.** Zero new Config fields expected; Path A if one is
   unavoidable; the pin `08e471b10130e1e2` does not move.
 
 ## Constraints
 
-- **Stack (carried over):** Next.js 15 + TypeScript + Tailwind v3, dark-only; Python 3.12 +
-  FastAPI; backend `:8000`, frontend `:3000` (browser-QA rig `:8301`/`:3301`); no new runtime
-  dependency (stdlib `statistics` + `random.Random` streams; numpy only where already
-  idiomatic; `math.fsum`-class accumulation for any persisted statistic).
-- **The statistical spec is canonical.**
-  [`docs/referee-statistical-spec.md`](referee-statistical-spec.md) fixes every constant,
-  eligibility rule, null definition, test procedure, weight, verdict rule, and oracle design
-  BEFORE the code that uses it. A developer who finds the spec ambiguous or unimplementable
-  for a procedure DROPS that procedure from the iteration, records the drop, and surfaces it
-  for an owner ruling — never improvises. A spec change is a named revision that re-keys
-  future results beside old ones.
-- **Parameters discipline (the desk pattern, applied at birth):** `referee_parameters()` reads
-  every referee constant at call time; every null/evaluation/adjudication record embeds the
-  relevant parameters verbatim and keys on their hash (plus the null-spec / test-spec ids
-  minted in J-04); a monkeypatched constant must move the parameters AND the result identity
-  (counter-tested). Seed streams follow the pinned recipe
-  `f"{REFEREE_SEED}:{hypothesis_id}:{purpose}[:{session_date}[:{i}]]"` with the hand-coded
-  Fisher–Yates draw discipline — never `random.sample`, never a global RNG, never wall-clock.
-- **Store discipline:** frozen, checksummed, append-only JSON records; record id = pure
-  function of the key; duplicate key raises; a corrupt file is surfaced, never overwritten;
-  NO update/delete/supersede path exists (source-scan guard-tested). Storage dirs are
-  env-var-or-sibling defaults (`TAPEOLOGY_DESK_REFEREE_DIR`, `_NULL_DIR`, `_EVAL_DIR`,
-  `_LOG_DIR` families — deliberately NOT Config fields). The observation cache follows the
-  `desk_meta_cache` contract: derived, stat-keyed, rebuildable, owns nothing.
-- **Read-side law:** the Referee imports the rail (`desk_forward._measure_from`,
-  `_draw_anchor_indices`, the averaging helpers) and the context resolver
-  (`BandMapResolver`) — zero diff to `desk_forward.py`, `desk_playbook*.py`, `levels.py`,
-  `tradability.py`; import-ban guards prove `desk_playbook_detect`/`desk_playbook_context`
-  never import referee modules and referee modules never import the detect module.
-- **Exploratory/confirmatory separation is structural:** confirmation eligibility =
-  completed-session records only (the pre-registered RTH-close-reach predicate), `session_date`
-  strictly after the ET boundary, informative-session floors met; the fold selects exactly the
-  recorded confirmatory adjudication snapshot per hypothesis; monitoring evaluations never
-  alter it.
-- **Copy discipline:** all referee copy is statistical description; the served
-  `REFEREE_REGISTER` states what verdicts do NOT mean (no profit claim, no advice, no
-  prediction, not annualized, a `corroborated` verdict is a statement about recorded history
-  under stated assumptions); no `profitable`/`profit`/`win rate`/`has an edge` claim phrasing
-  anywhere (`tests/test_copy_discipline.py` green; extended for referee copy, never weakened).
-- **Guard tests are extended, never edited** (subject to the J-08 enumerated amendments):
-  `tests/test_desk_ui_guards.py` `_PRICE_ARITHMETIC_FIELDS` gains every served referee numeric
-  (+ seeded counter-tests); `tests/test_desk_refresh_chain_guard.py` `_EXPECTED_EFFECT_COUNT`
-  is re-derived deliberately ONCE with the mandatory rationale paragraph;
-  `tests/test_mcp_server.py` `EXPECTED_TOOLS` grows to the 22-tuple;
-  `test_no_execution_path.py`, the chart guards, and the fingerprint pin assertions pass
-  byte-unmodified.
-- **Hermetic tests:** keyless on committed fixtures (synthetic observation corpora with known
-  truth; fixture playbook records; a would-promote pnl fixture); no test fetches the network;
-  real registrations/evaluations are operator-run acts reported run-or-not-run, never CI
-  gates; oracle suites run within `REFEREE_ORACLE_BUDGET_SECONDS`.
+- **Stack (carried):** Next.js 15 + TypeScript + Tailwind v3, dark-only; Python 3.12 + FastAPI;
+  backend `:8000`, frontend `:3000` (browser-QA rig `:8301`/`:3301` via the store-scope rig);
+  no new runtime dependency.
+- **The spec is canonical.** [`docs/rapid-validation-spec.md`](rapid-validation-spec.md) fixes
+  every constant, contract, fold rule, sealing rule, ledger schema, graduation gate, and trap
+  BEFORE the code that uses it. Ambiguous or unimplementable ⇒ DROP the procedure from the
+  iteration, record the drop, surface for an owner ruling — never improvise. A spec change is a
+  named revision that re-keys future results beside old ones.
+- **Parameters discipline (the desk pattern at birth):** `micro_parameters()` reads every
+  constant at call time; every persisted record embeds the relevant parameters verbatim and
+  keys on their hash; a monkeypatched constant must move the parameters AND the result identity
+  (counter-tested). Seed streams follow the spec §0 recipe — never `random.sample` on a global
+  RNG, never wall-clock.
+- **Store discipline:** frozen, checksummed, append-only records; record id = pure function of
+  the key; duplicate key raises; corrupt files surfaced, never overwritten; NO
+  update/delete/supersede path (source-scan guard-tested); storage dirs are
+  env-var-or-sibling defaults (`TAPEOLOGY_MICRO_*` family — deliberately NOT Config fields);
+  the vault secret lives OUTSIDE the repo at `TAPEOLOGY_VAULT_SECRET_FILE`, never committed,
+  logged, served, or printed — only its sha256 commitment is recorded.
+- **The accessor is the only door:** `micro_accessor.py` is the sole legal reader of snapshot
+  and vault event data (import-ban guard, the referee-guards precedent); origin fences and
+  sealed-shard refusals are typed errors, never empty results; every registered route is swept
+  against a sealed fixture shard.
+- **Evidence-class law:** every served research payload carries its class verbatim;
+  class-mixing in a pooled statistic is a refusal; diagnostic-class evidence advances no
+  gate — all counter-tested.
+- **Guard tests are extended, never edited:** `tests/test_mcp_server.py` `EXPECTED_TOOLS` grows
+  to the 26-tuple; `tests/test_desk_ui_guards.py` `_PRICE_ARITHMETIC_FIELDS` gains every served
+  micro numeric (+ seeded counter-tests); `test_meta_routes.py` (3 routes) passes
+  byte-unmodified; `test_no_execution_path.py`, `test_copy_discipline.py` (extended for micro
+  copy), the referee guards, the context byte-freeze, the fingerprint pins, and the golden
+  traces pass unweakened; new micro modules add their own guards (accessor import-ban,
+  threshold-sweep ban extended to `micro_*`/`scout*`/`walkforward*`).
+- **Hermetic tests:** keyless on committed fixtures (synthetic corpora with known truth; the
+  spec's oracle vectors; fixture shards); no test fetches the network; real recordings and
+  tranche acts are operator-run, reported run-or-not-run, never CI gates; heavy suites respect
+  the pinned time budgets.
 - **Browser evidence:** `rm -rf apps/frontend/.next` + rebuild before any browser pass (T-9);
   every browser acceptance needs a screenshot — none ⇒ `unknown`, never `passing` (T-10);
-  DOM-content reveals only; new sections render BELOW shipped ones and are statically swept
+  element-capture for below-the-fold sections (the era-6 lesson); new sections render BELOW
+  shipped ones, reuse no shipped `data-testid` or heading string, and are statically swept
   against the stored replay scripts (T-11).
-- **Compute-manager reuse:** null builds and evaluations follow the shipped desk manager
-  pattern (single-flight, snapshot-pollable progress, cancel, CLI-runnable, one shared
-  `run_*_and_record` writer, terminal-state-only ledger writes); page-load GETs never trigger
-  computes; the oracle attestation runs at evaluation time, never at GET time.
+- **Compute-manager reuse:** snapshot builds, screens, fold runs, and recordings follow the
+  shipped desk manager pattern (single-flight, snapshot-pollable progress, cancel,
+  CLI-runnable, one shared writer, terminal-state-only ledger writes); page-load GETs never
+  compute.
+- **Scope-pressure priority (operator ruling, binding):** if the era must shrink, defer in this
+  order — UI/MCP polish first, then up to two of the three pilot studies — and NEVER weaken
+  the observer, recorder/vault, Scout, walk-forward, provenance, or leakage-trap rails.
+- **Iteration hygiene (the era-6 retro):** step timeouts tripped in 13 of 15 referee
+  iterations — keep per-iteration scope lean, browser acceptance narrow, and the fixture-scoped
+  backend the default for QA.
 
 ## Design Direction
 
-Unchanged house style: dark-only, dense, professional, terminal-grade. The Referee reads like
-a lab notebook, not a scorecard: registered questions, boundaries, accrual counts, and
-verdicts with their provenance — never a leaderboard. Honest empty/degraded states are
-first-class copy (`"No hypotheses registered."`, `"Confirmation pending: 3 of 12 informative
-sessions accrued."`, `"Confirmatory output refused: oracle attestation missing."`). Verdict
-chips use the exact vocabulary tokens; no color implies advice.
+Unchanged house style: dark-only, dense, professional, terminal-grade. The Rapid Microscope
+reads like a lab bench log: corpus truth first, then trials with denominators, then folds with
+their classes, then the vault's one-way states. Honest empty/degraded states are first-class
+copy (`"No candidates ledgered."`, `"Fold construction refused: 11 sessions < 105 required."`,
+`"Sealed — metadata only until exposure."`). Class labels render verbatim; no color implies
+advice; every diagnostic-class number carries its label in the same visual unit.
 
 ## Product Shape
 
 Nav unchanged: **Cockpit `/` · Structure `/structure` · Desk `/desk`** (`app/meta.py`
-`UI_ROUTES` untouched). The Referee adds three sections to `/desk`, rendered BELOW the shipped
-Playbook sections.
+`UI_ROUTES` untouched). The era adds four sections to `/desk`, rendered BELOW the shipped
+Referee sections: **Microscope Readiness · Scout Ledger · Walk-Forward · Validation Vault**.
 
 **Data Contract — new rows (each value computed once, one owner):**
 
 | Value | Owner (module) | Serving endpoint |
 |---|---|---|
-| Referee evidence coverage + per-family readiness | new `app/research/referee_evidence.py` | `GET /research/desk/referee/evidence` |
-| Matched-null records | new `app/research/referee_null.py` | `GET /research/desk/referee/nulls` (`?id=`) |
-| Null compute progress + runs | same module + its log | `POST/GET/POST-cancel /research/desk/referee/nulls/compute`, `GET .../nulls/runs` |
-| Registry (families, hypotheses, withdrawals, certificates) | new `app/research/referee_registry.py` | `GET /research/desk/referee/registry`; `POST /research/desk/referee/registry/hypotheses` (operator act) |
-| Evaluation records + runs | new `app/research/referee_adjudicate.py` + its log | `GET /research/desk/referee/evaluations`, `POST/GET/POST-cancel .../evaluate`, `GET .../evaluate/runs` |
-| Adjudications (snapshots + pending fold) | `referee_adjudicate.py` | `GET /research/desk/referee/adjudications` |
-| Promotion authorization verdict | `referee_adjudicate.py` (`authorize_promotion`) | consumed inside `pnl_scan._promote`; surfaced in the scan report's `promotion` block |
+| Corpus readiness truth (inventory, floors, exposure states) | new `app/research/micro_readiness.py` | `GET /research/desk/micro/readiness` |
+| Feature snapshot metadata + build progress/runs | new `app/research/micro_snapshots.py` (+ manager) | `GET /research/desk/micro/snapshots`, `POST/GET/POST-cancel /research/desk/micro/snapshots/compute`, `GET .../snapshots/runs` |
+| Scout trials, kills, denominators, screens | new `app/research/scout_ledger.py` + `scout.py` | `GET /research/desk/micro/scout`, `POST/GET/POST-cancel /research/desk/micro/scout/compute`, `GET .../scout/runs` |
+| Fold specs, folds, sequences, decay view | new `app/research/walkforward.py` + its ledger | `GET /research/desk/micro/walkforward`, `POST/GET/POST-cancel /research/desk/micro/walkforward/compute`, `GET .../walkforward/runs` |
+| Vault shards, universes, exposure ledger | new `app/research/vault.py` | `GET /research/desk/micro/vault` |
+| Recorder job + tranche progress/runs | new `app/research/tick_recorder.py` | `POST/GET/POST-cancel /research/desk/micro/recorder/compute`, `GET .../recorder/runs` |
+| Graduation states + export bundles | new `app/research/micro_graduation.py` | `GET /research/desk/micro/graduation` |
 
-**Unchanged owners (the Referee reads them verbatim):** playbook records →
-`desk_playbook.py`; measurement helpers → `desk_forward.py` (imported, zero diff); band maps →
-`desk_playbook_context.BandMapResolver` over the recorded tradability cache; session honesty →
-`desk_sessions.py`; strategy trades/datasets → `store.py`/`datasets.py`; everything else
-exactly as the archived B2 contract lists.
+**Unchanged owners (this era reads them verbatim):** datasets/replay → `datasets.py` (one
+additive kwarg); engine features/side → the engine snapshot; playbook records →
+`desk_playbook.py`; band maps → `desk_playbook_context.BandMapResolver` over the recorded
+tradability cache; referee registry/adjudications → the `referee_*` family; everything else
+exactly as the archived Referee contract lists.
 
-## Build anchors & weak-model traps (era 6)
+**Canonical values (single source of truth):** a candidate's trial history (scout ledger); a
+fold/sequence result and its evidence class (walkforward ledger); a shard's exposure state
+(vault ledger); the corpus readiness floors (micro_readiness) — each computed once, served from
+its one endpoint, read verbatim by UI/MCP/reports.
 
-Anchors verified on `main` at authoring (2026-08-14) — **re-locate by symbol name (grep),
-never by line arithmetic**:
+## Build anchors & weak-model traps
 
-- Rail: `desk_forward.py` — `_measure_from` :451, `_draw_anchor_indices` :428,
-  `_collect_measures`/`_avg_cell` :564–616, `DESK_FORWARD_HORIZONS_MINUTES` :112,
-  `DESK_FORWARD_MEASURE_KEYS` :146, seed 1729 :138.
-- Playbook records: `desk_playbook.py` — `playbook_parameters()` :246 (54 keys, embedded
-  verbatim in every record — the `detector_basis` source), `compute_playbook_input_signature`
-  :345, `PlaybookStore.newest_for_date` :956, `PLAYBOOK_MIN_N_DISCLOSURE = 12` :174.
-- Context: `desk_playbook_context.py` — `PLAYBOOK_CONTEXT_ALGORITHM_VERSION =
-  "playbook-band-context-v3"` :131, `BandMapResolver` :570, `band_context_block` :457,
-  `risk_source="paired_signal"` borrowing :300–308.
-- Strategy family: `backtests.py` — trade dict `_close_trade` :1137, `_null_trades` :1010,
-  result block :608–634; `pnl_scan.py` — `_promote` :267 (authorization goes BEFORE the
-  `append_validation_row` call; ledger-row-first / pointer-second order preserved),
-  `run_sweep` :333; `store.py`/`datasets.py` — dataset `(id, checksum, split)` identity.
-- Guards: `test_desk_ui_guards.py` `_PRICE_ARITHMETIC_FIELDS` :215;
-  `test_desk_refresh_chain_guard.py` `_EXPECTED_EFFECT_COUNT = 19` :160;
-  `test_mcp_server.py` `EXPECTED_TOOLS` :56 (20 names; arg-property whitelist
-  `{ticker, bar, path, symbol, as_of}` — referee tools take NO selectors);
-  `test_copy_discipline.py` lexicons :64–108; fingerprint pin literal `08e471b10130e1e2`.
-- ToD buckets: `docs/research-directions.md` Card 6.5 — open 09:30–10:30, mid 10:30–15:00,
-  close 15:00–16:00 ET (epoch → ET with DST, the T1 discipline; desk ET convention).
-- Corpus reality at authoring: 210 records / 156 session dates; current signature
-  `31b1d8f89fe94467` = 3,222 signals / 155 dates; per-cell (n/sessions): double_top:short
-  771/105, double_bottom:long 703/98, capitulation:long 473/71, range_trade:long 469/80,
-  range_trade:short 459/79, jbe:long 164/44, dbi:short 138/43, open_high_break:long 26/22,
-  open_low_break:short 18/14, cup_handle:long 1/1; coverage median 4 symbols/date (38 dates
-  ≥90) — the reason session clustering is law.
+Anchors verified on `main` at authoring (2026-08-16) — **re-locate by symbol name (grep), never
+by line arithmetic**:
+
+- Observer seam: `app/engine/tape_engine.py` — `add_observer` :123, `_notify_event` :144 (fires
+  at END of `process_event` :361); equivalence proof `tests/test_observer_equivalence.py`.
+- Replay: `app/research/datasets.py` — `DatasetStore.replay` :376 (the ONE entry point; gains
+  the additive `observer=` kwarg), `load_events` :370, `_event_to_row` :151 (trade rows carry
+  vendor `side` = `unknown`; quote rows carry `bid_size`/`ask_size`), `record_from_source`
+  :498, `record` :391 (split validated :408, frozen at registration).
+- Aggressor: `app/engine/aggressor.py` — `classify_aggressor` :36 (quote rule :43, tick test
+  :52); measured fallback share 29–76% per dataset (readiness must serve it).
+- Engine features: `app/engine/features.py` — `FEATURE_NAMES` :24 (frozen), quote sizes dropped
+  at `add_quote` :558 (the observer reads them from the raw event instead); golden trace
+  `tests/test_dense_replay_gate.py` :256.
+- Vendor: `app/providers/adapters/alpaca.py` — `iter_historical_chunks` :309 (the recorder's
+  fetch), `_fetch_trades_quotes` :408; NO tick throttle/recency clamp exists (the recorder adds
+  its own throttle); `historical_chunk_seconds = 900` (`config.py:366`).
+- Precedents to copy: `desk_deep_backfill.py` (credentialed chunked CLI job, resumable);
+  `desk_playbook_log.py` (hash-chained append-only ledger); the desk compute-manager pattern;
+  `referee_null.py` ToD buckets :132.
+- Corpus reality at authoring: tick = 18 datasets / 12 symbol-days / 11 sessions
+  (2026-05-27→07-13) / ~3.01 session-equivalents / 0.92 GB, all exposed, splits hand-assigned;
+  playbook = 156 sessions / 3,222 signals / 101 symbols (2025-06→2026-08); storage ≈ 76–516 MB
+  per full symbol-session (mean ~218 MB).
+- Guards: `test_mcp_server.py` `EXPECTED_TOOLS` :58 (22 names, ordered); `test_meta_routes.py`
+  :33 (3 routes); `test_desk_ui_guards.py` `_PRICE_ARITHMETIC_FIELDS`; `test_copy_discipline.py`;
+  `test_real_data_gate.py` (Alpaca confinement — the recorder passes the string `"alpaca"`
+  through the seam, never imports the SDK); referee guards `test_referee_guards.py` :53 (context
+  byte-freeze) and :180+ (import bans).
 
 Traps (read before EVERY iteration):
 
-- **T-1 · The spec is law, vagueness is a drop.** Implement statistics from
-  `docs/referee-statistical-spec.md` verbatim. A constant, weight, eligibility rule, or test
-  changed without a spec revision is a defect even if tests pass.
-- **T-2 · The vocabulary minefield.** "survivor" belongs to `pnl_scan` (a holdout measurement
-  concept) — the Referee's passing verdict is `corroborated`, never "survivor". "evidence"
-  already names the playbook fold — referee modules say "observations". "setup" has three
-  meanings (B2's T-2, carried). "register/record/set/append" are banned MCP tool-name words.
-- **T-3 · CI-inversion is not a p-value.** The ordinary bootstrap estimates uncertainty
-  around the observed mean; it is NEVER the null distribution. Any p that feeds BH comes from
-  the within-session label permutation (or a spec-named calibrated procedure) — the oracle
-  suite exists to catch exactly this substitution.
-- **T-4 · Optional stopping hides in re-runs.** One confirmatory checkpoint per hypothesis,
-  recorded append-only. An evaluation re-run after new sessions accrue is MONITORING and must
-  be labeled so; folding it into the verdict is the forking-paths bug this era exists to kill.
-- **T-5 · Exposure asymmetry hides in truncation.** Remaining-time-matched anchor
-  eligibility; primary-horizon-complete occurrence eligibility; unmeasurable = counted
-  exclusion, never zero, never a `to_close` fallback. The pairing rules live INSIDE the
-  null/test-spec signatures.
-- **T-6 · The corpus moves daily.** `playbook_input_signature` churns on every top-up; pool
-  on `detector_basis` + newest-complete-record-per-date; snapshot `evaluation_basis`; a
-  newest record covering fewer symbols than a superseded one is a served disclosure, never a
-  silent shrink.
-- **T-7 · Insufficient is an answer.** Floors never loosen; a below-floor cell serves
-  `insufficient_sample` with its accrual math, not a p-value that pretends. Zero
-  `corroborated` verdicts at era end is the system working.
-- **T-8 · Fail closed, but never at GET time.** The oracle attestation is computed at
-  evaluation time and VERIFIED at fold time; a missing/mismatched attestation refuses
-  confirmatory output with honest copy. GETs never run Monte Carlo.
+- **T-1 · The spec is law, vagueness is a drop.** Implement from
+  `docs/rapid-validation-spec.md` verbatim; an unspecified constant or rule is a drop + owner
+  ruling, never an invention.
+- **T-2 · The vocabulary minefield.** "survivor" alone belongs to `pnl_scan` — this era's
+  states are the full tokens `walkforward_survivor` / `sealed_survivor` /
+  `referee_handoff_ready`. "evidence" names the playbook fold and "observations" the referee's —
+  micro modules say "snapshot rows" and "trials". "studies" was DEMOLISHED in era 5D — the
+  `/studies` route must not return. "sealed" is a vault state, never a marketing word.
+  `register/record/set/append` stay banned in MCP tool names.
+- **T-3 · The prefix law.** No snapshot row may read the future: no end-of-session normalizer,
+  no whole-dataset calibration, no backward fill. TR-1 exists to catch exactly this.
+- **T-4 · Classes never mix.** A diagnostic fold in an OOS pool, a diagnostic screen feeding a
+  gate, a legacy symbol-day inside a sealed claim — each is the era's cardinal sin; the
+  refusals are counter-tested, not aspirational.
+- **T-5 · The accessor is the only door.** Any direct `open()`/`sqlite3.connect` on snapshot or
+  vault data outside `micro_accessor.py` is a guard-test failure, even in a test helper.
+- **T-6 · Bounded grids or nothing.** A loop over threshold candidates outside a registered
+  grid is the threshold-sweep ban firing; the union-N denominator includes every grid version
+  ever run on the corpus.
+- **T-7 · Insufficient is an answer.** Floors never loosen; a below-floor fold serves
+  `insufficient` with its arithmetic; the tick family's refusal at today's corpus is a
+  FEATURE and is pinned by TR-15.
+- **T-8 · Fail closed, never at GET time.** Screens, folds, seals, and exposures are operator
+  acts through managers; GETs serve recorded state or typed refusals.
 - **T-9 · Clean rebuild before browser evidence** (`rm -rf apps/frontend/.next`, rebuild,
-  restart) — the stale-build trap.
-- **T-10 · Evidence honesty.** No screenshot ⇒ `unknown`, never `passing`; backend-only proof
-  never satisfies a browser acceptance; real registrations/evaluations are operator acts
-  reported run-or-not-run.
-- **T-11 · Replay-script collisions.** The stored golden replay scripts match first-visible
-  text — new sections render BELOW shipped ones, reuse no shipped `data-testid` or heading
-  string, and are statically swept against the stored scripts.
-- **T-12 · Host-guard caps are law** for every heavy path (oracle suites, null builds,
-  evaluations) exactly as for the desk's own computes.
+  restart).
+- **T-10 · Evidence honesty.** No screenshot ⇒ `unknown`, never `passing`; below-the-fold
+  sections need element captures; operator acts are reported run-or-not-run.
+- **T-11 · Replay-script collisions.** New sections render BELOW shipped ones, reuse no shipped
+  `data-testid` or heading string, and are statically swept against the stored scripts.
+- **T-12 · Host-guard caps are law** for every heavy path (snapshot builds, screens, folds,
+  recordings) exactly as for the desk's own computes.
 
 ## Must-have user journeys
 
-Journeys **J-01 – J-10** form the era. **Frontend is present** (J-07 and J-09 are
-browser-verifiable; the rest are keyless/automated with browser reveals landing in J-09).
-Natural dependency order: J-01 → J-02 → J-03 → J-04 → J-05 → J-06 → J-07 → J-08 → J-09, with
-J-10 guarding continuously. J-08 lands only after J-03/J-05/J-06 are real (no half-built
-certificate checking).
+Journeys **J-01 – J-10** form the era. **Frontend is present** (J-01 and J-08 are
+browser-verifiable; J-09's results render through J-08's sections; the rest are
+keyless/automated with browser reveals landing in J-08). Natural dependency order:
+J-01 → J-02 → J-03 → J-04 → J-05 → J-06 → J-07 → J-08 → J-09, with J-10 guarding continuously.
+J-09 is the era's honest measurement — `no survivor` is a passing state. J-06's tranche is an
+operator-attended act inside the era.
 
-- **J-01: The era transition stands — reconciliation made testable**
+- **J-01: The era transition stands — the corpus truth on the record**
   - Steps:
-    1. Verify the opening commit's documentation state and pin it with guards: a new
-       `tests/test_referee_guards.py` test asserts `docs/playbook-detector-spec.md` §6 names
-       `playbook-band-context-v3` exactly where the code constant does (heading and constants
-       line), AND that this journey ships a zero diff to `desk_playbook_context.py` (doc
-       catch-up is never a licence to touch the lens).
-    2. Build the readiness fold into `app/research/referee_evidence.py` (first slice):
-       `GET /research/desk/referee/evidence` serves per-family readiness — playbook family:
-       records, distinct sessions, signals at the current `detector_basis`, per-(setup, side)
-       n/n_sessions; strategy family: dataset count, per-split counts, trade counts, and the
-       honest statement that the old Era-6 tick gate (~150 symbol-days) is unmet — plus the
-       Card-6.4 `basis_caveats` disclosure text served on the strategy family.
-    3. Guard the catalog reconciliation: a test asserts `docs/research-directions.md` contains
-       the status-table rows for eras 5/5B/5C/5D/B/B2 and the dated Card 6.2/6.3 amendment
-       notes (string-presence pins, so the reconciliation cannot silently regress).
-  - Acceptance: on the fixture rig, `GET /research/desk/referee/evidence` serves the
-    per-family readiness shape with hand-computed fixture numbers exact and the strategy
-    family carrying the `basis_caveats` forming-bar disclosure verbatim; the spec-drift and
-    zero-lens-diff guards are green; the catalog-pin test is green; suite green,
-    `Config().config_fingerprint()` still `08e471b10130e1e2`, zero new `Config` fields, zero
-    diff to any `desk_playbook*.py`. *(Keyless; automated.)*
+    1. Verify the transition artifacts on `main`: `docs/goal-archive/goal-2026-08-16.md`
+       exists and equals the Referee constitution; `docs/rapid-validation-spec.md` exists;
+       `docs/research-directions.md` carries the Rapid-Microscope opening note, the Era-9/
+       Card-5.2/Era-15 dated amendments, and the appended era-6 status row;
+       `project-extensions/proposer-guidance.md` carries the §5.3 amendments.
+    2. Run `cd apps/backend && .venv/bin/pytest -q` and record the era-open count; run the
+       fingerprint check and the referee-module SHA-256 listing (the iteration-0 baseline).
+    3. Build `micro_readiness.py` + `GET /research/desk/micro/readiness` serving, from disk:
+       the per-shard inventory (symbol, session date, feed, window, trade/quote counts, bytes,
+       coverage gaps, `fallback_frac`, checksum, split provenance `hand_assigned` for the 18
+       legacy files, exposure state `exploratory`), the honest totals (distinct symbol-days,
+       RTH minutes, session-equivalents) beside the referee tick gate's file count, and the
+       per-study predeclared floors met/unmet.
+    4. Render the **Microscope Readiness** section on `/desk` (below the Referee sections)
+       showing the totals line, the per-shard table, and the floors table; screenshot via the
+       store-scoped rig.
+  - Acceptance: `GET /research/desk/micro/readiness` serves `distinct_symbol_days: 12`,
+    `session_equivalents` ≈ 3.0, every legacy shard tagged `exploratory` with
+    `split_provenance: "hand_assigned"`, and a floors table in which every pilot study reads
+    `floor_unmet`; the `/desk` Microscope Readiness section renders those same served values
+    verbatim (element screenshot), and the iteration-0 baseline records suite count,
+    fingerprint `08e471b10130e1e2`, and the referee SHA-256 listing.
 
-- **J-02: The evidence contract — two families, one observation shape**
+- **J-02: The micro observer — one pass, prefix-honest, benchmarked**
   - Steps:
-    1. Complete `referee_evidence.py`: the typed observation (fields as the Data Contract's
-       owner module defines them once — `evidence_family`, `observation_id`, `symbol`,
-       `session_date`, `anchor_ts`, `side`, `measure_key`, `value`, `cluster_key`,
-       `provenance{detector_basis, config_fingerprint, context_algorithm_version?,
-       source_record_id, basis_caveats}`), with units (% side-signed returns) and the
-       side→MDD binding (`long → mdd_long_*`) stated once.
-    2. Playbook adapter: observations from records pooled at
-       `(detector_basis, config_fingerprint)`, one record per `session_date` by newest
-       `(recorded_at, id)`; completeness predicate (finest-series reach of the RTH close
-       window) computed and carried per record; truncated/unmeasurable leaves carried as
-       counted exclusions, never values; per-date coverage counts carried; a newest record
-       covering fewer symbols than a superseded one raises a served disclosure.
-    3. Strategy adapter: trades joined to their enclosing report's
-       `{dataset(id, checksum, split, symbol, epoch_anchor, data_feed), strategy_id, profile,
-       config_fingerprint}`; `cluster_key = dataset id`; real UTC anchor from
-       `epoch_anchor + logical_ts`; the recorded `random_null` trades adapted as the family's
-       paired null observations.
-    4. The derived observation cache (stat-keyed sqlite, `desk_meta_cache` contract,
-       `TAPEOLOGY_REFEREE_OBS_CACHE_DB`): deleting it changes latency only.
-  - Acceptance: fixture goldens reproduce hand-computed observation sets for both families
-    byte-identically with the cache cold AND warm and after cache deletion; the
-    two-signatures-same-parameters fixture pools as ONE `detector_basis` while a
-    monkeypatched detector constant splits it; the dedup fixture (two records, one date, same
-    basis) selects the newest and discloses the coverage difference; no existing store file
-    is written (SHA-256 listing before/after); suite green, pin unchanged. *(Keyless;
-    automated.)*
+    1. Add the additive `observer=` kwarg to `DatasetStore.replay` (default `None`
+       byte-identical, counter-tested) wiring `TapeEngine.add_observer`.
+    2. Implement `micro_observer.py`/`micro_snapshots.py` per spec §2: streaming-only rows,
+       flush-before-next-event, snapshot identity with `feature_source_hash` +
+       `config_fingerprint`, load-time verification.
+    3. Implement the Wave-1 primitives of spec §3 in `micro_features.py` with per-row
+       `side_source`, per-window `fallback_frac`/`unknown_frac`, and the spec §4 outcome set;
+       hand-derived oracle fixtures for every family (TR-16 vectors committed).
+    4. Run the spec §2.4 granularity benchmark on ≥2 real datasets including NVDA `72ca8bc0`;
+       record bytes amplification, build time, and query latency per candidate representation;
+       pin the winner as `micro-snapshot-v1`.
+    5. Build snapshots for all 18 legacy datasets through the single-flight manager + CLI.
+  - Acceptance: the TR-1 prefix and tail-perturbation traps pass (3 cut points, byte-identical
+    prefixes); TR-7 stale-identity traps pass; every feature oracle fixture passes; the
+    benchmark table is in the iteration handoff with the pinned representation named; 18/18
+    legacy snapshots exist and `GET /research/desk/micro/snapshots` lists them with verified
+    identities; `tests/test_observer_equivalence.py` and the golden feature trace pass
+    byte-unmodified.
 
-- **J-03: The statistics core — calibrated, seeded, oracle-proven, fail-closed**
+- **J-03: Structure × flow — the join that never looks ahead**
   - Steps:
-    1. Build `referee_stats.py` from the canonical spec §3–§6: seeded per-row streams (pinned
-       recipe), percentile bootstrap CIs (occurrence-level and session-clustered;
-       `REFEREE_MIN_CLUSTERS_FOR_CI` floor below which the clustered CI serves
-       `insufficient_sample`), the within-session group-label permutation engine (preserved
-       group sizes, independent per-session shuffles, precision-weighted combined statistic,
-       full enumeration below `REFEREE_ENUMERATION_THRESHOLD`, `p = (1 + #{T* ≥ T})/(B + 1)`),
-       the session-level sign-flip and equal-weight robustness variants, BH (registered q,
-       m = planned, unevaluated = p=1) + BY disclosure, MDE and min-attainable-p disclosures.
-    2. Build the oracle suite (`tests/test_referee_oracles.py`) per spec §6: null calibration
-       (iid skewed, heavy-tailed, session-clustered-with-regime generators), the two
-       DEMONSTRATED failure cases (the unclustered foil over-rejects on clustered nulls; the
-       sign-flip variant mis-sizes on the skewed n_s=1/K=3 one-sided case while the label
-       permutation holds), power at reference S, the 20-null+1-positive BH sweep, CI
-       coverage — all seeded, all within `REFEREE_ORACLE_BUDGET_SECONDS`.
-    3. Build the attestation: `run_oracle_attestation()` produces
-       `{expected, actual, tolerance, passed, stats_core_version}` for the pinned
-       known-answer set — to be embedded in every evaluation record (J-06) and verified at
-       fold time.
-  - Acceptance: the oracle suite is green and IS the acceptance (fixture-only tests prove
-    nothing at small n); a deliberately mis-implemented test statistic (mutation fixture)
-    fails calibration; identical seeds reproduce byte-identical p/CI values across two runs;
-    the attestation round-trips and a corrupted attestation is detected; suite green, pin
-    unchanged, zero new deps in `requirements.txt`. *(Keyless; automated.)*
+    1. Implement `micro_join.py`: for a playbook signal (symbol, `trigger_ts`) or a band-map
+       wall touch, locate the covering snapshot and serve the feature row(s) at-or-before the
+       trigger plus the outcome rows after it; band basis through the recorded
+       `BandMapResolver` (compute=False) unchanged.
+    2. Enumerate the joinable corpus (signals and touches falling inside recorded tick
+       windows) and serve the count honestly.
+    3. Prove lookahead-cleanliness: a join at trigger T reads zero snapshot rows with
+       event epoch > T (asserted), and detector/context modules show zero diff.
+  - Acceptance: a committed fixture join reproduces hand-computed feature-at-trigger and
+    outcome-after-trigger values; the joinable-corpus count is served on the readiness
+    endpoint with its per-study breakdown; the lookahead assertion and the
+    detector/context-byte-freeze guards pass.
 
-- **J-04: Matched nulls — comparable times, identical measurement**
+- **J-04: The Scout and the ledger — every trial on the record**
   - Steps:
-    1. Build `referee_null.py` per spec §4: for each eligible occurrence (primary-horizon
-       complete), K = `REFEREE_NULL_ANCHORS_PER_OCCURRENCE` seeded anchors from the SAME
-       symbol's same measurement series, same ToD bucket, remaining-time-matched eligibility,
-       excluding the trigger bar, without replacement; measured through the imported
-       `_measure_from` with the signal's side; shortfall = min(K, eligible) disclosed; zero
-       eligible = occurrence excluded and counted; mean anchor-window-overlap disclosure.
-    2. The context-matched variant: anchor bars additionally satisfy the registered
-       backing-bucket predicate via `BandMapResolver` over the recorded band maps, `room_r`
-       via the paired signal's risk distance; per-cell eligibility rates served.
-    3. **Mint the null-spec and test-spec ids** (named, signature-bearing:
-       `referee-null-tod-v1`, `referee-null-context-v1`, `referee-test-perm-v1` — hashing
-       their full parameter blobs) that J-05 hypothesis records will reference immutably.
-    4. The append-only null store (`TAPEOLOGY_DESK_REFEREE_NULL_DIR`; keyed
-       `(playbook record id, null-spec signature)`), run ledger, compute manager trio + CLI;
-       `GET /research/desk/referee/nulls` serves recorded nulls with honest absence.
-  - Acceptance: fixture goldens with hand-computed draws (including a shortfall case, a
-    zero-eligible exclusion, and a remaining-time boundary case at 15:05/1h); a synthetic
-    anchor measured through the null path and directly through `desk_forward._measure_from`
-    is byte-identical (convention identity); truncating the fixture session after a trigger
-    changes nothing before it (lookahead-clean); re-run under identical pins reuses honestly;
-    old stores untouched (SHA-256); suite green, pin unchanged, zero diff to
-    `desk_forward.py`. *(Keyless; automated.)*
+    1. Implement `scout_ledger.py` (hash-chained, append-only, closed kill vocabulary,
+       union-N denominators) and `scout.py` (spec §5 screening: session-clustered block
+       permutation, non-overlapping anchor subsampling, concentration/ToD/fallback-tercile
+       disclosures, the economic-floor column with registration-ordering).
+    2. Register a bounded fixture grid, run it end to end through the manager + CLI, kill and
+       advance per the recorded results.
+    3. Implement TR-8 (calibration on the autocorrelated null fixture, 200 seeds, incl. the
+       banned-shuffle counter-test), TR-9, TR-10, TR-11.
+  - Acceptance: TR-8/9/10/11 pass; the fixture family's ledger shows every variant with its
+    decision and reason, `variants_tried` equals the union over grid versions, and the served
+    screen carries `evidence_class`, the best-of-N line, and the economic column with the
+    proxy sentence verbatim.
 
-- **J-05: The registry — pre-registration with an immutable boundary**
+- **J-05: The walk-forward engine — chronology, fences, and the diagnostic run**
   - Steps:
-    1. Build `referee_registry.py` per spec §5: append-only FAMILY records (`family_id`, `q`,
-       registered candidate list = the BH denominator, `registered_at`), HYPOTHESIS records
-       (`hypothesis_id`, `registered_at`, `evidence_family`, `estimand` A/B/C, `setup_id`,
-       `side`, context predicate, primary `(measure, horizon)`, sidedness, null-spec id,
-       test-spec id, `detector_basis`, `context_algorithm_version` where contextual,
-       `confirmation_start_boundary` (= `registered_at` UTC → ET calendar date; sessions
-       strictly after), `target_sessions`, floors, `origin: "historical-exploration"`,
-       `family_id`), WITHDRAWAL records (permitted only while no post-boundary evaluation
-       exists; late candidates stay in the denominator as p=1), and CERTIFICATE records
-       (shape per J-08).
-    2. Registration acts: CLI + `POST /research/desk/referee/registry/hypotheses` with
-       explicit confirmation; malformed/duplicate/retroactive-boundary/unknown-spec-id
-       refused with distinct honest errors; `GET .../registry` serves families, hypotheses,
-       boundaries, withdrawal state, and per-hypothesis accrual (informative post-boundary
-       sessions vs target).
-  - Acceptance: append-only proven (no update/delete method; duplicate raises); a
-    registration with a boundary before `registered_at`'s ET date is refused; a withdrawal
-    after a post-boundary evaluation exists is refused and the hypothesis folds as p=1; the
-    ET-midnight boundary case (23:30 ET registration) lands on the correct next session date
-    (fixture-tested); suite green, pin unchanged. *(Keyless; automated.)*
+    1. Implement `micro_accessor.py` (origin fence, sealed invisibility, sole-door import ban)
+       and `walkforward.py` per spec §6: fold specs, exact purge, derived embargo (E=0
+       legitimate, derivation recorded), frozen geometry + voiding, Mode A rule-identity
+       freeze/reveal, Mode B, constant-rule sequences, floors, the decay view, class labels.
+    2. Prove the synthetic end-to-end oracles (TR-16 known-null and planted-effect corpora)
+       and TR-3/5/6/13/14/15.
+    3. Run the **diagnostic acceptance run**: the 155-session playbook corpus (2025-06 orphan
+       excluded, disclosed), geometry 40/5/20/20, a predeclared frozen set of playbook setup
+       definitions; produce the fold ledger and per-sequence decay view.
+  - Acceptance: TR-3/5/6/13/14/15/16 pass; the diagnostic run completes with 5 folds / 100
+    validation sessions, every served fold and sequence labeled
+    `historical_exposed_diagnostic`, the tick-family fold request returns the typed
+    floor-refusal naming `11 < 105`, and a counter-test proves diagnostic-class results award
+    zero graduation credit.
 
-- **J-06: Estimand engines + adjudication — one checkpoint, recorded forever**
+- **J-06: The recorder and the Vault — new tape, sealed at birth**
   - Steps:
-    1. Build `referee_adjudicate.py` estimand evaluators per spec §3: A (occurrences vs their
-       ToD-matched null, per-session paired), B (context-associated difference within setup —
-       informative sessions only, one-group sessions counted out), C (occurrences vs the
-       context/ToD-matched null); each consuming the contract (J-02), nulls (J-04), and
-       stats core (J-03); each computing the pre-registered sensitivities (entry-basis
-       close-anchored re-measure, equal-weight, sign-flip) and both CI levels.
-    2. Evaluation = a recorded operator act (compute manager + CLI): the append-only
-       evaluation record embeds `evaluation_basis` (content hash of the dedup record-id set +
-       coverage counts, null record ids, null/test-spec ids, seeds, B, stats-core version)
-       AND the oracle attestation; a confirmatory evaluation is permitted only when
-       post-boundary informative sessions ≥ `target_sessions` on completed-session records —
-       earlier runs record `pending` accrual states with NO confirmatory p.
-    3. The single confirmatory checkpoint: the first qualifying evaluation per hypothesis
-       produces an append-only ADJUDICATION SNAPSHOT (BH within its family at the registered
-       q over the family's checkpoint p-values, m = planned); later evaluations are labeled
-       `monitoring` and can never alter it.
-    4. The read-side fold (`GET /research/desk/referee/adjudications`): serves recorded
-       snapshots + live pending states with the verdict vocabulary — `exploratory`,
-       `registered`, `pending_forward_confirmation`, `insufficient_sample`, `fragile` (BH
-       pass BUT BY fail, OR any sensitivity flips sign, OR the clustered CI includes 0),
-       `no_evidence`, `corroborated`, `killed`, plus the `basis_retired` disclosure — each a
-       pure function of recorded facts; attestation verified at fold time; missing/mismatched
-       ⇒ confirmatory output refused with honest copy.
-  - Acceptance: ON FIXTURES — a synthetic known-positive family adjudicates `corroborated`
-    and a known-null family `no_evidence` (end-to-end through real registration, null build,
-    evaluation, snapshot); a pre-boundary session (including a deep-backfilled record with an
-    old `session_date` recorded AFTER registration) can never enter a confirmatory pool
-    (counter-test); a second evaluation after the checkpoint changes nothing served from the
-    snapshot; the fold is byte-stable for identical stores; an evaluation with a tampered
-    attestation folds to the refusal state. The REAL corpus serves honest
-    `registered`/`pending_forward_confirmation` states with accrual math — this journey's
-    acceptance explicitly does NOT require any real `corroborated` verdict. *(Keyless;
-    automated.)*
+    1. Implement `tick_recorder.py` (chunked `iter_historical_chunks` fetch, tick throttle,
+       per-chunk checkpoints, resume/idempotency, single-flight manager + CLI, per-chunk
+       `failed` outcomes) writing through the unchanged `DatasetStore.record`; pair with the
+       existing deep-backfill CLI for the same symbol-days' bars.
+    2. Implement `vault.py`: universe registration (rule hash committed BEFORE any fetch),
+       the published sha256 split beside the HMAC seal assignment
+       (`TAPEOLOGY_VAULT_SECRET_FILE`, commitment recorded), one-way
+       `sealed → assigned → exposed` exposure ledger, sealed-metadata minimization, TR-2
+       route sweep, TR-4 cherry-pick refusal, TR-12 single-shot exposure.
+    3. Operator act, inside the era: register the starter-tranche universe, run the recorder
+       against real Alpaca historical trades+quotes to the spec §7.6 minimums (≥30
+       symbol-days, ≥8 panel symbols incl. PG + ≥3 Tier-B + ≥1 ETF, ≥10 dates over ≥6 weeks,
+       the concentration caps, ≥60% full-session), with a restart mid-run proving resume.
+    4. Refresh readiness: the new shards appear with completeness reporting; sealed members
+       show metadata-only.
+  - Acceptance: TR-2/4/12 pass; the tranche exists on disk meeting every §7.6 minimum
+    (readiness serves the arithmetic); at least the HMAC-assigned subset of tranche shards is
+    `sealed` with zero exploratory reads recorded before sealing; the recorder run ledger
+    shows the mid-run restart resuming without duplicate registration; the legacy 12
+    symbol-days remain `exploratory`; the readiness gate line still reads the ~150-symbol-day
+    research gate as unmet.
 
-- **J-07: The starter family — historical exploration becomes registered questions**
+- **J-07: Graduation — provenance in, nothing laundered out**
   - Steps:
-    1. Serve the shortlist (spec §7's five candidates — capitulation:long A/`5m`;
-       jbe:long A/`1h`; double_top:short A/`to_close`; range_trade-per-side at_wall
-       B/`1h`; range_trade:long + at_wall combined C/`1h` — each with its semantic
-       rationale) beside LIVE readiness from the J-01 fold: per-candidate historical n,
-       n_sessions, informative-session accrual rate (sessions/day over the trailing corpus),
-       and projected days to `target_sessions`.
-    2. Build the `/desk` registration flow (first Referee UI slice): the shortlist table, a
-       selection + explicit confirmation step, POST to the real registration act — no
-       special-casing, no hard-coded hypothesis set anywhere in code.
-    3. **The real registration is an explicit operator act**: the operator reviews the
-       shortlist with its readiness numbers and approves 2–3 hypotheses (preferring estimand
-       coverage A+B+C); the era records the act run-or-not-run; if the operator has not acted,
-       the honest state is a served shortlist with zero registrations — never a fabricated
-       registration.
-    4. Historical (pre-boundary) observations for registered hypotheses are served ONLY under
-       an explicit `discovery (exploratory)` label beside the boundary and accrual — never in
-       any confirmatory field.
-  - Acceptance: in a real browser after the T-9 clean rebuild, on the fixture rig — the
-    shortlist renders with readiness numbers and rationales (screenshot); a fixture
-    registration flows through confirmation to a recorded hypothesis whose registry row shows
-    the boundary, target, and `origin: historical-exploration` (screenshot); the discovery
-    label renders on historical numbers (screenshot). Against the REAL store: the operator's
-    2–3 approved registrations exist as registry records with post-registration boundaries
-    and zero-or-only-post-boundary confirmatory accrual, OR the honest not-yet-acted state is
-    reported — never faked. Suite green, pin unchanged. *(Browser-verifiable; the real
-    registration operator-gated.)*
+    1. Implement `micro_graduation.py` per spec §8: the four states, class-2-only
+       advancement, single-shot sealed transitions, voiding semantics, and the export bundle
+       (spec hash, complete exposure history incl. kills and failures, proposed boundary,
+       family/multiplicity metadata).
+    2. Prove the pipeline on fixtures: a fixture candidate walks
+       `exploratory → walkforward_survivor → sealed_survivor → referee_handoff_ready` on
+       synthetic class-2 evidence; a diagnostic-only twin is refused at the first transition;
+       a failed-sealed twin carries its permanent verdict in the bundle.
+    3. Record the Era-15 evidence line in the roadmap amendment (what L1 liquidity-family
+       survivor evidence would raise/lower the Depth purchase prior).
+  - Acceptance: the fixture walk produces a validating `referee_handoff_ready` bundle whose
+    provenance lists every trial/fold/shard including the failures; the diagnostic-only and
+    failed-sealed refusals are counter-tested; the bundle's own copy states that current-
+    Referee registration of a flow predicate awaits a named referee-spec revision; every
+    `referee_*` module remains byte-identical.
 
-- **J-08: The strategy family + the promotion interlock — fail closed, no bypass**
+- **J-08: The surface and MCP v6 — the funnel is visible**
   - Steps:
-    1. Strategy-family adjudication through the same rail: the adapter's observations
-       (dataset-clustered, paired against the recorded `random_null`), the same floors —
-       serving the honest expected verdict at today's corpus (`insufficient_sample`, champion
-       holdout n=1 < 5) with the Card-6.4 `basis_caveats` and the null-design disclosure
-       (uniform-random, not count/ToD-matched — stated, not hidden).
-    2. The CERTIFICATE contract (spec §8): an append-only registry record pinning
-       `{candidate (strategy_id, profile), champion identity at scan time, train/holdout
-       dataset (id, checksum, split) pairs, config_fingerprint, referee gate basis
-       (REFEREE_GATE_VERSION + referee parameters hash), family_id + hypothesis_id, gate
-       results (calibrated p, BH pass, CI, floors)}` — mintable only through the real
-       evaluation rail.
-    3. `authorize_promotion(...)` consulted inside `pnl_scan._promote` BEFORE any write
-       (ledger-row-first / pointer-second order preserved): fail closed with distinct honest
-       refusals on {no certificate, stale (any pin mismatch vs the live scan's own report
-       values), wrong candidate, mismatched datasets/fingerprint, failed gates,
-       malformed/unverifiable}; ZERO new Config fields; NO bypass flag, env override, or
-       default-allow path (source-scan guard-tested). Sweep computation, candidate
-       evaluation, survivor labelling, and reports keep working certificate-free; the scan
-       report's `promotion` block distinguishes `survivor: true` from
-       `promotion_eligible: false` with the refusal reason.
-    4. This inverts the existing promotion-on-survivor tests — the enumerated amendments:
-       `tests/test_pnl_scan.py`'s promotion-path assertions become
-       refusal-without-certificate assertions plus new promotion-with-fixture-certificate
-       assertions (the suite grows, never shrinks). goal.md declares the consequence: no
-       strategy certificate can honestly exist this era, so promotion deliberately refuses
-       until a future gate-v2 certification — that is the system working.
-  - Acceptance: a fixture candidate that reaches `_promote` under the old gate is REFUSED
-    with no ledger row and no pointer movement when no valid certificate exists; the same
-    candidate promotes when a fixture certificate minted through the real rail matches every
-    pin; each refusal class is separately fixture-tested; a non-promoting sweep's report is
-    byte-compatible except the new `promotion` fields; the no-bypass source scan and the
-    strategy-family `insufficient_sample` adjudication (with served caveats) are green; suite
-    green, pin unchanged. *(Keyless; automated.)*
+    1. Render the **Scout Ledger**, **Walk-Forward**, and **Validation Vault** sections on
+       `/desk` below Microscope Readiness: trials with denominators and kill reasons; fold
+       sequences with per-fold rows, class labels, and the decay line; shards with one-way
+       states and universe provenance; every compute behind its own operator button with
+       progress + cancel (the shipped manager pattern).
+    2. Add `desk_micro_readiness`, `desk_scout`, `desk_walkforward`, `desk_vault` as
+       byte-identical GET proxies; bump the MCP contract to v6 and update `EXPECTED_TOOLS`
+       to the 26-tuple in the same commit.
+    3. Clean rebuild, browser pass via the store-scoped rig, element screenshots per section.
+  - Acceptance: all four sections render served values verbatim (screenshots on record, one
+    per section, element-captured); the four tools return byte-identical bodies to their GET
+    routes; the 26-tool contract test and the replay-script static sweep pass; every
+    diagnostic-class number on the page carries its label in the same visual unit.
 
-- **J-09: The Referee on `/desk` + MCP contract v5 — 22 read-only tools**
+- **J-09: The pilot studies — three predeclared questions, honest answers**
   - Steps:
-    1. Build the three `/desk` sections BELOW the shipped ones, using the established
-       CollapsibleSection deferred-fetch contract: **Referee Registry** (families,
-       hypotheses, boundaries, withdrawal state, accrual), **Referee Adjudications** (verdict
-       chips in the exact vocabulary + provenance lines: evaluation basis hash, spec ids,
-       seeds, attestation state), **Referee Runs** (null/evaluation compute controls with
-       live progress + cancel, run ledgers) — rows served pre-sorted, no client arithmetic,
-       no client-side verdict derivation.
-    2. Honest states verbatim: `"No hypotheses registered."`, the pending-accrual sentence,
-       the attestation-refusal sentence; `REFEREE_REGISTER` served on the adjudications
-       payload and rendered.
-    3. Extend the guards deliberately: every served referee numeric into
-       `_PRICE_ARITHMETIC_FIELDS` (+ seeded counter-tests); `_EXPECTED_EFFECT_COUNT`
-       re-derived once with the rationale paragraph; new `data-testid`s only; static sweep
-       against the stored replay scripts (T-11); `lib/api.ts`/`lib/types.ts` in the
-       established style; copy lint green with the referee copy included.
-    4. MCP: `desk_referee` → `/research/desk/referee/adjudications` and
-       `desk_referee_registry` → `/research/desk/referee/registry` in `_STATIC_PATHS` (full
-       payloads, NO selector arguments — parameterized reads remain on `get_endpoint`'s
-       `/research/` allowlist); `tests/test_mcp_server.py` updated to the 22-tuple with
-       byte-identity and honest-error clauses for both new tools in empty AND populated
-       fixture states.
-  - Acceptance: in a real browser after the T-9 clean rebuild — the three sections render
-    their honest empty states (screenshot); on the fixture rig, a populated registry with a
-    verdict chip per vocabulary state including one `fragile` and one refused-attestation
-    state (screenshot); an in-flight second evaluation trigger is refused single-flight
-    (screenshot); every shipped `/desk` section renders exactly as shipped in the same pass;
-    exactly 22 tools advertised, both new tools byte-identical to their curl equivalents in
-    both states; all extended guard tests + copy lint green; suite green, pin unchanged.
-    *(Browser-verifiable; keyless via the fixture-scoped backend; DOM reveals only.)*
+    1. Predeclare (as ledgered specs, before any outcome read) the three studies in priority
+       order: **(1) range-wall failed aggression** — at band-map wall touches, does high
+       aggression-into-the-wall with collapsing impact efficiency and opposite-side
+       `refill_consistent` replenishment precede rejection more than comparable touches
+       without that signature; **(2) delta divergence at level tests** — at consecutive tests
+       of the same zone, does price extending while session cumulative delta does not predict
+       rejection (Card 9.1's formula verbatim); **(3) capitulation exhaustion** — do
+       event-level exhaustion signatures (extreme sell aggression then collapsing negative
+       impact efficiency / replenishment) separate capitulation signals that snap back from
+       those that do not. Continuous mechanism-defined representations first; any threshold
+       variant from the bounded grid, all ledgered.
+    2. Run each through the Scout on the full joinable corpus (legacy exploratory symbol-days
+       + any EXPOSED tranche shards; sealed shards untouched), with every disclosure of spec
+       §5.4 served.
+    3. Where any study's fold floors are met on class-2 data, run walk-forward; where not,
+       serve the floor-refusal as the study's honest result.
+    4. Record each study's outcome in the ledger (survive / kill with reason) and render it
+       through the J-08 sections.
+  - Acceptance: three ledgered study families exist with predeclared specs whose
+    registration timestamps precede their first outcome read; each serves its screen with
+    evidence class, denominators, concentration/ToD/fallback disclosures, and the economic
+    column; each carries a recorded decision in the closed vocabulary — with `no survivor`,
+    wrong-direction, and `insufficient_n` all acceptable end states — and no study output
+    feeds any gate, certificate, or promotion.
 
-- **J-10: The kept product stands — regression sentinel**
+- **J-10: The kept product stands — traps armed, sentinel green**
   - Steps:
-    1. Full backend suite + engine equivalence; every guard test green with the referee
-       extensions and NO other modification; `Config().config_fingerprint()` prints
-       `08e471b10130e1e2`; suite count ≥ the era-open count recorded at iteration 0; the
-       oracle suite green within its runtime budget; the annualization guard (the literal
-       string "annualized" appears in no research payload) green.
-    2. In a real browser (after T-9): walk the kept product — cockpit sim tape + chart,
-       `/structure` pinned-AAPL Load, and EVERY shipped `/desk` section (screen history,
-       forward returns, refresh chain, briefing, skipped, runs/pins/compare/provenance, all
-       Playbook sections with context columns, filters, and cohort views) plus the three
-       Referee sections — screenshots for each.
-    3. Kept-route byte-identity vs a baseline captured from the era-open commit, with
-       exactly the exemptions this constitution names up front: (a) the MCP tool list
-       (20 → 22), (b) the routes this goal's Data Contract adds, (c) the pnl_scan report's
-       additive `promotion` fields and the J-08 enumerated test amendments, (d) `/desk` page
-       additions with kept sections verified by the browser walk (never a byte-claim on the
-       grown page), (e) the deliberately re-derived `_EXPECTED_EFFECT_COUNT`. Any other
-       difference is explained against R-1/R-2/R-4 or it is a defect.
-    4. Every previously recorded playbook/screen/forward/dataset/pnl-ledger file
-       byte-identical (SHA-256 listing); the era's cumulative diff stays inside this goal's
-       inventory (the new `referee_*` modules/routes/sections/tools + the named guard
-       extensions + the J-08 pnl_scan interlock) — anything else is surfaced BEFORE it lands.
-  - Acceptance: full suite green under the unchanged pin; every browser step evidenced by
-    screenshot; kept-route byte-identity outside the five named exemptions; nav = exactly
-    three routes; MCP = exactly 22 tools; zero out-of-inventory changes, reading "inventory"
-    as including R-1, R-2, R-3, and R-4. *(Keyless core; browser-verifiable.)*
+    1. Land the full TR-1…TR-16 suite (whichever traps did not ship inside J-02…J-07 land
+       here) plus the extended guard tests (accessor import-ban, micro threshold-sweep ban,
+       copy discipline for micro copy, `_PRICE_ARITHMETIC_FIELDS` additions).
+    2. Run the deterministic-rerun check (byte-identical snapshot/screen/fold outputs on a
+       re-run over unchanged stores).
+    3. Run the kept-product sentinel: cockpit `/` live-tape and chart, `/structure` load and
+       Tradable Map, every shipped `/desk` section including the three Referee sections,
+       browser-verified via the store-scoped rig; full backend suite; fingerprint check;
+       referee SHA-256 listing re-check against the iteration-0 baseline.
+  - Acceptance: the complete trap suite is green; the deterministic rerun is byte-identical;
+    the full suite passes at a count ≥ the era-open baseline with 0 regressions; the
+    fingerprint prints `08e471b10130e1e2`; the referee listing matches iteration 0 exactly;
+    and the sentinel screenshots show every kept surface as shipped.
 
 <!-- AUTO:journeys -->
-
-- **J-11: The accrual projection states its own basis — the wait, measured in recorded sessions**
-  - Steps:
-    1. Extend the shortlist fold in `app/research/referee_registry.py` (`shortlist_response()`,
-       the canonical owner behind `GET /research/desk/referee/registry/shortlist`) with one
-       `accrual_basis` block computed from the SINGLE store scan that fold already performs —
-       never a second `PlaybookStore.list()`, never a second pooling walk:
-       `corpus_first_session_date`, `corpus_last_session_date`, `corpus_span_days` (the exact
-       denominator the shipped `accrual_rate_sessions_per_day` divides by, unchanged),
-       `recorded_sessions_in_span` and `pooled_sessions_at_current_basis` (read from the
-       `playbook_occurrence_readiness()` fold the shortlist already calls — its own
-       `distinct_sessions` less its own `stale_basis_dates`, never recounted), and
-       `longest_zero_session_stretch_days` with the two session dates that bound it.
-    2. Add two per-candidate fields BESIDE (never replacing) the shipped two:
-       `informative_sessions_per_pooled_session` = that candidate's own `n_sessions` over
-       `pooled_sessions_at_current_basis`, and `projected_pooled_sessions_to_target` =
-       `target_sessions` over that rate (`null` when the rate is 0 — the shipped
-       divide-by-zero discipline), both carrying the same proxy honesty the registry's accrual
-       block already declares (a session counts when the cell holds ≥1 occurrence — the
-       identical predicate `_hypothesis_accrual` uses). Zero new `Config` fields, zero new
-       referee constants, and NO entry in `referee_parameters()`: this block feeds no null, no
-       test statistic, no p-value, no BH denominator, no verdict, and no gate.
-    3. Record the disclosure as a dated, named addendum to `docs/referee-statistical-spec.md`
-       §9 (stated assumptions and limits, served not hidden): one paragraph stating that the
-       accrual projection is a read-side planning disclosure no statistical procedure consumes,
-       and that both bases are served side by side rather than one replacing the other.
-    4. Render it on `/desk` inside the shipped **Referee Registry** section: one descriptive
-       basis line above the shortlist table (recorded sessions, pooled sessions, span days,
-       first → last session date, the longest zero-session stretch) and one new right-aligned
-       column beside the shipped "Projected days" — server-computed, server-sorted, zero client
-       arithmetic, new `data-testid`s only, no shipped column/heading/`data-testid` touched, and
-       statically swept against the stored replay scripts (T-11).
-    5. Extend the guards deliberately: every new served numeric joins
-       `tests/test_desk_ui_guards.py`'s `_PRICE_ARITHMETIC_FIELDS` with its seeded counter-test
-       in the established referee shape; `tests/test_copy_discipline.py` stays green with the
-       new copy included (descriptive statistics only — no advice, no prediction, no profit
-       phrasing).
-  - Acceptance: on the fixture rig, `GET /research/desk/referee/registry/shortlist` serves the
-    `accrual_basis` block and both new per-candidate fields with hand-computed fixture numbers
-    exact — including a fixture corpus carrying a deliberate multi-month recording gap and one
-    whose pooled-session count is zero (rate 0 ⇒ `null` projection, rendered "—") — while the
-    shipped `accrual_rate_sessions_per_day` and `projected_days_to_target` stay byte-identical
-    for the same store (golden), the whole body is byte-stable across two runs on identical
-    stores, and the GET still computes nothing (one store scan;
-    `BandMapResolver(compute=False)` unchanged). Single source of truth: every new value is
-    computed once inside `referee_registry.py` — the module the Data Contract's registry row
-    already names — and read verbatim by the UI through its shortlist subpath; no second
-    computation path, no client-side recomputation, no new owner. In a real browser after the
-    T-9 clean rebuild: the Referee Registry section renders the basis line and the new column,
-    and every other shipped `/desk` section renders exactly as shipped in the same pass
-    (screenshots; no screenshot ⇒ `unknown`, never `passing`). Frozen foundations: engine
-    equivalence green, `Config().config_fingerprint()` prints `08e471b10130e1e2`, zero new
-    `Config` fields, `referee_parameters()` byte-unchanged (no null/evaluation/adjudication/
-    certificate identity moves), zero diff to `desk_playbook*.py`, `desk_forward.py`,
-    `levels.py`, `tradability.py`, and `pnl_scan.py`, and every previously recorded store file
-    byte-identical (SHA-256 listing before/after, referee dirs included — the fixture-scoped
-    backend writes no real store). PnL basis, stated rather than fabricated: this journey
-    changes no strategy, profile, backtest, or champion, so it appends NO PnL-ledger row and
-    proves it — the `default`-profile equivalence test green and the PnL ledger + champion
-    pointer byte-identical before/after (SHA-256); inventing a ledger row for a read-side
-    disclosure would breach the era's append-only ledger rail. Full backend suite green with no
-    test removed or weakened (era-close baseline: 2,688 collected / 2,680 passed / 8 skipped),
-    and MCP still exactly 22 tools. Walkthrough: a `[NEW]`-flagged demo-narrator walkthrough of
-    the new surface — `goto /desk` → `click` the "Referee Registry" section header → `expect`
-    the basis line and the new column — written with only the shared recorder's supported
-    actions (`goto`/`click`/`fill`/`expect`/`wait_for`; it rejects `scroll`).
-    *(Browser-verifiable; keyless via the fixture-scoped backend; no real store written.)*
-
-- **J-12: The readiness fold gets its reader — why a family cannot speak, visible on the desk**
-  - Steps:
-    1. Bind the ALREADY-CANONICAL endpoint to the UI without adding one value to it: a
-       `fetchRefereeEvidence()` in `apps/frontend/lib/api.ts` plus its response types in
-       `lib/types.ts`, in the established `{ok, data, error?}` shape, reading
-       `GET /research/desk/referee/evidence` — the Data Contract row "Referee evidence coverage +
-       per-family readiness", whose owner `app/research/referee_evidence.py` already computes every
-       field exactly once. ZERO backend product diff: `referee_evidence()`'s served body stays
-       byte-identical (golden before/after), no new field, no new value, no new Data Contract row,
-       no new owner, and no new MCP tool (the contract stays exactly 22 — the endpoint remains
-       readable from a conversation through the existing `get_endpoint` `/research/` allowlist).
-    2. Render it inside the shipped **Referee Registry** section on `/desk`, BELOW the shipped
-       registered-hypotheses table so not one shipped row, column, heading, or `data-testid`
-       moves — two dense blocks in house style (tables and text, no cards/gauges):
-       **playbook family** — `records`, `distinct_sessions`, `signals_at_current_basis`, the
-       `detector_basis` + `config_fingerprint` identity, and the `stale_basis_dates` list verbatim
-       in served order (an empty list renders its own honest sentence, never a blank);
-       **strategy family** — `dataset_count`, `per_split_counts.train`/`.holdout`, `trade_count`,
-       the `tick_gate_statement` verbatim, and every `basis_caveats` entry verbatim (today the
-       Card-6.4 forming-bar lookahead disclosure — the era's own stated condition for deferring
-       that fix, currently served to `curl` and to nothing else); plus each block's
-       `integrity_errors` as an explicit disclosure row (empty ⇒ its own "no integrity errors"
-       line) so a corrupt playbook/dataset file is visible to the operator, not only to a reader
-       of the raw endpoint. The fetch rides the section's established deferred-fetch dispatch (the
-       same `toggleSection("refereeRegistry")` branch that already calls `fetchRefereeShortlist`/
-       `fetchRefereeRegistry`) and is NOT a new React effect, so
-       `tests/test_desk_refresh_chain_guard.py`'s `_EXPECTED_EFFECT_COUNT` stays byte-unchanged and
-       page load still fetches and computes nothing (T-8).
-    3. Prove the copy keeps ONE owner: a guard test asserts the served `tick_gate_statement` and
-       `REFEREE_FORMING_BAR_BASIS_CAVEAT` sentences appear in NO frontend source file — they reach
-       the DOM only from the payload at runtime — applying the iteration-9 rider's own
-       unowned-frontend-literal lesson (`REFEREE_STARTER_FAMILY_ID`/`_Q`) before a second copy of
-       an honesty disclosure can be born.
-    4. Extend the guards deliberately: every served referee numeric this component reads joins
-       `tests/test_desk_ui_guards.py`'s `_PRICE_ARITHMETIC_FIELDS` with its seeded counter-test in
-       the established referee shape (these are counts, not prices — the section's "no client-side
-       arithmetic on any served numeric" contract, full stop); new `data-testid`s and new heading
-       strings only, reusing no shipped heading or `data-testid` and statically swept against the
-       stored replay scripts (T-11); `tests/test_copy_discipline.py` stays green with the rendered
-       gate/caveat copy included (descriptive statistics only — no advice, no prediction, no profit
-       phrasing).
-  - Acceptance: on the fixture rig, the Referee Registry section renders both readiness blocks with
-    the fixture's hand-computed counts exact, and the strategy family's `tick_gate_statement` and
-    every `basis_caveats` entry byte-identical to the strings
-    `GET /research/desk/referee/evidence` serves (compared string-for-string against that same
-    rig's served body in the test, never against a re-typed literal); an empty-corpus fixture
-    renders the honest all-zero/absent state rather than a blank, a spinner, or a 404 path. Single
-    source of truth: this journey introduces NO new value anywhere — every rendered number and
-    sentence is read verbatim from the one canonical endpoint the Data Contract already names
-    (`app/research/referee_evidence.py` / `GET /research/desk/referee/evidence`), with zero
-    client-side arithmetic, zero client-authored copy, no second computation path, no new owner,
-    and no new Data Contract row; MCP stays exactly 22 tools. In a real browser after the T-9 clean
-    rebuild: the Referee Registry section renders both blocks with every value matching that
-    backend's own served `/research/desk/referee/evidence` body exactly, and every other shipped
-    `/desk` section renders exactly as shipped in the same pass (screenshots; no screenshot ⇒
-    `unknown`, never `passing`). Frozen foundations: engine equivalence green,
-    `Config().config_fingerprint()` prints `08e471b10130e1e2`, zero new `Config` fields,
-    `referee_parameters()` byte-unchanged, zero diff to every `app/research/referee_*.py` module,
-    to `desk_playbook*.py`, `desk_forward.py`, `levels.py`, `tradability.py`, and `pnl_scan.py`,
-    and every previously recorded store file byte-identical (SHA-256 listing before/after, referee
-    dirs included — the endpoint is a pure read and this journey writes no store). PnL basis,
-    stated rather than fabricated: this journey changes no strategy, profile, backtest, or
-    champion, so it appends NO PnL-ledger row and proves it — the `default`-profile equivalence
-    test green and the PnL ledger + champion pointer byte-identical before/after (SHA-256);
-    inventing a ledger row for a read-side disclosure would breach the era's append-only ledger
-    rail. Full backend suite green with no test removed or weakened (iteration-12 baseline: 2,695
-    collected / 2,687 passed / 8 skipped). Walkthrough: a `[NEW]`-flagged demo-narrator walkthrough
-    of the new surface — `goto /desk` → `click` the "Referee Registry" section header → `expect`
-    the strategy family's tick-gate sentence and the forming-bar caveat — written with only the
-    shared recorder's supported actions (`goto`/`click`/`fill`/`expect`/`wait_for`; it rejects
-    `scroll`).
-    *(Browser-verifiable; keyless — a pure read over already-recorded stores.)*
 
 <!-- /AUTO:journeys -->
 
@@ -896,10 +645,9 @@ audits; only ever grow more specific, never weaker):**
    KEPT surface's behaviour stay byte-identical. New work is additive and versioned beside
    them, never a mutation of them. *(critical)*
 4. **Hold-out-only promotion** — the champion pointer moves only on a genuine hold-out
-   survival through the sweep gate PLUS a valid Referee certificate (this era makes the
-   "era-6 statistical gates" clause real). Train-only wins are labeled overfit. Never lower a
-   minimum sample size, widen a gate, or pool across feeds/fingerprints to manufacture a
-   survivor. *(critical)*
+   survival through the sweep gate PLUS a valid Referee certificate. Train-only wins are
+   labeled overfit. Never lower a minimum sample size, widen a gate, or pool across
+   feeds/fingerprints to manufacture a survivor. *(critical)*
 5. **No lookahead** — every value computed as-of T uses only events/bars fully completed at T.
    *(critical)*
 6. **Single source of truth** — each shared value is computed once, owned by one canonical
@@ -924,40 +672,52 @@ no threshold exists outside its spec and no code path sweeps one; the evidence p
 signature; no recorded playbook file is ever rewritten; no second implementation of the
 measurement rail. *(all critical)*
 
-**Referee-era anti-goals (added, not weakening any rail above):**
+**Referee-era anti-goals that remain binding** (the archived Referee goal's full text governs;
+headline rails): no confirmatory claim outside the gauntlet; the historical atlas is
+exploratory forever; CI-inversion is never a p-value; never shrink the BH denominator; no gate
+loosens mid-era; the Referee never feeds back; promotion is certificate-locked with no bypass;
+no confirmatory output without a verified oracle attestation; no annualized metrics anywhere.
+*(all critical)*
 
-- **No confirmatory claim outside the gauntlet.** A confirmatory verdict exists only for a
-  registered hypothesis with an immutable pre-data boundary, a calibrated randomization p, a
-  family BH pass at the registered q, session-clustered robustness, and floors met — and
-  exactly ONE confirmatory checkpoint per hypothesis, recorded as an append-only snapshot
-  that later evaluations can never change (a replication is a new registered hypothesis).
+**Rapid-Microscope anti-goals (added, not weakening any rail above):**
+
+- **No exploratory read of a sealed shard.** Event data and outcome aggregates of a `sealed`
+  shard are refused everywhere (routes, MCP, accessor, readiness) until its recorded
+  exposure; the refusal is typed, tested, and fail-closed. *(critical)*
+- **Sealed exposure is family-level and single-shot — never a second draw.** No more than one
+  evaluation per (family, shard) exists, ever; a failed sealed verdict is permanent and
+  travels in every later export bundle; no perturbed re-submission resets it. *(critical)*
+- **Evidence classes never mix.** No `historical_exposed_diagnostic` output feeds a gate, a
+  graduation transition, a certificate, a promotion, or a pooled statistic with
+  `historical_oos` rows; nothing in this era emits `live_confirmatory`. *(critical)*
+- **No fold geometry change after fold 1** without a recorded voiding event that clears every
+  survivor state of that corpus-era. *(critical)*
+- **No threshold, grid, formula, embargo, or fold parameter is chosen or revised from
+  validation, sealed, or holdout outcomes.** Fitting rules are data functionals frozen before
+  reveal; per-origin refits under an unchanged rule are provenance, never a new choice.
   *(critical)*
-- **The historical atlas is exploratory forever.** No historical observation is ever served,
-  labeled, or counted as forward confirmation; discovery data renders only under its
-  exploratory label. *(critical)*
-- **CI-inversion is never a p-value.** Ordinary bootstrap quantities are uncertainty
-  intervals; every p that feeds BH comes from a spec-named null-calibrated randomization
-  procedure; the oracle suite guards the distinction. *(critical)*
-- **Never shrink the BH denominator.** No BH pass may run with m smaller than the family's
-  registered planned count; no candidate joins a family retroactively; no unevaluated or
-  late-withdrawn candidate is dropped from m — they fold as p=1, never disappear; no family's
-  q changes after registration. *(critical)*
-- **No gate loosens mid-era.** q, floors, targets, K, B, and every eligibility rule are fixed
-  at registration; `insufficient_sample` is an answer, never a reason to widen anything.
+- **The denominator never shrinks.** Every evaluated variant lands in the hash-chained ledger
+  with a closed-vocabulary decision; kills are never deleted; the union-N across grid
+  versions is served beside every family. *(critical)*
+- **The accessor is the only data door.** No module but `micro_accessor.py` opens snapshot or
+  vault event data; origin fences fail closed; import-ban and source-scan guards enforce it.
   *(critical)*
-- **The Referee never feeds back.** No referee output gates, filters, ranks, or tunes any
-  detector, context, screen, or strategy computation (import-ban + source-scan guard-tested);
-  the frozen research vocabulary stays frozen. *(critical)*
-- **Promotion is certificate-locked.** No champion promotion without a valid
-  candidate-specific Referee certificate; no bypass flag, env override, or default-allow
-  path exists (source-scan guard-tested); a Playbook certificate can never satisfy a
-  strategy promotion. *(critical)*
-- **No confirmatory output without a verified oracle attestation.** The adjudication fold
-  never serves a confirmatory verdict from an evaluation whose attestation is missing,
-  mismatched, or version-stale — it serves the refusal state with its reason; descriptive
-  output never masquerades as confirmatory. *(critical)*
-- **No annualized metrics anywhere** — the literal string is guard-tested out of research
-  payloads. *(critical)*
+- **No microstructure claim beyond what L1 supports.** `refill_consistent` is the strongest
+  liquidity label; "iceberg", institutional-intent, and manipulation language are banned;
+  every aggressor-derived quantity is served beside its `fallback_frac` and `unknown_frac`.
+  *(critical)*
+- **No sub-second outcome horizon** and no latency-sensitive mechanism, per DO-NOT #1.
+  *(critical)*
+- **The 12 pre-existing tick symbol-days are permanently exploratory** — never sealed, never
+  `historical_oos`, never relabeled. *(critical)*
+- **The ~150-symbol-day research-readiness gate is never lowered or silently satisfied**; any
+  claim whose predeclared floor is unmet fails closed with the floor arithmetic served.
+  *(critical)*
+- **Referee modules are byte-untouched this era** — `referee_handoff_ready` never implies
+  current-Referee registrability of a flow predicate; that awaits a future named revision of
+  the referee spec. *(critical)*
+- **The vault secret never enters the repo, a log, a payload, or a screenshot** — only its
+  sha256 commitment is ever recorded. *(critical)*
 - **The enhancement loop stays inside its box.** The goal-proposer may append journeys ONLY
   inside the `AUTO:journeys` marker block above — it MUST NOT edit human-authored journeys,
   this Anti-goals section, or any other part of this file; proposed journeys MUST carry a
