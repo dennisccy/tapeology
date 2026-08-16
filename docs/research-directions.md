@@ -163,7 +163,7 @@ a weak model that improvises a third will corrupt the honesty machinery:
 | T9 | Vocabulary drift | Banned terms: "paper trading", "shadow trading", "annualized" anything, "expected profit", advice/imperative phrasing. The forward ledger is "**forward replay measurement**". |
 | T10 | Second sources of truth | Never recompute a served value in a new code path; read it from its canonical owner. If a new value is needed, create ONE owner. |
 | T11 | Quiet scope creep into frozen code | New strategies/detectors dispatch **beside** `v1`'s branch; classifier thresholds, `warmup_min_events`, and the five states are untouchable outside an explicit epoch bump. |
-| T12 | Units mixing | SIP quote sizes are **round lots**; trade sizes are **shares**. Never add or ratio them without the documented conversion. |
+| T12 | Units mixing | *(Amended 2026-08-16, rapid-microscope r2 — the old universal "SIP quote sizes are round lots; trade sizes are shares" pin is superseded: Alpaca CTA/UTP displayed quote sizes are SHARES from 2025-11-03.)* Trade sizes and displayed-liquidity sizes must never be added or ratioed except under the ACTIVE dataset-level size-unit/schema-basis contract (`quote_size_unit`, rapid-validation-spec §2.6); cross-basis arithmetic fails closed when units are unverified or incompatible; legacy datasets stay `unverified` until an auditable verification act. |
 
 ## 0.6 Idea-card template legend
 
@@ -488,8 +488,15 @@ forward + UI (5.5–5.9).
 
 #### Card 5.8 — `forward` split + champion forward replay ledger `[infra] [F2] [M]`
 - **Purpose**: true out-of-sample-by-time evidence. A strategy validated on holdout can still
-  fail forward; an append-only forward record accumulates the only evidence that cannot be
-  overfit — because it did not exist yet when the strategy was frozen.
+  fail forward; an append-only forward record accumulates the strongest genuinely-new-time
+  evidence — because those observations did not exist when the strategy was frozen — and it is
+  the only evidence that directly tests whether an effect still exists in the CURRENT/future
+  market regime. *(Amended 2026-08-16, rapid-microscope opening: the original "the only
+  evidence that cannot be overfit" wording predates the rapid era's sealed/clean historical
+  OOS class — sealed `historical_oos` evidence under a frozen spec is also independent of the
+  spec's authoring, but it tests past regimes, not the current one; the two claims are served
+  separately and neither substitutes for the other. Consistent with the Part-1
+  standing-physics amendment: only `live_confirmatory` evidence is calendar-constrained.)*
 - **Build**: (a) add `forward` to `VALID_SPLITS` (`apps/backend/app/research/datasets.py`) —
   additive; (b) recorder top-up mode registers post-era-5 days as `forward`; (c) a job replays
   the CURRENT champion once on each new forward dataset and appends one row to a new

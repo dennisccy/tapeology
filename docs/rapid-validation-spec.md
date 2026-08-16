@@ -424,6 +424,25 @@ rule_hash}` — appended to the vault ledger first. The recorded batch must be t
 output net of disclosed vendor failures; a verifier recomputes the expected set and refuses
 cherry-picked batches (TR-4).
 
+**The Tier-B resolution order (preflight correction 2026-08-16 — a contract clarification, not
+a methodology change).** Card 5.2's Tier-B mid-cap names are PROVISIONAL; its screening
+CRITERIA are the contract and are re-evaluated at recording time. The mandatory order, which a
+weak executor may not reinterpret:
+1. evaluate the frozen Card-5.2 Tier-B screening criteria;
+2. record, in the vault ledger: the screening criteria/spec hash, the screen's as-of
+   timestamp, the input/provenance basis, the COMPLETE screening output, and the resolved
+   Tier-B symbol list;
+3. freeze that resolved list;
+4. use the resolved list — and nothing else — as the Tier-B portion of `symbol_rule`;
+5. register the recording universe;
+6. record the vault-secret commitment and compute the opaque HMAC seal assignment (§7.3);
+7. only then begin vendor fetches.
+After universe registration: **no Tier-B re-screen, no substitution because a symbol is
+inconvenient, no replacement from vendor availability or observed data** — a vendor failure is
+a DISCLOSED per-chunk/per-symbol failure in the batch report, never a silent swap. The current
+provisional names are never hard-coded as permanently valid; only the resolved, recorded list
+of step 2 is.
+
 ### 7.3 Split vs seal — two independent assignments
 - **Split** (train/holdout tag, Card 5.2's published rule, unchanged): `holdout` iff the last hex
   digit of `sha256(f"{symbol}:{YYYY-MM-DD}")` ∈ {0,1,2}.

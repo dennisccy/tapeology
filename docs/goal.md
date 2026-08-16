@@ -120,12 +120,18 @@ route).
    the `pnl_scan` promotion interlock — all behaviorally byte-identical.** This era READS them;
    it never touches, re-implements, re-tunes, or feeds back into any of them. There is NO
    deliberate exception this era.
-3. The **stores** — `BarStore` + `DatasetStore` formats, checksums, append-only immutability,
-   frozen splits, the accelerator DBs, the desk stores, the playbook store, the referee store
-   family — are untouched in format and discipline. The era ADDS the micro store family
-   (snapshots, scout ledger, fold ledger, vault + exposure ledger, recorder runs, graduation
-   ledger) under the same discipline, plus one additive default-`None` `observer=` kwarg on
-   `DatasetStore.replay` (counter-tested byte-identical when absent).
+3. The **stores** — every EXISTING registered `BarStore`/`DatasetStore` artifact stays
+   byte-identical with its checksum verifying; no legacy file is ever rewritten or
+   reserialized; append-only immutability, frozen splits, parsing compatibility (absent
+   fields parse exactly as before), the accelerator DBs, the desk stores, the playbook store,
+   and the referee store family are untouched in discipline. **The one r2-sanctioned additive
+   seam:** NEWLY recorded datasets MAY carry the backward-compatible OPTIONAL event/manifest
+   fields of [`docs/rapid-validation-spec.md`](rapid-validation-spec.md) §7.1/§2.6
+   (conditions/venue preservation, `schema_basis`, `quote_size_unit`) — the frozen engine
+   ignores them entirely, and immutability is not weakened anywhere. The era ADDS the micro
+   store family (snapshots, scout ledger, fold ledger, vault + exposure ledger, recorder
+   runs, graduation ledger) under the same discipline, plus one additive default-`None`
+   `observer=` kwarg on `DatasetStore.replay` (counter-tested byte-identical when absent).
 4. The **PnL promotion ledger** stays append-only and intact; the champion pointer does not move
    this era; `authorize_promotion` keeps its fail-closed contract untouched.
 5. The **kept surfaces as shipped**: the cockpit, `/structure`, and every shipped `/desk`
@@ -148,12 +154,14 @@ items, in that order.**
    `08e471b10130e1e2` every iteration; every `referee_*` module byte-identical to `main` at
    era open (SHA-256 listing recorded at iteration 0 and re-checked); every kept `/`,
    `/structure`, `/desk` behavior browser-verified as shipped.
-2. **No leakage trap fails, ever.** The TR-1…TR-16 suite of
+2. **No leakage trap fails, ever.** The TR-1…TR-22 suite of
    [`docs/rapid-validation-spec.md`](rapid-validation-spec.md) §9 is implemented and green:
    prefix discipline, origin fencing, sealed-shard sweeps, cherry-pick refusal, class-mixing
    refusal, purge exactness, screening calibration, pool invariance, ledger chain integrity,
-   single-shot sealed exposure, geometry freeze, rule identity, tick-corpus refusal, and the
-   synthetic known-null / known-effect end-to-end oracles.
+   single-shot sealed exposure, geometry freeze, rule identity, tick-corpus refusal, the
+   synthetic known-null / known-effect end-to-end oracles — and the r2 traps: TR-17
+   future-event availability, TR-18 units gate, TR-19 Card-5.1 preservation prerequisite,
+   TR-20 root-family lineage, TR-21 process-label discipline, TR-22 exposure registry.
 3. **Every trial is on the record.** The scout ledger is hash-chained append-only; every
    evaluated variant — every kill, with its closed-vocabulary reason — is a permanent row; the
    union-N denominator is served beside every family; "statistically above null" and
@@ -559,10 +567,14 @@ operator-attended act inside the era.
        **opaque pre-exposure metadata (spec §7.5 r2: no symbol, no date range until
        assignment — aggregates only on readiness)**, TR-2 route sweep, TR-4 cherry-pick
        refusal, TR-12 single-shot exposure, TR-20 root-lineage refusal.
-    4. Operator act, inside the era: register the starter-tranche universe, run the recorder
-       against real Alpaca historical trades+quotes to the spec §7.6 minimums (≥30
-       symbol-days, ≥8 panel symbols incl. PG + ≥3 Tier-B + ≥1 ETF, ≥10 dates over ≥6 weeks,
-       the concentration caps, ≥60% full-session), with a restart mid-run proving resume.
+    4. Operator act, inside the era: resolve Tier-B by the spec §7.2 mandatory order (screen
+       by the frozen Card-5.2 criteria → record criteria hash, as-of, provenance, full output,
+       resolved list → freeze the list → `symbol_rule` → register the universe → commitment +
+       HMAC → only then fetch; no re-screen or substitution afterward — vendor failures are
+       disclosed, never swapped), then run the recorder against real Alpaca historical
+       trades+quotes to the spec §7.6 minimums (≥30 symbol-days, ≥8 panel symbols incl. PG +
+       ≥3 Tier-B + ≥1 ETF, ≥10 dates over ≥6 weeks, the concentration caps, ≥60%
+       full-session), with a restart mid-run proving resume.
     5. Refresh readiness: the new shards appear with completeness reporting (including
        `quote_size_unit` and preservation-field presence); sealed members show opaque
        aggregates only.
@@ -639,9 +651,11 @@ operator-attended act inside the era.
 
 - **J-10: The kept product stands — traps armed, sentinel green**
   - Steps:
-    1. Land the full TR-1…TR-16 suite (whichever traps did not ship inside J-02…J-07 land
-       here) plus the extended guard tests (accessor import-ban, micro threshold-sweep ban,
-       copy discipline for micro copy, `_PRICE_ARITHMETIC_FIELDS` additions).
+    1. Land the full TR-1…TR-22 suite (whichever traps did not ship inside J-02…J-07 land
+       here — the r2 traps TR-17 availability, TR-18 units, TR-19 preservation, TR-20 root
+       lineage, TR-21 process labels, TR-22 exposure registry included) plus the extended
+       guard tests (accessor import-ban, micro threshold-sweep ban, copy discipline for micro
+       copy, `_PRICE_ARITHMETIC_FIELDS` additions).
     2. Run the deterministic-rerun check (byte-identical snapshot/screen/fold outputs on a
        re-run over unchanged stores).
     3. Run the kept-product sentinel: cockpit `/` live-tape and chart, `/structure` load and
