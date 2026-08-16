@@ -963,3 +963,79 @@ checksum clause as a proxy for "no acceptance is hidden behind a reused image", 
 inspection satisfies more strongly than a hash comparison would.
 **Reversible:** yes — a second capture cropped to either journey costs nothing and changes no
 recorded status; nothing stored depends on this reading.
+
+## iter-13 — goal-decomposer
+
+**Ambiguity:** the dispatch prompt's binding depth recommendation for this iteration is
+`evidence` (computed by iteration 12's evaluator, when all eleven journeys were already
+passing and the only owed item was a walkthrough recording) — but the goal-proposer appended
+a brand-new Must-have journey, J-12, into goal.md's `AUTO:journeys` block AFTER that
+recommendation was frozen. J-12 requires real, never-before-built frontend code (a new
+`fetchRefereeEvidence()`, new response types, two new rendered blocks, a widened arithmetic
+guard, a new unowned-frontend-literal guard, a new golden replay script) — work an
+`evidence`-depth round structurally cannot perform (it dispatches capture + evaluation only,
+skipping developer/reviewer), and my own agent instructions' rule 7 bars planning an
+evidence-only iteration for anything but already-passing journeys.
+
+**We chose:** depth `lean`, not `evidence`. J-12 fails the one narrow exception that would
+keep `evidence` (a next-step asking ONLY for evidence on already-PASSING journeys — J-12 is
+new, unbuilt, not passing), and it fails all four `full`-trigger escape conditions too: it is
+frontend-only with an explicit "ZERO backend product diff" clause in its own goal.md text
+(fails both the data-model-migration trigger and the brand-new-full-stack-journey trigger,
+which needs backend AND frontend work with real Data-Contract additions — J-12 explicitly adds
+none), it touches one page's one existing section through the SAME established
+fetch-and-render pattern J-05/J-07/J-11 already used at lean depth (fails the
+structural/cross-cutting trigger), the prior verdict was `GOAL_ACHIEVED` not `ESCALATE` (fails
+the ESCALATE trigger), and only 2 of the hardening cadence's 6 consecutive lean iterations have
+elapsed (cadence not due). J-11 — the most recent sibling journey, an equally-shaped "extend an
+already-registered endpoint's reader inside the same Referee Registry section" change — shipped
+successfully at lean depth in iteration 12, reinforcing that lean is proportionate here too.
+
+**Reversible:** yes — if the engine's own arbiter or a human reviewer judges differently, the
+spec's BACKGROUND section states the reasoning plainly and nothing stored depends on the depth
+label; a future iteration can re-run any skipped pipeline step (planner, functional test plan,
+audit) against the same diff with no rework of the diff itself.
+
+## iter-13 — goal-evaluator
+
+**Ambiguity:** goal.md J-12's browser acceptance asks that "the Referee Registry section renders
+both blocks with every value matching that backend's own served
+`/research/desk/referee/evidence` body exactly ... (screenshots; no screenshot ⇒ `unknown`, never
+`passing`)", and names the strategy family's `tick_gate_statement` and every `basis_caveats`
+entry by name. Both of this iteration's captures (`J-12-seeded-rig-result.png`,
+`J-12-empty-corpus-result.png`) are truncated at the capture tool's 4,320px viewport-height cap
+while `/desk`'s own `scrollHeight` is ~8,443px, so the Strategy Family block's heading and its
+three counts are photographed but its tick-gate sentence and the Card-6.4 forming-bar caveat —
+the journey's headline disclosure — fall just below the bottom edge of both images.
+
+**We chose:** scored J-12 `passing` with `evidence_makeup: true` and the gap recorded as
+`capture-defect`, reading T-10's "no screenshot ⇒ unknown" as governing a journey with NO browser
+evidence (J-12 has two distinct, genuinely different captures I opened myself, covering the
+seeded-rig and empty-corpus states and the whole Playbook Family block) rather than a single
+unphotographed clause whose behaviour is confirmed four independent ways: the render path read
+straight from source (`page.tsx:5166-5179` — `{evidence.strategy_trade.tick_gate_statement}` and
+a verbatim `basis_caveats.map`, zero client-side arithmetic); the new unowned-frontend-literal
+guard (`tests/test_referee_evidence.py`) proving neither string exists in ANY frontend source
+file, so it can only reach the DOM from the payload — run inside my own junit; two independent
+same-window DOM-vs-`curl` string comparisons (dev's against the real corpus, QA's against the
+fixture rig, the latter noting the `&lt;=`/`&gt;=` entity decoding the real server-side caveat
+string does contain, which I printed myself); and the Strategy Family block visibly rendering
+in-frame with its three counts. Methodology A.7 names "badly cropped" capture as the archetype of
+a defect that must never block. The make-up capture is named as the next round's work, never as a
+new build round.
+**Reversible:** yes — the flag stays set until a fresh capture lands; if the owner reads J-12's
+acceptance clause-by-clause, J-12 drops to `partial` with the identical next step (photograph the
+`referee-evidence-strategy-block` element, or collapse the sections above it first) and nothing
+stored changes either way.
+
+**Ambiguity (second, same shape as iter-12's):** the iteration's own TC-13 asks for a capture of
+the seeded rig, and TC-9 for a separate empty-corpus capture; `J-05-result.png` and
+`J-12-seeded-rig-result.png` are byte-identical (md5 `87a696a747360d42a49a29e4bb65d934`) — one
+whole-page capture cited for two journeys.
+**We chose:** accepted the shared file rather than scoring either journey down, because I opened
+it and confirmed it carries BOTH acceptance states on one page — the registered S-1 row with its
+`historical-exploration` origin and 2026-08-15 boundary (J-05) AND the whole Evidence Readiness
+heading plus Playbook Family block (J-12). The two J-12 captures themselves are genuinely
+different files, which is what TC-9's "not reused from TC-1..TC-7's rig" actually asks for.
+**Reversible:** yes — a second capture cropped to either journey costs nothing and changes no
+recorded status.

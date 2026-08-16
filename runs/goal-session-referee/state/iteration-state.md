@@ -1,40 +1,40 @@
 # Iteration State — referee
 
-**After iteration:** 12 · **Date:** 2026-08-16 · **Verdict:** GOAL_ACHIEVED
+**After iteration:** 13 · **Date:** 2026-08-16 · **Verdict:** CONTINUE
 
 ## Journeys
 
-11 passing (J-01..J-11) · 0 failing · 0 unknown · 0 deferred — 11 total (J-11 new this iter,
-added by the proposer inside the AUTO:journeys block; it carries `evidence_makeup` for an owed
-walkthrough recording only)
+12 passing (J-01..J-12) · 0 failing · 0 unknown — 12 total. J-11 + J-12 carry `evidence_makeup`
+(owed captures: J-11's walkthrough recording, J-12's strategy-family tick-gate + caveat).
 
 ## Active blockers
 
-- none for the product. Human-owned, non-blocking: (a) this iteration's 6 changed product files
-  + prior evidence files are uncommitted; (b) the shared recorder `demo_runner.py` has no
-  `scroll` action, so the era has no walkthrough recording (framework tooling, not Tapeology
-  code); (c) from iter-2 and outside this project, trendora's backend on :8255 is still down.
+- **J-01 + J-02 were DEFERRED-BUDGET** (`phase-goal-referee-iter-13-ui-test-results.md:39-40`) —
+  not tested, so the achievement gate blocks GOAL_ACHIEVED. Owner: QA lane. Both are backend-only
+  (`J-0{1,2}.json.invalid`): re-verify by running `tests/test_referee_guards.py` +
+  `tests/test_referee_evidence.py` and writing real PASS rows into the results table (iter-11).
+- **J-12's owed capture.** Both captures truncate at the tool's 4,320px cap; `/desk`'s
+  `scrollHeight` is ~8,443px. Capture the `referee-evidence-strategy-block` element itself, or
+  collapse the sections above it — a full-page capture cannot reach it. Owner: QA lane.
+- Human-owned, non-blocking: uncommitted files; the shared recorder (`.../demo_runner.py`) cannot
+  play `scroll`, so the era has no video walkthrough; trendora's port-8255 backend not restarted.
 
 ## Last 2 verdicts
 
-- iter 12: GOAL_ACHIEVED — J-11 verified in the browser (basis line + new "Projected sessions"
-  column, shipped 0.02 / 564 pair unmoved), all 11 journeys hold current evidence, coherence
-  PASS, no open anti-goal, evaluator's own suite 2,695 collected / 2,687 passed / 0 failed.
-- iter 11: GOAL_ACHIEVED — evidence-only round cleared every deferred row and the owed J-09
-  capture; zero product diff.
+- iter 13: CONTINUE — J-12 shipped and verified on two rigs, zero backend diff, rails clean; but
+  J-01/J-02 skipped for time and one J-12 capture clause unphotographed.
+- iter 12: GOAL_ACHIEVED — J-11's accrual-basis disclosure verified; eleven journeys passing.
 
 ## Do not redo
 
-- J-11 shipped and verified: `accrual_basis` + the two per-candidate fields in
-  `referee_registry.py::shortlist_response()`, one basis line + one "Projected sessions"
-  column in `page.tsx::RefereeRegistrySection`, §9 addendum in `referee-statistical-spec.md`.
-- The shipped calendar-day pair (`accrual_rate_sessions_per_day` / `projected_days_to_target`)
-  is deliberately unchanged and must stay so — the recorded-session basis sits BESIDE it.
-- `informative_sessions_per_pooled_session` is API-only by decision (assumptions.md iter-12);
-  do not "fix" it by adding a second column unless the owner asks.
-- Do not plan an iteration whose only content is the J-11 walkthrough recording — a capture
-  item for finalization/a human, blocked on the shared recorder, not on the product.
-- Four carried hardening items, none blocking: 4 Referee dirs into the store-scope guard;
-  both-names-unknown certificate match (`referee_adjudicate.py:550`); dash-vs-unknown on a
-  failed second fetch; stale `19/7/1` comment.
-- Anti-goal entries from iters 6, 8 and 9 are all closed and re-confirmed — do not re-litigate.
+- **J-12 is built + verified** — `lib/api.ts:2122`, `lib/types.ts:2429`,
+  `RefereeEvidenceReadinessSection` (`app/desk/page.tsx:5004-5200`), `journey-scripts/J-12.json`.
+- **Backend byte-frozen** — `git diff -- apps/backend/app` EMPTY at iter-13; `referee_evidence.py`'s
+  served body is pinned by a golden test. Do not touch it. Its `integrity_errors` really is
+  `{file, error}[]` (the iter-13 spec's `[string]` paraphrase was wrong) — settled.
+- **Guards already widened** — `_PRICE_ARITHMETIC_FIELDS` covers all 7 new referee numerics;
+  `_EXPECTED_EFFECT_COUNT` stays 21; `EXPECTED_TOOLS` stays 22. Extend, never edit.
+- **Carried clean-ups, non-blocking:** stray assertion `test_desk_ui_guards.py:371-372`; 4 Referee
+  store dirs absent from the guard; no-name cert should fail; dash-not-word on a failed 2nd fetch.
+- **J-05's replay timeout 8s→12s is by design** (assertion text unchanged) — the iter-13 replay
+  FAIL was a latency false negative, verified by screenshot. Not a regression.

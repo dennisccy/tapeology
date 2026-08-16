@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "journey": "J-12",
+  "name": "The readiness fold gets its reader — why a family cannot speak, visible on the desk",
+  "default_timeout_ms": 12000,
+  "steps": [
+    {"n": 1, "journey": "J-12", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Referee Registry"}},
+    {"n": 2, "journey": "J-12", "action": {"type": "click", "target": {"testid": "desk-section-expand-refereeRegistry"}}, "expect": {"text": "Strategy Family"}}
+  ]
+}

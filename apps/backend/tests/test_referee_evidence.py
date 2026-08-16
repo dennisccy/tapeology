@@ -291,6 +291,121 @@ def test_module_docstring_pins_integrity_errors_as_part_of_the_response_shape():
     assert "strategy_trade.integrity_errors" in doc
 
 
+# --- goal-referee-iter-13 (J-12): the readiness fold gets its FIRST direct UI reader -----------------
+#
+# J-12 is a frontend-only iteration (apps/frontend/lib/api.ts::fetchRefereeEvidence() +
+# RefereeRegistrySection's own new blocks on /desk) -- zero production diff to this module. The two
+# tests below are the Backend (tests only) scope's own required proofs: a byte-identity check that
+# referee_evidence()'s served body never moved, and the unowned-frontend-literal guard (the
+# iteration-9 REFEREE_STARTER_FAMILY_ID/_Q precedent, test_referee_registry.py TC-17) extended to
+# the two disclosure strings this iteration's UI first renders.
+
+
+def test_referee_evidence_served_body_matches_the_pinned_golden_fixture(client):
+    """A byte-identity check proving referee_evidence()'s served body is unchanged by this
+    iteration's diff -- the WHOLE response dict, both blocks, every key, pinned against a
+    hand-computed fixture built through each store's own public write path (never a real
+    detect/backtest run). J-12 reads this endpoint for the first time in the browser; this test is
+    the durable proof its shape and values never moved (a future accidental edit to
+    referee_evidence.py breaks this test immediately, forcing a deliberate, named update)."""
+    c, playbook_store, dataset_store, journal_store = client
+    fingerprint = CONFIG.config_fingerprint()
+
+    record = _plant_playbook_record(
+        playbook_store, session_date="2026-06-08", signature="sig-golden",
+        signals=[_signal("capitulation", "long")],
+    )
+    basis = _record_detector_basis(record)
+    _plant_dataset(dataset_store, symbol="AAPL", split=SPLIT_TRAIN, source_id="ds-golden")
+    _plant_backtest(journal_store, backtest_id="bt-golden", trades=[{"net_r": 1.0}])
+
+    response = c.get("/research/desk/referee/evidence")
+    assert response.status_code == 200
+    # The one field derived through the module's own helper rather than hand-retyped: the
+    # met/unmet English sentence is already locked down exactly by
+    # test_strategy_readiness_names_the_unmet_tick_gate_and_the_forming_bar_caveat and
+    # test_tick_gate_state_unmet_branch above -- re-typing its full prose here would only risk a
+    # transcription mismatch against those tests' own source of truth, `_tick_gate_state` itself.
+    tick_gate_met, tick_gate_statement = _tick_gate_state(1)
+
+    assert response.json() == {
+        "playbook_occurrence": {
+            "detector_basis": basis,
+            "config_fingerprint": fingerprint,
+            "records": 1,
+            "distinct_sessions": 1,
+            "signals_at_current_basis": 1,
+            "per_setup_side": [
+                {"setup": "capitulation", "side": "long", "n": 1, "n_sessions": 1},
+            ],
+            "stale_basis_dates": [],
+            "integrity_errors": [],
+        },
+        "strategy_trade": {
+            "dataset_count": 1,
+            "per_split_counts": {"train": 1, "holdout": 0},
+            "trade_count": 1,
+            "tick_gate_met": tick_gate_met,
+            "tick_gate_statement": tick_gate_statement,
+            "basis_caveats": [REFEREE_FORMING_BAR_BASIS_CAVEAT],
+            "integrity_errors": [],
+        },
+    }
+
+
+# A substring invariant across BOTH the met/unmet branches of `_tick_gate_state` (the numeric
+# counts vary; this fragment does not) -- distinctive enough that no frontend prose would ever
+# coincidentally contain it, so its absence from frontend source is a meaningful guard.
+_TICK_GATE_STATEMENT_DISTINCTIVE_SUBSTRING = "Era-6 tick-corpus gate"
+
+# The SAME `apps/frontend` root + component/app/lib glob set `test_copy_discipline.py`'s own
+# frontend-literal scan already uses (re-declared locally per this codebase's own convention --
+# test_desk_ui_guards.py re-declares its own `_FRONTEND_ROOT` rather than importing one too).
+_EVIDENCE_LITERAL_GUARD_FRONTEND_ROOT = Path(__file__).resolve().parents[2] / "frontend"
+
+
+def _evidence_literal_guard_frontend_files() -> list[Path]:
+    root = _EVIDENCE_LITERAL_GUARD_FRONTEND_ROOT
+    return (
+        sorted(root.glob("components/**/*.tsx"))
+        + sorted(root.glob("components/**/*.ts"))
+        + sorted(root.glob("app/**/*.tsx"))
+        + sorted(root.glob("app/**/*.ts"))
+        + sorted(root.glob("lib/**/*.ts"))
+    )
+
+
+def test_tick_gate_statement_and_forming_bar_caveat_are_unowned_frontend_literals():
+    """TC-11: mirrors the iteration-9 REFEREE_STARTER_FAMILY_ID/_Q unowned-literal guard
+    (test_referee_registry.py TC-17) -- now that J-12 gives `tick_gate_statement`/
+    `REFEREE_FORMING_BAR_BASIS_CAVEAT` their first UI reader, neither string may ALSO be typed into
+    a frontend source file as a second, independently-drifting copy. Both reach the DOM only from
+    the GET /research/desk/referee/evidence payload at runtime."""
+    files = _evidence_literal_guard_frontend_files()
+    assert files, "no frontend source files found -- the scan cannot be vacuous"
+    offenders: list[str] = []
+    for path in files:
+        source = path.read_text()
+        rel = path.relative_to(_EVIDENCE_LITERAL_GUARD_FRONTEND_ROOT)
+        if _TICK_GATE_STATEMENT_DISTINCTIVE_SUBSTRING in source:
+            offenders.append(f"{rel}: hardcodes the tick-gate statement")
+        if REFEREE_FORMING_BAR_BASIS_CAVEAT in source:
+            offenders.append(f"{rel}: hardcodes the forming-bar basis caveat")
+    assert not offenders, (
+        "a referee evidence disclosure string was hardcoded into frontend source instead of read "
+        f"from the GET /research/desk/referee/evidence runtime payload: {offenders}"
+    )
+
+
+def test_tick_gate_statement_and_forming_bar_caveat_guard_can_fail_on_a_seeded_violation():
+    """The lint CAN fail -- a lint that cannot fail proves nothing."""
+    seeded_tick_gate = f'const x = "{_TICK_GATE_STATEMENT_DISTINCTIVE_SUBSTRING} is unmet";'
+    assert _TICK_GATE_STATEMENT_DISTINCTIVE_SUBSTRING in seeded_tick_gate
+
+    seeded_caveat = f"const y = {REFEREE_FORMING_BAR_BASIS_CAVEAT!r};"
+    assert REFEREE_FORMING_BAR_BASIS_CAVEAT in seeded_caveat
+
+
 # === J-02: the typed evidence contract -- fixture builders (goal-referee-iter-2 TC-1..TC-9) ==========
 #
 # Every fixture below plants records through each store's own public write path

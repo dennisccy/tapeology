@@ -285,6 +285,16 @@ _PRICE_ARITHMETIC_FIELDS = (
     # `RefereeEvaluationRunRow`).
     r"|compute\??\.(?:done|total)"
     r"|run\.progress\.(?:done|total)"
+    # goal-referee-iter-13 (J-12): the Referee Registry section's own new evidence-readiness
+    # blocks -- GET /research/desk/referee/evidence read verbatim for the FIRST time in the
+    # browser. J-12's whole point is "zero client-side arithmetic on any served numeric", so
+    # every one of the seven counts this component renders joins this list on the same footing
+    # as every other referee numeric above (evidence.playbook_occurrence.*/
+    # evidence.strategy_trade.* -- the RefereeEvidenceReadinessSection's own local binding for
+    # the fetched `GET /research/desk/referee/evidence` body).
+    r"|evidence\.playbook_occurrence\.(?:records|distinct_sessions|signals_at_current_basis)"
+    r"|evidence\.strategy_trade\.(?:dataset_count|trade_count)"
+    r"|evidence\.strategy_trade\.per_split_counts\.(?:train|holdout)"
 )
 _PRICE_ARITHMETIC_PATTERN = re.compile(
     rf"({_PRICE_ARITHMETIC_FIELDS})\s*[-+*/]|[-+*/]\s*({_PRICE_ARITHMETIC_FIELDS})"
@@ -327,6 +337,36 @@ def test_desk_page_price_arithmetic_guard_catches_opposite_band_and_bands_by_cla
 
     seeded_score = "const combined = row.opposite_band.band_score + row.band_score;"
     assert _PRICE_ARITHMETIC_PATTERN.search(seeded_score) is not None
+
+
+def test_desk_page_price_arithmetic_guard_catches_referee_evidence_arithmetic():
+    """goal-referee-iter-13 (J-12) TC-12 counter-test: the widened guard also catches arithmetic
+    over the new Referee evidence-readiness numerics (GET /research/desk/referee/evidence's first
+    UI reader), proving the widened pattern actually fails on injected client-side arithmetic --
+    not just that it passes on unmodified source."""
+    seeded_total = (
+        "const total = evidence.playbook_occurrence.records + "
+        "evidence.playbook_occurrence.distinct_sessions;"
+    )
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_total) is not None
+
+    seeded_signals = (
+        "const share = evidence.playbook_occurrence.signals_at_current_basis / "
+        "evidence.playbook_occurrence.records;"
+    )
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_signals) is not None
+
+    seeded_split = (
+        "const combined = evidence.strategy_trade.per_split_counts.train + "
+        "evidence.strategy_trade.per_split_counts.holdout;"
+    )
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_split) is not None
+
+    seeded_trades = (
+        "const perDataset = evidence.strategy_trade.trade_count / "
+        "evidence.strategy_trade.dataset_count;"
+    )
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_trades) is not None
 
     seeded_bands_by_class = "const total = row.bands_by_class.A + row.bands_by_class.B;"
     assert _PRICE_ARITHMETIC_PATTERN.search(seeded_bands_by_class) is not None

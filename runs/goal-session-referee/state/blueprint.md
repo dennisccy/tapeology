@@ -31,7 +31,7 @@ no dedicated page):
 
 | Feature / journey | Canonical home (route) | Nav section |
 |---|---|---|
-| J-01 per-family readiness fold (backend fold; surfaces inside the J-07 shortlist) | `GET /research/desk/referee/evidence` | Desk |
+| J-01 per-family readiness fold — direct reader added by J-12 (previously only fed the J-07 shortlist's own numbers via the shared pooling function; the endpoint itself was unread by any client until now) | `/desk` → **Referee Registry** | Desk |
 | J-02 evidence contract, J-03 stats core (library modules, no page of their own) | n/a — consumed by J-04–J-09 | — |
 | J-04 matched nulls — compute controls + ledger | `/desk` → **Referee Runs** | Desk |
 | J-05 registry — families/hypotheses/withdrawals/certificates | `/desk` → **Referee Registry** | Desk |
@@ -41,6 +41,7 @@ no dedicated page):
 | J-09 full Referee UI + MCP contract v5 | `/desk`, the three sections above; MCP `desk_referee` / `desk_referee_registry` | Desk |
 | J-10 regression sentinel | all three routes, every kept section | Cockpit / Structure / Desk |
 | J-11 accrual projection basis disclosure (field additions on the J-07 shortlist) | `/desk` → **Referee Registry** (shortlist table + new basis line) | Desk |
+| J-12 readiness-fold reader (playbook + strategy family blocks, read verbatim off J-01's own endpoint) | `/desk` → **Referee Registry** (new blocks below the registered-hypotheses table) | Desk |
 
 ## Data Contract
 
@@ -349,3 +350,25 @@ API-only this iteration, see state/assumptions.md iter-12 entry) -- both server-
 client arithmetic, new data-testids only, no shipped column/heading/data-testid touched. No new
 page, no new nav entry; the Information Architecture table's existing J-05/J-07 "Referee
 Registry" row (now also tagged J-11 above) already covers this surface. -->
+
+<!-- iter-13 note (J-12): NO new Data Contract row, no new field, no owner/endpoint change --
+the "Referee evidence coverage + per-family readiness" row (owner app/research/referee_evidence.py,
+endpoint GET /research/desk/referee/evidence) was registered at iter-0 and has been READ
+server-side since iter-8 (shortlist_response() reuses playbook_occurrence_readiness()'s existing
+pooling), but the endpoint's OWN served body had zero DIRECT readers anywhere -- confirmed by
+grep before this iteration was planned: no frontend fetch call, and no MCP tool (it stays
+reachable only through the existing generic get_endpoint /research/ allowlist, per goal.md J-12
+Step 1 -- MCP stays exactly 22 tools).
+
+J-12 adds the endpoint's first direct UI reader: apps/frontend/lib/api.ts::fetchRefereeEvidence()
++ apps/frontend/lib/types.ts response types, rendered as two new dense blocks (playbook family,
+strategy family) inside the ALREADY-registered "Referee Registry" section, below the shipped
+registered-hypotheses table. Zero backend diff (referee_evidence()'s served body stays
+byte-identical, golden-diffed).
+
+Information Architecture table above updated: the J-01 row's home cell now reads
+"/desk -> Referee Registry" instead of the bare endpoint, reflecting the new direct reader, and
+a new J-12 row is added pointing at the SAME home (no second home for the same section). This is
+NOT a nav-skeleton change -- no new route, no new top-level section, the same "Referee Registry"
+collapsible that already hosts J-05/J-07/J-11 -- so no blueprint.reapproval-requested file is
+written. -->

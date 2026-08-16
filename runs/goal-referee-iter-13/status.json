@@ -1,0 +1,22 @@
+{
+  "phase": "goal-referee-iter-13",
+  "status": "in_progress",
+  "current_step": "dev_complete",
+  "updated_at": "2026-08-16T01:35:00.000000Z",
+  "started_at": "2026-08-16T01:35:00.000000Z",
+  "cli": "claude",
+  "blockers": [],
+  "changed_files": [
+    "apps/backend/tests/test_desk_ui_guards.py",
+    "apps/backend/tests/test_referee_evidence.py",
+    "apps/frontend/lib/api.ts",
+    "apps/frontend/lib/types.ts",
+    "apps/frontend/app/desk/page.tsx",
+    "runs/goal-session-referee/journey-scripts/J-12.json",
+    "docs/handoffs/goal-referee-iter-13-dev.md"
+  ],
+  "tests_run": true,
+  "browser_checks_run": false,
+  "qa_passed": null,
+  "next_action": "review"
+}

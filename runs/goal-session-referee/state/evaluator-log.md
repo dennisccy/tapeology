@@ -674,3 +674,78 @@ builder's write-up miscounted its registry test file (it says 52 to 58; the true
 to 53 — the growth of six is right). Still outstanding from round 2 and outside this project:
 the unrelated trendora backend on port 8255 has not been restarted. Approve closing the era
 and committing the files.
+
+## Iteration 13 — goal-referee-iter-13
+
+**Date:** 2026-08-16T03:20:00Z
+**Verdict:** CONTINUE
+**Depth dispatched:** lean
+**Journey deltas:**
+- Newly passing: J-12 "The readiness fold gets its reader — why a family cannot speak, visible
+  on the desk" (new journey, added by the proposer inside its own marker block)
+- Newly failing: none
+- Regressed: none
+- Overturned this round: J-05 "The registry" — the automatic replay recorded a failure; I
+  checked it myself and it is a false alarm, so J-05 stays passing (details below)
+- Re-checked with a fresh picture: J-07 "The starter family", J-09 "The Referee on the Desk
+  page", J-10 "The kept product stands", J-11 "The accrual projection states its own basis"
+- Re-proved by running their own test files inside my own full suite run: J-03 "The statistics
+  core", J-04 "Matched nulls", J-06 "Estimand engines and adjudication", J-08 "The strategy
+  family and the promotion lock" — none of their sources changed
+- Not re-tested this run: J-01 "The era transition stands" and J-02 "The evidence contract" —
+  both marked "not run, over budget" in the results table, so both keep their recorded passing
+  status. These two rows are what stops the era being declared finished this round
+- Owed picture: J-12's strategy-family warning sentence and no-lookahead caveat (flagged, not
+  blocking). J-11's walkthrough recording is still owed from last round
+- Anti-goal violations: none new. The three earlier ones stay closed and could not re-open —
+  every module that carried them has no change at all this round
+
+**Reasoning:** The one new thing this round claims is a screen, and I opened the pictures rather
+than reading the words. Inside the Desk page's "Referee Registry" panel there is now an
+"Evidence Readiness" area with two blocks. On the seeded test setup the Playbook block reads
+Records 4, Distinct sessions 3, Signals at current basis 21, with its two identity codes below,
+and honest "No stale basis dates." / "No integrity errors." messages. On a separate, genuinely
+empty setup the same block reads plain zeros — not a blank space, not a spinner, not an error
+page. I read the screen's own source to be sure the two honest sentences are printed straight
+from the server's answer and are never typed into the app, and a new test proves those sentences
+appear in no front-end file at all. I ran the whole suite myself (2,699 collected, 2,691 passed,
+8 skipped, nothing failed — exactly four more tests than last round, none removed), printed the
+settings pin myself (08e471b10130e1e2), counted the Claude connector's tools myself (still 22),
+and confirmed the back end has NO change whatsoever this round, not one line. Nothing was
+written to the owner's records: all 11,274 protected files are untouched and no Referee folder
+exists there at all. I also checked the automatic proposal loop stayed inside its fence — its 73
+added lines all sit between the two markers it is allowed to write between. Two honest gaps stop
+me short of declaring the era done. First, two older journeys were skipped for time; a skipped
+row is not a pass, and the finishing check treats it exactly like a failure. Second, and more
+interesting: both new pictures stop about one screen short of the strategy family's honest
+warning sentence and its no-lookahead caveat — the exact two sentences this round existed to put
+on screen. The page is about 8,400 pixels tall and the camera stops at 4,320. The behaviour is
+proved four other ways, so I kept the journey passing and marked the picture as owed rather than
+pretending the feature is broken. Finally I did not inherit either lane's opinion about J-05:
+the automatic replay said its text was missing, so I opened both the failure picture and the
+verification picture. The panel was open and its first table filled, but the button that only
+greys out once the second answer arrives was still un-greyed — the answer had simply not come
+back inside eight seconds. The text is genuinely on screen. The script's patience was raised
+from eight to twelve seconds; I diffed that file myself and the expected words are unchanged, so
+nothing was weakened.
+
+**Next-step recommendation:** Run one short verification round with no new building. Re-check the
+two skipped journeys — J-01 "The era transition stands" and J-02 "The evidence contract" have no
+screen of their own, so that means running their named backend tests and writing the real result
+into the results table, exactly as round 11 did. Take the one missing picture: photograph the
+strategy family's warning sentence and its no-lookahead caveat. A whole-page photograph cannot
+reach them, so photograph just that block on its own, or close the panels above it first so it
+moves up the page. Three small clean-ups can ride along, none blocking: move a stray two-line
+assertion in test_desk_ui_guards.py back into the test whose description it belongs to, and the
+four carried items from round 10 (add the four Referee storage folders to the guard watching the
+owner's real data; make a certificate with no name at all fail instead of matching; show a clear
+word instead of a plain dash when a second data request fails; correct a stale comment quoting
+19/7/1). One thing to watch, not act on: the registry panel now makes three server requests when
+it opens instead of two, and this is the first round where eight seconds was not enough for its
+table to appear; the wait was raised to twelve, which is honest but hides the trend — if a future
+round raises it again, treat the slowness itself as the problem. For a person: approve one short
+verification round; nothing needs a human unblock. Carried items, none blocking — this round's
+files are uncommitted; the era still has no video walkthrough because the shared recording tool
+cannot play a "scroll" step (it lives in the shared framework folder, not this project); and,
+from round 2 and outside this project, the unrelated trendora backend on port 8255 has still not
+been restarted.

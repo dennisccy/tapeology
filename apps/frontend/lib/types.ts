@@ -2424,3 +2424,53 @@ export interface RefereeEvaluateRunsListResult {
   latest: RefereeEvaluationRun | null;
   integrity_errors: RefereeIntegrityError[];
 }
+
+// --- Era 6 "The Referee" (goal-referee-iter-13, J-12) -- GET /research/desk/referee/evidence's
+// FIRST direct UI reader. `app/research/referee_evidence.py::referee_evidence()` has served this
+// shape since J-01 (iteration 1); this iteration adds ZERO backend field/value -- every interface
+// below matches the served body field-for-field (docs/goal.md J-12 Step 1). Each block's own
+// `integrity_errors` is the plain `{file, error}[]` shape every OTHER single-store desk section
+// already uses (DeskTopupRunsListResult et al., types.ts:1020/1087/1152/... — 9+ precedents) --
+// distinct from `RefereeIntegrityError[]` above (registry/adjudications), which labels errors
+// across FOUR stores and so carries an extra `store` field neither `playbook_occurrence` nor
+// `strategy_trade` needs (each reads exactly ONE store's own `.list()`, confirmed by reading
+// referee_evidence.py's `playbook_occurrence_readiness()`/`strategy_trade_readiness()` live).
+
+export interface RefereeEvidencePerSetupSideCell {
+  setup: string;
+  side: string;
+  n: number;
+  n_sessions: number;
+}
+
+export interface RefereeEvidenceStaleBasisDate {
+  session_date: string;
+  record_detector_basis: string;
+}
+
+export interface RefereePlaybookOccurrenceReadiness {
+  detector_basis: string;
+  config_fingerprint: string;
+  records: number;
+  distinct_sessions: number;
+  signals_at_current_basis: number;
+  per_setup_side: RefereeEvidencePerSetupSideCell[];
+  stale_basis_dates: RefereeEvidenceStaleBasisDate[];
+  integrity_errors: { file: string; error: string }[];
+}
+
+export interface RefereeStrategyTradeReadiness {
+  dataset_count: number;
+  per_split_counts: { train: number; holdout: number };
+  trade_count: number;
+  tick_gate_met: boolean;
+  tick_gate_statement: string;
+  basis_caveats: string[];
+  integrity_errors: { file: string; error: string }[];
+}
+
+// GET /research/desk/referee/evidence -- the readiness fold, served verbatim.
+export interface RefereeEvidenceResponse {
+  playbook_occurrence: RefereePlaybookOccurrenceReadiness;
+  strategy_trade: RefereeStrategyTradeReadiness;
+}

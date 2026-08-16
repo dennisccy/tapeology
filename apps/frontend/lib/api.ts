@@ -44,6 +44,7 @@ import type {
   RefereeAdjudicationsResponse,
   RefereeEvaluateRunsListResult,
   RefereeEvaluationComputeSnapshot,
+  RefereeEvidenceResponse,
   RefereeHypothesis,
   RefereeHypothesisRegistrationPayload,
   RefereeNullComputeSnapshot,
@@ -2106,6 +2107,35 @@ export async function fetchRefereeRegistry(): Promise<{
       return { ok: true, data: (await res.json()) as RefereeRegistryResponse };
     }
     let error = "The referee registry could not be loaded.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, data: null, error };
+  } catch {
+    return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// GET /research/desk/referee/evidence -- the readiness fold (goal-referee-iter-13, J-12): this
+// endpoint's FIRST direct UI reader (registered since J-01/iteration-1; previously curl/tests-only
+// -- zero frontend grep hits beyond an unrelated type name). Served VERBATIM -- zero client-side
+// arithmetic on any numeric this component reads (test_desk_ui_guards.py's widened
+// _PRICE_ARITHMETIC_FIELDS covers every one). ZERO backend product diff this iteration: no new
+// field, no new value, no new Data Contract row, no new owner, no new MCP tool.
+export async function fetchRefereeEvidence(): Promise<{
+  ok: boolean;
+  data: RefereeEvidenceResponse | null;
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/referee/evidence`);
+    if (res.ok) {
+      return { ok: true, data: (await res.json()) as RefereeEvidenceResponse };
+    }
+    let error = "The referee evidence readiness could not be loaded.";
     try {
       const data = await res.json();
       if (typeof data?.detail === "string") error = data.detail;

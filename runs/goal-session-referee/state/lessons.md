@@ -239,3 +239,30 @@ rule (this iteration's TC-14) will false-alarm — open the image and check it c
 acceptance states rather than judging by md5.
 **Applies to:** any browser-QA pass on `/desk` (a very tall page) or any acceptance whose
 target sits far below the fold; any evaluator applying a per-screenshot checksum rule.
+
+## iter-13 — 2026-08-16T03:20:00Z
+
+**Verdict:** CONTINUE
+**Lesson:** A whole-page screenshot of `/desk` can no longer reach the Referee blocks: the page's
+own `scrollHeight` is ~8,443px while the capture tool caps the viewport at 4,320px, so BOTH of
+this iteration's J-12 captures cut off exactly at the strategy family's `tick_gate_statement` and
+forming-bar caveat — the two sentences the journey existed to make visible. The iter-12 remedy
+("resize the viewport to the page's own scrollHeight") is now structurally unavailable. Capture
+the target element itself (`referee-evidence-strategy-block`) or collapse the `/desk` sections
+above it first; a full-page capture is not a technique that works on this page any more.
+**Applies to:** any iteration whose acceptance needs a screenshot of anything rendered below the
+Referee Registry section on `/desk` (Referee Adjudications, Referee Runs, and every future
+`AUTO:journeys` addition to that area).
+
+## iter-13 — 2026-08-16T03:20:00Z
+
+**Verdict:** CONTINUE
+**Lesson:** An "empty-corpus" rig built with the usual store-scope overrides is NOT empty:
+`strategy_trade_readiness()` reads trades from a `JournalStore` keyed by its OWN separate
+`TAPEOLOGY_JOURNAL_DB` env var, which the usual overrides do not cover — QA's first empty rig
+leaked `trade_count=873` straight from the operator's real journal and would have made a
+"honest all-zero state" screenshot a lie. Any isolated/empty-state rig must scope
+`TAPEOLOGY_JOURNAL_DB` explicitly and be confirmed by `curl`-ing the served body BEFORE the
+browser pass, not after.
+**Applies to:** any iteration that builds an isolated or empty-corpus backend rig, and any
+acceptance clause of the form "renders the honest all-zero/absent state".

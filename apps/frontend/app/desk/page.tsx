@@ -48,6 +48,7 @@ import {
   fetchRefereeAdjudications,
   fetchRefereeEvaluate,
   fetchRefereeEvaluateRuns,
+  fetchRefereeEvidence,
   fetchRefereeNullRuns,
   fetchRefereeNullsCompute,
   fetchRefereeRegistry,
@@ -123,6 +124,7 @@ import type {
   RefereeEvaluateRunsListResult,
   RefereeEvaluationComputeSnapshot,
   RefereeEvaluationRun,
+  RefereeEvidenceResponse,
   RefereeHypothesis,
   RefereeNullComputeSnapshot,
   RefereeNullRun,
@@ -4708,6 +4710,7 @@ function PlaybookEvidenceSection({
 function RefereeRegistrySection({
   shortlistResult,
   registryResult,
+  evidenceResult,
   selectedCandidateId,
   onSelect,
   onCancel,
@@ -4717,6 +4720,7 @@ function RefereeRegistrySection({
 }: {
   shortlistResult: { ok: boolean; data: RefereeShortlistResponse | null; error?: string } | null;
   registryResult: { ok: boolean; data: RefereeRegistryResponse | null; error?: string } | null;
+  evidenceResult: { ok: boolean; data: RefereeEvidenceResponse | null; error?: string } | null;
   selectedCandidateId: string | null;
   onSelect: (candidateId: string) => void;
   onCancel: () => void;
@@ -4910,6 +4914,8 @@ function RefereeRegistrySection({
         </h3>
         <RefereeHypothesesTable registryResult={registryResult} />
       </div>
+
+      <RefereeEvidenceReadinessSection evidenceResult={evidenceResult} />
     </div>
   );
 }
@@ -4980,6 +4986,215 @@ function RefereeHypothesesTable({
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+// goal-referee-iter-13 (J-12): the readiness-fold blocks -- GET /research/desk/referee/evidence's
+// FIRST direct UI reader (registered since J-01/iteration-1; previously curl/tests-only). Rendered
+// directly BELOW the shipped Registered Hypotheses table above, inside the SAME "Referee Registry"
+// section -- not a new page, not a new nav entry, not a new CollapsibleSection (goal.md J-12 Step
+// 2). Its own Loading/Unavailable states, independent of shortlistResult/registryResult above (the
+// RefereeAdjudicationsSection precedent: each section's own deferred read gates its own slice,
+// never blocking an already-resolved sibling's render on a third, unrelated fetch). Two dense
+// text/table blocks, no cards/gauges (house style) -- every value a straight pass-through of the
+// fetched body, zero client-side arithmetic (test_desk_ui_guards.py's widened
+// _PRICE_ARITHMETIC_FIELDS covers every numeric read here), and every honest-absence case reuses
+// the shipped EmptyState component rather than rendering blank.
+function RefereeEvidenceReadinessSection({
+  evidenceResult,
+}: {
+  evidenceResult: { ok: boolean; data: RefereeEvidenceResponse | null; error?: string } | null;
+}) {
+  if (evidenceResult === null) {
+    return <LoadingPanel testid="referee-evidence-loading" />;
+  }
+  if (!evidenceResult.ok || evidenceResult.data === null) {
+    return (
+      <UnavailablePanel
+        testid="referee-evidence-unavailable"
+        message={evidenceResult.error ?? "The referee evidence readiness could not be loaded."}
+      />
+    );
+  }
+  const evidence = evidenceResult.data;
+  return (
+    <div data-testid="referee-evidence-section" className="mt-4 border-t border-slate-800 pt-4">
+      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+        Evidence Readiness
+      </h3>
+      <p className="mb-3 text-xs text-slate-500">
+        Why each evidence family is or is not ready for confirmatory statistics (GET
+        /research/desk/referee/evidence, read verbatim) — the tick-gate statement and the
+        no-lookahead forming-bar caveat below gate confirmatory use of the strategy family.
+      </p>
+
+      <div data-testid="referee-evidence-playbook-block" className="mb-4">
+        <h4 className="mb-2 text-xs font-semibold text-slate-400">Playbook Family</h4>
+        <div className="overflow-x-auto">
+          <table
+            data-testid="referee-evidence-playbook-table"
+            className="w-full min-w-[420px] border-collapse text-xs"
+          >
+            <tbody>
+              <tr className="border-b border-slate-900">
+                <td className="px-1.5 py-1 text-slate-500">Records</td>
+                <td
+                  data-testid="referee-evidence-playbook-records"
+                  className="px-1.5 py-1 text-right font-mono text-slate-300"
+                >
+                  {evidence.playbook_occurrence.records}
+                </td>
+              </tr>
+              <tr className="border-b border-slate-900">
+                <td className="px-1.5 py-1 text-slate-500">Distinct sessions</td>
+                <td
+                  data-testid="referee-evidence-playbook-distinct-sessions"
+                  className="px-1.5 py-1 text-right font-mono text-slate-300"
+                >
+                  {evidence.playbook_occurrence.distinct_sessions}
+                </td>
+              </tr>
+              <tr>
+                <td className="px-1.5 py-1 text-slate-500">Signals at current basis</td>
+                <td
+                  data-testid="referee-evidence-playbook-signals-at-current-basis"
+                  className="px-1.5 py-1 text-right font-mono text-slate-300"
+                >
+                  {evidence.playbook_occurrence.signals_at_current_basis}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p
+          data-testid="referee-evidence-playbook-basis-line"
+          className="mt-2 text-[11px] text-slate-500"
+        >
+          Detector basis{" "}
+          <span
+            data-testid="referee-evidence-playbook-detector-basis"
+            className="font-mono text-slate-400"
+          >
+            {evidence.playbook_occurrence.detector_basis}
+          </span>
+          {" · "}config fingerprint{" "}
+          <span
+            data-testid="referee-evidence-playbook-config-fingerprint"
+            className="font-mono text-slate-400"
+          >
+            {evidence.playbook_occurrence.config_fingerprint}
+          </span>
+        </p>
+        {evidence.playbook_occurrence.stale_basis_dates.length === 0 ? (
+          <EmptyState
+            testid="referee-evidence-playbook-stale-basis-empty"
+            title="No stale basis dates."
+          />
+        ) : (
+          <ul
+            data-testid="referee-evidence-playbook-stale-basis-dates"
+            className="mt-2 space-y-0.5 text-[11px] text-amber-300"
+          >
+            {evidence.playbook_occurrence.stale_basis_dates.map((entry) => (
+              <li key={`${entry.session_date}:${entry.record_detector_basis}`}>
+                {entry.session_date} — {entry.record_detector_basis}
+              </li>
+            ))}
+          </ul>
+        )}
+        {evidence.playbook_occurrence.integrity_errors.length === 0 ? (
+          <EmptyState
+            testid="referee-evidence-playbook-integrity-errors-empty"
+            title="No integrity errors."
+          />
+        ) : (
+          <ul
+            data-testid="referee-evidence-playbook-integrity-errors"
+            className="mt-2 space-y-0.5 text-[11px] text-red-300"
+          >
+            {evidence.playbook_occurrence.integrity_errors.map((e) => (
+              <li key={e.file}>
+                {e.file}: {e.error}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div data-testid="referee-evidence-strategy-block">
+        <h4 className="mb-2 text-xs font-semibold text-slate-400">Strategy Family</h4>
+        <div className="overflow-x-auto">
+          <table
+            data-testid="referee-evidence-strategy-table"
+            className="w-full min-w-[420px] border-collapse text-xs"
+          >
+            <tbody>
+              <tr className="border-b border-slate-900">
+                <td className="px-1.5 py-1 text-slate-500">Datasets</td>
+                <td
+                  data-testid="referee-evidence-strategy-dataset-count"
+                  className="px-1.5 py-1 text-right font-mono text-slate-300"
+                >
+                  {evidence.strategy_trade.dataset_count}
+                </td>
+              </tr>
+              <tr className="border-b border-slate-900">
+                <td className="px-1.5 py-1 text-slate-500">Train / Holdout</td>
+                <td className="px-1.5 py-1 text-right font-mono text-slate-300">
+                  <span data-testid="referee-evidence-strategy-train-count">
+                    {evidence.strategy_trade.per_split_counts.train}
+                  </span>
+                  {" / "}
+                  <span data-testid="referee-evidence-strategy-holdout-count">
+                    {evidence.strategy_trade.per_split_counts.holdout}
+                  </span>
+                </td>
+              </tr>
+              <tr>
+                <td className="px-1.5 py-1 text-slate-500">Trades</td>
+                <td
+                  data-testid="referee-evidence-strategy-trade-count"
+                  className="px-1.5 py-1 text-right font-mono text-slate-300"
+                >
+                  {evidence.strategy_trade.trade_count}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p
+          data-testid="referee-evidence-strategy-tick-gate"
+          className="mt-2 text-[11px] text-slate-400"
+        >
+          {evidence.strategy_trade.tick_gate_statement}
+        </p>
+        <ul
+          data-testid="referee-evidence-strategy-basis-caveats"
+          className="mt-2 space-y-1 text-[11px] text-slate-500"
+        >
+          {evidence.strategy_trade.basis_caveats.map((caveat) => (
+            <li key={caveat}>{caveat}</li>
+          ))}
+        </ul>
+        {evidence.strategy_trade.integrity_errors.length === 0 ? (
+          <EmptyState
+            testid="referee-evidence-strategy-integrity-errors-empty"
+            title="No integrity errors."
+          />
+        ) : (
+          <ul
+            data-testid="referee-evidence-strategy-integrity-errors"
+            className="mt-2 space-y-0.5 text-[11px] text-red-300"
+          >
+            {evidence.strategy_trade.integrity_errors.map((e) => (
+              <li key={e.file}>
+                {e.file}: {e.error}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }
@@ -8420,6 +8635,16 @@ export default function DeskPage() {
     data: RefereeRegistryResponse | null;
     error?: string;
   } | null>(null);
+  // goal-referee-iter-13 (J-12): the readiness-fold blocks' own state -- a THIRD independent
+  // deferred read issued alongside the shortlist/registry pair on first expand (same
+  // `toggleSection("refereeRegistry")` branch, T-8: GETs never compute). GET
+  // /research/desk/referee/evidence's first UI reader; ZERO backend product diff (referee_evidence()
+  // has served this shape since J-01/iteration-1).
+  const [refereeEvidenceResult, setRefereeEvidenceResult] = useState<{
+    ok: boolean;
+    data: RefereeEvidenceResponse | null;
+    error?: string;
+  } | null>(null);
   const [refereeSelectedCandidateId, setRefereeSelectedCandidateId] = useState<string | null>(null);
   const [refereeRegistering, setRefereeRegistering] = useState(false);
   const [refereeRegisterError, setRefereeRegisterError] = useState<string | null>(null);
@@ -8499,6 +8724,10 @@ export default function DeskPage() {
     } else if (section === "refereeRegistry") {
       fetchRefereeShortlist().then(setRefereeShortlistResult);
       fetchRefereeRegistry().then(setRefereeRegistryResult);
+      // goal-referee-iter-13 (J-12): the readiness-fold blocks' own read, issued alongside the
+      // shortlist/registry pair above -- a THIRD call inside this SAME branch, not a new
+      // useEffect, so test_desk_refresh_chain_guard.py's _EXPECTED_EFFECT_COUNT stays unchanged.
+      fetchRefereeEvidence().then(setRefereeEvidenceResult);
     } else if (section === "refereeAdjudications") {
       fetchRefereeAdjudications().then(setRefereeAdjudicationsResult);
       // Also (re)fetches the registry -- Adjudications cross-references each entry's own
@@ -10534,6 +10763,7 @@ export default function DeskPage() {
             <RefereeRegistrySection
               shortlistResult={refereeShortlistResult}
               registryResult={refereeRegistryResult}
+              evidenceResult={refereeEvidenceResult}
               selectedCandidateId={refereeSelectedCandidateId}
               onSelect={setRefereeSelectedCandidateId}
               onCancel={() => {

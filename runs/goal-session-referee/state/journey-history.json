@@ -9,7 +9,7 @@
       "first_seen_iter": "goal-referee-iter-0",
       "last_evidence_path": "reports/qa/goal-referee-iter-11-test.log",
       "spec_hash": "9fe67344e7c7ae71546d205bbd134263e172265ee542963f4b483f564c0e228e",
-      "note": "iter-12: outside the Required-still-passing set and its own sources are unchanged (product diff = 6 files: referee_registry.py, 2 test files, page.tsx, types.ts, referee-statistical-spec.md), so iter-11's browser/test evidence stays valid under evidence durability (methodology A.6). Re-proved anyway inside the evaluator's OWN full-suite run this iteration (junit-xml): tests.test_referee_guards = 19 tests, 0 failures. Suite total 2,695 collected / 2,687 passed / 8 skipped / 0 failed / 0 errors in 263.6s; Config().config_fingerprint() printed by the evaluator = 08e471b10130e1e2."
+      "note": "iter-13: DEFERRED-BUDGET row in the merged results file (reports/phase-goal-referee-iter-13-ui-test-results.md:39) — the wall-clock budget cut its re-verification, so it was NOT tested by the lane and KEEPS its prior recorded status (methodology A.4); last_verified_iter deliberately left at iter-12. This is the row that mechanically blocks GOAL_ACHIEVED this iteration. Corroboration (not lane verification) from the evaluator's OWN full-suite run: tests.test_referee_guards = 19 tests, 0 failures, and apps/backend/app has ZERO diff this iteration (evaluator ran `git diff --stat 027a7f7 -- apps/backend/app` itself: empty), so nothing could have moved. J-01 is a keyless/backend-only journey (journey-scripts/J-01.json.invalid) — its correct re-verification is running its named acceptance module and writing the row, per the iteration-11 precedent."
     },
     "J-02": {
       "id": "J-02",
@@ -20,107 +20,119 @@
       "first_seen_iter": "goal-referee-iter-0",
       "last_evidence_path": "reports/qa/goal-referee-iter-11-test.log",
       "spec_hash": "853e7be61a1ba27f0c8baf57dff1914d3aa54c01f82471f990133afab378850a",
-      "note": "iter-12: referee_evidence.py has ZERO diff this iteration (evaluator's own diff file list), so iter-11 evidence stands (A.6). Re-proved in the evaluator's own junit: tests.test_referee_evidence = 26 tests, 0 failures. The evaluator additionally read playbook_occurrence_readiness() source itself (referee_evidence.py:264-305) to confirm the new J-11 field pooled_sessions_at_current_basis = distinct_sessions - len(stale_basis_dates) can never go negative: stale_basis_dates is built by iterating newest_by_date, whose length IS distinct_sessions."
+      "note": "iter-13: DEFERRED-BUDGET row in the merged results file (results:40) — NOT tested by the lane, prior status kept (methodology A.4), last_verified_iter left at iter-12; blocks GOAL_ACHIEVED mechanically. Corroboration from the evaluator's own junit: tests.test_referee_evidence = 29 tests (26 + this iteration's 3 new J-12 guard tests), 0 failures. referee_evidence.py itself has ZERO diff (evaluator-verified) — J-12 reads its endpoint and adds nothing to it; the evaluator additionally ran the new golden byte-identity test (test_referee_evidence_served_body_matches_the_pinned_golden_fixture) inside its own suite run, which pins the served body key-for-key. Keyless/backend-only journey (J-02.json.invalid) — same re-verification route as J-01."
     },
     "J-03": {
       "id": "J-03",
       "name": "The statistics core — calibrated, seeded, oracle-proven, fail-closed",
       "status": "passing",
-      "last_verified_iter": "goal-referee-iter-12",
-      "last_passing_iter": "goal-referee-iter-12",
+      "last_verified_iter": "goal-referee-iter-13",
+      "last_passing_iter": "goal-referee-iter-13",
       "first_seen_iter": "goal-referee-iter-0",
       "last_evidence_path": "reports/qa/goal-referee-iter-11-test.log",
       "spec_hash": "f00b804c40b2b60e1b9bf6209033d53796c98d86c14248ea079ef3a507291ae0",
-      "note": "iter-12: referee_stats.py / the oracle suite have ZERO diff this iteration, so iter-11 evidence stands (A.6). Re-proved in the evaluator's own junit: tests.test_referee_stats = 48 tests + tests.test_referee_oracles = 11 tests, 0 failures. J-11 adds no statistical procedure and no referee_parameters() entry — the evaluator printed referee_parameters_hash() itself = 0976d49e3e4583b5, unchanged."
+      "note": "iter-13: outside the Required-still-passing set; referee_stats.py and the oracle suite have ZERO diff (the whole product diff is 5 files: 2 backend TEST files + api.ts + types.ts + page.tsx), so iter-11/12 evidence stands under evidence durability (methodology A.6). Re-proved anyway inside the evaluator's OWN full-suite junit run: tests.test_referee_stats = 48 tests + tests.test_referee_oracles = 11 tests, 0 failures. J-12 adds no statistical procedure and touches no referee production module."
     },
     "J-04": {
       "id": "J-04",
       "name": "Matched nulls — comparable times, identical measurement",
       "status": "passing",
-      "last_verified_iter": "goal-referee-iter-12",
-      "last_passing_iter": "goal-referee-iter-12",
+      "last_verified_iter": "goal-referee-iter-13",
+      "last_passing_iter": "goal-referee-iter-13",
       "first_seen_iter": "goal-referee-iter-0",
       "last_evidence_path": "reports/qa/goal-referee-iter-11-test.log",
       "spec_hash": "c16455f3b0356910d9d0e1062edea7531b45b5ee68f58df527ba8d182516e611",
-      "note": "iter-12: referee_null.py has ZERO diff this iteration, so iter-11 evidence stands (A.6). Re-proved in the evaluator's own junit: tests.test_referee_null = 36 tests, 0 failures."
+      "note": "iter-13: outside the Required-still-passing set; referee_null.py has ZERO diff, so prior evidence stands (A.6). Re-proved in the evaluator's own junit: tests.test_referee_null = 36 tests, 0 failures."
     },
     "J-05": {
       "id": "J-05",
       "name": "The registry — pre-registration with an immutable boundary",
       "status": "passing",
-      "last_verified_iter": "goal-referee-iter-12",
-      "last_passing_iter": "goal-referee-iter-12",
+      "last_verified_iter": "goal-referee-iter-13",
+      "last_passing_iter": "goal-referee-iter-13",
       "first_seen_iter": "goal-referee-iter-0",
-      "last_evidence_path": "reports/qa/goal-referee-iter-12-evidence/UT-J-05-result.png",
+      "last_evidence_path": "reports/qa/goal-referee-iter-13-evidence/J-05-result.png",
       "spec_hash": "2af99b40b3062ff02f0d57470dbb3085479c4232b5f509e4361bbf3e8562aa5e",
-      "note": "iter-12: its OWN module (referee_registry.py) changed this iteration, so it was re-verified rather than carried. UT-J-05 PASS (reports/phase-goal-referee-iter-12-ui-test-results.md:21) with a screenshot the evaluator opened: the Registered Hypotheses table renders S-1 | capitulation:long | boundary 2026-08-15 | historical-exploration | active | 0 / 12 | 1 / 1 discovery (exploratory), and S-1's shortlist action is greyed to 'Registered' while S-2..S-6 read 'Select'. Backend half re-proved in the evaluator's own junit: tests.test_referee_registry = 53 tests (47 + this iteration's 6 new J-11 tests), 0 failures. NOTE: this PNG is byte-identical (md5 ca3f6bfea412f5302b9de640d8194abe) to UT-J-11-result.png — one full-page capture serving both journeys; the evaluator opened it and confirmed it genuinely carries BOTH acceptance states, so no acceptance is hidden. A new golden replay script was written this iteration (runs/goal-session-referee/journey-scripts/J-05.json)."
+      "note": "iter-13: the deterministic replay lane reported FAIL (phase-goal-referee-iter-13-regression-replay-results.md:19, 'step 02 expected historical-exploration did not appear'); the merged file overturns it as a golden-script false positive (results:18) and the evaluator VERIFIED THAT INDEPENDENTLY rather than inheriting it. Opened J-05-result.png at 1.35x and read the Registered Hypotheses row directly: 'S-1 | capitulation:long | 2026-08-15 | historical-exploration | active | 0 / 12 | 1 / 1 discovery (exploratory)' — the text is genuinely present. Also opened the replay's own failure capture J-05-verify.png: the Referee Registry section IS expanded with the shortlist table populated, but S-1's action button still reads 'Select' (not the greyed 'Registered' that J-11-verify.png, taken moments later on the same rig, shows) — i.e. the second registry fetch had not landed inside the 8s budget, so the assertion timed out on latency, not absence. The golden's default_timeout_ms was raised 8000 -> 12000 this iteration; the evaluator diffed J-05.json itself and confirmed the ASSERTION TEXT is byte-unchanged — a patience raise, not a weakened check. Backend half re-proved in the evaluator's own junit: tests.test_referee_registry = 53 tests, 0 failures. NOTE: J-05-result.png is byte-identical (md5 87a696a747360d42a49a29e4bb65d934) to J-12-seeded-rig-result.png — one full-page capture cited for both; the evaluator opened it and confirmed it genuinely carries J-05's registered row AND J-12's Evidence Readiness block, so nothing is hidden behind the reuse."
     },
     "J-06": {
       "id": "J-06",
       "name": "Estimand engines + adjudication — one checkpoint, recorded forever",
       "status": "passing",
-      "last_verified_iter": "goal-referee-iter-12",
-      "last_passing_iter": "goal-referee-iter-12",
+      "last_verified_iter": "goal-referee-iter-13",
+      "last_passing_iter": "goal-referee-iter-13",
       "first_seen_iter": "goal-referee-iter-0",
       "last_evidence_path": "reports/qa/goal-referee-iter-11-test.log",
       "spec_hash": "f0a370fab0515b423625b8fbe8694180875d0839d8ca105230bcc0179b8ca2e8",
-      "note": "iter-12: referee_adjudicate.py has ZERO diff this iteration, so iter-11 evidence stands (A.6). Re-proved in the evaluator's own junit: tests.test_referee_adjudicate = 57 tests, 0 failures. J-11's disclosure feeds no null, test statistic, p-value, BH denominator, verdict or gate — asserted in the spec addendum (docs/referee-statistical-spec.md:379-391, content-checked by test_tc17_...) and structurally true from the diff (the new fields are terminal dict entries read only by the UI)."
+      "note": "iter-13: outside the Required-still-passing set; referee_adjudicate.py has ZERO diff, so prior evidence stands (A.6). Re-proved in the evaluator's own junit: tests.test_referee_adjudicate = 57 tests, 0 failures. J-12 is a pure read-side display of an already-served endpoint and feeds nothing into any null, test statistic, p-value, BH denominator, verdict or gate."
     },
     "J-07": {
       "id": "J-07",
       "name": "The starter family — historical exploration becomes registered questions",
       "status": "passing",
-      "last_verified_iter": "goal-referee-iter-12",
-      "last_passing_iter": "goal-referee-iter-12",
+      "last_verified_iter": "goal-referee-iter-13",
+      "last_passing_iter": "goal-referee-iter-13",
       "first_seen_iter": "goal-referee-iter-0",
-      "last_evidence_path": "reports/qa/goal-referee-iter-12-evidence/J-07-verify.png",
+      "last_evidence_path": "reports/qa/goal-referee-iter-13-evidence/J-07-verify.png",
       "spec_hash": "473e2966a4c3fc78ec62b1ce97a0a6ada59891a625c9c88daf0964e8ec1c9f66",
-      "note": "iter-12: Required-still-passing AND its own surface (shortlist_response + RefereeRegistrySection) changed, so it was re-verified, not carried. Deterministic golden replay PASS (results:18, journey-scripts/J-07.json), fresh screenshot J-07-verify.png. The shipped shortlist readiness columns still read exactly as before the change on the same fixture rig: Accrual / day 0.02 and Projected days 564 for S-1..S-3, em dash for S-4..S-6 — the same 564 iteration 8 recorded when it fixed that number, i.e. the shipped pair is empirically unmoved."
+      "note": "iter-13: Required-still-passing AND its own surface (the RefereeRegistrySection call site) changed, so it rode the deterministic golden replay — PASS end-to-end (results:19, journey-scripts/J-07.json) with a fresh screenshot J-07-verify.png. The shipped shortlist table is also visible unchanged inside J-05-result.png / J-11-verify.png, which the evaluator opened: candidate/estimand/setup-side/primary/rationale/n/sessions/accrual-per-day/projected-days/projected-sessions/action columns all in their shipped order and positions, with the new Evidence Readiness blocks rendered strictly BELOW the registered-hypotheses table."
     },
     "J-08": {
       "id": "J-08",
       "name": "The strategy family + the promotion interlock — fail closed, no bypass",
       "status": "passing",
-      "last_verified_iter": "goal-referee-iter-12",
-      "last_passing_iter": "goal-referee-iter-12",
+      "last_verified_iter": "goal-referee-iter-13",
+      "last_passing_iter": "goal-referee-iter-13",
       "first_seen_iter": "goal-referee-iter-0",
       "last_evidence_path": "reports/qa/goal-referee-iter-11-test.log",
       "spec_hash": "04cecc16df051077401e5a4c694d6d81422554e3d45fccfcf3615b2722de9808",
-      "note": "iter-12: pnl_scan.py and referee_adjudicate.py have ZERO diff this iteration (git diff scoped to the five frozen modules is empty), so iter-11 evidence stands (A.6). Re-proved in the evaluator's own junit: tests.test_pnl_scan = 30 tests, 0 failures. The evaluator also hashed the PnL ledger and champion pointer itself: apps/backend/journal.db = 352a9bb23c329c5a9bf235baf56917358b5b64b03f1a11d261fadae9c3cdb721 (mtime 2026-07-03), apps/backend/tapeology_journal.db = 3db3ee7ec8962808b767090b69c67852f7854f027bd5d14f0a65318b99fb912f (mtime 2026-07-24) — byte-identical to the values the dev handoff recorded, so no ledger row was appended and the champion pointer did not move."
+      "note": "iter-13: outside the Required-still-passing set; pnl_scan.py and referee_adjudicate.py have ZERO diff (the evaluator ran a git diff scoped to every frozen module itself: empty), so prior evidence stands (A.6). Re-proved in the evaluator's own junit: tests.test_pnl_scan = 30 tests, 0 failures. No promotion could have occurred: the evaluator confirmed no POST was issued this iteration, no referee store dirs exist under apps/backend/.data at all, and the store-scope guard reports all 11,274 protected files byte-size- and mtime-unchanged (reports/qa/goal-referee-iter-13-store-scope-guard.md, verdict CLEAN)."
     },
     "J-09": {
       "id": "J-09",
       "name": "The Referee on /desk + MCP contract v5 — 22 read-only tools",
       "status": "passing",
-      "last_verified_iter": "goal-referee-iter-12",
-      "last_passing_iter": "goal-referee-iter-12",
+      "last_verified_iter": "goal-referee-iter-13",
+      "last_passing_iter": "goal-referee-iter-13",
       "first_seen_iter": "goal-referee-iter-0",
-      "last_evidence_path": "reports/qa/goal-referee-iter-12-evidence/J-09-verify.png",
+      "last_evidence_path": "reports/qa/goal-referee-iter-13-evidence/J-09-verify.png",
       "spec_hash": "26f414b65f170424797c6c23ab3c013a3648e2db090af16db72c52d2b781bf9d",
-      "note": "iter-12: Required-still-passing and its page (page.tsx) changed, so it was re-verified, not carried. Deterministic golden replay PASS (results:19, journey-scripts/J-09.json) with a fresh screenshot J-09-verify.png. MCP contract re-proved in the evaluator's own junit: tests.test_mcp_server = 52 tests, 0 failures, including test_advertised_tool_set_is_exactly_capability_6; the evaluator also parsed EXPECTED_TOOLS itself = exactly 22 names, and that guard file is untouched by this iteration."
+      "note": "iter-13: Required-still-passing and its page (page.tsx) changed, so it rode the deterministic golden replay — PASS end-to-end (results:20, journey-scripts/J-09.json) with a fresh screenshot J-09-verify.png. MCP contract re-proved by the evaluator itself: it parsed EXPECTED_TOOLS out of tests/test_mcp_server.py = exactly 22 names, that guard file is untouched by this iteration's diff, and tests.test_mcp_server = 52 tests, 0 failures in its own junit run. J-12 deliberately adds NO tool (the endpoint stays reachable through the existing generic get_endpoint /research/ allowlist)."
     },
     "J-10": {
       "id": "J-10",
       "name": "The kept product stands — regression sentinel",
       "status": "passing",
-      "last_verified_iter": "goal-referee-iter-12",
-      "last_passing_iter": "goal-referee-iter-12",
+      "last_verified_iter": "goal-referee-iter-13",
+      "last_passing_iter": "goal-referee-iter-13",
       "first_seen_iter": "goal-referee-iter-0",
-      "last_evidence_path": "reports/qa/goal-referee-iter-12-evidence/J-10-verify.png",
+      "last_evidence_path": "reports/qa/goal-referee-iter-13-evidence/J-10-verify.png",
       "spec_hash": "d14682891de7794bb3728ade717e6a1ed805f44384087a9bf18d75d09348fd9a",
-      "note": "iter-12: Required-still-passing, re-verified by deterministic golden replay (results:20) with a fresh screenshot the evaluator opened — Backscan / Back-scan Runs / Playbook Evidence render as shipped, the evidence basis block reading signature 0dcd625e3677f198 over 2 pooled records. Sentinel clauses re-proved first-hand this iteration: evaluator's own full suite 2,695 collected / 2,687 passed / 8 skipped / 0 failed / 0 errors (junit-xml, 263.6s), fingerprint printed = 08e471b10130e1e2, tests.test_profile_equivalence = 14 tests and tests.test_no_execution_path = 6 tests green, git diff over desk_playbook*.py / desk_forward.py / levels.py / tradability.py / pnl_scan.py empty, and the evaluator's own scan of the 12 protected store paths counted exactly 11,274 files with none modified since 2026-08-15 23:00 (store-scope guard report also CLEAN)."
+      "note": "iter-13: Required-still-passing, re-verified by deterministic golden replay (results:21) with a fresh screenshot the evaluator opened — Backscan, Back-scan Runs ('No back-scan runs recorded yet.') and Playbook Evidence all render as shipped, the evidence basis block reading signature 87a71f14c22fcde4 over 2 pooled records with the full signal/baseline distribution table (n/pos/trunc/unmeas/sess/median/p25/p75/mean on both sides). Sentinel clauses re-proved first-hand this iteration: the evaluator's OWN full suite = 2,699 collected / 2,691 passed / 8 skipped / 0 failed / 0 errors (junit-xml, 258.7s), fingerprint printed by the evaluator = 08e471b10130e1e2, tests.test_profile_equivalence = 14 and tests.test_no_execution_path = 6 green, `git diff --stat 027a7f7 -- apps/backend/app` EMPTY (zero backend production diff at all), the frozen-module diff empty, no dependency/manifest/LICENSE diff, and the store-scope guard CLEAN at 11,274 files."
     },
     "J-11": {
       "id": "J-11",
       "name": "The accrual projection states its own basis — the wait, measured in recorded sessions",
       "status": "passing",
-      "last_verified_iter": "goal-referee-iter-12",
-      "last_passing_iter": "goal-referee-iter-12",
+      "last_verified_iter": "goal-referee-iter-13",
+      "last_passing_iter": "goal-referee-iter-13",
       "first_seen_iter": "goal-referee-iter-12",
-      "last_evidence_path": "reports/qa/goal-referee-iter-12-evidence/UT-J-11-result.png",
+      "last_evidence_path": "reports/qa/goal-referee-iter-13-evidence/J-11-verify.png",
       "spec_hash": "3b1522e622e729d4ca48949944a75eb76649d234c1c61bacb958c28450a1f881",
       "evidence_makeup": true,
-      "note": "iter-12 NEW (goal-proposer journey, appended inside the AUTO:journeys block only — goal.md diff is 68 insertions / 0 deletions, all after the marker, evaluator-verified). UT-J-11 PASS (results:22). The evaluator opened the screenshot and re-derived every number by hand: basis line reads 'Recorded sessions 3 · pooled at the current detector basis 3 · corpus span 47d (2026-06-22 → 2026-08-07) · longest zero-session stretch 42d (2026-06-25 → 2026-08-07)' — (2026-08-07 - 2026-06-22).days + 1 = 47 and (2026-08-07 - 2026-06-25).days - 1 = 42 both reproduced; the new right-aligned 'Projected sessions' column sits immediately beside the shipped 'Projected days' and reads 36 for S-1..S-3 (12 / (1/3) = 36) and an em dash for S-4..S-6 (rate 0 -> null). The shipped pair is unmoved on the same screen (0.02 / 564). Source-level byte-identity of the shipped pair confirmed by the evaluator from the diff: every shipped computation line appears only as unchanged context, the new code is pure local arithmetic with no mutation, and the new keys are appended last in both the candidate dict and the response dict. Backend acceptance re-run by the evaluator: the 6 new tests (test_tc1_tc2_tc6_accrual_basis..., test_tc3_zero_pooled_session_denominator..., test_tc5_...byte_identical_across_two_back_to_back_calls, test_tc7_...no_new_store_scan..., test_tc8_referee_parameters_served_json_is_unchanged..., test_tc17_the_statistical_spec_carries_the_iter12_accrual_addendum) all PASS in its own junit XML. evidence_makeup: the acceptance's [NEW]-flagged demo-narrator walkthrough was not produced — no demo step runs at lean depth and the shared recorder still cannot play a 'scroll' action (vendored framework tooling, human-owned); behaviour is proven by screenshot + replay + tests, so this is a capture defect (methodology A.7), never a product gap."
+      "note": "iter-13: Required-still-passing, re-verified by deterministic golden replay (results:22) with a fresh screenshot the evaluator opened. Its acceptance state is intact and unmoved by J-12: the descriptive basis line reads 'Recorded sessions 3 · pooled at the current detector basis 3 · corpus span 47d (2026-06-22 -> 2026-08-07) · longest zero-session stretch 42d (2026-06-25 -> 2026-08-07)', and the shortlist's right-aligned 'Projected sessions' column still sits immediately beside the shipped 'Projected days', reading 36 next to 564 with 'Accrual / day' 0.02 — the exact triple iterations 8 and 12 recorded. evidence_makeup CARRIED (not new): the [NEW]-flagged demo-narrator walkthrough is still unrecorded because the shared vendored recorder (incredible_auto_dev/scripts/automation/lib/demo_runner.py) cannot play a 'scroll' action; that is framework tooling outside this project and a human/finalization item, never a product gap (methodology A.7)."
+    },
+    "J-12": {
+      "id": "J-12",
+      "name": "The readiness fold gets its reader — why a family cannot speak, visible on the desk",
+      "status": "passing",
+      "last_verified_iter": "goal-referee-iter-13",
+      "last_passing_iter": "goal-referee-iter-13",
+      "first_seen_iter": "goal-referee-iter-13",
+      "last_evidence_path": "reports/qa/goal-referee-iter-13-evidence/J-12-seeded-rig-result.png",
+      "spec_hash": "32504201627a59a736db7e633f09c61388e7f48f234400ad4aee8d73e112682e",
+      "evidence_makeup": true,
+      "note": "iter-13 NEW (goal-proposer journey). The evaluator verified the proposer stayed inside its box itself: the goal.md diff vs HEAD is 73 insertions / 0 deletions in ONE hunk, and a line-membership check confirmed every added line falls between the AUTO:journeys markers (lines 737-879) — no human-authored journey, anti-goal, or other section touched. UT-J-12 PASS (results:23) on two distinct rigs with two distinct screenshots (md5 87a696a7... and 46dbcb91..., genuinely different files). SEEDED RIG, opened and read by the evaluator at 1.35x: 'EVIDENCE READINESS' heading + its descriptive line, then 'Playbook Family' with Records 4, Distinct sessions 3, Signals at current basis 21, the identity line 'Detector basis 02bebbe17e7b8769 · config fingerprint 08e471b10130e1e2', and EmptyState panels 'No stale basis dates.' / 'No integrity errors.'; then 'Strategy Family' with Datasets 0, Train / Holdout 0 / 0, Trades 0. EMPTY-CORPUS RIG (separate backend/frontend pair on :8302/:3302), opened separately: the same 'EVIDENCE READINESS' + 'Playbook Family' blocks rendering explicit zeros (Records 0, Distinct sessions 0, Signals at current basis 0) with 'No hypotheses registered.' above — an honest all-zero state, not a blank, a spinner or a 404. Code path read directly from source by the evaluator (page.tsx:5166-5179): tick_gate_statement renders as a bare {evidence.strategy_trade.tick_gate_statement} and basis_caveats as a verbatim .map, with zero client-side arithmetic anywhere in the component (only .length === 0 empty-state ternaries). evidence_makeup / capture-defect: BOTH captures are truncated at the capture tool's 4320px viewport-height cap while /desk's own scrollHeight is ~8443px, so the strategy family's tick-gate sentence and the Card-6.4 forming-bar caveat — the single most operator-visible new disclosure of this journey — fall just below the bottom edge of both images and are NOT photographed. Scored passing rather than partial because the BEHAVIOUR is confirmed four independent ways (the render path read from source; the new unowned-frontend-literal guard test proving neither string exists in ANY frontend source file, so it can only reach the DOM from the payload — run by the evaluator inside its own junit; two independent same-window DOM-vs-curl string comparisons, the QA lane's one noting the &lt;=/&gt;= entity decoding that the real server-side caveat string does contain, which the evaluator printed itself; and the Strategy Family block visibly rendering in-frame with its three counts). Only the artifact's crop is defective, never the behaviour (methodology A.7). MAKE-UP CAPTURE OWED next round: photograph the referee-evidence-strategy-block element itself, or collapse the /desk sections above it first — a whole-page capture structurally cannot reach it."
     }
   },
   "anti_goal_violations": [
@@ -130,7 +142,7 @@
       "severity": "critical",
       "evidence": "docs/handoffs/goal-referee-iter-6-audit.md finding B1 — apps/backend/app/research/referee_routes.py exposed `registered_at: Optional[str]` on the registration body and forwarded it into register_hypothesis, where apps/backend/app/research/referee_registry.py:665 makes it the sole input to the boundary derivation; the CLI carried the same `--registered-at` knob. Proven live pre-fix: a POST with registered_at 2025-01-01 stored confirmation_start_boundary 2024-12-31 and made three pre-existing historical sessions accrue as post-boundary confirmation, in an append-only record with no delete path.",
       "resolved": true,
-      "resolution": "Fixed inside iteration 6 by the full pipeline's hard-audit lane and re-verified live by the evaluator there. RE-CONFIRMED CLOSED in iterations 7, 8, 9, 10 and 11 from five further sides. ITERATION 12: referee_registry.py's registration/boundary code is untouched (the whole diff is +73 lines of additive read-side shortlist arithmetic plus a docstring paragraph — evaluator read every hunk), referee_routes.py has ZERO diff, and the fixture rig's S-1 row still shows its server-stamped boundary 2026-08-15 with 0 / 12 post-boundary accrual and '1 / 1 discovery (exploratory)' in UT-J-05-result.png."
+      "resolution": "Fixed inside iteration 6 by the full pipeline's hard-audit lane and re-verified live by the evaluator there. RE-CONFIRMED CLOSED in iterations 7, 8, 9, 10, 11 and 12. ITERATION 13: apps/backend/app has ZERO diff of any kind (evaluator ran the git diff itself), so no registration or boundary code could move; the fixture rig's S-1 row in J-05-result.png still shows its server-stamped boundary 2026-08-15 with 0 / 12 post-boundary accrual and '1 / 1 discovery (exploratory)', and the new J-12 blocks add no confirmation-counting value of any kind."
     },
     {
       "iter": "goal-referee-iter-8",
@@ -138,7 +150,7 @@
       "severity": "minor",
       "evidence": "docs/handoffs/goal-referee-iter-8-audit.md finding B2 — referee_registry.shortlist_response served `projected_days_to_target = max(0.0, (target_sessions - n_sessions) / accrual_rate)`, subtracting a candidate's PRE-boundary historical sessions from a target that is a post-boundary count everywhere else it is used.",
       "resolved": true,
-      "resolution": "Fixed inside iteration 8 (517 -> 564) and confirmed in iterations 9, 10 and 11. ITERATION 12 touches the same function, so the evaluator re-checked it directly: the fixed formula lines appear only as UNCHANGED context in the diff, the new recorded-session pair is computed from the same 'from zero, never net of history' shape (n_sessions / pooled_sessions, target / that rate — never target minus n_sessions), and the live fixture rig still serves 564 in the shipped Projected days column beside the new 36."
+      "resolution": "Fixed inside iteration 8 (517 -> 564) and confirmed in iterations 9, 10, 11 and 12. ITERATION 13: referee_registry.py has ZERO diff, and the live fixture rig still serves 0.02 / 564 / 36 in the shipped Accrual-per-day / Projected-days / Projected-sessions columns (evaluator read them off J-11-verify.png)."
     },
     {
       "iter": "goal-referee-iter-9",
@@ -146,8 +158,8 @@
       "severity": "minor",
       "evidence": "The certificate's 'candidate-specific' property was enforced only against the MINT CALLER'S OWN DECLARED PIN, never against the evidence the statistics were computed from: `_pool_strategy_trades(journal_store)` pooled EVERY recorded backtest report's trades unfiltered by result['strategy_id']/['profile']. Demonstrated end-to-end by the iter-9 evaluator: 12 planted v1/default backtests minted an attested, gate-passing certificate naming an unrelated strategy, and authorize_promotion then authorized that unrelated candidate.",
       "resolved": true,
-      "resolution": "CLOSED in iteration 10 by the rider-1 fix and reproduced by that iteration's evaluator (unfiltered pools 12, unrelated candidate pools 0, true candidate pools 12). ITERATION 12: referee_adjudicate.py and pnl_scan.py have ZERO diff, so nothing could re-open it; tests.test_pnl_scan (30) and tests.test_referee_adjudicate (57) are green in the evaluator's own junit run."
+      "resolution": "CLOSED in iteration 10 by the rider-1 fix and reproduced by that iteration's evaluator (unfiltered pools 12, unrelated candidate pools 0, true candidate pools 12). ITERATIONS 12 and 13: referee_adjudicate.py and pnl_scan.py have ZERO diff, so nothing could re-open it; tests.test_pnl_scan (30) and tests.test_referee_adjudicate (57) are green in the evaluator's own junit run."
     }
   ],
-  "updated_at": "2026-08-16T01:15:00Z"
+  "updated_at": "2026-08-16T03:20:00Z"
 }
