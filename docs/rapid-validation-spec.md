@@ -9,6 +9,20 @@
 > recorded meaning. Nothing here is ever tuned from outcomes. The Referee's own spec
 > (`docs/referee-statistical-spec.md`) is untouched and outranks this file wherever both speak
 > about confirmatory claims.
+>
+> **Revision r2 (2026-08-16, pre-implementation).** A narrow named revision applied BEFORE any
+> artifact was recorded under r1 — so nothing re-keys; r1 never produced a record. r2 adds: the
+> availability law (`anchor_at` / `observed_through` / `available_at`, §0/§2.2); the dataset
+> schema-basis + quote-size-unit contract (§2.6, superseding Card 5.1's universal "round lots"
+> pin — Alpaca CTA/UTP displayed quote sizes are SHARES from 2025-11-03); the Card-5.1
+> data-preservation prerequisite on the recorder (§7.1); every remaining Wave-1 degree of
+> freedom frozen as a §1 constant (refill M, response K, burst baseline, depletion window,
+> impact-flatness formula, divergence trailing window + δ); mid-only primary outcomes with a
+> separate last-trade sensitivity basis (§4); `family_root_id` lineage for single-shot sealed
+> evidence (§5.1/§7.4); opaque pre-exposure vault metadata (§7.5); the deterministic exposure
+> registry + human/agent rules for `historical_oos` (§6.7); `rule_process` vs
+> `operator_process` sequence labels (§6.8); frozen clustering semantics and the explicit
+> `WF_SURVIVOR_RULE_V1` (§6.2/§6.6); and traps TR-17–TR-22 (§9).
 
 ---
 
@@ -25,6 +39,17 @@
 - **Read-side law.** Every module this spec governs READS the frozen product (engine, detectors,
   band context, referee) and never feeds back into any of it. The engine-derived aggressor side
   and window features are consumed from the replay snapshot — never recomputed.
+- **The availability law (r2).** Every feature value carries three instants: `anchor_at` (the
+  event/moment the value describes), `observed_through` (the last event consumed to compute it),
+  and `available_at` = the instant of `observed_through` (never earlier than `anchor_at`). A
+  prefix feature has `observed_through = anchor_at`. A deferred construct — anything requiring
+  later observations, e.g. `refill_consistent` (needs `REFILL_M_QUOTES` subsequent quotes) or
+  response-over-K-trades (needs `RESPONSE_K_TRADES` subsequent trades) — becomes available only
+  when those observations exist: it is written at its `observed_through` row, referencing its
+  `anchor_at`, and is `unavailable` (counted, never guessed) when the session ends first.
+  **Outcomes for a conditioned anchor begin at or after the conditioning feature set's maximum
+  `available_at`** — never at `anchor_at` when the condition looks later. TR-17 enforces all of
+  this deterministically.
 - **Evidence classes** (stamped on every served study/fold/screen output; the era's spine):
 
 | Class | Definition | Maximum claim it can carry |
@@ -62,6 +87,21 @@
 | `TRANCHE_MINIMUMS` | §7.6 table | The starter-tranche diversity floors |
 | `RECORDER_PAGE_BUDGET_PER_MINUTE` | `200` | Tick-fetch throttle (the bar path's discipline, applied to the tick path at last) |
 | `KILL_REASONS` | `("killed_null", "killed_direction", "killed_insufficient_n", "killed_concentration", "killed_economic", "killed_fragile", "superseded")` | The CLOSED kill vocabulary; free-text goes in `notes`, never in `reason` |
+| `MICRO_FEATURE_WINDOW_TRADES` | `(20, 100)` | Event-time FEATURE windows (deliberately separate constants from the outcome horizons) |
+| `MICRO_FEATURE_WINDOW_SHARES` | `(5_000, 50_000)` | Volume-time feature windows |
+| `REFILL_M_QUOTES` | `20` | `refill_consistent` observation window: same-side quote updates after the execution; `available_at` = the M-th update; session-end first ⇒ `unavailable` |
+| `RESPONSE_K_TRADES` | `20` | Response-asymmetry window: trades after the print; `available_at` = the K-th trade |
+| `BURST_BASELINE_TRAILING_WINDOWS` | `20` | Burst baseline = median of this many prior non-overlapping same-length windows in the SAME session prefix; fewer than `5` ⇒ burst undefined (counted) |
+| `DEPLETION_WINDOW_QUOTES` | `20` | Quote-depletion observation bound: consecutive same-side quote updates at an unchanged price; ends at a price change or the bound; `available_at` = window end |
+| `IMPACT_FLATNESS_SCALE_BPS` | `5.0` | The frozen flatness scale: `flatness = clamp(1 − |Δmid_bps| / 5.0, 0, 1)`; `failed_aggression_score = dominant_side_volume_share × flatness` per feature window |
+| `DIVERGENCE_TRAILING_SECONDS` | `120.0` | Divergence-at-level price/volume window: TRAILING `[τ − 120s, τ]`, as-of the touch — supersedes Card 9.1's symmetric "window around the touch"; `available_at` = τ |
+| `DIVERGENCE_DELTA_VOLUME_FRACTION` | `0.25` | Card 9.1's δ fraction, frozen HERE as a module constant (never a Config field): `δ = 0.25 × median trailing-120s volume` over the session-prefix baseline windows |
+| `QUOTE_SIZE_UNITS` | `("shares", "round_lots", "unverified")` | The dataset-level size-unit vocabulary (§2.6) |
+| `ALPACA_QUOTE_SIZE_UNIT_EFFECTIVE` | `"2025-11-03"` | Vendor-documented rule the recorder stamps from: Alpaca CTA/UTP displayed quote sizes are SHARES for windows on/after this date, ROUND LOTS before it; re-verify against vendor docs at recording time and record the verification |
+| `WF_SURVIVOR_SIGN_CONSISTENCY` | `0.7` | The §6.6 survivor rule's fold-sign agreement floor |
+
+Every value above was chosen on 2026-08-16, before any outcome was read — arbitrary-but-frozen;
+a change to any of them is a named revision, never a tuning act.
 
 Every record embeds the constants it used verbatim (`micro_parameters()` — the desk pattern) and
 keys on their hash; a monkeypatched constant must move the parameters hash AND the result identity
@@ -77,12 +117,14 @@ calls the engine's existing `TapeEngine.add_observer` seam before the event loop
 is byte-identical to today (the engine's observer-equivalence test already proves snapshots are
 unaffected; a counter-test pins the kwarg default). **No second replay implementation exists.**
 
-### 2.2 The prefix law (streaming-only state)
+### 2.2 The prefix law (streaming-only state) + availability (r2)
 Snapshot row *i* is a pure function of events `1..i` (plus the engine snapshot after event *i*).
 The writer flushes row *i* before consuming event *i+1*. **No whole-dataset normalizer, baseline,
 calibration, or end-of-session statistic may enter any row.** Session-anchored accumulations
 (cumulative delta) are legal because the anchor precedes every row. Event-time baselines use only
-prior events. Enforced by the TR-1 prefix and tail-perturbation traps (§9).
+prior events. Deferred constructs (§0 availability law) are written at their `observed_through`
+row referencing their `anchor_at` — never attached retroactively to an earlier row. Enforced by
+the TR-1 prefix/tail traps and the TR-17 availability trap (§9).
 
 ### 2.3 Snapshot identity and verification
 Snapshot key = `(dataset_id, dataset_checksum, MICRO_ALGO_VERSION, SNAPSHOT_FORMAT_VERSION,
@@ -90,7 +132,8 @@ feature_source_hash, config_fingerprint, params_hash)` where `feature_source_has
 sha256 over the feature-module bytes. The loader re-verifies `dataset_checksum`,
 `config_fingerprint`, and `feature_source_hash` on every read and refuses on mismatch
 (the `DatasetIntegrityError` discipline). Snapshots are derived, append-only, rebuildable, and
-own nothing.
+own nothing. Every persisted feature value carries `anchor_at`, `observed_through`, and
+`available_at` (§0); prefix features may encode the three compactly, deferred features never.
 
 ### 2.4 Granularity is decided by measurement, not assumption
 Before any snapshot format is frozen, J-02 runs a benchmark on ≥2 real datasets including the
@@ -108,6 +151,29 @@ Read from the engine snapshot, never re-derived: aggressor side (+ its `side_sou
 `bid/ask_refresh_score`, `reference_price`), tape state, bid/ask/spread/last. New research
 features (§3) are additive representations the engine does not compute.
 
+### 2.6 The dataset schema-basis + size-unit contract (r2)
+Every NEWLY recorded dataset carries two manifest fields, stamped at record time:
+- `schema_basis` — the event-row schema version, including whether the optional Card-5.1
+  preservation fields (§7.1) are present;
+- `quote_size_unit` ∈ `QUOTE_SIZE_UNITS` — stamped from the dated vendor rule
+  (`ALPACA_QUOTE_SIZE_UNIT_EFFECTIVE`: Alpaca CTA/UTP displayed quote sizes are SHARES for
+  windows on/after 2025-11-03, ROUND LOTS before; the recorder records the rule text + the
+  verification note beside the stamp).
+
+Every LEGACY dataset (all 18 on disk) is `quote_size_unit: "unverified"` until a recorded,
+auditable verification act says otherwise — never a silent relabel. **The old universal "SIP
+quote sizes are round lots" pin (Card 5.1 / trap T12) is superseded by this per-dataset
+contract.**
+
+Consequences, fail-closed: features that compare quote sizes only to quote sizes within one
+dataset (quote imbalance, microprice) are unit-invariant and always legal; **any cross-basis
+feature relating trade SHARES to displayed liquidity — execution-vs-replenishment, any
+share-denominated depletion/replenishment magnitude, any trade-share/displayed-size ratio — is
+REFUSED with a typed error unless the dataset's `quote_size_unit` is verified**, and any pooled
+statistic across datasets of mixed units is refused outright (TR-18). Unit normalization exists
+only as a recorded verification act (a named, auditable manifest annotation), never as silent
+arithmetic in a feature path.
+
 ---
 
 ## 3. Feature families (Wave 1 — L1 only)
@@ -117,24 +183,46 @@ classified by the tick test rather than the quote rule — measured 29–76% on 
 and `unknown_frac`. Any aggressor-derived quantity is served beside those two fractions.
 
 - **F-FLOW** — per-print signed volume (engine side × size); session-anchored cumulative delta
-  `CD_t = Σ_{i≤t, side_i≠unknown} sign(side_i)·size_i` (Card 9.1's formula verbatim; unknowns
-  excluded and counted); rolling imbalance over event-time windows (last-N trades, last-X shares)
-  beside the engine's clock windows; same-side run length at anchor; volume burst = window volume
-  vs the median of the trailing event-time windows of the SAME session prefix.
-- **F-RESPONSE** — impact efficiency = mid-price progress per aggressive share over a window;
-  efficiency trend = current window efficiency minus the prior non-overlapping window's (the
-  exhaustion signature: rising aggression with falling efficiency); failed aggression = the
-  engine's `absorption_score` (reused) plus the continuous complement (dominant-side volume ×
-  clamped impact flatness, unthresholded); response asymmetry = signed mid move in the K trades
-  after buy-aggressive vs sell-aggressive prints, same window.
-- **F-LIQUIDITY** — spread level (engine) and spread change (window mean minus prior window's);
-  quote imbalance `(bid_size − ask_size)/(bid_size + ask_size)`; microprice
-  `(ask·bid_size + bid·ask_size)/(bid_size + ask_size)`; quote depletion (drawdown of same-side
-  displayed size across consecutive quotes at an unchanged price); replenishment
-  (`refill_consistent`: displayed size restored at the same price within the next M quotes after
-  executions against it — **the ONLY permitted label**; "iceberg", "institutional", "spoof" and
-  any intent language are banned); execution-vs-replenishment ratio (executed volume at a price /
-  displayed-size restoration at that price, windowed).
+  `CD_t = Σ_{i≤t, side_i≠unknown} sign(side_i)·size_i` (Card 9.1's accumulator verbatim;
+  unknowns excluded and counted); rolling imbalance over the `MICRO_FEATURE_WINDOW_TRADES` /
+  `MICRO_FEATURE_WINDOW_SHARES` event-time windows beside the engine's clock windows; same-side
+  run length at anchor (consecutive prints with the same engine side; `unknown` breaks the run;
+  the anchor print counts); volume burst = window volume ÷ the median of the prior
+  `BURST_BASELINE_TRAILING_WINDOWS` non-overlapping same-length windows of the SAME session
+  prefix (fewer than 5 ⇒ undefined, counted). **Divergence-at-level (Card 9.1, amended r2)**:
+  at consecutive touches τ1 < τ2 of the same recorded band, bearish divergence iff
+  `price_extreme(τ2) > price_extreme(τ1)` AND `CD(τ2) ≤ CD(τ1) − δ`, where `price_extreme(τ)`
+  = the max/min mid over the TRAILING window `[τ − DIVERGENCE_TRAILING_SECONDS, τ]` (as-of,
+  never symmetric) and `δ = DIVERGENCE_DELTA_VOLUME_FRACTION × median trailing-120s volume`
+  over the same session-prefix baseline windows; `available_at = τ`. Prefix features all carry
+  `available_at = anchor_at`.
+- **F-RESPONSE** — impact efficiency = signed mid move (bps, aggressor-signed) per 1,000
+  aggressive shares over a feature window; efficiency trend = current window efficiency minus
+  the prior non-overlapping same-length window's (the exhaustion signature: rising aggression
+  with falling efficiency); failed aggression = the engine's `absorption_score` (reused)
+  plus the continuous complement, pinned as
+  `failed_aggression_score = dominant_side_volume_share × clamp(1 − |Δmid_bps| /
+  IMPACT_FLATNESS_SCALE_BPS, 0, 1)` (dominant share = max(buy, sell) ÷ directional volume,
+  0.0 when none); **response asymmetry** = the signed mid move over the `RESPONSE_K_TRADES`
+  trades after a buy-aggressive vs a sell-aggressive print — a DEFERRED construct:
+  `observed_through` = the K-th subsequent trade, `available_at` there, `unavailable` when the
+  session ends first.
+- **F-LIQUIDITY** — spread level (engine) and spread change (feature-window mean minus the
+  prior non-overlapping same-length window's); quote imbalance
+  `(bid_size − ask_size)/(bid_size + ask_size)` and microprice
+  `(ask·bid_size + bid·ask_size)/(bid_size + ask_size)` — both instantaneous at the in-effect
+  NBBO and as feature-window means, and both unit-invariant WITHIN a dataset (legal at any
+  `quote_size_unit`); quote depletion = the drawdown of same-side displayed size across
+  consecutive quote updates at an unchanged price, observed over at most
+  `DEPLETION_WINDOW_QUOTES` updates (ends at a price change or the bound; a DEFERRED
+  construct, `available_at` = window end); replenishment (`refill_consistent`: displayed size
+  restored at the same price within the next `REFILL_M_QUOTES` same-side quote updates after
+  executions against it — a DEFERRED construct, `available_at` = the M-th update or
+  `unavailable`; **the ONLY permitted label** — "iceberg", "institutional", "spoof" and any
+  intent language are banned); execution-vs-replenishment ratio (executed trade volume at a
+  price ÷ displayed-size restoration there, windowed) — **CROSS-BASIS: refused unless the
+  dataset's `quote_size_unit` is verified (§2.6)**, as is any share-denominated
+  depletion/replenishment magnitude.
 
 Quote sizes reach the observer on `QuoteEvent` rows — they are dropped only inside the engine's
 `FeatureEngine`, which this spec does not touch.
@@ -144,22 +232,34 @@ Quote sizes reach the observer on `QuoteEvent` rows — they are dropped only in
 ## 4. Outcomes (the closed set)
 
 For an anchor event: forward **mid-price** move (quote mid at the horizon boundary minus mid at
-anchor; last-trade fallback only when no quote exists on either end, disclosed per row) at every
-horizon in §1's three horizon families; session-truncated with truncation flagged and truncated
-rows excluded from averages (the playbook rail's honesty rule); side-signed when a hypothesis side
-exists. Quoted spread at anchor (bps) is served beside every outcome as the cost-proxy column —
-never netted into the outcome silently. No sub-second horizon exists anywhere.
+the outcome start) at every horizon in §1's three horizon families; session-truncated with
+truncation flagged and truncated rows excluded from averages (the playbook rail's honesty rule);
+side-signed when a hypothesis side exists. **Mid is the ONLY primary basis (r2)**: a row lacking
+a quote mid at either end is `unmeasured` — excluded and counted, never silently measured off
+the last trade. A separately named `last_trade_basis` outcome column MAY be served beside the
+primary as a sensitivity reading; it is never pooled with, substituted for, or averaged into
+the mid-basis primary. **Outcome start = the conditioning feature set's maximum `available_at`**
+(= `anchor_at` when every conditioning feature is prefix; strictly later for deferred
+constructs) — TR-17(c) enforces it. Quoted spread at the outcome start (bps) is served beside
+every outcome as the cost-proxy column — never netted into the outcome silently. No sub-second
+horizon exists anywhere.
 
 ---
 
 ## 5. The Scout and the exploratory candidate ledger (`scout.py`, `scout_ledger.py`)
 
 ### 5.1 Candidate spec (frozen at ledger append)
-`{candidate_id, family_id, feature: {name, transform, params}, structure_context: {kind:
-"playbook_signal"|"band_touch"|"none", …frozen references}, outcome: {horizon_key, sidedness},
-fitting_rule?: <a named rule string, §6.4>, econ_floor: {multiple, family_median_spread_bps,
-floor_bps, proxy_sentence}, corpus_manifest: [dataset/record ids + checksums], grid_version,
-registered_at, spec_hash}`.
+`{candidate_id, family_id, family_root_id, feature: {name, transform, params},
+structure_context: {kind: "playbook_signal"|"band_touch"|"none", …frozen references},
+outcome: {horizon_key, sidedness}, fitting_rule?: <a named rule string, §6.4>, econ_floor:
+{multiple, family_median_spread_bps, floor_bps, proxy_sentence}, corpus_manifest:
+[dataset/record ids + checksums], grid_version, registered_at, spec_hash}`.
+
+**`family_root_id` (r2) is COMPUTED, never declared**:
+`sha256(canonical(feature_family_name, structure_context_kind, outcome_horizon_family))[:16]`.
+Every renamed, re-parameterized, or derived family with the same triple computes the SAME root —
+so the single-shot sealed-exposure key (§7.4) cannot be reset by renaming, and every export
+bundle's lineage is canonical (TR-20).
 
 ### 5.2 The ledger
 Hash-chained append-only JSONL (the `desk_playbook_log.py` pattern): every evaluated variant —
@@ -169,8 +269,9 @@ survive|<KILL_REASONS>`, `reason` (closed vocabulary), `notes`, and the family's
 `superseded` rows point at their successor. Tamper = chain-verification failure (TR-11).
 
 ### 5.3 Screening procedure (descriptive, never confirmatory)
-Cluster unit = `session_date` (tick family: symbol-day until ≥2 symbols/date median, then
-session_date). Effect = mean of session-cluster mean deltas (candidate cell vs its comparator).
+Cluster unit = `session_date` for BOTH families, always — **frozen, corpus-size-invariant
+(r2)**; symbol-day breadth is a served disclosure beside it, never an alternative clustering.
+Effect = mean of session-cluster mean deltas (candidate cell vs its comparator).
 Null = **within-session circular block permutation** with block length ≥ the label span in events
 of the longest horizon evaluated (computed per session, ceiling) — a plain row shuffle is BANNED
 (anti-conservative under overlapping labels; TR-8 calibration trap pins pass-rate ≤ 1.5× nominal
@@ -206,7 +307,9 @@ except as §7.5 metadata.
 ### 6.2 Fold spec (frozen per corpus-era, before fold 1)
 `{corpus_id, corpus_manifest_hash, geometry: {train_sessions, test_sessions, step_sessions,
 embargo_sessions, embargo_derivation}, clustering_unit, floors (§1), registered_at,
-geometry_hash}`. Fold boundaries fall ONLY on session-date boundaries. Step ≥ test span (pooled
+geometry_hash}`. `clustering_unit` is frozen at registration and is `session_date` for both
+families (§5.3's r2 rule — no corpus-size-dependent switching, ever). Fold boundaries fall ONLY
+on session-date boundaries. Step ≥ test span (pooled
 statistics over overlapping validation windows are refused). **Changing geometry after fold 1
 voids every survivor state of that corpus-era** (recorded as a voiding event; TR-13).
 
@@ -242,11 +345,47 @@ Below-floor folds report `insufficient`; a sequence with < `WF_MIN_SUFFICIENT_FO
 folds refuses a sequence-level verdict. The tick family refuses fold construction outright until
 its corpus clears the §1 floors (TR-15 pins the refusal at today's 11 sessions).
 
+**The explicit survivor rule — `WF_SURVIVOR_RULE_V1` (r2, frozen):** a constant-rule sequence
+qualifies as `walkforward_survivor` iff ALL of:
+1. ≥ `WF_MIN_SUFFICIENT_FOLDS` sufficient folds, every one of class `historical_oos` and
+   process label `rule_process` (§6.8);
+2. fold-sign agreement with the registered sidedness ≥ `WF_SURVIVOR_SIGN_CONSISTENCY` over the
+   sufficient folds (a zero or opposite-sign fold counts against);
+3. the pooled session-clustered effect lies in the registered direction with magnitude ≥ the
+   family's pre-registered economic floor (§5.5);
+4. no sufficient fold passes the §5.3 screen in the OPPOSITE direction;
+5. zero voiding events on the corpus-era.
+Anything less is not a survivor — there is no discretionary override.
+
 **The diagnostic acceptance run**: the 155-session playbook bar corpus (the 2025-06 orphan
 excluded, disclosed), `DIAGNOSTIC_GEOMETRY`, a small predeclared set of already-frozen playbook
 setup definitions, producing 5 folds / 100 validation sessions — every output labeled
 `historical_exposed_diagnostic`, worth zero graduation credit, and never re-run with tuned
 parameters.
+
+### 6.7 The exposure registry — the deterministic `historical_oos` rule (r2)
+A corpus-scoped, hash-chained **exposure registry** records every serving of a window's outcome
+data: any GET/report/study/screen/fold that returned outcome aggregates or rows for (corpus,
+session-window) appends an exposure entry (surface, window, timestamp). The class rule is then
+mechanical: a (spec, validation-window) pair is `historical_oos` **iff** the window has NO
+exposure entry timestamped before the spec's `registered_at` AND the shard(s) covering it were
+not `exposed` before that instant. At r2 the registry is honestly initialized: every window of
+the playbook bar corpus and of the 12 legacy tick symbol-days is pre-marked exposed (their
+aggregates have been served for months). **Human/agent rule**: authors — human or agent — read
+research data only through served, registry-logged surfaces; the accessor is the only door and
+direct file/sqlite reads are guard-banned (TR-3), so there is no unlogged read path. A spec
+registered after any logged serving of its validation window is auto-classed
+`historical_exposed_diagnostic` (TR-22) — the rule needs no judgment about who remembers what.
+
+### 6.8 Process labels: candidate-rule vs proposer-process evidence (r2)
+Every sequence carries a process label. `rule_process`: every generation, ranking, and fitting
+step inside the walk-forward was the frozen algorithmic rule — no human/proposer choice
+intervened after the first reveal. `operator_process`: a human or proposer selection step
+occurred after any fold reveal (choosing among Mode-A outputs, re-ordering, re-prioritizing).
+`operator_process` sequences are diagnostic-grade for graduation — they may inform NEW
+registrations but never satisfy `WF_SURVIVOR_RULE_V1` (TR-21). An operator selection logged
+BEFORE the first reveal (a registered shortlist) keeps `rule_process` for the sequences it
+selected, because nothing revealed informed it.
 
 ---
 
@@ -257,11 +396,26 @@ Chunked fetch via the adapter's `iter_historical_chunks` (900s sub-windows), thr
 `RECORDER_PAGE_BUDGET_PER_MINUTE`, per-chunk checkpointing, resumable and idempotent (an
 already-recorded window is answered store-first), single-flight job manager + CLI (the
 deep-backfill precedent), operator-gated and credentialed; every recording lands through the
-existing `DatasetStore.record` unchanged (append-only, checksummed, split frozen at
-registration). Paired bar backfill (the existing `desk_deep_backfill` CLI) runs for the same
+existing `DatasetStore.record` unchanged in discipline (append-only, checksummed, split frozen
+at registration). Paired bar backfill (the existing `desk_deep_backfill` CLI) runs for the same
 symbol-days so band context joins. Recording failure modes (vendor timeout, partial window,
 credential absence) are per-chunk `failed` outcomes with detail — never a raise, never a
 fabricated row.
+
+**The Card-5.1 data-preservation prerequisite (r2) — a HARD gate before any bulk recording.**
+Before the recorder may record ANY universe (starter tranche included), the event schema ships
+the preservation fields: optional `conditions: list[str]` and `exchange: str` on
+`RawTrade`/`TradeEvent` and the dataset trade rows, and the vendor-supplied quote
+conditions/venue equivalents on `RawQuote`/`QuoteEvent` and quote rows where the feed provides
+them — plus any other immutable vendor identifiers the SDK response carries (tape, trade id)
+as optional row fields. Optional means: absent-key backward compatibility — every EXISTING
+dataset and committed fixture loads byte-identically and its checksum still verifies; the
+frozen engine ignores the new fields entirely (the equivalence and golden-trace tests pass
+byte-unmodified); the fields exist for research consumers and future data families (Card 9.10's
+condition dependency starts accruing on new recordings). The recorder structurally asserts the
+schema basis (fields present + `quote_size_unit` stamping per §2.6) before its first fetch and
+refuses otherwise (TR-19). Whatever is recorded first is what the corpus keeps forever — the
+store is immutable, so preservation precedes volume.
 
 ### 7.2 Pre-registered recording universes
 A recording batch is legal only under a UNIVERSE registered before any fetch: `{universe_id,
@@ -283,17 +437,22 @@ cherry-picked batches (TR-4).
 
 ### 7.4 Shard lifecycle (one-way)
 `sealed → assigned → exposed`, recorded in a hash-chained append-only exposure ledger with
-timestamps; no transition back; deletion impossible. Assignment binds ONE candidate FAMILY to the
-shard; **sealed exposure is family-level and single-shot** — a second spec from the same family
-can never treat the same shard as fresh, and a failed sealed verdict is a permanent family fact
-carried in every later export bundle (TR-12).
+timestamps; no transition back; deletion impossible. Assignment binds ONE candidate family LINE
+to the shard, keyed on the COMPUTED `family_root_id` (§5.1) — **sealed exposure is
+root-family-level and single-shot**: a renamed or re-parameterized family computes the same
+root and can never treat the same shard as fresh, and a failed sealed verdict is a permanent
+root-family fact carried in every later export bundle (TR-12, TR-20).
 
-### 7.5 Sealed metadata minimization
-While sealed, a shard serves only: symbol, date range, feed, coarse size bucket (order of
-magnitude), checksum commitment, universe id, exposure state. Exact event counts, bytes, and any
-feature/outcome aggregate are withheld until exposure (TR-2 sweeps every registered route,
-closing the `get_endpoint` path structurally). Recorder run logs commit counts by hash while the
-shard is sealed.
+### 7.5 Sealed metadata minimization — OPAQUE pre-exposure (r2)
+While sealed, a shard serves only: an opaque `shard_id`, its `universe_id`, a coarse size
+bucket (order of magnitude), the checksum commitment, `sealed_at`, and the exposure state.
+**Symbol and date range are NOT served pre-exposure** — they would let bar-level public
+outcomes (desk/playbook, served for every date) be looked up against sealed membership; both
+are revealed at ASSIGNMENT and recorded in the exposure ledger. Exact event counts, bytes, and
+any feature/outcome aggregate are withheld until exposure (TR-2 sweeps every registered route,
+closing the `get_endpoint` path structurally). Readiness serves sealed-tranche AGGREGATES only
+(shard count, total symbol-days, per-universe totals), never per-shard identity. Recorder run
+logs commit per-shard identity and counts by hash while sealed.
 
 ### 7.6 The starter tranche (this era's recording acceptance)
 Minimums (all must hold): ≥30 symbol-days; ≥8 distinct Card-5.2-panel symbols including `PG`,
@@ -323,15 +482,17 @@ decided by the deterministic provenance/exposure rules above alone.
 States, strictly ordered; every transition is an append-only ledger event with full provenance:
 
 1. `exploratory` — any ledgered candidate. Claims: descriptive only.
-2. `walkforward_survivor` — a constant-rule sequence with ≥ `WF_MIN_SUFFICIENT_FOLDS` sufficient
-   folds of class `historical_oos`, sign-consistent per the sequence report, above its economic
-   floor, and no voiding event. Diagnostic-class folds contribute nothing.
-3. `sealed_survivor` — additionally passed its single-shot family-level sealed-shard evaluation
-   (§7.4) under a spec frozen before assignment.
-4. `referee_handoff_ready` — the export bundle exists and validates: frozen spec hash; the
-   COMPLETE exposure provenance (every ledger trial including kills, every fold, every shard
-   touched, every failure); proposed confirmation boundary; family/multiplicity metadata
-   (union-N, sibling candidates). **This state does NOT imply the current Referee can register
+2. `walkforward_survivor` — a constant-rule sequence satisfying `WF_SURVIVOR_RULE_V1` (§6.6)
+   in full: sufficient `historical_oos` + `rule_process` folds, the sign-agreement floor, the
+   economic floor in the registered direction, no opposite-direction fold pass, no voiding
+   event. Diagnostic-class and `operator_process` folds contribute nothing.
+3. `sealed_survivor` — additionally passed its single-shot root-family-level sealed-shard
+   evaluation (§7.4, keyed on `family_root_id`) under a spec frozen before assignment.
+4. `referee_handoff_ready` — the export bundle exists and validates: frozen spec hash;
+   `family_root_id` lineage; the COMPLETE exposure provenance (every ledger trial including
+   kills, every fold with its evidence class AND process label, every shard touched, every
+   failure); proposed confirmation boundary; family/multiplicity metadata (union-N, sibling
+   candidates, prior sealed verdicts of the root family). **This state does NOT imply the current Referee can register
    or adjudicate the candidate**: a flow-context predicate requires a FUTURE named revision of
    `docs/referee-statistical-spec.md`; where a candidate maps onto the existing referee
    vocabulary (setup × side × existing context predicates × existing measures), the bundle is
@@ -361,7 +522,13 @@ No state ever moves backward except by a voiding event (§6.2), which is itself 
 | TR-13 geometry freeze | A second geometry on the same corpus is refused without a voiding event; the voiding event clears every survivor state of that corpus-era |
 | TR-14 rule identity | A per-origin refit under an unchanged fitting rule does NOT start a new sequence; changing the rule string DOES |
 | TR-15 tick refusal | The fold engine pointed at the 18-dataset corpus returns the typed floor-refusal naming the failed minima — never an empty fold report |
-| TR-16 end-to-end oracles | A synthetic known-null corpus survives nothing end-to-end (Scout + folds); a synthetic planted-effect corpus is recovered with the planted sign and magnitude within tolerance; byte-identical rerun |
+| TR-16 end-to-end oracles | A synthetic known-null corpus survives nothing end-to-end (Scout + folds); a synthetic planted-effect corpus is recovered with the planted sign and magnitude within tolerance (mid-basis primary); byte-identical rerun |
+| TR-17 future-event availability | (a) every row with `observed_through` after `anchor_at` has `available_at` = the `observed_through` instant; (b) truncating a dataset at T reproduces byte-identically exactly the rows with `available_at` ≤ T — none later; (c) a planted outcome starting before its conditioning set's max `available_at` is refused by the outcome join |
+| TR-18 units gate | A fixture with `quote_size_unit: "unverified"` (and a mixed-unit pool) refuses every cross-basis feature with a typed error; the verified twin serves them; no silent normalization path exists (source-scan) |
+| TR-19 preservation prerequisite | The recorder refuses to start any universe recording unless the row schema carries the Card-5.1 preservation fields and the §2.6 stamping; a freshly captured fixture round-trips conditions/exchange; every legacy fixture loads byte-identically with its checksum verifying |
+| TR-20 root lineage | A re-registered family with the same (feature family, context kind, outcome family) triple COMPUTES the same `family_root_id` (the rename attack is refused at the sealed door); a genuinely different triple computes a different root |
+| TR-21 process label | A sequence containing a logged operator selection after any fold reveal is `operator_process` and is refused at `walkforward_survivor`; a pre-reveal registered shortlist keeps `rule_process` |
+| TR-22 exposure registry | A spec registered after a logged serving of its validation window is auto-classed `historical_exposed_diagnostic`; the registry's r2 initialization marks every playbook-corpus and legacy-tick window exposed |
 
 Plus the standing suite: engine golden trace + observer equivalence + frozen-default profile,
 fingerprint pin `08e471b10130e1e2`, referee modules byte-untouched, no-execution scan, copy
@@ -371,12 +538,18 @@ discipline, MCP contract, replay-script static sweep.
 
 ## 10. Stated assumptions and limits (served, not hidden)
 
-1. L1 only: trades (epoch, price, size) + top-of-book quotes. Trade conditions/exchange were
-   dropped at the vendor boundary and are unrecoverable for existing datasets; condition-aware
-   studies (Card 9.10) stay blocked until a future re-recorded data family.
+1. L1 only: trades + top-of-book quotes. For the LEGACY datasets, trade conditions/exchange
+   were dropped at the vendor boundary and are unrecoverable; from this era's recorder on, the
+   Card-5.1 preservation fields (§7.1) carry them on every NEW recording — so condition-aware
+   studies (Card 9.10) remain blocked on the legacy corpus but their data prerequisite accrues
+   going forward. Auction/average-price/TRF prints in legacy data still masquerade as ordinary
+   prints; served as a standing caveat on legacy-corpus flow statistics.
 2. Aggressor labels are inferred (quote rule → tick test); 29–76% of current-corpus labels are
    tick-test inferences. Every aggressor-derived statistic carries `fallback_frac` and the
    tercile stratification; no label is ever treated as ground truth.
+2b. Displayed quote sizes have a DATED unit basis (§2.6): Alpaca CTA/UTP moved to shares on
+   2025-11-03; earlier windows are round lots; every legacy dataset is `unverified` until a
+   recorded verification. No cross-basis liquidity arithmetic exists outside verified units.
 3. Quoted spread is a research cost proxy — no fill model, no queue model, no impact model is
    claimed anywhere in this era.
 4. The current tick corpus (12 symbol-days) supports plumbing and clearly-labeled exploratory

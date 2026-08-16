@@ -263,6 +263,13 @@ accrues only in calendar time.** The forward replay ledger (card 5.6) gains one 
 trading day; consolidation reviews (Part 5.4) are only meaningful after weeks of accrual. Agent
 effort can compress everything except elapsed market days — plan around that, not against it.
 
+*(Amended 2026-08-16, rapid-microscope opening: the paragraph above is now scoped to
+**live-confirmatory** evidence only — the Referee's genuinely-post-registration sessions and
+the forward ledger. `historical_oos`-class evidence (rapid-validation-spec §0: clean-horizon
+folds and sealed backfilled shards) accrues at RECORDING speed, not calendar speed — a
+credentialed backfill can add months of never-inspected history in an afternoon. Only live
+confirmation still requires elapsed market days.)*
+
 ---
 
 # Part 2 — Era chapters
@@ -285,6 +292,19 @@ forward + UI (5.5–5.9).
 ---
 
 #### Card 5.1 — Event-schema enrichment (conditions, venue, units) `[infra] [F1] [M]`
+
+> *(Status note 2026-08-16, rapid-microscope r2: the DATA-PRESERVATION portion of this card is
+> BROUGHT FORWARD as a HARD prerequisite of the rapid-microscope era's bulk recording (goal.md
+> J-06 step 1 / rapid-validation-spec §7.1, trap TR-19) — optional conditions/exchange/venue
+> fields land before any tranche is recorded, absent-key backward compatible, engine-ignored.
+> The card's **units pin below is SUPERSEDED**: "SIP quote `bid_size`/`ask_size` are ROUND
+> LOTS" stopped being universally true when Alpaca moved CTA/UTP displayed quote sizes to
+> SHARES effective 2025-11-03 — the rule is now a per-dataset `quote_size_unit` contract
+> stamped at record time from the dated vendor rule, with every legacy dataset `unverified`
+> and all cross-unit liquidity arithmetic refused until verified
+> (rapid-validation-spec §2.6, trap TR-18). The card text below stands as the historical
+> record.)*
+
 - **Purpose**: the Alpaca adapter currently discards trade condition codes and exchange/venue
   (`apps/backend/app/providers/adapters/alpaca.py` builds `RawTrade(ts, price, size)` only;
   `RawTrade`/`RawQuote` in `apps/backend/app/providers/adapters/base.py`). Without conditions,
@@ -1067,22 +1087,29 @@ a documented basis decision.
 > exploratory candidate ledger, origin-fenced chronological walk-forward, sealed Validation
 > Vault, graduation contract). Dispositions, card by card:
 >
-> - **Brought forward into the rapid-microscope era**: 9.1 (session cumulative delta +
->   divergence-at-level — the formula is used verbatim; it is pilot study 2), 9.3 (top-of-book
->   imbalance — quote-size features), 9.4 (burst/climax — event-time burst features + the
->   capitulation-exhaustion pilot), 9.5 (spread dynamics — spread level/change features),
->   9.6 (same-side flow-runs — the run-persistence feature; its seeded within-session shuffle
->   null is SUPERSEDED by the spec's session-clustered block permutation, which is strictly
->   more dependence-honest), 9.7 (event-time feature windows — last-N-trades / last-X-shares
->   are first-class representations).
+> - **Brought forward into the rapid-microscope era — as CONCEPTS, with every operational
+>   window/constant re-frozen in `docs/rapid-validation-spec.md` (r2), superseding the old
+>   cards' symbolic or lookahead-unsafe choices where they conflict**: 9.1 (the `CD_t`
+>   accumulator verbatim; the symmetric divergence window SUPERSEDED by a trailing as-of
+>   definition — see the dated amendment on the card itself; it is pilot study 2), 9.3
+>   (top-of-book imbalance — quote-size features, now under the per-dataset
+>   `quote_size_unit` contract of spec §2.6), 9.4 (burst/climax — event-time burst features
+>   with a frozen trailing-baseline count + the capitulation-exhaustion pilot), 9.5 (spread
+>   dynamics — spread level/change features over frozen windows), 9.6 (same-side flow-runs —
+>   the run-persistence feature; its seeded within-session shuffle null is SUPERSEDED by the
+>   spec's session-clustered block permutation, which is strictly more dependence-honest),
+>   9.7 (event-time feature windows — last-N-trades / last-X-shares are first-class
+>   representations at frozen sizes).
 > - **Deferred unchanged**: 9.2 (delta-by-price profile; still needs Card 8.2's binning).
 > - **Wave 2 (9.8–9.11) stays gated.** The 6.9 "atlas" this era's gate names was never built
 >   (executed era 6 re-scoped per evidence family). The gate is therefore RE-POINTED, not
 >   waived: Wave-2 detector cards open only on `historical_oos`-class Scout/walk-forward
 >   evidence from the rapid-microscope machinery meeting the same thresholds in spirit
 >   (`|median ρ| ≥ 0.03` AND `sign_consistency ≥ 0.7` on discovery-class data, per-family).
->   Card 9.10 additionally stays blocked on condition codes, which the current `RawTrade`
->   (epoch/price/size) cannot carry — a future re-recorded data family.
+>   Card 9.10 additionally stays blocked on condition codes for the LEGACY corpus — but the
+>   rapid era's Card-5.1 preservation prerequisite (spec §7.1) means every NEW recording
+>   carries conditions/venue from 2026-08-16 on, so 9.10's data prerequisite accrues going
+>   forward instead of staying permanently empty.
 > - The era-9 polish cards (chart markers, replay annotation) remain future work (Era C for
 >   the annotation tool).
 >
@@ -1094,6 +1121,17 @@ a documented basis decision.
 ### Wave 1 — features + studies
 
 #### Card 9.1 — Session cumulative delta + divergence-at-level `[tape] [F2] [M]`
+
+> *(AMENDED 2026-08-16, rapid-microscope r2: the `CD_t` session-anchored accumulator below is
+> carried VERBATIM. The divergence comparison is NOT — its `price_extreme(τ)` "over the 120s
+> window **around** the touch" is symmetric and therefore lookahead at τ, and its
+> `δ = 0.25 · median 120s volume "(config fraction)"` would have been a Config field. The
+> rapid era's operative definition (rapid-validation-spec §3, r2) uses a TRAILING as-of window
+> `[τ − 120s, τ]` with `available_at = τ`, and freezes both choices as module constants
+> (`DIVERGENCE_TRAILING_SECONDS = 120.0`, `DIVERGENCE_DELTA_VOLUME_FRACTION = 0.25`) — never
+> Config fields. The original text below is preserved for the record and is superseded where
+> it conflicts.)*
+
 - **Hypothesis**: at consecutive tests of the same zone, price making a new extreme while
   cumulative delta does not (divergence) predicts rejection better than the tape state alone.
 - **Mechanism**: a second push to the same level on LESS net aggression = the aggressor is

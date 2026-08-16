@@ -1,6 +1,6 @@
 # goal-lint — docs/goal.md (The Rapid Microscope)
 
-Run: 2026-08-16, at era authoring (commit pending).
+Run: 2026-08-16, after the r2 methodology/data-preservation revision.
 
 ```
 exit=0

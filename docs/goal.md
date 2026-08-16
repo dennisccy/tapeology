@@ -370,8 +370,13 @@ by line arithmetic**:
   at `add_quote` :558 (the observer reads them from the raw event instead); golden trace
   `tests/test_dense_replay_gate.py` :256.
 - Vendor: `app/providers/adapters/alpaca.py` — `iter_historical_chunks` :309 (the recorder's
-  fetch), `_fetch_trades_quotes` :408; NO tick throttle/recency clamp exists (the recorder adds
-  its own throttle); `historical_chunk_seconds = 900` (`config.py:366`).
+  fetch), `_fetch_trades_quotes` :408 (builds `RawTrade(ts, price, size)` at :369/:475 —
+  the Card-5.1 preservation fields extend THESE construction sites plus
+  `providers/adapters/base.py` `RawTrade`/`RawQuote` :64-81 and `providers/base.py`
+  `TradeEvent`/`QuoteEvent`, all optional-default-None); NO tick throttle/recency clamp exists
+  (the recorder adds its own throttle); `historical_chunk_seconds = 900` (`config.py:366`).
+  Units fact: Alpaca CTA/UTP displayed quote sizes are SHARES from `2025-11-03`, round lots
+  before — per-dataset `quote_size_unit` stamping, never a universal assumption (spec §2.6).
 - Precedents to copy: `desk_deep_backfill.py` (credentialed chunked CLI job, resumable);
   `desk_playbook_log.py` (hash-chained append-only ledger); the desk compute-manager pattern;
   `referee_null.py` ToD buckets :132.
@@ -461,19 +466,27 @@ operator-attended act inside the era.
     2. Implement `micro_observer.py`/`micro_snapshots.py` per spec §2: streaming-only rows,
        flush-before-next-event, snapshot identity with `feature_source_hash` +
        `config_fingerprint`, load-time verification.
-    3. Implement the Wave-1 primitives of spec §3 in `micro_features.py` with per-row
-       `side_source`, per-window `fallback_frac`/`unknown_frac`, and the spec §4 outcome set;
-       hand-derived oracle fixtures for every family (TR-16 vectors committed).
+    3. Implement the Wave-1 primitives of spec §3 (r2 — every degree of freedom is a frozen §1
+       constant: refill M, response K, burst baseline, depletion window, the pinned
+       impact-flatness formula, the trailing divergence window + δ) in `micro_features.py`
+       with the availability triple `anchor_at`/`observed_through`/`available_at` on every
+       value (deferred constructs written at `observed_through`, `unavailable` counted),
+       per-row `side_source`, per-window `fallback_frac`/`unknown_frac`, the §2.6 size-unit
+       gating on cross-basis liquidity features, and the spec §4 mid-only primary outcome set
+       (last-trade basis only as the separately named sensitivity column); hand-derived oracle
+       fixtures for every family (TR-16 vectors committed).
     4. Run the spec §2.4 granularity benchmark on ≥2 real datasets including NVDA `72ca8bc0`;
        record bytes amplification, build time, and query latency per candidate representation;
        pin the winner as `micro-snapshot-v1`.
     5. Build snapshots for all 18 legacy datasets through the single-flight manager + CLI.
   - Acceptance: the TR-1 prefix and tail-perturbation traps pass (3 cut points, byte-identical
-    prefixes); TR-7 stale-identity traps pass; every feature oracle fixture passes; the
-    benchmark table is in the iteration handoff with the pinned representation named; 18/18
-    legacy snapshots exist and `GET /research/desk/micro/snapshots` lists them with verified
-    identities; `tests/test_observer_equivalence.py` and the golden feature trace pass
-    byte-unmodified.
+    prefixes); the TR-17 future-event availability trap and the TR-18 units gate pass (an
+    `unverified`-unit fixture refuses every cross-basis feature with a typed error); TR-7
+    stale-identity traps pass; every feature oracle fixture passes; the benchmark table is in
+    the iteration handoff with the pinned representation named; 18/18 legacy snapshots exist —
+    every one carrying `quote_size_unit: "unverified"` — and
+    `GET /research/desk/micro/snapshots` lists them with verified identities;
+    `tests/test_observer_equivalence.py` and the golden feature trace pass byte-unmodified.
 
 - **J-03: Structure × flow — the join that never looks ahead**
   - Steps:
@@ -509,42 +522,59 @@ operator-attended act inside the era.
   - Steps:
     1. Implement `micro_accessor.py` (origin fence, sealed invisibility, sole-door import ban)
        and `walkforward.py` per spec §6: fold specs, exact purge, derived embargo (E=0
-       legitimate, derivation recorded), frozen geometry + voiding, Mode A rule-identity
-       freeze/reveal, Mode B, constant-rule sequences, floors, the decay view, class labels.
+       legitimate, derivation recorded), frozen geometry + voiding, frozen session_date
+       clustering (no corpus-size switching), Mode A rule-identity freeze/reveal, Mode B,
+       constant-rule sequences, floors, the explicit `WF_SURVIVOR_RULE_V1`, the §6.7 exposure
+       registry (initialized with every playbook and legacy-tick window pre-marked exposed),
+       the §6.8 `rule_process`/`operator_process` labels, the decay view, class labels.
     2. Prove the synthetic end-to-end oracles (TR-16 known-null and planted-effect corpora)
        and TR-3/5/6/13/14/15.
     3. Run the **diagnostic acceptance run**: the 155-session playbook corpus (2025-06 orphan
        excluded, disclosed), geometry 40/5/20/20, a predeclared frozen set of playbook setup
        definitions; produce the fold ledger and per-sequence decay view.
-  - Acceptance: TR-3/5/6/13/14/15/16 pass; the diagnostic run completes with 5 folds / 100
-    validation sessions, every served fold and sequence labeled
+  - Acceptance: TR-3/5/6/13/14/15/16/21/22 pass; the diagnostic run completes with 5 folds /
+    100 validation sessions, every served fold and sequence labeled
     `historical_exposed_diagnostic`, the tick-family fold request returns the typed
-    floor-refusal naming `11 < 105`, and a counter-test proves diagnostic-class results award
-    zero graduation credit.
+    floor-refusal naming `11 < 105`, and counter-tests prove diagnostic-class results and
+    `operator_process` sequences award zero graduation credit.
 
 - **J-06: The recorder and the Vault — new tape, sealed at birth**
   - Steps:
-    1. Implement `tick_recorder.py` (chunked `iter_historical_chunks` fetch, tick throttle,
+    1. **The Card-5.1 preservation prerequisite lands FIRST (spec §7.1, r2)**: optional
+       `conditions`/`exchange` (and vendor quote-condition/venue equivalents) on
+       `RawTrade`/`RawQuote`/`TradeEvent`/`QuoteEvent` and the dataset rows — absent-key
+       backward compatible (every legacy dataset and committed fixture loads byte-identically,
+       checksums verify), engine-ignored (equivalence + golden trace byte-unmodified) — plus
+       the §2.6 `schema_basis` + `quote_size_unit` stamping from the dated vendor rule
+       (Alpaca CTA/UTP shares from `2025-11-03`, round lots before). The recorder structurally
+       refuses any universe recording until these ship (TR-19).
+    2. Implement `tick_recorder.py` (chunked `iter_historical_chunks` fetch, tick throttle,
        per-chunk checkpoints, resume/idempotency, single-flight manager + CLI, per-chunk
-       `failed` outcomes) writing through the unchanged `DatasetStore.record`; pair with the
-       existing deep-backfill CLI for the same symbol-days' bars.
-    2. Implement `vault.py`: universe registration (rule hash committed BEFORE any fetch),
+       `failed` outcomes) writing through `DatasetStore.record` under the unchanged store
+       discipline; pair with the existing deep-backfill CLI for the same symbol-days' bars.
+    3. Implement `vault.py`: universe registration (rule hash committed BEFORE any fetch),
        the published sha256 split beside the HMAC seal assignment
        (`TAPEOLOGY_VAULT_SECRET_FILE`, commitment recorded), one-way
-       `sealed → assigned → exposed` exposure ledger, sealed-metadata minimization, TR-2
-       route sweep, TR-4 cherry-pick refusal, TR-12 single-shot exposure.
-    3. Operator act, inside the era: register the starter-tranche universe, run the recorder
+       `sealed → assigned → exposed` exposure ledger keyed on the computed `family_root_id`,
+       **opaque pre-exposure metadata (spec §7.5 r2: no symbol, no date range until
+       assignment — aggregates only on readiness)**, TR-2 route sweep, TR-4 cherry-pick
+       refusal, TR-12 single-shot exposure, TR-20 root-lineage refusal.
+    4. Operator act, inside the era: register the starter-tranche universe, run the recorder
        against real Alpaca historical trades+quotes to the spec §7.6 minimums (≥30
        symbol-days, ≥8 panel symbols incl. PG + ≥3 Tier-B + ≥1 ETF, ≥10 dates over ≥6 weeks,
        the concentration caps, ≥60% full-session), with a restart mid-run proving resume.
-    4. Refresh readiness: the new shards appear with completeness reporting; sealed members
-       show metadata-only.
-  - Acceptance: TR-2/4/12 pass; the tranche exists on disk meeting every §7.6 minimum
-    (readiness serves the arithmetic); at least the HMAC-assigned subset of tranche shards is
-    `sealed` with zero exploratory reads recorded before sealing; the recorder run ledger
-    shows the mid-run restart resuming without duplicate registration; the legacy 12
-    symbol-days remain `exploratory`; the readiness gate line still reads the ~150-symbol-day
-    research gate as unmet.
+    5. Refresh readiness: the new shards appear with completeness reporting (including
+       `quote_size_unit` and preservation-field presence); sealed members show opaque
+       aggregates only.
+  - Acceptance: TR-2/4/12/19/20 pass; every legacy dataset and committed fixture loads
+    byte-identically with checksums verifying and the engine equivalence/golden-trace tests
+    byte-unmodified; the tranche exists on disk meeting every §7.6 minimum (readiness serves
+    the arithmetic) with every new shard carrying `schema_basis`, preservation fields, and a
+    stamped `quote_size_unit`; at least the HMAC-assigned subset of tranche shards is `sealed`
+    with zero exploratory reads recorded before sealing and no symbol/date served
+    pre-exposure; the recorder run ledger shows the mid-run restart resuming without duplicate
+    registration; the legacy 12 symbol-days remain `exploratory`; the readiness gate line
+    still reads the ~150-symbol-day research gate as unmet.
 
 - **J-07: Graduation — provenance in, nothing laundered out**
   - Steps:
@@ -708,6 +738,14 @@ no confirmatory output without a verified oracle attestation; no annualized metr
   *(critical)*
 - **No sub-second outcome horizon** and no latency-sensitive mechanism, per DO-NOT #1.
   *(critical)*
+- **No cross-unit liquidity arithmetic.** No feature, screen, or study relates trade shares to
+  displayed quote sizes unless the dataset's `quote_size_unit` is verified (spec §2.6);
+  unverified or mixed units are a typed refusal; unit normalization exists only as a recorded
+  verification act, never silent arithmetic. *(critical)*
+- **No value is served before it exists.** Every feature carries
+  `anchor_at`/`observed_through`/`available_at`; a deferred construct is `unavailable` until
+  its observations exist; no outcome for a conditioned anchor begins before the conditioning
+  set's maximum `available_at` (TR-17). *(critical)*
 - **The 12 pre-existing tick symbol-days are permanently exploratory** — never sealed, never
   `historical_oos`, never relabeled. *(critical)*
 - **The ~150-symbol-day research-readiness gate is never lowered or silently satisfied**; any
