@@ -4736,6 +4736,9 @@ function RefereeRegistrySection({
     );
   }
   const shortlist = shortlistResult.data;
+  // goal-referee-iter-12 (J-11): the corpus-honest accrual disclosure -- read verbatim, zero
+  // client-side arithmetic (referee_registry.py::shortlist_response() computes every field once).
+  const accrualBasis = shortlist.accrual_basis;
   const registeredIds = new Set(
     registryResult.ok && registryResult.data
       ? registryResult.data.hypotheses.map((h) => h.hypothesis_id)
@@ -4752,6 +4755,39 @@ function RefereeRegistrySection({
         hypothesis — historical observations before that boundary are discovery, never
         confirmation.
       </p>
+      <div
+        data-testid="referee-accrual-basis-line"
+        className="mb-3 rounded-md border border-slate-800 bg-slate-900/40 px-3 py-2 text-xs text-slate-400"
+      >
+        {accrualBasis.corpus_first_session_date === "" ? (
+          <span>No sessions recorded yet.</span>
+        ) : (
+          <span>
+            Recorded sessions{" "}
+            <span className="font-mono text-slate-300">
+              {accrualBasis.recorded_sessions_in_span}
+            </span>
+            {" · "}pooled at the current detector basis{" "}
+            <span className="font-mono text-slate-300">
+              {accrualBasis.pooled_sessions_at_current_basis}
+            </span>
+            {" · "}corpus span{" "}
+            <span className="font-mono text-slate-300">{accrualBasis.corpus_span_days}</span>d (
+            {accrualBasis.corpus_first_session_date} {"→"} {accrualBasis.corpus_last_session_date})
+            {" · "}longest zero-session stretch{" "}
+            <span className="font-mono text-slate-300">
+              {accrualBasis.longest_zero_session_stretch_days}
+            </span>
+            d
+            {accrualBasis.longest_zero_session_stretch_start !== "" && (
+              <>
+                {" "}({accrualBasis.longest_zero_session_stretch_start} {"→"}{" "}
+                {accrualBasis.longest_zero_session_stretch_end})
+              </>
+            )}
+          </span>
+        )}
+      </div>
       <div className="overflow-x-auto">
         <table
           data-testid="referee-shortlist-table"
@@ -4768,6 +4804,7 @@ function RefereeRegistrySection({
               <th className="px-1.5 py-1 text-right">Sessions</th>
               <th className="px-1.5 py-1 text-right">Accrual / day</th>
               <th className="px-1.5 py-1 text-right">Projected days</th>
+              <th className="px-1.5 py-1 text-right">Projected sessions</th>
               <th className="px-1.5 py-1 text-center">Action</th>
             </tr>
           </thead>
@@ -4801,6 +4838,14 @@ function RefereeRegistrySection({
                     {candidate.projected_days_to_target === null
                       ? "—"
                       : candidate.projected_days_to_target.toFixed(0)}
+                  </td>
+                  <td
+                    data-testid={`referee-shortlist-projected-pooled-${candidate.candidate_id}`}
+                    className="px-1.5 py-1.5 text-right font-mono text-slate-300"
+                  >
+                    {candidate.projected_pooled_sessions_to_target === null
+                      ? "—"
+                      : candidate.projected_pooled_sessions_to_target.toFixed(0)}
                   </td>
                   <td className="px-1.5 py-1.5 text-center">
                     <button

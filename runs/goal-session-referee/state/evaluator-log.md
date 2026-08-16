@@ -611,3 +611,66 @@ certificate with no name at all fail instead of matching, show a clear word inst
 when a second data request fails, and correct a stale comment. Still outstanding from round 2 and
 outside this project: the unrelated trendora backend on port 8255 has not been restarted. Approve
 closing the era and committing the files.
+
+## Iteration 12 — goal-referee-iter-12
+
+**Date:** 2026-08-16T01:15:00Z
+**Verdict:** GOAL_ACHIEVED
+**Depth dispatched:** lean
+**Journey deltas:**
+- Newly passing: J-11 "The accrual projection states its own basis — the wait, measured in
+  recorded sessions" (new journey, added by the proposer inside its own marker block)
+- Newly failing: none
+- Regressed: none
+- Re-verified with a fresh picture this round: J-05 "The registry", J-07 "The starter family",
+  J-09 "The Referee on the Desk page", J-10 "The kept product stands" — the four whose own
+  files or page changed this round
+- Re-proved by running their own test files inside my own full suite run: J-01 "The era
+  transition stands", J-02 "The evidence contract", J-03 "The statistics core", J-04 "Matched
+  nulls", J-06 "Estimand engines and adjudication", J-08 "The strategy family and the
+  promotion lock" — none of their sources changed
+- Not re-tested this run: none. No row in the results table was skipped for time
+- Owed capture: J-11 has no recorded walk-through (flagged, not blocking)
+- Anti-goal violations: none new; the three earlier ones stay closed, and I re-checked the
+  iteration-8 one directly because this round edits the very same function
+
+**Reasoning:** The one new thing this round claims is a plain, honest disclosure, and I
+checked it myself rather than reading the report. On the Desk page the "Referee Registry"
+panel now states how many trading sessions the system has actually recorded, over what date
+span, and how long its longest completely silent stretch was, plus a new column giving each
+candidate question its expected wait counted in recorded sessions instead of raw calendar
+days. I opened the picture and re-derived every number by hand: the span of 47 days and the
+42-day silent stretch both come out exactly from the two pairs of dates shown, and the new
+column's 36 is exactly the twelve-session target divided by one session in three. The old
+calendar-day numbers sit right beside them and did not move — the same picture shows 0.02 per
+day and 564 days, the very number an earlier round recorded when it fixed that figure. I also
+proved that "did not move" from the source: every line that computes the old pair appears in
+the change only as untouched surrounding text, the new code only reads local values and never
+alters anything, and the new fields are added at the end, so the old ones keep their exact
+places. I ran the whole suite myself (2,695 collected, 2,687 passed, 8 skipped, nothing
+failed) and pulled the per-file counts out of my own machine-readable result file; the six new
+tests all pass, including one proving the page does no extra reading of stored files and one
+pinning the settings list as unchanged. I printed the settings pin myself
+(08e471b10130e1e2), counted the Claude connector's tools myself (exactly 22), hashed the
+trading ledger and champion pointer myself (unchanged since July), and counted the owner's
+protected data myself: 11,274 files, none touched since before this round began, and no
+Referee folder exists there at all. One evidence-hygiene point I checked instead of assuming:
+the picture cited for the new work is the same file as the one cited for the registry
+journey. That pattern has hidden a missing test before, so I opened it — it genuinely shows
+both journeys' end states on one page, so nothing is concealed.
+
+**Next-step recommendation:** Halt — goal achieved. Three items are left for a person, none of
+them product faults. First, commit this round's changed files and the earlier rounds' evidence
+files. Second, the era still has no video walk-through: the shared recording tool cannot play
+a "scroll" step, so it produced nothing in round 11, and no recording step runs in a short
+round; the tool lives in the shared framework folder, not in this project, and the new
+journey's own walk-through is already written using only allowed steps, so the recording can
+simply be taken once the tool is fixed — it needs no new build round. Third, four small
+clean-ups can ride along whenever someone next works in those files: add the four Referee
+storage folders to the guard that watches the owner's real data, make a certificate with no
+name at all fail instead of matching, show a clear word instead of a plain dash when a second
+data request fails, and correct a stale comment quoting 19/7/1. Also, for the record, the
+builder's write-up miscounted its registry test file (it says 52 to 58; the true counts are 47
+to 53 — the growth of six is right). Still outstanding from round 2 and outside this project:
+the unrelated trendora backend on port 8255 has not been restarted. Approve closing the era
+and committing the files.

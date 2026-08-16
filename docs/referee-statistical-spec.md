@@ -377,3 +377,16 @@ sample reality in view.
 7. **The forming-bar caveat (Card 6.4)** applies to structure/strategy-family measurement
    bases and is stamped as `basis_caveats`; it does not touch Playbook context (recorded
    band maps) or these tests' validity.
+8. **(2026-08-16 addendum, goal-referee-iter-12, J-11) The accrual projection is a read-side
+   planning disclosure, not a statistical procedure.** The starter-family shortlist's shipped
+   `accrual_rate_sessions_per_day`/`projected_days_to_target` divide a candidate's recorded
+   sessions by the corpus's raw CALENDAR-day span (`corpus_span_days`), which can silently
+   include stretches with zero recorded trading sessions — a multi-month recording gap inflates
+   that projected wait. This addendum adds a second basis measured in RECORDED sessions instead
+   of calendar days (`accrual_basis`'s `recorded_sessions_in_span`/
+   `pooled_sessions_at_current_basis`/longest zero-session stretch, plus each candidate's own
+   `informative_sessions_per_pooled_session`/`projected_pooled_sessions_to_target`), served SIDE
+   BY SIDE with the calendar-day pair — neither basis ever replaces the other. Both bases are
+   pure read-side arithmetic over already-recorded facts: neither feeds any null, test statistic,
+   p-value, BH denominator, verdict, or gate, and neither is a `referee_parameters()` entry — the
+   spec's estimands, tests, and verdict rules (Sec3-Sec5) are unchanged by this addendum.

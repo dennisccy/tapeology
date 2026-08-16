@@ -249,8 +249,19 @@ _PRICE_ARITHMETIC_FIELDS = (
     # shortlist candidate's live readiness (never divide/subtract these client-side; the backend
     # already served accrual_rate_sessions_per_day/projected_days_to_target as computed numbers)
     # and a registered hypothesis's discovery count (never combined with its accrual siblings).
-    r"|candidate\.(?:n|n_sessions|accrual_rate_sessions_per_day|projected_days_to_target)"
+    # goal-referee-iter-12 (J-11): widened for the TWO new per-candidate fields beside the shipped
+    # pair -- informative_sessions_per_pooled_session (API-only this iteration, no dedicated
+    # column yet, guarded here anyway per "every new served numeric joins this list") and
+    # projected_pooled_sessions_to_target (the new "Projected sessions" column).
+    r"|candidate\.(?:n|n_sessions|accrual_rate_sessions_per_day|projected_days_to_target"
+    r"|informative_sessions_per_pooled_session|projected_pooled_sessions_to_target)"
     r"|hyp\.discovery\.(?:n|n_sessions)"
+    # goal-referee-iter-12 (J-11): the Referee Registry section's own new accrual-basis line --
+    # accrualBasis.* (the RefereeRegistrySection's own local binding for `shortlist.accrual_basis`)
+    # -- a corpus-wide recorded/pooled session count or day-span must never be recombined
+    # client-side (e.g. a client-computed "stale share" or "days since last gap").
+    r"|accrualBasis\.(?:corpus_span_days|recorded_sessions_in_span|pooled_sessions_at_current_basis"
+    r"|longest_zero_session_stretch_days)"
     # goal-referee-iter-9 (J-08 rider): the Referee Registry section's own accrual numerics --
     # mirrors the existing `hyp.discovery.*` entry above (a "sessions accrued so far" readout is
     # the obvious client-side subtraction to reach for and the obvious thing to get wrong; the
@@ -580,6 +591,56 @@ def test_desk_page_price_arithmetic_guard_catches_referee_adjudications_and_runs
     # The shipped pass-through rendering (page.tsx's own "X / Y" JSX line) stays clean.
     assert _PRICE_ARITHMETIC_PATTERN.search(
         "{hyp.accrual.informative_post_boundary_sessions} / {hyp.accrual.target_sessions}"
+    ) is None
+
+
+def test_desk_page_price_arithmetic_guard_catches_accrual_basis_and_pooled_projection_arithmetic():
+    """goal-referee-iter-12 (J-11) counter-test: the extended guard catches arithmetic on the new
+    accrual-basis line's own `accrualBasis.*` bindings (corpus-wide recorded/pooled session counts
+    and the day span) and on the two new per-candidate fields
+    (`candidate.informative_sessions_per_pooled_session`/`candidate.projected_pooled_sessions_to_target`)
+    -- proving the widened `candidate.*` group and the new `accrualBasis.*` group each genuinely
+    catch a violation, not just list it (the "a lint that cannot fail proves nothing" precedent)."""
+    seeded_stale_share = (
+        "const stale = accrualBasis.recorded_sessions_in_span - "
+        "accrualBasis.pooled_sessions_at_current_basis;"
+    )
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_stale_share) is not None
+
+    seeded_pooled_rate = (
+        "const rate = accrualBasis.pooled_sessions_at_current_basis / accrualBasis.corpus_span_days;"
+    )
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_pooled_rate) is not None
+
+    seeded_gap_pct = (
+        "const share = accrualBasis.longest_zero_session_stretch_days / "
+        "accrualBasis.corpus_span_days;"
+    )
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_gap_pct) is not None
+
+    seeded_pooled_projection = (
+        "const soon = candidate.projected_pooled_sessions_to_target * 2;"
+    )
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_pooled_projection) is not None
+
+    seeded_pooled_rate_diff = (
+        "const gap = candidate.accrual_rate_sessions_per_day - "
+        "candidate.informative_sessions_per_pooled_session;"
+    )
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_pooled_rate_diff) is not None
+
+    # And the pattern does NOT over-match: rendering the basis line's fields as plain descriptive
+    # text, and the new column's value via the SAME null-guarded ternary the shipped "Projected
+    # days" column already uses, both stay clean.
+    assert _PRICE_ARITHMETIC_PATTERN.search(
+        "`${accrualBasis.recorded_sessions_in_span} recorded / "
+        "${accrualBasis.pooled_sessions_at_current_basis} pooled over "
+        "${accrualBasis.corpus_span_days}d`"
+    ) is None
+    assert _PRICE_ARITHMETIC_PATTERN.search(
+        "candidate.projected_pooled_sessions_to_target === null "
+        '? "—" '
+        ": candidate.projected_pooled_sessions_to_target.toFixed(0)"
     ) is None
 
 

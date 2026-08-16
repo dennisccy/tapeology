@@ -1,40 +1,40 @@
 # Iteration State — referee
 
-**After iteration:** 11 · **Date:** 2026-08-15 · **Verdict:** GOAL_ACHIEVED
+**After iteration:** 12 · **Date:** 2026-08-16 · **Verdict:** GOAL_ACHIEVED
 
 ## Journeys
 
-10 passing (J-01..J-10) — 10 total · all ten re-verified against the CURRENT goal text this round;
-zero DEFERRED-BUDGET rows remain (`reports/phase-goal-referee-iter-11-ui-test-results.md`), so
-`goal_gate.py`'s journeys / results / coherence / drift checks all return clean.
+11 passing (J-01..J-11) · 0 failing · 0 unknown · 0 deferred — 11 total (J-11 new this iter,
+added by the proposer inside the AUTO:journeys block; it carries `evidence_makeup` for an owed
+walkthrough recording only)
 
 ## Active blockers
 
-- none for the chain. Human-only leftovers: commit this round's evidence files; the shared
-  walkthrough recorder still rejects the `scroll` action
-  (`incredible_auto_dev/scripts/automation/lib/demo_runner.py` `_VALID_ACTIONS`), so the era has no
-  demo recording; the unrelated trendora backend on port 8255 is still down (since iter-2).
+- none for the product. Human-owned, non-blocking: (a) this iteration's 6 changed product files
+  + prior evidence files are uncommitted; (b) the shared recorder `demo_runner.py` has no
+  `scroll` action, so the era has no walkthrough recording (framework tooling, not Tapeology
+  code); (c) from iter-2 and outside this project, trendora's backend on :8255 is still down.
 
 ## Last 2 verdicts
 
-- iter 11: GOAL_ACHIEVED — the 7 deferred rows became real PASS rows from their own pytest modules
-  (evaluator reproduced every count from its own full-suite junit: 2,688 collected / 2,680 passed /
-  8 skipped / 0 failed, pin `08e471b10130e1e2`), and J-09's owed single-flight-refusal screenshot
-  landed (md5 `5baf7d31…`, refusal text read at 3x zoom, server-driven per `page.tsx:8545-8547`).
-- iter 10: CONTINUE — J-09 + J-10 verified (22 MCP tools, 3 Referee panels, kept walk); deferred
-  rows blocked the finish gate.
+- iter 12: GOAL_ACHIEVED — J-11 verified in the browser (basis line + new "Projected sessions"
+  column, shipped 0.02 / 564 pair unmoved), all 11 journeys hold current evidence, coherence
+  PASS, no open anti-goal, evaluator's own suite 2,695 collected / 2,687 passed / 0 failed.
+- iter 11: GOAL_ACHIEVED — evidence-only round cleared every deferred row and the owed J-09
+  capture; zero product diff.
 
 ## Do not redo
 
-- The era is COMPLETE: all ten journeys hold current evidence; nothing in `docs/goal.md` remains
-  unbuilt. Do not plan new Referee work under this goal file.
-- J-09's owed capture is DONE (`reports/qa/goal-referee-iter-11-evidence/UT-J-09-result.png`);
-  `evidence_makeup` cleared. Never re-plan an iteration whose only content is a screenshot.
-- The 7 keyless journeys re-verify via their own pytest modules, never a screenshot of a page that
-  does not exist (`reports/qa/goal-referee-iter-11-test.log`; `state/golden-gaps` lists them).
-- All three recorded anti-goal violations (iter-6 critical, iter-8/iter-9 minor) are
-  `resolved: true` and re-confirmed closed — do not re-open or re-test them.
-- Non-blocking hardening for whoever is next here (never an iteration goal): 4 Referee dirs into
-  the store-scope guard; both-names-unknown matching in `_candidate_matches_observation`
-  (`referee_adjudicate.py:550`); dash-vs-unknown on a failed second fetch; stale `19/7/1` comment.
-- Zero product diff this round (`scan-report.md` CLEAN, `iter-diff.md` "(no changes)").
+- J-11 shipped and verified: `accrual_basis` + the two per-candidate fields in
+  `referee_registry.py::shortlist_response()`, one basis line + one "Projected sessions"
+  column in `page.tsx::RefereeRegistrySection`, §9 addendum in `referee-statistical-spec.md`.
+- The shipped calendar-day pair (`accrual_rate_sessions_per_day` / `projected_days_to_target`)
+  is deliberately unchanged and must stay so — the recorded-session basis sits BESIDE it.
+- `informative_sessions_per_pooled_session` is API-only by decision (assumptions.md iter-12);
+  do not "fix" it by adding a second column unless the owner asks.
+- Do not plan an iteration whose only content is the J-11 walkthrough recording — a capture
+  item for finalization/a human, blocked on the shared recorder, not on the product.
+- Four carried hardening items, none blocking: 4 Referee dirs into the store-scope guard;
+  both-names-unknown certificate match (`referee_adjudicate.py:550`); dash-vs-unknown on a
+  failed second fetch; stale `19/7/1` comment.
+- Anti-goal entries from iters 6, 8 and 9 are all closed and re-confirmed — do not re-litigate.

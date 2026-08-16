@@ -1099,6 +1099,29 @@ def _corpus_session_span_days(newest_by_date: dict[str, dict]) -> int:
     return (latest - earliest).days + 1
 
 
+def _longest_zero_session_stretch(newest_by_date: dict[str, dict]) -> tuple[int, str, str]:
+    """goal-referee-iter-12 (J-11): the corpus's longest RECORDING gap -- the calendar days with
+    ZERO recorded sessions strictly between two CONSECUTIVE recorded ``session_date`` keys
+    (``(later - earlier).days - 1``), plus the two recorded dates immediately bounding it. Walks
+    the SAME sorted date keys ``_corpus_session_span_days`` already sorts (T-6's own
+    ``newest_by_date`` -- no second store scan, no second pooling walk). Fewer than two recorded
+    dates has no gap to measure: ``(0, "", "")``, the same empty-string discipline
+    ``accrual_basis``'s other date fields use on an empty/singleton corpus."""
+    if len(newest_by_date) < 2:
+        return 0, "", ""
+    dates = sorted(newest_by_date)
+    best_days = -1
+    best_start = ""
+    best_end = ""
+    for earlier, later in zip(dates, dates[1:]):
+        gap_days = (date.fromisoformat(later) - date.fromisoformat(earlier)).days - 1
+        if gap_days > best_days:
+            best_days = gap_days
+            best_start = earlier
+            best_end = later
+    return best_days, best_start, best_end
+
+
 def _starter_context_readiness(
     newest_by_date: dict[str, dict],
     config_fingerprint: str,
@@ -1168,7 +1191,21 @@ def shortlist_response(
     estimand-A candidates, against the real corpus), i.e. "ready now" for a wait that is really
     ``target_sessions`` post-boundary sessions away -- and counted historical observations as
     progress toward a confirmatory target, which the era's own "the historical atlas is exploratory
-    forever" anti-goal forbids."""
+    forever" anti-goal forbids.
+
+    goal-referee-iter-12 (J-11): ALSO serves ``accrual_basis`` (the corpus's own recorded-session
+    accounting -- first/last recorded date, calendar-day span, recorded vs. pooled-at-current-basis
+    session counts, and the longest zero-recorded-session gap) plus, per candidate, two fields
+    BESIDE (never replacing) ``accrual_rate_sessions_per_day``/``projected_days_to_target``:
+    ``informative_sessions_per_pooled_session`` (that candidate's own already-computed
+    ``n_sessions`` over ``accrual_basis.pooled_sessions_at_current_basis``) and
+    ``projected_pooled_sessions_to_target`` (``target_sessions`` over that rate). Both new
+    per-candidate fields reuse the SAME divide-by-zero discipline as the shipped pair (``0.0`` /
+    ``None``, never a ``ZeroDivisionError``) -- a raw calendar-day span silently includes stretches
+    with zero recorded trading sessions, inflating the shipped projection; this basis answers "how
+    many sessions has the corpus ACTUALLY recorded" instead. Purely a read-side planning disclosure
+    (docs/referee-statistical-spec.md Sec9 addendum): feeds no null, no test statistic, no p-value,
+    no BH denominator, no verdict, no gate, and adds no ``referee_parameters()`` entry."""
     readiness = playbook_occurrence_readiness(playbook_store, config_fingerprint)
     per_setup_side = {(cell["setup"], cell["side"]): cell for cell in readiness["per_setup_side"]}
 
@@ -1176,6 +1213,13 @@ def shortlist_response(
     newest_by_date = _newest_per_session_date(records)
     corpus_span_days = _corpus_session_span_days(newest_by_date)
     context_resolver = BandMapResolver(bar_store, config, compute=False)
+
+    sorted_dates = sorted(newest_by_date)
+    corpus_first_session_date = sorted_dates[0] if sorted_dates else ""
+    corpus_last_session_date = sorted_dates[-1] if sorted_dates else ""
+    recorded_sessions_in_span = readiness["distinct_sessions"]
+    pooled_sessions_at_current_basis = recorded_sessions_in_span - len(readiness["stale_basis_dates"])
+    stretch_days, stretch_start, stretch_end = _longest_zero_session_stretch(newest_by_date)
 
     candidates = []
     for spec in REFEREE_STARTER_FAMILY_SHORTLIST:
@@ -1199,6 +1243,17 @@ def shortlist_response(
             spec["target_sessions"] / accrual_rate
             if accrual_rate > 0 else None
         )
+        # goal-referee-iter-12 (J-11): the SAME "from zero, never net of history" discipline
+        # above, applied to the recorded-session basis instead of the raw calendar-day one --
+        # divides this candidate's own ALREADY-computed n_sessions (never a fresh or
+        # differently-filtered recomputation) by the corpus-wide pooled_sessions_at_current_basis.
+        pooled_rate = (
+            n_sessions / pooled_sessions_at_current_basis
+            if pooled_sessions_at_current_basis > 0 else 0.0
+        )
+        projected_pooled_sessions = (
+            spec["target_sessions"] / pooled_rate if pooled_rate > 0 else None
+        )
         candidates.append(
             {
                 "candidate_id": spec["candidate_id"],
@@ -1219,6 +1274,8 @@ def shortlist_response(
                 "min_occurrences": spec["min_occurrences"],
                 "accrual_rate_sessions_per_day": accrual_rate,
                 "projected_days_to_target": projected_days,
+                "informative_sessions_per_pooled_session": pooled_rate,
+                "projected_pooled_sessions_to_target": projected_pooled_sessions,
             }
         )
     # goal-referee-iter-9 rider (closes iter-8 coherence-audit F1 WARN): `family_id`/`family_q`
@@ -1229,6 +1286,20 @@ def shortlist_response(
         "candidates": candidates,
         "family_id": REFEREE_STARTER_FAMILY_ID,
         "family_q": REFEREE_DEFAULT_Q,
+        # goal-referee-iter-12 (J-11): the corpus-honest accrual disclosure -- recorded/pooled
+        # session counts, span, and the longest zero-recorded-session gap. Zero on an empty corpus
+        # (never a crash): `_corpus_session_span_days`/`_longest_zero_session_stretch` already
+        # return 0/""/"" there, and `pooled_sessions_at_current_basis` is `0 - 0 == 0`.
+        "accrual_basis": {
+            "corpus_first_session_date": corpus_first_session_date,
+            "corpus_last_session_date": corpus_last_session_date,
+            "corpus_span_days": corpus_span_days,
+            "recorded_sessions_in_span": recorded_sessions_in_span,
+            "pooled_sessions_at_current_basis": pooled_sessions_at_current_basis,
+            "longest_zero_session_stretch_days": stretch_days,
+            "longest_zero_session_stretch_start": stretch_start,
+            "longest_zero_session_stretch_end": stretch_end,
+        },
     }
 
 

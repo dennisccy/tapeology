@@ -902,3 +902,64 @@ own rule that an evidence gap on confirmed behaviour never blocks (methodology A
 **Reversible:** yes — if the owner reads the clause strictly, the remedy is one more capture of the
 evaluate-side refusal on the fixture rig (a hypothesis is already registered there, S-1); nothing
 stored anywhere depends on this reading.
+
+## iter-12 — goal-decomposer
+
+**Ambiguity:** goal.md J-11 Step 2 adds two new per-candidate API fields beside the shipped pair
+(rate `accrual_rate_sessions_per_day` + projection `projected_days_to_target`) —
+`informative_sessions_per_pooled_session` (the new rate) and `projected_pooled_sessions_to_target`
+(the new projection) — but Step 4 asks the Referee Registry section to render "one descriptive
+basis line... and one new right-aligned column beside the shipped 'Projected days' column"
+(singular "column"), while the shipped table already renders BOTH members of its own rate/
+projection pair as separate columns ("Accrual / day" and "Projected days"). It is unclear whether
+the new pair should mirror that shape with two new columns, or whether Step 4's literal
+"one... column" governs.
+
+**We chose:** Render exactly ONE new table column this iteration —
+`projected_pooled_sessions_to_target`, placed immediately beside "Projected days" — matching Step
+4's literal singular wording. `informative_sessions_per_pooled_session` is served on the API
+response (Step 2's own field, exercised by its own backend test) but gets no dedicated table
+column this iteration; it is the rate the new column's projection is derived from, available to
+any client (a future UI pass, or reading the endpoint directly) without forcing a second new
+column onto an already-dense ten-column table. Weighted over "mirror the shipped pair with two
+columns" because Step 4 names the rendered surface precisely and separately from Step 2's API
+field list, and the house style favors density over completeness-for-its-own-sake — a second
+column the acceptance text does not ask for adds T-11 replay-script/testid surface for no
+acceptance-required benefit.
+
+**Reversible:** yes — `informative_sessions_per_pooled_session` is already served; exposing it in
+its own column later is a pure frontend addition (new testid, no backend change, no stored data
+migrated).
+
+## iter-12 — goal-evaluator
+
+**Ambiguity:** J-11's acceptance names a `[NEW]`-flagged demo-narrator walkthrough as part of
+its own acceptance text, and the era's T-10 rail is strict about evidence honesty. No
+walkthrough was produced: no demo step runs at lean depth, and the shared recorder
+(`incredible_auto_dev/scripts/automation/lib/demo_runner.py`) still cannot play a `scroll`
+action, which is why iteration 11's demo run recorded zero steps (`reports/phase-
+goal-referee-iter-11-demo-results.md`, verdict NOT_YET).
+**We chose:** scored J-11 `passing` with `evidence_makeup: true` and the gap recorded as
+`capture-defect`, reading methodology A.7 ("the walkthrough recording is missing" is named
+verbatim there) as governing, and T-10's "no screenshot ⇒ unknown" as governing the SCREENSHOT
+rail, which J-11 satisfies (a fresh whole-page capture I opened and re-derived by hand). The
+behaviour behind the clause is proven three ways: the screenshot, the six new backend tests in
+my own junit run, and the golden replay script written this iteration. The make-up recording is
+named as a human/finalization item, never as a new build round.
+**Reversible:** yes — the flag stays set until a fresh capture lands; if the owner reads J-11's
+acceptance clause-by-clause, J-11 drops to `partial` with the identical next step (fix the
+shared recorder, then record), and nothing stored changes either way.
+
+**Ambiguity:** the iteration's own TC-14 requires "each screenshot's checksum differs from
+every other screenshot taken this iteration", but `UT-J-05-result.png` and
+`UT-J-11-result.png` are byte-identical (md5 `ca3f6bfea412f5302b9de640d8194abe`) — one
+whole-page capture cited for both journeys. Iteration 10 had a genuine defect of exactly this
+shape (a shared file that showed none of the claimed refusal).
+**We chose:** accepted the shared file rather than scoring either journey down, because I
+opened it and confirmed it carries BOTH acceptance states on one page — the registered S-1 row
+with its 2026-08-15 boundary, origin, status and accrual (J-05) AND the new basis line plus the
+new "Projected sessions" column with the shipped pair unchanged beside it (J-11). Read TC-14's
+checksum clause as a proxy for "no acceptance is hidden behind a reused image", which direct
+inspection satisfies more strongly than a hash comparison would.
+**Reversible:** yes — a second capture cropped to either journey costs nothing and changes no
+recorded status; nothing stored depends on this reading.

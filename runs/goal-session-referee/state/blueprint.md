@@ -40,6 +40,7 @@ no dedicated page):
 | J-08 promotion interlock | no new page — reads inside the EXISTING `pnl_scan` report's `promotion` block, wherever the shipped `/desk` sections already render scan reports | Desk |
 | J-09 full Referee UI + MCP contract v5 | `/desk`, the three sections above; MCP `desk_referee` / `desk_referee_registry` | Desk |
 | J-10 regression sentinel | all three routes, every kept section | Cockpit / Structure / Desk |
+| J-11 accrual projection basis disclosure (field additions on the J-07 shortlist) | `/desk` → **Referee Registry** (shortlist table + new basis line) | Desk |
 
 ## Data Contract
 
@@ -310,3 +311,41 @@ supplied), closing the iter-9-recorded MINOR anti-goal entry (a certificate's de
 was never checked against its pooled evidence's own identity) -- see state/assumptions.md
 iter-10 entry. The Certificate record's own field shape (iter-6/iter-9 notes) is unchanged;
 still zero certificates on file against the operator's real store. -->
+
+<!-- iter-12 note (J-11): field-level additions to the ALREADY-registered "Registry" row's
+existing `GET /research/desk/referee/registry/shortlist` endpoint cell (owner
+referee_registry.py::shortlist_response(), endpoint registered at iter-8) -- no new row, no new
+endpoint, no owner change. Computed entirely from data the fold already scans this call (no
+second PlaybookStore.list(), no second pooling walk); feeds no null, no test statistic, no
+p-value, no BH denominator, no verdict, no gate (zero referee_parameters() entry, zero new
+Config field).
+
+1. New top-level response key `accrual_basis`: {corpus_first_session_date: str ("YYYY-MM-DD"),
+corpus_last_session_date: str ("YYYY-MM-DD"), corpus_span_days: int >= 0 (the SAME value the
+shipped accrual_rate_sessions_per_day already divides by via _corpus_session_span_days() --
+reused, never recomputed), recorded_sessions_in_span: int >= 0 (== playbook_occurrence_
+readiness()'s own distinct_sessions -- the fold's raw, unfiltered recorded-date count),
+pooled_sessions_at_current_basis: int >= 0 (== that same distinct_sessions minus the count of
+dates in that fold's own stale_basis_dates -- the count actually pooled at the live detector
+basis), longest_zero_session_stretch_days: int >= 0, longest_zero_session_stretch_start: str
+("YYYY-MM-DD"), longest_zero_session_stretch_end: str ("YYYY-MM-DD") (the two recorded session
+dates bounding the corpus's longest zero-recorded-session gap -- walks the SAME sorted
+newest_by_date date keys shortlist_response() already builds).
+
+2. Two new per-candidate fields on the existing candidates[] array entries, beside (never
+replacing) the shipped accrual_rate_sessions_per_day / projected_days_to_target:
+informative_sessions_per_pooled_session: float >= 0 (that candidate's own ALREADY-computed
+n_sessions -- context-filtered via _starter_context_readiness for S-4/S-5/S-6, unfiltered
+per_setup_side for S-1/S-2/S-3 -- divided by accrual_basis.pooled_sessions_at_current_basis; 0.0
+when the denominator is 0, never a division error), projected_pooled_sessions_to_target: float |
+null (target_sessions over that rate; null when the rate is 0 -- reuses the shipped
+divide-by-zero rendering discipline, never a new one).
+
+Rendered for the first time this iteration (not a stub): the shipped Referee Registry section
+(`/desk`) gains one basis line above the shortlist table (reading accrual_basis verbatim) and
+exactly ONE new right-aligned column beside the shipped "Projected days" column
+(projected_pooled_sessions_to_target only -- informative_sessions_per_pooled_session stays
+API-only this iteration, see state/assumptions.md iter-12 entry) -- both server-computed, zero
+client arithmetic, new data-testids only, no shipped column/heading/data-testid touched. No new
+page, no new nav entry; the Information Architecture table's existing J-05/J-07 "Referee
+Registry" row (now also tagged J-11 above) already covers this surface. -->

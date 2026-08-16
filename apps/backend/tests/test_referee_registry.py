@@ -11,6 +11,7 @@ re-implement anything ``PlaybookStore`` already owns."""
 from __future__ import annotations
 
 import datetime
+import pathlib
 import sys
 import zoneinfo
 
@@ -22,6 +23,7 @@ from app.config import CONFIG
 from app.main import app
 from app.research.bars import BarStore
 from app.research.desk_playbook import PLAYBOOK_REGISTER, PlaybookStore, playbook_parameters
+from app.research.referee_adjudicate import referee_parameters_hash
 from app.research.referee_null import REFEREE_NULL_TOD_SPEC_ID, REFEREE_TEST_PERM_SPEC_ID
 from app.research.referee_registry import (
     REFEREE_MIN_OCCURRENCES,
@@ -871,6 +873,185 @@ def test_shortlist_s4_s5_s6_readiness_reflects_the_at_wall_context_resolve(
     assert by_id["S-4"]["n"] == 1 and by_id["S-4"]["n_sessions"] == 1
     assert by_id["S-5"]["n"] == 1 and by_id["S-5"]["n_sessions"] == 1
     assert by_id["S-6"]["n"] == 1 and by_id["S-6"]["n_sessions"] == 1
+
+
+# === goal-referee-iter-12 (J-11): the accrual projection states its own basis =========================
+#
+# `accrual_basis` (corpus-honest recorded/pooled session accounting + the longest zero-session
+# recording gap) plus two per-candidate fields BESIDE (never replacing) the shipped
+# accrual_rate_sessions_per_day/projected_days_to_target pair. TC-1/TC-2/TC-4/TC-6 share one
+# fixture corpus (a deliberate multi-month gap, hand-computed numbers); TC-3 uses a SEPARATE empty
+# corpus (pooled_sessions_at_current_basis == 0, the genuine divide-by-zero risk).
+
+
+def _plant_gap_corpus(playbook_store: PlaybookStore) -> None:
+    """Six recorded sessions spanning 2026-01-05..2026-06-20 (167 calendar days inclusive) with a
+    deliberate 65-day zero-session gap between 2026-02-09 and 2026-04-16 (the days 2026-02-10..
+    2026-04-15 inclusive carry no recorded session -- TC-1's own literal example). Every session
+    plants exactly one capitulation:long signal (S-1's cell) -- never a jbe:long one, so S-2 stays
+    genuinely at zero throughout (TC-3's "a fixture candidate whose cell has zero occurrences
+    pooled at the current detector basis", the non-vacuous half, folded into the test below rather
+    than duplicated)."""
+    for session_date in (
+        "2026-01-05", "2026-01-20", "2026-02-09", "2026-04-16", "2026-05-01", "2026-06-20",
+    ):
+        _plant_playbook_signals(playbook_store, session_date, [_signal("capitulation", "long")])
+
+
+def test_tc1_tc2_tc6_accrual_basis_serves_hand_computed_span_and_longest_zero_session_gap(
+    stores, bar_store,
+):
+    """TC-1/TC-2: against the gap corpus, `accrual_basis`'s first/last recorded dates, span,
+    recorded/pooled session counts, and longest zero-session stretch (length + bounding dates) are
+    all hand-computed exact. TC-6 (folded in here rather than duplicated in its own test): the
+    shipped `accrual_rate_sessions_per_day`/`projected_days_to_target` stay byte-identical to their
+    pre-iteration formula against this SAME corpus."""
+    _fam, _hyp, _wd, _cert, playbook_store = stores
+    _plant_gap_corpus(playbook_store)
+
+    response = shortlist_response(
+        playbook_store=playbook_store, config_fingerprint=CONFIG.config_fingerprint(),
+        bar_store=bar_store, config=CONFIG,
+    )
+    basis = response["accrual_basis"]
+    assert basis["corpus_first_session_date"] == "2026-01-05"
+    assert basis["corpus_last_session_date"] == "2026-06-20"
+    assert basis["corpus_span_days"] == 167  # (2026-06-20 - 2026-01-05).days + 1, hand-counted
+    assert basis["recorded_sessions_in_span"] == 6  # six distinct recorded session dates
+    assert basis["pooled_sessions_at_current_basis"] == 6  # none stale -- all at the live basis
+    assert basis["longest_zero_session_stretch_days"] == 65  # 2026-02-10..2026-04-15 inclusive
+    assert basis["longest_zero_session_stretch_start"] == "2026-02-09"  # the recorded date BEFORE
+    assert basis["longest_zero_session_stretch_end"] == "2026-04-16"  # the recorded date AFTER
+
+    by_id = {c["candidate_id"]: c for c in response["candidates"]}
+    s1 = by_id["S-1"]  # capitulation:long -- every one of the six sessions
+    assert s1["n"] == 6 and s1["n_sessions"] == 6
+    # TC-6: the shipped pair, byte-identical to the pre-iteration formula
+    # (n_sessions / corpus_span_days, target_sessions / that rate).
+    assert s1["accrual_rate_sessions_per_day"] == pytest.approx(6 / 167)
+    assert s1["projected_days_to_target"] == pytest.approx(12 / (6 / 167))
+    # TC-4: the new recorded-session basis, hand-computed exact -- 6 own sessions over 6 pooled
+    # corpus-wide sessions is a clean 1.0, and 12 target sessions over a 1.0 rate is 12.0.
+    assert s1["informative_sessions_per_pooled_session"] == pytest.approx(1.0)
+    assert s1["projected_pooled_sessions_to_target"] == pytest.approx(12.0)
+
+    # TC-3 (the non-vacuous "zero occurrences pooled" half): S-2 (jbe:long) never fires in this
+    # corpus, so its rate is a genuine 0.0 against a NONEMPTY pooled-session denominator (6) --
+    # never a ZeroDivisionError -- and its projection is null.
+    s2 = by_id["S-2"]
+    assert s2["n"] == 0 and s2["n_sessions"] == 0
+    assert s2["informative_sessions_per_pooled_session"] == 0.0
+    assert s2["projected_pooled_sessions_to_target"] is None
+
+
+def test_tc3_zero_pooled_session_denominator_never_divides_by_zero(stores, bar_store):
+    """TC-3 (the genuine divide-by-zero-risk half) + the empty-corpus error case: an EMPTY corpus
+    has `pooled_sessions_at_current_basis == 0` -- every candidate's own
+    `informative_sessions_per_pooled_session` must read `0.0`, never raise, and every
+    `projected_pooled_sessions_to_target` must read `null`. Mirrors
+    `test_tc2_zero_jbe_long_signals_amid_a_nonempty_corpus_serves_zero_never_a_divide_by_zero`'s own
+    shipped-pair guard, at the corpus-wide denominator rather than one cell's numerator."""
+    _fam, _hyp, _wd, _cert, playbook_store = stores  # empty -- pooled_sessions_at_current_basis == 0
+    response = shortlist_response(
+        playbook_store=playbook_store, config_fingerprint=CONFIG.config_fingerprint(),
+        bar_store=bar_store, config=CONFIG,
+    )
+    basis = response["accrual_basis"]
+    assert basis["pooled_sessions_at_current_basis"] == 0
+    assert basis["corpus_first_session_date"] == ""
+    assert basis["corpus_last_session_date"] == ""
+    assert basis["corpus_span_days"] == 0
+    assert basis["recorded_sessions_in_span"] == 0
+    assert basis["longest_zero_session_stretch_days"] == 0
+    assert basis["longest_zero_session_stretch_start"] == ""
+    assert basis["longest_zero_session_stretch_end"] == ""
+    for candidate in response["candidates"]:
+        assert candidate["informative_sessions_per_pooled_session"] == 0.0
+        assert candidate["projected_pooled_sessions_to_target"] is None
+
+
+def test_tc5_shortlist_accrual_basis_is_byte_identical_across_two_back_to_back_calls(
+    stores, bar_store,
+):
+    """TC-5: two calls against the SAME stores with no write between them serve byte-identical
+    bodies, including every new field -- no wall-clock, no unseeded randomness anywhere in this
+    read-side fold."""
+    _fam, _hyp, _wd, _cert, playbook_store = stores
+    _plant_gap_corpus(playbook_store)
+    kwargs = dict(
+        playbook_store=playbook_store, config_fingerprint=CONFIG.config_fingerprint(),
+        bar_store=bar_store, config=CONFIG,
+    )
+    first = shortlist_response(**kwargs)
+    second = shortlist_response(**kwargs)
+    assert first == second
+
+
+def test_tc7_shortlist_adds_no_new_store_scan_and_keeps_band_map_resolver_compute_false(
+    stores, bar_store, monkeypatch,
+):
+    """TC-7: this iteration's new fields are computed from data `shortlist_response()` ALREADY
+    scans -- proven by wrapping `PlaybookStore.list` with a counting wrapper and asserting the call
+    count stays at its PRE-ITERATION baseline of 2 (one inside `playbook_occurrence_readiness()`,
+    one direct call the function already made) rather than growing to 3. Also proves
+    `BandMapResolver` is still constructed `compute=False` -- a RECORDED-band-map lookup, never a
+    fresh compute (T-8), unchanged by this iteration."""
+    _fam, _hyp, _wd, _cert, playbook_store = stores
+    _plant_gap_corpus(playbook_store)
+
+    real_list = PlaybookStore.list
+    call_count = {"n": 0}
+
+    def _counting_list(self):
+        call_count["n"] += 1
+        return real_list(self)
+
+    monkeypatch.setattr(PlaybookStore, "list", _counting_list)
+
+    resolver_kwargs: list[dict] = []
+    real_resolver_cls = referee_registry_module.BandMapResolver
+
+    def _spy_resolver(*args, **kwargs):
+        resolver_kwargs.append(kwargs)
+        return real_resolver_cls(*args, **kwargs)
+
+    monkeypatch.setattr(referee_registry_module, "BandMapResolver", _spy_resolver)
+
+    shortlist_response(
+        playbook_store=playbook_store, config_fingerprint=CONFIG.config_fingerprint(),
+        bar_store=bar_store, config=CONFIG,
+    )
+    assert call_count["n"] == 2  # unchanged from the pre-iteration baseline -- no third scan added
+    assert len(resolver_kwargs) == 1
+    assert resolver_kwargs[0]["compute"] is False
+
+
+def test_tc8_referee_parameters_served_json_is_unchanged_by_this_iteration():
+    """TC-8 (the `referee_parameters()` half): J-11 adds zero `referee_parameters()` entries --
+    pinned against the exact pre-iteration content hash (mirrors the `Config().config_fingerprint()`
+    `08e471b10130e1e2` pin idiom). A future accidental entry here would move this hash and fail
+    loudly, exactly like a fingerprint-pin regression would."""
+    assert referee_parameters_hash() == "0976d49e3e4583b5"
+
+
+def test_tc17_the_statistical_spec_carries_the_iter12_accrual_addendum():
+    """TC-17: docs/referee-statistical-spec.md Sec9 carries a dated, named addendum paragraph
+    stating the accrual projection is a read-side planning disclosure no statistical procedure
+    consumes, with both bases (calendar-day and recorded-session) served side by side rather than
+    one replacing the other."""
+    spec_path = (
+        pathlib.Path(__file__).resolve().parents[3] / "docs" / "referee-statistical-spec.md"
+    )
+    # Normalized (whitespace/newlines collapsed to single spaces) so this assertion is immune to
+    # the prose's own line-wrap width -- it checks CONTENT, never markdown formatting.
+    text = " ".join(spec_path.read_text().split())
+    assert "goal-referee-iter-12" in text  # the dated, named revision marker
+    assert "2026-08-16" in text
+    assert "read-side planning disclosure" in text.lower()
+    assert "side by side" in text.lower()  # both bases served together -- neither replaces the other
+    # explicitly denies feeding any confirmatory machinery, echoing goal.md's own J-11 Step 2.
+    assert "neither feeds any null, test statistic, p-value, BH denominator, verdict, or gate" in text
+    assert "neither is a `referee_parameters()` entry" in text
 
 
 # === TC-9 / TC-10 (iter-8): the write path stays generic; discovery is boundary-gated on

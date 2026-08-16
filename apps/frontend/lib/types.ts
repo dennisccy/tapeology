@@ -2154,6 +2154,29 @@ export interface RefereeShortlistCandidate {
   accrual_rate_sessions_per_day: number;
   // `null` only when `accrual_rate_sessions_per_day` is 0 -- never a divide-by-zero value.
   projected_days_to_target: number | null;
+  // goal-referee-iter-12 (J-11): BESIDE (never replacing) the calendar-day pair above -- the SAME
+  // rate/projection shape measured against the corpus's own recorded-session basis
+  // (`accrual_basis.pooled_sessions_at_current_basis`) instead of a raw calendar-day span. `0.0`
+  // when the denominator (the corpus-wide pooled-session count) is 0 -- never a divide-by-zero
+  // value; `projected_pooled_sessions_to_target` is `null` in that same case.
+  informative_sessions_per_pooled_session: number;
+  projected_pooled_sessions_to_target: number | null;
+}
+
+// goal-referee-iter-12 (J-11): the corpus's own recorded-session accounting -- a read-side
+// planning disclosure (docs/referee-statistical-spec.md Sec9 addendum) no statistical procedure
+// consumes. `corpus_span_days` is byte-identical to the value the shipped
+// `accrual_rate_sessions_per_day` already divides by; the four session-date/count fields read ""
+// / `0` on an empty corpus, never a crash.
+export interface RefereeAccrualBasis {
+  corpus_first_session_date: string;
+  corpus_last_session_date: string;
+  corpus_span_days: number;
+  recorded_sessions_in_span: number;
+  pooled_sessions_at_current_basis: number;
+  longest_zero_session_stretch_days: number;
+  longest_zero_session_stretch_start: string;
+  longest_zero_session_stretch_end: string;
 }
 
 // goal-referee-iter-9 rider: `family_id`/`family_q` are the starter family's own
@@ -2163,6 +2186,9 @@ export interface RefereeShortlistResponse {
   candidates: RefereeShortlistCandidate[];
   family_id: string;
   family_q: number;
+  // goal-referee-iter-12 (J-11): the accrual-basis disclosure, computed once inside
+  // shortlist_response()'s existing single store scan (referee_registry.py) -- no second owner.
+  accrual_basis: RefereeAccrualBasis;
 }
 
 // The read-side fold additions GET /research/desk/referee/registry adds to every hypothesis

@@ -224,3 +224,18 @@ with no demo recording at all. If a walkthrough matters for an era's finish, the
 to happen in a round that dispatches a developer, or outside goal mode entirely.
 **Applies to:** any session planning an evidence-depth round to clear deferred rows, and any era
 whose closure artifacts are expected to include a demo recording.
+
+## iter-12 — 2026-08-16T01:15:00Z
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** In this project's headless Chrome-MCP rig, a screenshot taken at a deep scroll
+offset can come back a solid blank even while `getBoundingClientRect()`/`visibilityState`
+report the target elements laid out and visible — both the explicit capture and the
+auto-captured per-action PNG were blank at `scrollY≈1460` in a 1316px viewport. The working
+fix is to resize the viewport to the page's own `scrollHeight` (here 2900px) so the whole page
+fits without scrolling, then capture. Corollary for evaluators: one honest full-page capture
+can legitimately serve two journeys that live in the same section, so a checksum-distinctness
+rule (this iteration's TC-14) will false-alarm — open the image and check it carries BOTH
+acceptance states rather than judging by md5.
+**Applies to:** any browser-QA pass on `/desk` (a very tall page) or any acceptance whose
+target sits far below the fold; any evaluator applying a per-screenshot checksum rule.
