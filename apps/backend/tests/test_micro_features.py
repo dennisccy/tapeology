@@ -271,6 +271,24 @@ def test_last_trade_outcome_is_a_separately_named_basis_never_the_primary():
     assert result["value"] == pytest.approx(0.25)
 
 
+# --- J-03: the section 4 cost-proxy column, served BESIDE every outcome, never netted in -----------
+
+
+def test_spread_bps_hand_computed():
+    # 0.06 wide on a 149.0 mid -> (0.06 / 149.0) * 10_000.
+    assert mf.spread_bps(0.06, 149.0) == pytest.approx(0.06 / 149.0 * 10_000.0)
+
+
+def test_spread_bps_none_with_no_measured_spread_or_mid():
+    assert mf.spread_bps(None, 149.0) is None
+    assert mf.spread_bps(0.06, None) is None
+
+
+def test_spread_bps_none_with_a_non_positive_mid():
+    assert mf.spread_bps(0.06, 0.0) is None
+    assert mf.spread_bps(0.06, -1.0) is None
+
+
 # --- the section 2.6 cross-basis unit gate (TC-7 / TR-18) -------------------------------------------
 
 

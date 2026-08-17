@@ -36,6 +36,9 @@ from app.research.micro_readiness import (
     build_readiness,
     resolve_micro_readiness_cache_db_path,
 )
+from app.research.desk_playbook import PlaybookStore, playbook_parameters
+from app.research.desk_routes import get_playbook_store
+from app.research.micro_join import joinable_corpus_counts
 from app.research.micro_routes import get_micro_readiness_cache
 from app.research.referee_evidence import REFEREE_TICK_GATE_SYMBOL_DAYS
 from app.research.routes import get_dataset_store
@@ -84,12 +87,18 @@ def _plant_dataset(
 def client(tmp_path):
     dataset_store = DatasetStore(tmp_path / "datasets")
     cache = MicroReadinessCache(str(tmp_path / "cache.db"))
+    # J-03: the route now also depends on a playbook store (the joinable_corpus field) -- a
+    # tmp_path-scoped, empty-by-default one, so this fixture's existing hermeticity contract is
+    # unaffected (never the real, ambient .data/playbook directory).
+    playbook_store = PlaybookStore(tmp_path / "playbook")
     app.dependency_overrides[get_dataset_store] = lambda: dataset_store
     app.dependency_overrides[get_micro_readiness_cache] = lambda: cache
+    app.dependency_overrides[get_playbook_store] = lambda: playbook_store
     with TestClient(app) as c:
         yield c, dataset_store, cache
     app.dependency_overrides.pop(get_dataset_store, None)
     app.dependency_overrides.pop(get_micro_readiness_cache, None)
+    app.dependency_overrides.pop(get_playbook_store, None)
 
 
 # --- _quote_rule_decides: cross-validated against classify_aggressor's own OBSERVABLE behavior ------
@@ -439,3 +448,100 @@ def test_tc5_real_corpus_all_three_pilot_studies_read_floor_unmet(real_readiness
         assert floor["required_sessions"] == 60
         assert floor["available_sessions"] == 11
         assert floor["status"] == "floor_unmet"
+
+
+# --- J-03 TC-5: the joinable_corpus field (docs/phases/goal-rapid-microscope-iter-3.md) ------------
+#
+# NOT the same "TC-5" as the J-01 real-corpus block just above (a numbering coincidence across
+# iterations, not a duplicate) -- this section covers THIS iteration's own DEFINITION OF DONE item
+# "GET /research/desk/micro/readiness serves the honest joinable_corpus breakdown".
+
+
+def test_joinable_corpus_defaults_to_an_honest_zero_without_a_playbook_store(tmp_path):
+    """``build_readiness`` called the OLD way (no ``playbook_store``, every pre-J-03 call site)
+    still serves a well-shaped, honestly-zero ``joinable_corpus`` -- never an error, never an
+    absent key."""
+    store = DatasetStore(tmp_path / "datasets")
+    _plant_dataset(store, symbol="AAPL")
+    cache = MicroReadinessCache(str(tmp_path / "cache.db"))
+    body = build_readiness(store, cache, dataset_dir=str(tmp_path / "datasets"))
+    assert body["joinable_corpus"] == {
+        "total": 0, "playbook_signal_count": 0, "band_touch_count": 0, "by_setup_id": {},
+    }
+
+
+def test_joinable_corpus_matches_joinable_corpus_counts_directly(tmp_path):
+    """``build_readiness``'s served field is BYTE-IDENTICAL to calling ``joinable_corpus_counts``
+    directly over the same two stores -- single source of truth, never a second computation."""
+    store = DatasetStore(tmp_path / "datasets")
+    _plant_dataset(store, symbol="AAPL")
+    playbook_store = PlaybookStore(tmp_path / "playbook")
+    playbook_store.record(
+        session_date="2026-06-09",
+        config_fingerprint=CONFIG.config_fingerprint(),
+        playbook_input_signature="sig-readiness-tc5",
+        payload_version=1,
+        parameters=playbook_parameters(),
+        register="",
+        signals=[
+            {"symbol": "AAPL", "setup_id": "opening_range_break", "trigger_ts": "2026-06-09T13:00:30Z"},
+        ],
+        absences=[], diagnostics=[],
+    )
+    cache = MicroReadinessCache(str(tmp_path / "cache.db"))
+
+    body = build_readiness(
+        store, cache, dataset_dir=str(tmp_path / "datasets"), playbook_store=playbook_store
+    )
+
+    assert body["joinable_corpus"] == joinable_corpus_counts(store, playbook_store)
+    assert body["joinable_corpus"] == {
+        "total": 1, "playbook_signal_count": 1, "band_touch_count": 0,
+        "by_setup_id": {"opening_range_break": 1},
+    }
+
+
+def test_joinable_corpus_is_served_through_the_route_and_is_non_negative_and_never_hardcoded(
+    client, tmp_path
+):
+    """TC-5's own route-level acceptance: called twice, the SERVED ``joinable_corpus`` is
+    identical, every count is a non-negative int, and it reflects a REAL planted signal -- never a
+    hardcoded placeholder."""
+    c, store, _cache = client
+    _plant_dataset(store, symbol="AAPL")
+    # Plants into the SAME tmp_path the `client` fixture already scoped its (overridden) playbook
+    # store to -- a second PlaybookStore instance over the identical on-disk directory.
+    playbook_store = PlaybookStore(tmp_path / "playbook")
+    playbook_store.record(
+        session_date="2026-06-09",
+        config_fingerprint=CONFIG.config_fingerprint(),
+        playbook_input_signature="sig-readiness-route-tc5",
+        payload_version=1,
+        parameters=playbook_parameters(),
+        register="",
+        signals=[
+            {"symbol": "AAPL", "setup_id": "jbe", "trigger_ts": "2026-06-09T13:00:15Z"},
+            {"symbol": "AAPL", "setup_id": "jbe", "trigger_ts": "2099-01-01T00:00:00Z"},  # not joinable
+        ],
+        absences=[], diagnostics=[],
+    )
+
+    first = c.get("/research/desk/micro/readiness").json()["joinable_corpus"]
+    second = c.get("/research/desk/micro/readiness").json()["joinable_corpus"]
+
+    assert first == second
+    for key in ("total", "playbook_signal_count", "band_touch_count"):
+        assert isinstance(first[key], int) and first[key] >= 0
+    assert first["playbook_signal_count"] == 1  # only the in-window signal counts
+    assert first["by_setup_id"] == {"jbe": 1}
+
+
+def test_real_corpus_readiness_still_serves_an_honest_zero_joinable_corpus_without_a_playbook_store(
+    real_readiness,
+):
+    """The module-scoped real-corpus fixture above calls ``build_readiness`` the OLD way (no
+    ``playbook_store``) -- confirms the new field is present and honestly zero there too, never an
+    absent key on the real 18-dataset corpus response."""
+    assert real_readiness["joinable_corpus"] == {
+        "total": 0, "playbook_signal_count": 0, "band_touch_count": 0, "by_setup_id": {},
+    }

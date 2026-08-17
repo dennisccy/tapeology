@@ -106,3 +106,44 @@ sentinel test plan so it stops failing for test-rig reasons (use AAPL on Structu
 with recorded signals, repair the replay script's volatile assertion); write down the two
 undisclosed measurement gaps so J-05 does not inherit them silently; and re-photograph the
 readiness panel whenever a later iteration seeds the rig with more tick data.
+
+## Iteration 3 — goal-rapid-microscope-iter-3
+
+**Date:** 2026-08-17T09:05:00Z
+**Verdict:** ESCALATE
+**Depth dispatched:** lean (the spec asked for full; the engine demoted it — telemetry reason
+`budget-breach`, so the auditor step never ran)
+**Journey deltas:**
+- Newly passing: J-03 "Structure x flow — the join that never looks ahead"
+- Newly failing: none
+- Regressed: none
+- Unchanged: J-01, J-02 passing (both re-verified, not carried); J-04..J-09 failing (none of their
+  modules landed — checked against this iteration's complete 8-file change list); J-10 partial, but
+  its browser sentinel is fully green for the first time
+- Anti-goal violations: none critical; one NEW minor open item (the new corpus count silently drops
+  a corrupt playbook record instead of failing closed) plus the still-open minor timing-stamp
+  ruling carried from iteration 2
+
+**Reasoning:** I did not take the handoff on trust. I ran J-03's evidence myself: 74 tests across
+the join and feature files, and I read the no-lookahead tests to confirm they really probe the
+stream (a sampled grid across the fixture plus a probe just before each later row) rather than
+passing vacuously. I called the new corpus count against the owner's real tick data and got exactly
+what the handoff claimed — 2 recorded chart signals fall inside recorded tick windows, both of one
+setup type — and the same answer twice in a row, so it is real and repeatable, not a stored number.
+I re-ran the whole backend suite (2,866 pass, 8 skip, 0 fail), re-computed the six referee file
+hashes against the iteration-0 list, and confirmed the settings pin, the engine folder, and both
+chart-pattern modules are byte-for-byte unchanged. For J-10 I opened the page photograph and read
+it: the Desk page really does show four recorded signals for 2026-06-22 with real prices and times,
+which is what iteration 2 could not get, and every kept panel renders. One evidence fault: this
+iteration's Microscope Readiness photograph is a blank rectangle, so J-01 keeps its make-up flag and
+still cites the older, good picture — the panel's own code was not touched, and the endpoint
+photograph taken this run shows the same served values.
+
+**Next-step recommendation:** Build J-04 "The Scout and the ledger" next under the full pipeline.
+The engine downgraded this iteration to the quick pass for time reasons, so the independent auditor
+— the only step in this session that has caught an honesty fault (two of them, in iteration 2) —
+did not run, and the quick pass again left two small honesty gaps unfixed. J-04 is the journey that
+must never lose the record of a failed trial, so it needs that auditor. Carry four passenger items:
+report or refuse on a corrupt playbook record instead of silently skipping it; serve a "not counted
+yet" state for wall touches instead of a bare zero; get the owner's ruling on the one-quote-early
+timing stamp before any result is measured from it; and re-take the readiness photograph.

@@ -6,6 +6,13 @@ actually exists today, and which of the three predeclared pilot-study floors it 
 honestly). It never fabricates, never re-derives a value another store already owns, and never
 computes at GET time beyond the one per-shard cost documented below.
 
+**J-03 addition:** the SAME "Corpus readiness truth" Data Contract row (no new endpoint) now also
+carries ``joinable_corpus`` -- how many recorded playbook signals fall inside a recorded tick
+dataset's own window, with a ``by_setup_id`` breakdown, computed by ``micro_join.
+joinable_corpus_counts`` (never a second, independently-valued copy of that count here). Read the
+full rationale, including why ``band_touch_count`` is honestly zero this iteration, in
+``micro_join.py``'s own module docstring.
+
 **Reads verbatim, never re-derives.** Every shard's ``checksum``/``trade_count``/``quote_count``/
 ``data_feed``/``window_start_utc``/``window_end_utc`` is read straight off
 ``DatasetStore.list()``'s own already-checksum-verified metadata -- this module performs no
@@ -68,6 +75,7 @@ from zoneinfo import ZoneInfo
 
 from ..providers.base import Event, QuoteEvent, TradeEvent
 from .datasets import DatasetStore
+from .micro_join import joinable_corpus_counts
 from .referee_evidence import REFEREE_TICK_GATE_SYMBOL_DAYS
 
 __all__ = [
@@ -280,12 +288,19 @@ class MicroReadinessCache:
 # --- the whole readiness aggregation -----------------------------------------------------------------
 
 
-def build_readiness(store: DatasetStore, cache: MicroReadinessCache, *, dataset_dir: str) -> dict:
+def build_readiness(
+    store: DatasetStore, cache: MicroReadinessCache, *, dataset_dir: str, playbook_store=None
+) -> dict:
     """The whole ``GET /research/desk/micro/readiness`` body -- a pure aggregation over
     ``DatasetStore.list()``'s already-verified records (module docstring). Deterministic and
     byte-reproducible: an unchanged store + a warm cache yields a byte-identical response on
     every call (TC-7) -- nothing here reads the wall clock into the served shape (the cache's own
-    ``created_utc`` never leaves the cache)."""
+    ``created_utc`` never leaves the cache).
+
+    ``playbook_store`` (J-03, ``desk_playbook.PlaybookStore``) is OPTIONAL and defaults to
+    ``None`` -- callers that do not pass one (every pre-J-03 test in this file) get the honest
+    ``joinable_corpus`` zero rather than an error, since "no playbook evidence was even checked"
+    is a true statement in that case, never a fabricated one."""
     records, errors = store.list()
     root = Path(dataset_dir)
 
@@ -359,9 +374,21 @@ def build_readiness(store: DatasetStore, cache: MicroReadinessCache, *, dataset_
         "referee_tick_gate_symbol_days": REFEREE_TICK_GATE_SYMBOL_DAYS,
     }
 
+    # J-03: honestly zero (never computed) when no playbook_store is given at all -- a true
+    # statement ("no playbook evidence was even checked"), never a fabricated count. When one IS
+    # given, the count is owned entirely by micro_join.joinable_corpus_counts (never re-derived
+    # here -- module docstring).
+    if playbook_store is None:
+        joinable_corpus = {
+            "total": 0, "playbook_signal_count": 0, "band_touch_count": 0, "by_setup_id": {},
+        }
+    else:
+        joinable_corpus = joinable_corpus_counts(store, playbook_store)
+
     return {
         "totals": totals,
         "shards": shards,
         "study_floors": study_floors,
         "integrity_errors": errors,
+        "joinable_corpus": joinable_corpus,
     }

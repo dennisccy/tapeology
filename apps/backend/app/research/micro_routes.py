@@ -24,6 +24,8 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from ..config import CONFIG
 from .datasets import DatasetStore
+from .desk_playbook import PlaybookStore
+from .desk_routes import get_playbook_store
 from .micro_readiness import MicroReadinessCache, build_readiness, resolve_micro_readiness_cache_db_path
 from .micro_snapshots import (
     MicroSnapshotComputeManager,
@@ -50,14 +52,21 @@ def get_micro_readiness_cache() -> MicroReadinessCache:
 def get_micro_readiness(
     dataset_store: DatasetStore = Depends(get_dataset_store),
     cache: MicroReadinessCache = Depends(get_micro_readiness_cache),
+    playbook_store: PlaybookStore = Depends(get_playbook_store),
 ) -> dict:
     """J-01's corpus-truth fold: the honest per-shard inventory, corpus totals beside the
     referee's tick-gate figure, and the three pilot studies' floor table -- see
     ``micro_readiness.build_readiness``'s own docstring for the full contract. Never 404/500 on
     an empty corpus (the desk router's established never-404-on-absence convention) -- an empty
     ``shards`` list (``study_floors`` still carries its 3 rows, each read against a 0-session
-    corpus) at HTTP 200."""
-    return build_readiness(dataset_store, cache, dataset_dir=CONFIG.dataset_dir_resolved())
+    corpus) at HTTP 200.
+
+    J-03: ``playbook_store`` is the EXISTING ``desk_routes.get_playbook_store`` dependency,
+    reused verbatim (never a second, redefined provider) -- it feeds the ``joinable_corpus``
+    field, computed by ``micro_join.joinable_corpus_counts``."""
+    return build_readiness(
+        dataset_store, cache, dataset_dir=CONFIG.dataset_dir_resolved(), playbook_store=playbook_store
+    )
 
 
 def get_micro_snapshots_dir() -> str:

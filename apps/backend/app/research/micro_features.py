@@ -72,6 +72,7 @@ __all__ = [
     "require_outcome_start_not_before_conditioning",
     "mid_outcome",
     "last_trade_outcome",
+    "spread_bps",
     "CrossBasisUnverifiedUnitError",
     "is_verified_unit",
     "require_verified_unit",
@@ -404,6 +405,19 @@ def last_trade_outcome(
         "unmeasured": unmeasured,
         "truncated": truncated,
     }
+
+
+def spread_bps(spread: float | None, mid: float | None) -> float | None:
+    """The quoted spread (dollar terms, exactly as the engine/observer already compute it)
+    expressed in basis points of the mid -- spec section 4's cost-proxy column: "Quoted spread at
+    the outcome start (bps) is served beside every outcome ... never netted into the outcome
+    silently." A caller (``micro_join.py``, the FIRST caller of this closed outcome set) reads
+    this beside ``mid_outcome``/``last_trade_outcome`` as an independent field -- it is never
+    added to or subtracted from either outcome's own ``value``. ``None`` with no measured spread
+    or mid, or a non-positive mid (no basis for a bps expression), never a fabricated 0.0."""
+    if spread is None or mid is None or mid <= 0:
+        return None
+    return spread / mid * 10_000.0
 
 
 # --- The section 2.6 cross-basis unit gate (TR-18) ------------------------------------------------

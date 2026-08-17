@@ -64,3 +64,29 @@ auditor caught it (F1). Pin the sentinel steps to data the rig actually holds, a
 cross-read `ui-test-results.md` before believing a QA regression table.
 **Applies to:** every future iteration — J-10 is the standing required-still-passing journey, so
 this fires each run until the plan is parameterized to the rig's real data state.
+
+## iter-3 — 2026-08-17T09:05:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** The engine's depth arbiter can silently downgrade a `Depth: full` spec to lean —
+iter-3's telemetry records `{"from":"full","to":"lean","reason":"budget-breach"}` because iter-2
+(full) overran its wall clock. A CONTINUE verdict plus a "full" depth recommendation is NOT enough
+to get it back: the arbiter's `full-cap` rung (one full per 4-iteration window) would demote it
+again. Only a prior **ESCALATE** (or REGRESSION, or a prior COHERENCE-FAIL) grants full
+unconditionally, because that is rung 1 of the ladder in `scripts/automation/run-goal.sh:2427`.
+**Applies to:** any iteration where the evaluator genuinely needs the auditor lane (provenance
+ledgers, leakage rails, whole-corpus data events) — say ESCALATE, do not just recommend full.
+
+## iter-3 — 2026-08-17T09:05:00Z (second)
+
+**Verdict:** ESCALATE
+**Lesson:** A 13-line purely additive helper in `apps/backend/app/research/micro_features.py`
+(`spread_bps`) re-keyed and forced a rebuild of ALL 18 real-corpus snapshots, because
+`micro_snapshots.feature_source_hash()` hashes the whole SOURCE BYTES of `micro_features.py` +
+`micro_observer.py`, not the functions actually used. The rebuild is honest (an identity MISS, never
+a stale served value) and value-preserving here — the row total stayed exactly 3,815,933 — but it
+means any edit to those two files, even a comment, triggers a whole-corpus recompute that no lane
+audits in a lean pass. Check the row total against the prior iteration's recorded number as a cheap
+value-equality proxy.
+**Applies to:** any iteration touching `micro_features.py` or `micro_observer.py`; budget a corpus
+rebuild into the iteration's time, and re-verify snapshot row totals afterwards.

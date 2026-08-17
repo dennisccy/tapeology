@@ -130,3 +130,35 @@ vs `band_touch`, matching spec §5.1's own vocabulary) and, within `playbook_sig
 each pilot study's mechanism (range-wall, level-test, capitulation) will map onto once registered.
 **Reversible:** yes — J-09 may re-key or add a coarser "by predeclared study" view over the same
 counts without changing how J-03 computes or serves them.
+
+## iter-3 — goal-evaluator
+
+**Ambiguity:** J-03's Acceptance requires "the joinable-corpus count is served on the readiness
+endpoint with its per-study breakdown", and step 2 says to enumerate "signals AND touches falling
+inside recorded tick windows". No module in the product enumerates band-map wall-touch INSTANTS,
+and defining what counts as a touch is J-09's predeclared-mechanism work (inventing one here would
+breach trap T-1). The goal never says whether an unenumerated side may be served as `0`.
+**We chose:** scored J-03 `passing` on a served `band_touch_count: 0` that is disclosed as
+"honestly zero" in the module docstring and dev handoff but NOT in the served payload — because the
+playbook-signal side is genuinely enumerated and broken down (verified against the real store:
+total 2, by_setup_id {range_trade: 2}), the join PRIMITIVE for a touch is implemented and tested
+both ways (cached map and honest absence), and the failure direction is an undercount, never a
+fabricated positive. Recorded as a required fix-forward item: the payload must serve a
+"not enumerated" state instead of a bare `0` before J-08 renders it.
+**Reversible:** yes
+
+## iter-3 — goal-evaluator
+
+**Ambiguity:** J-01's browser half needs a screenshot (rail T-10: no screenshot ⇒ `unknown`, never
+`passing`), and this iteration DID produce a fresh capture — but it came out blank
+(`reports/qa/goal-rapid-microscope-iter-3-evidence/UT-J-01-result.png` is a solid dark rectangle).
+The methodology says a fresh capture clears `evidence_makeup` "whatever the outcome", which does not
+say what to do when the fresh capture is itself defective while the product code under it changed
+(`micro_readiness.py` gained a field this iteration).
+**We chose:** kept J-01 `passing` with `evidence_makeup: true` and left `last_evidence_path` on
+iter-2's good panel capture — because the renderer (`apps/frontend/app/desk/page.tsx`) is
+byte-unchanged this iteration, the endpoint half was re-verified by me directly against the real
+store rather than carried, and this iteration's `UT-J-03-readiness-endpoint.png` independently
+photographs the same served body. A blank artifact is treated as a capture defect, not as evidence
+of a broken panel.
+**Reversible:** yes

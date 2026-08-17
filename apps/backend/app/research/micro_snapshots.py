@@ -51,6 +51,7 @@ __all__ = [
     "quote_size_unit_for_dataset",
     "build_snapshot_rows",
     "write_snapshot",
+    "read_snapshot_rows",
     "load_snapshot_meta",
     "list_snapshot_meta",
     "run_snapshot_build_and_record",
@@ -197,6 +198,32 @@ def write_snapshot(root_dir: str, dataset_id: str, rows: list[dict], identity_an
     }
     _meta_path(root, dataset_id).write_text(json.dumps(meta, sort_keys=True))
     return meta
+
+
+# --- the plain row reader (J-03: micro_join.py's ONLY door onto a snapshot's persisted rows) ------
+
+
+def read_snapshot_rows(root_dir: str, dataset_id: str) -> list[dict]:
+    """Every persisted row of ONE snapshot, in their ORIGINAL append (ascending ``anchor_at``)
+    order -- a plain JSONL iterator, co-located with the writer (module docstring) since both read
+    and write the identical on-disk shape. Callers MUST have already established the snapshot is
+    CURRENT (``load_snapshot_meta`` -- TR-7's re-verification) before calling this: unlike that
+    function, this reader performs no identity check of its own and raises ``FileNotFoundError``
+    verbatim for a dataset with no snapshot on disk, never a silent empty list.
+
+    This is deliberately a PLAIN reader, not an origin-fenced one -- ``micro_accessor.py`` (J-05)
+    becomes the sole, origin-fenced, sealed-shard-aware door onto snapshot AND vault event data
+    (the era's "the accessor is the only door" rail); until it exists, the still-fully-exploratory
+    legacy corpus this iteration reads has no sealed shard to protect, and the iteration's own
+    NOTES record this boundary as an explicit, later re-pointing (J-05 is expected to route
+    ``micro_join.py``'s reads through the accessor once it lands, not to duplicate this reader)."""
+    rows: list[dict] = []
+    with _rows_path(Path(root_dir), dataset_id).open("r", encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if line:
+                rows.append(json.loads(line))
+    return rows
 
 
 # --- load, with re-verification (TR-7) ------------------------------------------------------------
