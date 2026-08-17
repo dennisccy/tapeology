@@ -33,14 +33,33 @@ implementation of any measurement rail (the same class of judgment call
 importing, a sibling module's technique). Logged as an interpretation call in the iteration's dev
 handoff.
 
-**``band_touch_count`` is honestly zero this iteration.** No module anywhere in the shipped
-product yet enumerates discrete band-map wall-touch INSTANTS as a stored, countable list --
-identifying what counts as a "touch" is explicitly J-09's own predeclared-mechanism work (goal.md
-OUT OF SCOPE: "Any pilot-study-specific mechanism ... is J-09; J-03 only builds the generic join
-primitive and its honest corpus count"). ``join_band_touch`` below proves the JOIN PRIMITIVE
-itself works against an explicit, caller-supplied ``(symbol, as_of_epoch)`` pair (TC-2); there is
-simply no existing corpus of such pairs to count over yet, so ``joinable_corpus_counts`` reports
-the honest, non-fabricated zero rather than inventing a detector.
+**``band_touch_count`` is a typed "not enumerated" state, never a bare zero (iter-4 passenger
+fix).** No module anywhere in the shipped product yet enumerates discrete band-map wall-touch
+INSTANTS as a stored, countable list -- identifying what counts as a "touch" is explicitly J-09's
+own predeclared-mechanism work (goal.md OUT OF SCOPE: "Any pilot-study-specific mechanism ... is
+J-09; J-03 only builds the generic join primitive and its honest corpus count"). ``join_band_touch``
+below proves the JOIN PRIMITIVE itself works against an explicit, caller-supplied ``(symbol,
+as_of_epoch)`` pair (TC-2); there is simply no existing corpus of such pairs to count over yet. The
+J-03 iteration originally served a bare ``0`` here -- indistinguishable, at the response's own
+surface, from "we counted and found zero touches". The iter-4 fix (goal.md J-04 passenger item)
+replaces it with ``{"status": "not_enumerated", "count": None}`` (``_band_touch_not_enumerated``,
+``BAND_TOUCH_STATUS_NOT_ENUMERATED``) -- a reader can no longer mistake absence-of-a-detector for a
+real, counted zero. ``total`` is defined as ``playbook_signal_count`` alone (never summing a
+not-yet-a-number band-touch state): numerically identical to before this fix, since the prior bare
+``0`` always contributed nothing to the sum either (TC-16). Defining an actual touch enumeration
+stays J-09's job; when it lands, this becomes ``{"status": "enumerated", "count": <int>}``.
+
+**A corrupt playbook record surfaces honestly, never a silent undercount (iter-4 passenger fix).**
+``playbook_store.list()`` returns ``(records, errors)`` (the SAME shape ``DatasetStore.list()``
+serves, and the shape every reader of it already surfaces at ITS own call site --
+``desk_playbook.PlaybookStore.list()``'s own docstring: "an EXPLICIT error row per file that failed
+verification"). The J-03 iteration's own ``joinable_corpus_counts`` discarded the error half
+outright (``playbook_store.list()[0]``) -- a corrupted playbook file would silently vanish from
+``total``/``playbook_signal_count``/``by_setup_id`` with no trace anywhere in the response. Fixed
+by capturing both halves and serving the error half verbatim as ``playbook_integrity_errors`` --
+the corruption is now visible beside the (necessarily undercounted, but no longer SILENTLY
+undercounted) count, the same discipline dataset errors already get via ``micro_readiness.py``'s
+own ``integrity_errors`` field.
 
 **Outcome-start basis (assumption-ledger entry, this iteration).** Outcome start = the trigger's
 own ``anchor_at`` (never a later, conditioned instant) -- no per-candidate conditioning feature
@@ -76,10 +95,13 @@ __all__ = [
     "JOIN_STATUS_NO_COVERING_SNAPSHOT",
     "JOIN_STATUS_NO_ROW_BEFORE_TRIGGER",
     "JOIN_STATUS_NO_BAND_CONTEXT",
+    "BAND_TOUCH_STATUS_NOT_ENUMERATED",
     "find_covering_dataset",
     "find_covering_snapshot",
     "feature_row_at_trigger",
     "outcome_rows_after_trigger",
+    "outcome_rows_at_position",
+    "outcome_row_at_single_horizon",
     "join_playbook_signal",
     "join_band_touch",
     "joinable_corpus_counts",
@@ -207,8 +229,16 @@ def _trade_horizon_row(trade_rows: list[dict], anchor_pos: int, n_trades: int) -
 
 
 def _shares_horizon_row(trade_rows: list[dict], anchor_pos: int, shares_threshold: int) -> dict | None:
+    """iter-4 perf fix (behavior-unchanged): iterates by INDEX rather than ``trade_rows[anchor_pos
+    + 1:]`` -- that slice notation copies every remaining row on EVERY call regardless of how
+    quickly the loop below breaks, which is O(n) per call and, summed across one caller evaluating
+    every anchor of a dataset (``scout.extract_anchors``, J-04), O(n^2) overall -- measured to hang
+    ``POST /research/desk/micro/scout/compute`` against the real 18-dataset corpus. Output is
+    byte-identical: same iteration order, same early-return row, same ``None`` when the threshold
+    is never reached."""
     cumulative = 0.0
-    for row in trade_rows[anchor_pos + 1 :]:
+    for i in range(anchor_pos + 1, len(trade_rows)):
+        row = trade_rows[i]
         cumulative += row["size"]
         if cumulative >= shares_threshold:
             return row
@@ -218,9 +248,14 @@ def _shares_horizon_row(trade_rows: list[dict], anchor_pos: int, shares_threshol
 def _clock_horizon_row(trade_rows: list[dict], anchor_pos: int, horizon_ts: float) -> dict | None:
     """The nearest at-or-before row for a CLOCK horizon, sampled from the trade-anchored
     representation (the ONLY representation the section 2.4 benchmark chose -- there is no
-    standalone quote row to sample instead; an interpretation call, logged in the dev handoff)."""
+    standalone quote row to sample instead; an interpretation call, logged in the dev handoff).
+
+    iter-4 perf fix (behavior-unchanged): the SAME index-iteration fix as ``_shares_horizon_row``
+    above, for the identical reason (``trade_rows[anchor_pos:]`` was an O(n)-per-call slice
+    copy)."""
     candidate = None
-    for row in trade_rows[anchor_pos:]:
+    for i in range(anchor_pos, len(trade_rows)):
+        row = trade_rows[i]
         if row["anchor_at"] <= horizon_ts:
             candidate = row
         else:
@@ -287,10 +322,85 @@ def outcome_rows_after_trigger(
     ``anchor_row`` (a row returned by ``feature_row_at_trigger`` over the SAME ``rows``). Outcome
     start = ``anchor_row["anchor_at"]`` (this iteration's assumption-ledger entry -- module
     docstring). Each entry carries the mid-basis primary, the last-trade sensitivity basis, and
-    the spread-at-outcome-start cost-proxy column, never merged into either outcome's own value."""
+    the spread-at-outcome-start cost-proxy column, never merged into either outcome's own value.
+
+    ``trade_rows.index(anchor_row)`` is an O(n) scan -- fine for the single at-or-before lookup
+    this function's own callers (``_join_core``) make once per join, but pathological for a
+    caller iterating every anchor of a whole snapshot (O(n^2) overall). ``outcome_rows_at_position``
+    below is the O(1)-position counterpart for exactly that caller shape (iter-4, J-04's own
+    ``scout.extract_anchors``, added when a live run against the real 18-dataset corpus stalled on
+    this scan -- see that function's own docstring)."""
     trade_rows = _trade_rows(rows)
     anchor_pos = trade_rows.index(anchor_row)
     return _outcome_rows_after(trade_rows, anchor_pos, session_end_ts, side=side)
+
+
+def outcome_rows_at_position(
+    trade_rows: list[dict], anchor_pos: int, session_end_ts: float, *, side: str | None = None
+) -> list[dict]:
+    """The O(1)-position counterpart to ``outcome_rows_after_trigger`` (module docstring, iter-4):
+    for a caller that ALREADY knows an anchor's own position in its trade-only row list (e.g. one
+    iterating via ``enumerate(trade_rows)``), this skips the O(n) ``.index()`` lookup that function
+    performs internally -- byte-identical output to
+    ``outcome_rows_after_trigger(rows, trade_rows[anchor_pos], session_end_ts, side=side)`` for the
+    SAME ``trade_rows``/``anchor_pos``/``session_end_ts``/``side`` (both call the SAME
+    ``_outcome_rows_after`` core -- no second outcome implementation, the read-side law honored).
+
+    Takes ``trade_rows`` (a plain ``list``, not ``Sequence``) and passes it through UNCOPIED:
+    ``_outcome_rows_after`` only ever reads it, never mutates it, so a defensive ``list(...)`` copy
+    here would itself be an O(n) cost paid on EVERY call -- exactly the anti-pattern this function
+    exists to eliminate, and the reason a caller iterating every anchor of a large dataset must
+    pass the SAME list object through every call, never a fresh copy per anchor."""
+    return _outcome_rows_after(trade_rows, anchor_pos, session_end_ts, side=side)
+
+
+def outcome_row_at_single_horizon(
+    trade_rows: list[dict],
+    anchor_pos: int,
+    horizon_kind: str,
+    horizon_value: int,
+    session_end_ts: float,
+    *,
+    side: str | None = None,
+) -> dict:
+    """ONE entry of the closed outcome set (spec section 4) -- computes only the requested
+    ``(horizon_kind, horizon_value)`` pair, byte-identical to the matching entry of
+    ``outcome_rows_at_position(...)``'s own list, by calling the IDENTICAL per-horizon-kind
+    row-finder (``_trade_horizon_row``/``_shares_horizon_row``/``_clock_horizon_row``) and
+    ``_build_outcome`` core those functions already use (no second implementation).
+
+    Exists because ``_outcome_rows_after`` always computes the FULL closed set (2 trade + 2 shares
+    + 3 clock horizons) even when a caller wants exactly one -- fine for the join primitives' own
+    call volume (once per playbook signal or band touch), but for a caller evaluating one horizon
+    across EVERY anchor of a large dataset (``scout.extract_anchors``, J-04), the other 6 unused
+    horizons' own forward scans (``_shares_horizon_row``/``_clock_horizon_row``, each bounded only
+    by how many subsequent trades it takes to satisfy the threshold) are pure waste -- measured on
+    the real NVDA dataset (~929K trades) to turn a should-be-fast trade-count-horizon extraction
+    into a multi-minute stall. A trade-count horizon (``horizon_kind="trades"``) resolves in O(1)
+    here (direct index arithmetic, no scan of any kind) since the unused shares/clock row-finders
+    are never even called."""
+    anchor_row = trade_rows[anchor_pos]
+    if horizon_kind == "trades":
+        horizon_row = _trade_horizon_row(trade_rows, anchor_pos, horizon_value)
+        horizon_ts = (
+            horizon_row["anchor_at"] if horizon_row is not None else session_end_ts + _BEYOND_SESSION_EPS
+        )
+    elif horizon_kind == "shares":
+        horizon_row = _shares_horizon_row(trade_rows, anchor_pos, horizon_value)
+        horizon_ts = (
+            horizon_row["anchor_at"] if horizon_row is not None else session_end_ts + _BEYOND_SESSION_EPS
+        )
+    elif horizon_kind == "clock_seconds":
+        horizon_ts = anchor_row["anchor_at"] + horizon_value
+        horizon_row = (
+            None if horizon_ts > session_end_ts else _clock_horizon_row(trade_rows, anchor_pos, horizon_ts)
+        )
+    else:
+        raise ValueError(f"unknown horizon_kind {horizon_kind!r}")
+    return _build_outcome(
+        kind=horizon_kind, value=horizon_value, anchor_row=anchor_row, horizon_row=horizon_row,
+        horizon_ts=horizon_ts, session_end_ts=session_end_ts, side=side,
+    )
 
 
 # --- the shared join core --------------------------------------------------------------------------
@@ -364,25 +474,43 @@ def join_band_touch(
 
 # --- the honest joinable-corpus count (micro_readiness.py's new field) -----------------------------
 
+# The closed vocabulary for band_touch_count's "not enumerated" state (iter-4 passenger fix) -- see
+# the module docstring. A future J-09 caller wiring a real touch enumeration in adds a sibling
+# "enumerated" status; this iteration serves only the honest absence.
+BAND_TOUCH_STATUS_NOT_ENUMERATED = "not_enumerated"
+
+
+def _band_touch_not_enumerated() -> dict:
+    """A FRESH dict every call (never a shared mutable literal -- the ``desk_playbook.py``
+    per-list-copy discipline, applied to a plain dict here) so no caller can ever poison a later
+    read by mutating what it received."""
+    return {"status": BAND_TOUCH_STATUS_NOT_ENUMERATED, "count": None}
+
 
 def joinable_corpus_counts(dataset_store: DatasetStore, playbook_store) -> dict:
-    """``total``/``playbook_signal_count``/``band_touch_count``/``by_setup_id`` -- every recorded
-    playbook signal whose ``(symbol, trigger_ts)`` falls inside a recorded tick dataset's own
-    window (module docstring's dataset-window match), counted honestly from the real stores.
-    Never requires a snapshot to already be BUILT: a snapshot is a reproducible, rebuildable cache
-    of the SAME tick data (``micro_snapshots.py``'s own "derived, rebuildable" docstring) -- an
-    unbuilt one says nothing about whether the underlying evidence is joinable.
+    """``total``/``playbook_signal_count``/``band_touch_count``/``by_setup_id``/
+    ``playbook_integrity_errors`` -- every recorded playbook signal whose ``(symbol, trigger_ts)``
+    falls inside a recorded tick dataset's own window (module docstring's dataset-window match),
+    counted honestly from the real stores. Never requires a snapshot to already be BUILT: a
+    snapshot is a reproducible, rebuildable cache of the SAME tick data (``micro_snapshots.py``'s
+    own "derived, rebuildable" docstring) -- an unbuilt one says nothing about whether the
+    underlying evidence is joinable.
 
     Fails CLOSED, never silently under-counts (the iter-2 "streamed-artifact completeness"
     lesson, applied to this enumeration loop): a signal recording no symbol or no ``trigger_ts``
     is a structural, honest absence and is skipped (the identical treatment
     ``desk_playbook_context.record_band_context`` already gives it); a signal whose ``trigger_ts``
     is PRESENT but unparseable is never silently skipped -- ``parse_utc_epoch`` raises and this
-    function raises with it, rather than serving an undercounted total."""
+    function raises with it, rather than serving an undercounted total. A CORRUPTED playbook
+    record (``playbook_store.list()``'s own error half) is skipped from the count -- there is no
+    signal content to read from a file that failed verification -- but is never silently dropped
+    from the RESPONSE: it is surfaced verbatim in ``playbook_integrity_errors`` (module docstring's
+    iter-4 passenger fix)."""
     records, _errors = dataset_store.list()
     total_playbook = 0
     by_setup_id: dict[str, int] = {}
-    for playbook_record in playbook_store.list()[0]:
+    playbook_records, playbook_errors = playbook_store.list()
+    for playbook_record in playbook_records:
         for signal in playbook_record.get("signals") or []:
             symbol = signal.get("symbol")
             trigger_ts = signal.get("trigger_ts")
@@ -395,14 +523,13 @@ def joinable_corpus_counts(dataset_store: DatasetStore, playbook_store) -> dict:
             setup_id = signal.get("setup_id") or "unknown"
             by_setup_id[setup_id] = by_setup_id.get(setup_id, 0) + 1
 
-    # Honestly zero this iteration -- see the module docstring's "band_touch_count is honestly
-    # zero" section. Expressed as a variable (never a bare literal at the return site) so a future
-    # J-09 caller wiring a real touch enumeration in changes exactly one line.
-    band_touch_count = 0
-
     return {
-        "total": total_playbook + band_touch_count,
+        # `playbook_signal_count` alone -- `band_touch_count` is no longer a plain number to sum
+        # (module docstring); numerically identical to the pre-fix total, since the prior bare `0`
+        # always contributed nothing to the sum either (TC-16).
+        "total": total_playbook,
         "playbook_signal_count": total_playbook,
-        "band_touch_count": band_touch_count,
+        "band_touch_count": _band_touch_not_enumerated(),
         "by_setup_id": by_setup_id,
+        "playbook_integrity_errors": playbook_errors,
     }

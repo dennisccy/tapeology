@@ -466,7 +466,11 @@ def test_joinable_corpus_defaults_to_an_honest_zero_without_a_playbook_store(tmp
     cache = MicroReadinessCache(str(tmp_path / "cache.db"))
     body = build_readiness(store, cache, dataset_dir=str(tmp_path / "datasets"))
     assert body["joinable_corpus"] == {
-        "total": 0, "playbook_signal_count": 0, "band_touch_count": 0, "by_setup_id": {},
+        "total": 0,
+        "playbook_signal_count": 0,
+        "band_touch_count": {"status": "not_enumerated", "count": None},
+        "by_setup_id": {},
+        "playbook_integrity_errors": [],
     }
 
 
@@ -496,8 +500,11 @@ def test_joinable_corpus_matches_joinable_corpus_counts_directly(tmp_path):
 
     assert body["joinable_corpus"] == joinable_corpus_counts(store, playbook_store)
     assert body["joinable_corpus"] == {
-        "total": 1, "playbook_signal_count": 1, "band_touch_count": 0,
+        "total": 1,
+        "playbook_signal_count": 1,
+        "band_touch_count": {"status": "not_enumerated", "count": None},
         "by_setup_id": {"opening_range_break": 1},
+        "playbook_integrity_errors": [],
     }
 
 
@@ -530,8 +537,11 @@ def test_joinable_corpus_is_served_through_the_route_and_is_non_negative_and_nev
     second = c.get("/research/desk/micro/readiness").json()["joinable_corpus"]
 
     assert first == second
-    for key in ("total", "playbook_signal_count", "band_touch_count"):
+    for key in ("total", "playbook_signal_count"):
         assert isinstance(first[key], int) and first[key] >= 0
+    # band_touch_count is a typed "not enumerated" state, never a bare int (iter-4 passenger fix,
+    # TC-15) -- distinguishable from a real zero count.
+    assert first["band_touch_count"] == {"status": "not_enumerated", "count": None}
     assert first["playbook_signal_count"] == 1  # only the in-window signal counts
     assert first["by_setup_id"] == {"jbe": 1}
 
@@ -543,5 +553,30 @@ def test_real_corpus_readiness_still_serves_an_honest_zero_joinable_corpus_witho
     ``playbook_store``) -- confirms the new field is present and honestly zero there too, never an
     absent key on the real 18-dataset corpus response."""
     assert real_readiness["joinable_corpus"] == {
-        "total": 0, "playbook_signal_count": 0, "band_touch_count": 0, "by_setup_id": {},
+        "total": 0,
+        "playbook_signal_count": 0,
+        "band_touch_count": {"status": "not_enumerated", "count": None},
+        "by_setup_id": {},
+        "playbook_integrity_errors": [],
     }
+
+
+# --- TC-15 (iter-4 passenger fix, docs/phases/goal-rapid-microscope-iter-4.md): band_touch_count is
+# a typed "not enumerated" state on THIS route, never a bare zero a reader could mistake for a real
+# count ------------------------------------------------------------------------------------------
+
+
+def test_tc15_readiness_route_serves_band_touch_count_as_a_typed_not_enumerated_state(client):
+    c, _store, _cache = client
+    resp = c.get("/research/desk/micro/readiness")
+    assert resp.status_code == 200
+    band_touch = resp.json()["joinable_corpus"]["band_touch_count"]
+    assert not isinstance(band_touch, int)
+    assert band_touch == {"status": "not_enumerated", "count": None}
+
+
+def test_tc15_real_corpus_readiness_also_serves_the_typed_band_touch_count(real_readiness):
+    band_touch = real_readiness["joinable_corpus"]["band_touch_count"]
+    assert not isinstance(band_touch, int)
+    assert band_touch["status"] == "not_enumerated"
+    assert band_touch["count"] is None

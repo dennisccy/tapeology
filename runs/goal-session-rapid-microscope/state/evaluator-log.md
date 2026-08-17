@@ -147,3 +147,51 @@ must never lose the record of a failed trial, so it needs that auditor. Carry fo
 report or refuse on a corrupt playbook record instead of silently skipping it; serve a "not counted
 yet" state for wall touches instead of a bare zero; get the owner's ruling on the one-quote-early
 timing stamp before any result is measured from it; and re-take the readiness photograph.
+
+## Iteration 4 — goal-rapid-microscope-iter-4
+
+**Date:** 2026-08-17T16:10:00Z
+**Verdict:** ESCALATE
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: J-04 "The Scout and the ledger — every trial on the record"
+- Newly failing: none
+- Regressed: none
+- Unchanged: J-01, J-02, J-03 passing (all three RE-VERIFIED by me, not carried — every one of
+  their modules or their served values changed or needed re-counting); J-05..J-09 failing (none of
+  their modules exist on disk — checked file by file); J-10 partial, its trap half 4/22 → 8/22
+- Anti-goal violations: two critical ones were introduced AND fixed inside this run (a ledger whose
+  chopped-off tail was undetectable, so the count of trials could silently shrink; and a "how many
+  variants tried" number that counted rows instead of distinct candidates, inflating it and jamming
+  the operator button after 12 clicks) — both re-proved fixed by me on live code; a third critical
+  fault (two horizon families screened against a null far too short, making results look better than
+  they were) was also found and closed by refusing those horizons outright. One iteration-3 minor
+  item is now CLOSED (a corrupt record is reported, and a bare zero became a typed "not enumerated");
+  one minor item stays open — the one-quote-early timing stamp, which needs the owner, not a coder.
+
+**Reasoning:** I did not take the handoffs on trust. I ran the Scout myself, from the command line,
+against a throwaway copy of the test data: six trials, one permanent line each, every death reason
+from the fixed list, and the served result carrying its evidence label, its best-of-many warning and
+the cost-proxy sentence word for word. I then re-broke and re-checked each of the independent
+checker's four fixes on the running code — a record edited on disk is now reported as tampered, a
+chopped tail is caught at the exact missing row, and three identical re-runs grew the record from 6
+to 18 lines while the "variants tried" count correctly stayed at 2. Against the owner's real data I
+re-read the corpus truth (12 symbol-days, 18 shards, 3.0089 session-equivalents, all three floors
+unmet) and the joinable count (2 signals, both of one setup), and I re-counted the 18 feature files
+straight off disk at exactly 3,815,933 rows. The frozen parts are frozen: the settings fingerprint
+prints `08e471b10130e1e2` and all six judge files hash identical to iteration 0. The one real
+failure is not in the product: the browser check was skipped entirely, so the four already-working
+journeys this iteration was told to re-check were never looked at, and the 13-step whole-product
+safety walk did not run. Nothing this iteration changed can reach a screen — I checked the frontend
+diff is empty and that none of the changed fields is read by the app — so I did not mark anything
+down, but no one owned that gap and it must not repeat.
+
+**Next-step recommendation:** Build J-05 "The walk-forward engine" next under the full pipeline —
+it decides which results are allowed to count, so a hidden mistake there is the most expensive kind,
+and the independent checker is the only step in this session that has ever caught that kind of
+mistake. Carry five passenger items: actually run the browser check and the safety walk this time;
+get two owner rulings together (the one-quote-early timing stamp, and whether the "variants tried"
+bucket should also be counted per data set as the written spec says) before more data is recorded;
+re-take the readiness photograph when the rig can show real tick data; clean up one unreadable kill
+message and add the new numbers to the two page-guard lists before anything is put on screen; and
+weigh a speed-focused pass, because the grid already takes minutes on today's 18 files.

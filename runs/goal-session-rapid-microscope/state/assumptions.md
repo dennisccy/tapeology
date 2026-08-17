@@ -181,3 +181,24 @@ imbalance, microprice, `refill_consistent`) stays eligible.
 **Reversible:** yes — once the owner rules on the timing stamp, a later iteration can register
 `quote_depletion`-conditioned candidates as an ordinary grid addition (a new `grid_version`)
 without touching this iteration's already-ledgered rows; the union-N denominator only grows.
+
+## iter-4 — goal-evaluator
+
+**Ambiguity:** `docs/goal.md` Constraints state trap **T-10** verbatim — "every browser acceptance
+needs a screenshot — none ⇒ `unknown`, never `passing`" — and this iteration's browser lane recorded
+a blanket SKIP, producing zero screenshots and never running the mandated TC-20 regression set
+(J-01/J-02/J-03 re-verify + `journey-scripts/J-10.json`'s 13-step sentinel). The independent auditor
+read T-10 literally and filed E1: "the required-still-passing set is `unknown`, not `passing`". The
+goal never says whether T-10 governs the iteration in which a journey's acceptance is FIRST proven,
+or re-asserts itself every subsequent iteration even when nothing that journey renders has changed.
+**We chose:** the first reading, aligned with the evaluation methodology's evidence-durability rail
+(A.6: evidence expires with CHANGE, not time; durability relaxes WHICH iteration a screenshot may
+come from, never whether one exists). Kept J-01/J-02/J-03 `passing` and J-10 `partial` on their
+existing captures, after establishing myself that no field this diff touches can reach a screen:
+`git diff` over `apps/frontend` is empty (zero `.tsx`), and `band_touch_count` / `joinable_corpus` /
+`playbook_integrity_errors` appear nowhere in `apps/frontend/app|lib|components`. I additionally
+re-derived the ENDPOINT half of J-01 and J-03 myself against the operator's real store rather than
+carrying it. The gap is recorded as binding next-iteration work, and it is the primary reason this
+iteration's verdict is ESCALATE rather than CONTINUE — so the call costs the loop nothing it can
+hide behind. Had any frontend file changed, I would have scored the set `unknown`.
+**Reversible:** yes

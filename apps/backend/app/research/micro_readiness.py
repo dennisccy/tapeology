@@ -75,7 +75,7 @@ from zoneinfo import ZoneInfo
 
 from ..providers.base import Event, QuoteEvent, TradeEvent
 from .datasets import DatasetStore
-from .micro_join import joinable_corpus_counts
+from .micro_join import BAND_TOUCH_STATUS_NOT_ENUMERATED, joinable_corpus_counts
 from .referee_evidence import REFEREE_TICK_GATE_SYMBOL_DAYS
 
 __all__ = [
@@ -377,10 +377,19 @@ def build_readiness(
     # J-03: honestly zero (never computed) when no playbook_store is given at all -- a true
     # statement ("no playbook evidence was even checked"), never a fabricated count. When one IS
     # given, the count is owned entirely by micro_join.joinable_corpus_counts (never re-derived
-    # here -- module docstring).
+    # here -- module docstring). iter-4 passenger fix: this fallback shape now mirrors
+    # joinable_corpus_counts's own typed band_touch_count ("not enumerated", never a bare 0) and
+    # its playbook_integrity_errors key -- `[]` here is the SAME "nothing was checked, so nothing
+    # is known to be corrupt" convention every other empty/unbuilt store in this codebase reports
+    # (DatasetStore.list()/PlaybookStore.list() both answer `[]` on an absent store, never a
+    # fabricated warning).
     if playbook_store is None:
         joinable_corpus = {
-            "total": 0, "playbook_signal_count": 0, "band_touch_count": 0, "by_setup_id": {},
+            "total": 0,
+            "playbook_signal_count": 0,
+            "band_touch_count": {"status": BAND_TOUCH_STATUS_NOT_ENUMERATED, "count": None},
+            "by_setup_id": {},
+            "playbook_integrity_errors": [],
         }
     else:
         joinable_corpus = joinable_corpus_counts(store, playbook_store)

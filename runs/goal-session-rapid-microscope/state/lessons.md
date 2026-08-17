@@ -90,3 +90,32 @@ audits in a lean pass. Check the row total against the prior iteration's recorde
 value-equality proxy.
 **Applies to:** any iteration touching `micro_features.py` or `micro_observer.py`; budget a corpus
 rebuild into the iteration's time, and re-verify snapshot row totals afterwards.
+
+## iter-4 — 2026-08-17T16:10:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** A `Frontend Present: no` iteration spec makes the browser-qa step skip the WHOLE pass —
+including the required-still-passing regression set the same spec's TESTING REQUIREMENTS/TC-20
+explicitly mandated (`journey-scripts/J-10.json`'s 13-step sentinel never ran, zero screenshots
+exist for iter-4). The two lanes each assumed the other owned it: the QA report wrote "the
+required-still-passing set re-verification is browser-qa-agent's scope, not this QA pass", and
+browser-qa then skipped on the frontend flag. A regression set is not a frontend-delta question —
+whenever a spec names required-still-passing journeys, the browser lane must run them regardless of
+`Frontend Present`.
+**Applies to:** any backend-only iteration (`Frontend Present: no`) whose spec still names
+required-still-passing journeys or a sentinel script — i.e. every iteration of J-05/J-06/J-07/J-09
+in this era.
+
+## iter-4 — 2026-08-17T16:10:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** A hash-chained append-only ledger's `prev_hash` walk catches in-place edits and mid-file
+deletions but is BLIND to tail truncation — erasing the newest row leaves a chain that verifies
+perfectly clean while the denominator silently shrinks, which is exactly the era's cardinal
+anti-goal. It needs a separately-persisted tail anchor (`chain_head.json` with `{row_count,
+head_hash}`, written AFTER the row it commits to so a crash can only leave the ledger longer than
+the anchor). Equally: a "variants tried" denominator must count DISTINCT candidate identities, not
+ledger rows, or every re-run of the same grid inflates it and eventually trips the hard cap.
+**Applies to:** every future hash-chained ledger in this era (`walkforward.py`'s fold ledger, the
+vault exposure ledger, `micro_graduation.py`'s bundle) — copy `scout_ledger.py`'s anchor +
+`distinct_variant_count` pattern rather than the pre-audit chain-only design.

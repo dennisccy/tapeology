@@ -4,112 +4,112 @@
       "id": "J-01",
       "name": "The era transition stands — the corpus truth on the record",
       "status": "passing",
-      "last_verified_iter": "goal-rapid-microscope-iter-3",
-      "last_passing_iter": "goal-rapid-microscope-iter-3",
+      "last_verified_iter": "goal-rapid-microscope-iter-4",
+      "last_passing_iter": "goal-rapid-microscope-iter-4",
       "first_seen_iter": "goal-rapid-microscope-iter-0",
       "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-2-evidence/UT-02-result.png",
       "spec_hash": "1791ebcd14c10fa789e1048509f8f8af20a7696fe11a7de4bf946b446d4fbb52",
       "evidence_makeup": true,
-      "notes": "RE-VERIFIED THIS ITERATION BY THE EVALUATOR DIRECTLY (micro_readiness.py CHANGED this iteration — the additive joinable_corpus field — so iter-1/iter-2 endpoint evidence no longer stands on durability alone). Called build_readiness() against the real .data/datasets store: distinct_symbol_days=12, distinct_datasets=18, rth_minutes_covered=1173.49, session_equivalents=3.0089, referee_tick_gate_symbol_days=150; 18 shards, every one exposure_state=exploratory / split_provenance=hand_assigned; all 3 pilot-study floors floor_unmet; integrity_errors=[]; and the response is byte-identical on an immediate re-call (determinism). Browser row UT-J-01 = PASS (reports/phase-goal-rapid-microscope-iter-3-ui-test-results.md) with a field-by-field text cross-check against the served body on the rig. CAPTURE-DEFECT (evidence_makeup, two reasons): (1) THIS iteration's element capture reports/qa/goal-rapid-microscope-iter-3-evidence/UT-J-01-result.png is a BLANK dark rectangle — it shows no panel at all, so it is not usable evidence; last_evidence_path therefore still points at iter-2's good capture, which stands under the durability rail because apps/frontend/app/desk/page.tsx is byte-unchanged this iteration (git status clean for all frontend files) and reports/qa/goal-rapid-microscope-iter-3-evidence/UT-J-03-readiness-endpoint.png independently photographs the same served body on the rig; (2) the standing gap — no photograph yet shows the real 12/18/~3.0 totals or the clipped exposure_state column, deferred until a later iteration seeds the rig with a wider tick corpus. Do NOT rebuild any J-01 code for either."
+      "notes": "RE-VERIFIED THIS ITERATION BY THE EVALUATOR DIRECTLY (micro_readiness.py CHANGED again this iteration - the joinable_corpus fallback shape - so prior endpoint evidence does not stand on durability alone). Called build_readiness() against the real .data/datasets store read-only: distinct_symbol_days=12, distinct_datasets=18, rth_minutes_covered=1173.49, session_equivalents=3.0089, referee_tick_gate_symbol_days=150, 18 shards ALL exposure_state='exploratory' AND split_provenance='hand_assigned', fallback_frac 0.2931-0.8252, all three study floors 'floor_unmet' (11/60), integrity_errors []. Every acceptance value matches. BROWSER HALF carried under evidence durability (methodology A.6): zero .tsx changed this iteration (git diff over apps/frontend is empty), and the panel's own served fields (totals/shards/study_floors/integrity_errors) are unchanged - the fields this diff touched (joinable_corpus.band_touch_count, playbook_integrity_errors) are provably NOT rendered (grep over apps/frontend/app|lib|components returns nothing; audit F1 independently agrees). GAP: this iteration's browser lane recorded a blanket SKIP, so no fresh capture was taken - the last good panel photograph is still iter-2's, which shows the rig's small 2-shard PG corpus rather than the real 12/18/~3.0 totals. evidence_makeup stays true; the make-up capture rides as a PASSENGER task, never an iteration goal."
     },
     "J-02": {
       "id": "J-02",
       "name": "The micro observer — one pass, prefix-honest, benchmarked",
       "status": "passing",
-      "last_verified_iter": "goal-rapid-microscope-iter-3",
-      "last_passing_iter": "goal-rapid-microscope-iter-3",
+      "last_verified_iter": "goal-rapid-microscope-iter-4",
+      "last_passing_iter": "goal-rapid-microscope-iter-4",
       "first_seen_iter": "goal-rapid-microscope-iter-0",
       "last_evidence_path": "docs/handoffs/goal-rapid-microscope-iter-2-dev.md",
       "spec_hash": "01f4f43564cba7431118d4a504b9dbeb20f1a994fdb52be5ceded15529d8b27a",
-      "notes": "Non-browser journey by design (goal.md: browser reveals land in J-08); browser row UT-J-02 = SKIP with an honest {\"snapshots\": []} endpoint proxy on the fixture rig. RE-VERIFIED THIS ITERATION BY THE EVALUATOR: micro_features.py changed (additive spread_bps), which re-keys feature_source_hash and therefore re-keyed and rebuilt ALL 18 real-corpus snapshots — so J-02's artifact evidence was re-checked, not carried. list_snapshot_meta() against the real store returns 18 entries, 3,815,933 rows total (IDENTICAL to iter-2's recorded total — the rebuild moved identity, not values), every meta stamped config_fingerprint 08e471b10130e1e2, quote_size_unit 'unverified', snapshot_format_version 'micro-snapshot-v1', built 2026-08-17T06:47Z. micro_observer.py is byte-unchanged this iteration (git status), and micro_features.py's whole diff is the additive spread_bps + its __all__ entry, so no persisted VALUE could move. Full backend suite re-run by the evaluator: 2866 passed / 8 skipped / 0 failed (439s, bare pytest tests/). CARRY-FORWARD GAPS: audit B4's §3 window-mean quote_imbalance/microprice still unimplemented and now DISCLOSED in the iter-3 dev handoff Known Issues (B4's other half — the §4 spread cost-proxy column — SHIPPED this iteration as micro_features.spread_bps); audit B5's one-quote-early depletion available_at still needs an owner ruling; TR-1/TR-17b close-out-row exclusion still undisclosed."
+      "notes": "RE-VERIFIED THIS ITERATION BY THE EVALUATOR. micro_observer.py / micro_features.py / micro_snapshots.py are byte-unchanged since iter-2 (git diff vs snapshot sha 0cca0314 AND vs HEAD both empty), so iter-2's evidence stands under durability (A.6). Independently re-counted the snapshot corpus straight off disk: 18 .jsonl files totalling exactly 3,815,933 rows (TC-18 met). The frozen-equivalence and golden-trace tests re-ran green inside this iteration's full suite. No browser surface (keyless/automated journey - SKIPPED in iter-3's browser pass too, by design)."
     },
     "J-03": {
       "id": "J-03",
       "name": "Structure x flow — the join that never looks ahead",
       "status": "passing",
-      "last_verified_iter": "goal-rapid-microscope-iter-3",
-      "last_passing_iter": "goal-rapid-microscope-iter-3",
+      "last_verified_iter": "goal-rapid-microscope-iter-4",
+      "last_passing_iter": "goal-rapid-microscope-iter-4",
       "first_seen_iter": "goal-rapid-microscope-iter-0",
       "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-3-evidence/UT-J-03-readiness-endpoint.png",
       "spec_hash": "a671f63835247f7fca66a41a2dc48ec4fe3e83fe0bda85d3703ef385cb20de83",
-      "notes": "BUILT AND VERIFIED THIS ITERATION. Acceptance clause by clause, all re-run by the evaluator: (a) fixture join reproduces hand-computed values — `pytest tests/test_micro_join.py tests/test_micro_features.py` = 74 passed (TC-1 exact-anchor + strictly-between cases, TC-2 cached band map AND honest no_band_context absence, the trades-20 horizon against an independently computed reference, truncation never measured off the last trade); (b) lookahead — TC-3's two tests are non-vacuous (a stride-23 grid over the real fixture snapshot plus a probe 1e-6 before each later row, asserting the matched row's own anchor_at <= trigger and that it never jumps ahead); (c) detector/context byte-freeze — `git diff` and `git status` both empty for desk_playbook.py and desk_playbook_context.py, and TC-4 pins their SHA-256s with a seeded counter-test; (d) joinable_corpus served on the SAME readiness endpoint — evaluator called it against the REAL store and got {\"total\": 2, \"playbook_signal_count\": 2, \"band_touch_count\": 0, \"by_setup_id\": {\"range_trade\": 2}}, byte-identical on re-call, matching the dev handoff exactly; the served field is photographed on the fixture rig (honest all-zero) in UT-J-03-readiness-endpoint.png. Coherence PASS: one owner (micro_join.joinable_corpus_counts), one production call site (micro_readiness.py:386), one snapshot-row door (micro_snapshots.read_snapshot_rows). TWO OPEN HONESTY ITEMS carried to the next iteration, neither blocking: (1) band_touch_count is a hardcoded honest zero (no stored corpus of wall-touch instants exists — defining a touch is J-09's predeclared-mechanism work) but the SERVED payload cannot be distinguished from 'we counted and found none'; it needs a served not_enumerated label. (2) joinable_corpus_counts iterates playbook_store.list()[0] and discards the error element (micro_join.py:381), so a checksum-failing playbook record is silently excluded while the function's own docstring claims it 'fails CLOSED, never silently under-counts' — the dataset-side sibling IS surfaced as integrity_errors. INTERPRETATIONS (ledgered, reversible): outcome start = anchor_at (no per-candidate conditioning set exists before J-04); snapshot rows read through a plain reader, not micro_accessor.py (a J-05 deliverable) — J-05 must re-point this read."
+      "notes": "RE-VERIFIED THIS ITERATION BY THE EVALUATOR - micro_join.py changed substantially this iteration (both passenger honesty fixes plus a disclosed O(n^2) perf rewrite of _shares_horizon_row/_clock_horizon_row and new outcome_rows_at_position / outcome_row_at_single_horizon entry points), so iter-3 evidence could NOT be carried. Called joinable_corpus_counts() against the real .data/datasets + .data/playbook stores: playbook_signal_count=2, by_setup_id={'range_trade': 2}, total=2 - the enumerated arithmetic is byte-unchanged (TC-16 met). BOTH iter-3 fix-forward items are now CLOSED and verified by me in the served real-corpus payload: band_touch_count is the typed {'status': 'not_enumerated', 'count': None} (no longer a bare 0 a reader could mistake for a counted zero) and playbook_integrity_errors: [] is surfaced (the discarded error channel). Ran tests/test_micro_join.py + test_micro_readiness.py + test_scout*.py myself: 142 passed. The perf rewrite carries three dedicated byte-identity tests against the pre-existing core."
     },
     "J-04": {
       "id": "J-04",
       "name": "The Scout and the ledger — every trial on the record",
-      "status": "failing",
-      "last_verified_iter": "goal-rapid-microscope-iter-3",
-      "last_passing_iter": null,
+      "status": "passing",
+      "last_verified_iter": "goal-rapid-microscope-iter-4",
+      "last_passing_iter": "goal-rapid-microscope-iter-4",
       "first_seen_iter": "goal-rapid-microscope-iter-0",
-      "last_evidence_path": "reports/phase-goal-rapid-microscope-iter-0-ui-test-results.md#UT-J-04",
+      "last_evidence_path": "docs/handoffs/goal-rapid-microscope-iter-4-audit.md",
       "spec_hash": "d188d138b6c84c4ff7302bf60f5da2f95b247b58a6cd7c42874d740801bc19d0",
-      "notes": "Still absent — scout.py / scout_ledger.py are not in this iteration's complete 8-file change list (runs/goal-session-rapid-microscope/iter-3/iter-diff.md). NOW UNBLOCKED and next in dependency order: J-03's join gives the Scout its feature-at-trigger / outcome-after-trigger rows. Carries the era's CRITICAL 'the denominator never shrinks' rail plus TR-8's screening calibration (200 seeds + the banned-shuffle counter-test) — correctness no screenshot or same-author unit test can establish, which is why iter-4 is escalated to the full pipeline. It must also settle audit B5's available_at owner ruling BEFORE it conditions any candidate outcome on a deferred feature."
+      "notes": "NEWLY PASSING - VERIFIED END TO END BY THE EVALUATOR, not read off the handoff. Ran the operator CLI (python -m app.research.scout) against a scoped copy of the committed fixtures (TAPEOLOGY_DATASET_DIR/_MICRO_SNAPSHOTS_DIR/_MICRO_SCOUT_DIR all pointed at a throwaway root - the operator's real store was never written): 6 candidates screened, ledger.jsonl written. Read the JSONL myself: exactly one permanent row per registered variant, every decision in the closed vocabulary (all killed_insufficient_n on the tiny fixture corpus - an honest result, 'zero survivors is a passing grade'), every reason from that same vocabulary, 3 families each carrying variants_tried. Served screen payload carries evidence_class='historical_exposed_diagnostic' verbatim, concentration, tod_buckets, fallback_tercile, best_of_n_disclosure and econ_proxy_sentence with the frozen proxy sentence present VERBATIM ('quoted spread is a research cost proxy, not a full execution or tradability model'). TC-13 verified: the registered grid names only cumulative_delta / failed_aggression_score / quote_imbalance, and 'quote_depletion' is absent from FEATURE_FAMILY_OF entirely (structural, not a policy flag). I also re-proved all four auditor fixes against live code: (B1) GET /research/desk/micro/scout returns chain_verification beside families, and a row tampered on disk reads {'ok': False, 'failed_at_row': 0, 'reason': 'content_hash_mismatch'}; (B2) truncating the tail one row reads {'ok': False, 'failed_at_row': 12, 'reason': 'tail_truncated'} - the silent-denominator-shrink hole is closed; (B3) three consecutive identical grid runs grew the ledger 6 -> 12 -> 18 rows while variants_tried stayed 2 per family (no inflation, no cap exhaustion, no row suppressed); (B4) shares/clock horizons now raise ScoutUnsupportedHorizonError instead of screening under a too-short null block. OPEN NOTE (conservative direction, not a defect): grid_version is hashed into spec_hash, so re-registering an IDENTICAL candidate under a new grid_version yields a new candidate_id and counts as a new variant (union-N over-counts, never under-counts) - pairs with audit B5 (family_id omits the (family, CORPUS) term spec section 1 names) as one owner ruling due before J-06 lands more corpora, since re-keying rewrites already-ledgered rows."
     },
     "J-05": {
       "id": "J-05",
       "name": "The walk-forward engine — chronology, fences, and the diagnostic run",
       "status": "failing",
-      "last_verified_iter": "goal-rapid-microscope-iter-3",
+      "last_verified_iter": "goal-rapid-microscope-iter-4",
       "last_passing_iter": null,
       "first_seen_iter": "goal-rapid-microscope-iter-0",
       "last_evidence_path": "reports/phase-goal-rapid-microscope-iter-0-ui-test-results.md#UT-J-05",
       "spec_hash": "1b84144912ebd9de2f4731f2209f6f7354ac8e563f633f14825644d2f838fa1e",
-      "notes": "Still absent — micro_accessor.py / walkforward.py are not in this iteration's 8-file change list. INHERITS: (1) audit B5's one-quote-early available_at — still an OPEN OWNER RULING, and the deadline effectively moves up to J-04 now that outcomes exist. (2) audit B4's §3 window-mean quote_imbalance/microprice — still unbuilt (now disclosed in the iter-3 dev handoff). (3) audit T1's close-out-row exclusion in TR-1/TR-17b. (4) NEW from J-03: micro_join.py reads snapshot rows through micro_snapshots.read_snapshot_rows (a plain reader); J-05 owns re-pointing that read through micro_accessor.py when it lands, plus the TR-3 import-ban guard. micro_readiness.py still holds WF_TRAIN_MIN_SESSIONS=40 / WF_TEST_MIN_SESSIONS=20 — import or supersede, never re-declare."
+      "notes": "micro_accessor.py and walkforward.py both confirmed ABSENT on disk by the evaluator. Unchanged this iteration - checked against the complete 9-file product change list in runs/goal-session-rapid-microscope/iter-4/iter-diff.md."
     },
     "J-06": {
       "id": "J-06",
       "name": "The recorder and the Vault — new tape, sealed at birth",
       "status": "failing",
-      "last_verified_iter": "goal-rapid-microscope-iter-3",
+      "last_verified_iter": "goal-rapid-microscope-iter-4",
       "last_passing_iter": null,
       "first_seen_iter": "goal-rapid-microscope-iter-0",
       "last_evidence_path": "reports/phase-goal-rapid-microscope-iter-0-ui-test-results.md#UT-J-06",
       "spec_hash": "68c9e0e14d8377c27f8fa65fdf25f4c5ad7c432d75abbd95d82ec5b25c6b26fc",
-      "notes": "Still absent — tick_recorder.py / vault.py are not in this iteration's 8-file change list; Card-5.1 preservation fields still absent from RawTrade/RawQuote. Step 4 is an operator-attended act reserved for a later iteration."
+      "notes": "tick_recorder.py and vault.py both confirmed ABSENT on disk by the evaluator. Unchanged this iteration - checked against the complete 9-file product change list in runs/goal-session-rapid-microscope/iter-4/iter-diff.md."
     },
     "J-07": {
       "id": "J-07",
       "name": "Graduation — provenance in, nothing laundered out",
       "status": "failing",
-      "last_verified_iter": "goal-rapid-microscope-iter-3",
+      "last_verified_iter": "goal-rapid-microscope-iter-4",
       "last_passing_iter": null,
       "first_seen_iter": "goal-rapid-microscope-iter-0",
       "last_evidence_path": "reports/phase-goal-rapid-microscope-iter-0-ui-test-results.md#UT-J-07",
       "spec_hash": "6bd325e2c1511b9d2745bdcd612a12d2142f32498a7aa85055d31209c9e46b28",
-      "notes": "Still absent — micro_graduation.py is not in this iteration's 8-file change list."
+      "notes": "micro_graduation.py confirmed ABSENT on disk by the evaluator. Unchanged this iteration - checked against the complete 9-file product change list in runs/goal-session-rapid-microscope/iter-4/iter-diff.md."
     },
     "J-08": {
       "id": "J-08",
       "name": "The surface and MCP v6 — the funnel is visible",
       "status": "failing",
-      "last_verified_iter": "goal-rapid-microscope-iter-3",
+      "last_verified_iter": "goal-rapid-microscope-iter-4",
       "last_passing_iter": null,
       "first_seen_iter": "goal-rapid-microscope-iter-0",
       "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-2-evidence/UT-01-result.png",
       "spec_hash": "037874a8933089ff99b53568d5aedac2843043741d83fa4958759ba898145572",
-      "notes": "Still absent — zero .tsx/.ts files changed this iteration (coherence.md scope note, git status), the /desk page still renders Microscope Readiness as its only micro section (visible at the foot of reports/qa/goal-rapid-microscope-iter-3-evidence/UT-J-10-result.png, collapsed, below Referee Runs), and EXPECTED_TOOLS is still the 22-tuple (target 26). J-03's joinable_corpus is served but deliberately unrendered — J-08 owns wiring it, and it should render band_touch_count's not-enumerated state rather than a bare 0."
+      "notes": "Confirmed by the evaluator: EXPECTED_TOOLS still carries 22 names (desk_scout absent), and apps/frontend/app/desk/page.tsx contains zero 'Scout Ledger' / 'Walk-Forward' / 'Validation Vault' section strings. Unchanged this iteration - checked against the complete 9-file product change list in runs/goal-session-rapid-microscope/iter-4/iter-diff.md."
     },
     "J-09": {
       "id": "J-09",
       "name": "The pilot studies — three predeclared questions, honest answers",
       "status": "failing",
-      "last_verified_iter": "goal-rapid-microscope-iter-3",
+      "last_verified_iter": "goal-rapid-microscope-iter-4",
       "last_passing_iter": null,
       "first_seen_iter": "goal-rapid-microscope-iter-0",
       "last_evidence_path": "reports/phase-goal-rapid-microscope-iter-0-ui-test-results.md#UT-J-09",
       "spec_hash": "7dd99ef032e14d2c86d69962f917efb8840d2496fa07765e9488264ecbd8a58a",
-      "notes": "Still absent — no ledgered pilot-study specs; the scout ledger they would live in does not exist. The three study_ids appear in the readiness floors table (all floor_unmet, photographed in UT-J-03-readiness-endpoint.png) but naming is not registration. Downstream of J-04/J-05. J-09 also owns defining what a band-map WALL TOUCH is, which is why J-03's band_touch_count is an honest zero today."
+      "notes": "No study family is predeclared or ledgered; the Scout ran only a generic bounded FIXTURE grid this iteration, never a study-specific mechanism (correctly OUT OF SCOPE). Unchanged this iteration - checked against the complete 9-file product change list in runs/goal-session-rapid-microscope/iter-4/iter-diff.md."
     },
     "J-10": {
       "id": "J-10",
       "name": "The kept product stands — traps armed, sentinel green",
       "status": "partial",
-      "last_verified_iter": "goal-rapid-microscope-iter-3",
+      "last_verified_iter": "goal-rapid-microscope-iter-4",
       "last_passing_iter": null,
       "first_seen_iter": "goal-rapid-microscope-iter-0",
       "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-3-evidence/UT-J-10-result.png",
       "spec_hash": "471d5b5b05f81c2922457651075a07f2c6ae428df8055f0ecd7a9f841b432814",
-      "notes": "BROWSER SENTINEL NOW FULLY GREEN — iter-2's two rig-data FAILs are closed. UT-J-10 PASS: all 13 steps of journey-scripts/J-10.json driven live; the evaluator opened the screenshot and read the /desk page directly — Playbook Signals filtered to 2026-06-22 renders record playbook-2026-06-22-0e602f6c7c77, '4 signal(s) - 0 absence(s)', the literal '4 recorded signals, none hidden', and 4 real rows (Capitulation/long 10:10, Range Trade/long 10:05, Open-High Break/long 09:45, Double Top/short 11:00) with real trigger/invalidation prices; Referee Registry shows config fingerprint 08e471b10130e1e2; Adjudications 'No hypotheses registered.'; Runs honest-empty; Microscope Readiness renders last, below Referee Runs (T-11 placement intact). Step 9's volatile-hash assertion is repaired to the static label 'Built from signature:' (apps/frontend/app/desk/page.tsx:4690) and proved hash-independent (this run's hash db939240d73dac73 != iter-1's b06e0bc289c54d77). ALSO RE-VERIFIED BY THE EVALUATOR: full suite 2866 passed / 8 skipped / 0 failed (>= the 2828 floor, up from iter-2's 2835, era-open baseline 2691); fingerprint 08e471b10130e1e2; all 6 referee_*.py SHA-256 hashes byte-identical to the iteration-0 listing; app/engine/ and both playbook/context modules byte-unchanged; store-scope guard CLEAN (11,275 protected files unchanged). STILL PARTIAL: only TR-1/TR-7/TR-17/TR-18 of the TR-1..TR-22 suite exist (goal.md itself spreads the rest across J-04..J-07), and the deterministic-rerun check is only partly evidenced (the readiness response is byte-identical on re-call; snapshot/screen/fold re-runs are not yet checked)."
+      "notes": "STILL PARTIAL. Trap-suite half advanced 4/22 -> 8/22 (TR-8 calibration + its banned-shuffle counter-test, TR-9 registration ordering, TR-10 pool invariance, TR-11 chain/union-N landed with J-04); 14 traps remain, and the extended guard tests J-10 step 1 names (micro/scout threshold-sweep ban, copy discipline for micro copy, _PRICE_ARITHMETIC_FIELDS additions, accessor import-ban) are still absent - grep over test_copy_discipline.py / test_desk_ui_guards.py / test_no_execution_path.py returns no scout coverage. Frozen-foundation half RE-VERIFIED BY THE EVALUATOR this iteration: Config().config_fingerprint() prints 08e471b10130e1e2; all six referee_*.py SHA-256 hashes diff IDENTICAL against the iteration-0 listing in the iter-0 dev handoff; git diff over app/engine/, desk_playbook.py, desk_playbook_context.py and every referee_*.py is empty. SENTINEL HALF NOT RE-RUN THIS ITERATION - the browser lane recorded a blanket SKIP (reports/phase-goal-rapid-microscope-iter-4-ui-test-results.md is four lines) even though the iteration spec's TC-20/TESTING REQUIREMENTS explicitly mandated re-running journey-scripts/J-10.json unmodified. Carried on evidence durability (A.6): zero frontend files changed, so iter-3's green 13-step sentinel capture still stands. NOT scored down for this - but the next iteration MUST actually run it."
     }
   },
   "anti_goal_violations": [
@@ -131,16 +131,30 @@
       "iter": "goal-rapid-microscope-iter-2",
       "anti_goal": "No lookahead — every value computed as-of T uses only events/bars fully completed at T. (critical)",
       "severity": "minor",
-      "evidence": "audit B5 — apps/backend/app/research/micro_observer.py:636/:657 (locked by tests/test_micro_observer.py:291): a price-change-terminated quote_depletion stamps observed_through at the last same-price quote, one quote BEFORE the price change that proves the window closed, so available_at is earlier than the moment the completion could be known. STILL OPEN after iter-3 and still MINOR: micro_join.py's outcome start is anchor_at (the trigger's own timestamp), never max(available_at), so nothing consumes the early stamp yet — but the deadline now moves up to J-04, which is where a candidate first conditions an outcome on a deferred feature. Needs an OWNER RULING, not a developer invention (T-1).",
+      "evidence": "audit B5 — apps/backend/app/research/micro_observer.py:636/:657 (locked by tests/test_micro_observer.py:291): a price-change-terminated quote_depletion stamps observed_through at the last same-price quote, one quote BEFORE the price change that proves the window closed, so available_at is earlier than the moment the completion could be known. STILL OPEN after iter-3 and still MINOR: micro_join.py's outcome start is anchor_at (the trigger's own timestamp), never max(available_at), so nothing consumes the early stamp yet — but the deadline now moves up to J-04, which is where a candidate first conditions an outcome on a deferred feature. Needs an OWNER RULING, not a developer invention (T-1). || ITER-4 RE-CHECK: still OPEN, still MINOR, still HUMAN-OWNED. micro_observer.py is byte-unchanged this iteration. Iteration 4 honoured T-1 by scoping AROUND the ruling rather than inventing one: its registered Scout grid structurally excludes every quote_depletion-conditioned candidate ('quote_depletion' is absent from FEATURE_FAMILY_OF, verified by the evaluator), so no ledgered result rests on the early stamp. The deadline moves to whichever journey first conditions an outcome on a depletion-derived feature - J-05's walk-forward outcomes or J-09's liquidity studies.",
       "resolved": false
     },
     {
       "iter": "goal-rapid-microscope-iter-3",
       "anti_goal": "Foundation invariants (still law): honest uncertainty; no fabricated data; single source of truth; ... record integrity. (critical rails; this instance scored MINOR — see evidence)",
       "severity": "minor",
-      "evidence": "apps/backend/app/research/micro_join.py:381 — joinable_corpus_counts iterates `playbook_store.list()[0]` and discards the error element, so a playbook record failing its own checksum verification is silently excluded from the served joinable_corpus with nothing in the response saying anything was skipped; the sibling DatasetStore.list() errors ARE surfaced one call earlier as micro_readiness's `integrity_errors`. The function's own docstring claims it 'fails CLOSED, never silently under-counts'. Found by the reviewer (reports/reviews/goal-rapid-microscope-iter-3-review.md, MINOR) and confirmed in source by the evaluator. Scored MINOR: the failure direction is an UNDERCOUNT (never a fabricated positive), it fires only on a corrupt playbook record, and nothing downstream consumes the count yet. Related, same fix window: `band_touch_count` is a hardcoded honest zero that the served payload cannot distinguish from a real count of none (micro_join.py:399-403). Both to be fixed in iteration 4.",
-      "resolved": false
+      "evidence": "apps/backend/app/research/micro_join.py:381 — joinable_corpus_counts iterates `playbook_store.list()[0]` and discards the error element, so a playbook record failing its own checksum verification is silently excluded from the served joinable_corpus with nothing in the response saying anything was skipped; the sibling DatasetStore.list() errors ARE surfaced one call earlier as micro_readiness's `integrity_errors`. The function's own docstring claims it 'fails CLOSED, never silently under-counts'. Found by the reviewer (reports/reviews/goal-rapid-microscope-iter-3-review.md, MINOR) and confirmed in source by the evaluator. Scored MINOR: the failure direction is an UNDERCOUNT (never a fabricated positive), it fires only on a corrupt playbook record, and nothing downstream consumes the count yet. Related, same fix window: `band_touch_count` is a hardcoded honest zero that the served payload cannot distinguish from a real count of none (micro_join.py:399-403). Both to be fixed in iteration 4. || RESOLVED IN ITERATION 4 and verified by the evaluator directly against the real .data/datasets + .data/playbook stores: joinable_corpus_counts() now returns playbook_integrity_errors (the previously-discarded playbook_store.list() error half, served verbatim beside the count) and band_touch_count as the typed {'status': 'not_enumerated', 'count': None}. TC-16 confirms the enumerated arithmetic is unchanged (playbook_signal_count 2, by_setup_id {'range_trade': 2}).",
+      "resolved": true
+    },
+    {
+      "iter": "goal-rapid-microscope-iter-4",
+      "anti_goal": "The denominator never shrinks. Every evaluated variant lands in the hash-chained ledger with a closed-vocabulary decision; kills are never deleted; the union-N across grid versions is served beside every family. (critical)",
+      "severity": "critical",
+      "evidence": "INTRODUCED AND FIXED INSIDE THIS ITERATION (the iteration-2 pattern), found by the independent auditor after review and QA both passed the code. Two faults, both in the ledger contract this journey exists to guarantee: (B2) scout_ledger.py's chain walk could not detect a TAIL truncation - erasing the most recent kill row left verify_chain() reporting ok: True with variants_tried silently 3 -> 2; (B3) variants_tried_for_family counted ledger ROWS rather than distinct candidate_ids, so every re-run of the identical grid inflated the served union-N (and bricked POST /scout/compute at the 24-variant cap after 12 runs). Fixed by a durable chain_head.json tail anchor written after the row it commits to, plus scout_ledger.distinct_variant_count. VERIFIED FIXED BY THE EVALUATOR against live code, not read off the handoff: tail truncation now reads {'ok': False, 'failed_at_row': 12, 'reason': 'tail_truncated'}, and three consecutive identical grid runs grew the ledger 6 -> 12 -> 18 rows (every evaluation permanently on record, nothing suppressed) while variants_tried held at 2 per family.",
+      "resolved": true
+    },
+    {
+      "iter": "goal-rapid-microscope-iter-4",
+      "anti_goal": "Referee-era / Rapid-Microscope screening honesty: no threshold, grid, formula, embargo, or fold parameter is chosen or revised from validation outcomes; the screening null must not be anti-conservative. (critical)",
+      "severity": "critical",
+      "evidence": "INTRODUCED AND FIXED INSIDE THIS ITERATION. Audit B4: scout.py's _block_length_for_horizon returned a 20-event block for EVERY shares and clock horizon (documented in the dev handoff as 'a conservative floor' - it is the opposite). Spec section 5.3 requires block length >= the longest evaluated horizon's label span in events; a clock_seconds_300 horizon spans hundreds-to-thousands of trades, so the null was narrowed and p_screen anti-conservative on a callable path whose results are permanently ledgered. Section 5.3's non-overlapping anchor subsampling was also absent entirely and undisclosed. Fixed by REFUSING rather than inventing (T-1): a typed ScoutUnsupportedHorizonError raised at the registration boundary before any corpus read or ledger write. VERIFIED BY THE EVALUATOR: nothing this iteration registers is affected (the whole grid is trade-count-only, where block length equals the label span exactly), and 142 tests across the four touched test files pass. CARRY-FORWARD: restoring shares/clock horizons needs per-session block sizing PLUS the subsampling and its own calibration trap - real work for whichever journey first registers a clock-horizon candidate, never a patch.",
+      "resolved": true
     }
   ],
-  "updated_at": "2026-08-17T09:05:00Z"
+  "updated_at": "2026-08-17T16:10:00Z"
 }

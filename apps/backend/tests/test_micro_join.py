@@ -7,7 +7,15 @@ the existing (already-tested) J-02 pipeline -- this file never re-verifies J-02'
 only that ``micro_join.py`` LOCATES and serves the right rows. TC-4 is a pinned whole-module
 byte-freeze (the ``test_referee_guards.py`` precedent). TC-5's ``joinable_corpus`` readiness field
 is exercised end to end in ``test_micro_readiness.py`` instead -- this file covers the counting
-function it calls into (``joinable_corpus_counts``) directly, over small hermetic fixtures."""
+function it calls into (``joinable_corpus_counts``) directly, over small hermetic fixtures.
+
+**iter-4 passenger-fix additions (TC-14, TC-15, TC-16 -- ``docs/phases/goal-rapid-microscope-
+iter-4.md``, a DISTINCT numbering scope from this file's own iter-3 TC-1..9 above):** a corrupt
+playbook record now surfaces in ``playbook_integrity_errors`` rather than silently vanishing from
+the count (TC-14); ``band_touch_count`` is now a typed ``{"status": "not_enumerated", "count":
+None}`` rather than a bare ``0`` a reader could mistake for a real zero (TC-15); the REAL-corpus
+enumerated arithmetic (``playbook_signal_count``/``by_setup_id``) is unchanged by either fix
+(TC-16)."""
 
 from __future__ import annotations
 
@@ -427,9 +435,10 @@ def test_joinable_corpus_counts_only_counts_signals_inside_a_recorded_tick_windo
     counts = micro_join.joinable_corpus_counts(dataset_store, playbook_store)
 
     assert counts["playbook_signal_count"] == 1
-    assert counts["band_touch_count"] == 0
+    assert counts["band_touch_count"] == {"status": micro_join.BAND_TOUCH_STATUS_NOT_ENUMERATED, "count": None}
     assert counts["total"] == 1
     assert counts["by_setup_id"] == {"opening_range_break": 1}
+    assert counts["playbook_integrity_errors"] == []
 
 
 def test_joinable_corpus_counts_breaks_down_by_setup_id(tmp_path):
@@ -460,7 +469,13 @@ def test_joinable_corpus_counts_is_an_honest_zero_with_no_playbook_records(tmp_p
 
     counts = micro_join.joinable_corpus_counts(dataset_store, playbook_store)
 
-    assert counts == {"total": 0, "playbook_signal_count": 0, "band_touch_count": 0, "by_setup_id": {}}
+    assert counts == {
+        "total": 0,
+        "playbook_signal_count": 0,
+        "band_touch_count": {"status": micro_join.BAND_TOUCH_STATUS_NOT_ENUMERATED, "count": None},
+        "by_setup_id": {},
+        "playbook_integrity_errors": [],
+    }
 
 
 def test_joinable_corpus_counts_fails_closed_on_a_malformed_trigger_ts_never_silently_undercounts(tmp_path):
@@ -507,3 +522,198 @@ def test_find_covering_snapshot_is_none_without_a_built_snapshot(tmp_path):
         "ZJN", micro_join.parse_utc_epoch("2026-06-09T13:00:10Z"), dataset_store, snapshots_dir, CONFIG
     )
     assert result is None
+
+
+# --- TC-14 (iter-4 passenger fix): a corrupt playbook record surfaces honestly, never a silent
+# undercount --------------------------------------------------------------------------------------
+
+
+def test_tc14_a_corrupted_playbook_record_surfaces_in_playbook_integrity_errors(tmp_path):
+    """Mirrors ``test_micro_readiness.py``'s own ``test_corrupted_dataset_is_surfaced_never_
+    dropped_never_a_crash`` precedent, applied to the PLAYBOOK store's own on-disk shape (the same
+    ``{"file_checksum": ..., "record": {...}}`` envelope every store in this codebase hashes)."""
+    import json
+
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    _plant_dataset(
+        dataset_store, symbol="ZJN",
+        window_start_utc="2026-06-09T13:00:00Z", window_end_utc="2026-06-09T13:01:00Z",
+    )
+    playbook_store = PlaybookStore(tmp_path / "playbook")
+    healthy = _plant_playbook_signal(
+        playbook_store, session_date="2026-06-09", playbook_input_signature="sig-healthy",
+        signals=[{"symbol": "ZJN", "setup_id": "opening_range_break", "trigger_ts": "2026-06-09T13:00:10Z"}],
+    )
+    corrupted = _plant_playbook_signal(
+        playbook_store, session_date="2026-06-10", playbook_input_signature="sig-corrupt",
+        signals=[{"symbol": "ZJN", "setup_id": "jbe", "trigger_ts": "2026-06-10T13:00:10Z"}],
+    )
+    corrupted_path = playbook_store._path(corrupted["id"])
+    payload = json.loads(corrupted_path.read_text())
+    payload["record"]["meta"]["session_date"] = "tampered"
+    corrupted_path.write_text(json.dumps(payload))
+
+    counts = micro_join.joinable_corpus_counts(dataset_store, playbook_store)
+
+    assert len(counts["playbook_integrity_errors"]) == 1
+    assert counts["playbook_integrity_errors"][0]["file"] == corrupted_path.name
+    # the healthy record is NEVER dropped alongside the corrupted one -- never a silent full
+    # undercount just because ONE other file failed verification.
+    assert counts["playbook_signal_count"] == 1
+    assert counts["by_setup_id"] == {"opening_range_break": 1}
+    assert counts["total"] == 1
+
+
+def test_tc14_healthy_playbook_records_still_count_when_none_are_corrupted(tmp_path):
+    """A lint that can fail proves something: the healthy path still serves an EMPTY error list,
+    never a fabricated one."""
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    _plant_dataset(
+        dataset_store, symbol="ZJN",
+        window_start_utc="2026-06-09T13:00:00Z", window_end_utc="2026-06-09T13:01:00Z",
+    )
+    playbook_store = PlaybookStore(tmp_path / "playbook")
+    _plant_playbook_signal(
+        playbook_store, session_date="2026-06-09", playbook_input_signature="sig-clean",
+        signals=[{"symbol": "ZJN", "setup_id": "opening_range_break", "trigger_ts": "2026-06-09T13:00:10Z"}],
+    )
+    counts = micro_join.joinable_corpus_counts(dataset_store, playbook_store)
+    assert counts["playbook_integrity_errors"] == []
+    assert counts["playbook_signal_count"] == 1
+
+
+# --- TC-15 (iter-4 passenger fix): band_touch_count is a typed "not enumerated" state --------------
+
+
+def test_tc15_band_touch_count_is_a_typed_not_enumerated_state_never_a_bare_zero(tmp_path):
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    playbook_store = PlaybookStore(tmp_path / "playbook")
+    counts = micro_join.joinable_corpus_counts(dataset_store, playbook_store)
+    band_touch = counts["band_touch_count"]
+    assert not isinstance(band_touch, int)  # never a bare int a reader could read as "counted zero"
+    assert band_touch == {"status": micro_join.BAND_TOUCH_STATUS_NOT_ENUMERATED, "count": None}
+    assert band_touch["status"] == "not_enumerated"
+    assert band_touch["count"] is None
+
+
+def test_tc15_band_touch_count_shape_is_a_fresh_dict_every_call_never_shared_mutable_state(tmp_path):
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    playbook_store = PlaybookStore(tmp_path / "playbook")
+    first = micro_join.joinable_corpus_counts(dataset_store, playbook_store)
+    first["band_touch_count"]["count"] = 999  # mutate the caller's own copy
+    second = micro_join.joinable_corpus_counts(dataset_store, playbook_store)
+    assert second["band_touch_count"]["count"] is None  # unaffected by the earlier mutation
+
+
+# --- TC-16: the real-corpus enumerated arithmetic is unchanged by either passenger fix --------------
+
+
+def test_tc16_real_corpus_joinable_corpus_arithmetic_is_unchanged_by_the_passenger_fixes():
+    """Against the REAL ``.data/datasets`` + playbook stores (a direct call against the real
+    stores, per the phase spec's own TC-16 wording -- not the browser rig): ``playbook_signal_
+    count`` stays ``2`` and ``by_setup_id`` stays ``{"range_trade": 2}`` -- the fixes changed only
+    corruption-surfacing and the ``band_touch_count``/``total`` representation, never the
+    enumerated arithmetic itself."""
+    from app.research.desk_playbook import resolve_desk_playbook_dir
+
+    dataset_store = DatasetStore(CONFIG.dataset_dir_resolved())
+    playbook_store = PlaybookStore(resolve_desk_playbook_dir(CONFIG.desk_universe_dir_resolved()))
+
+    counts = micro_join.joinable_corpus_counts(dataset_store, playbook_store)
+
+    assert counts["playbook_signal_count"] == 2
+    assert counts["by_setup_id"] == {"range_trade": 2}
+    assert counts["total"] == 2  # total == playbook_signal_count alone now (module docstring)
+    assert counts["playbook_integrity_errors"] == []  # the real corpus is healthy
+    assert counts["band_touch_count"] == {"status": micro_join.BAND_TOUCH_STATUS_NOT_ENUMERATED, "count": None}
+
+
+# --- iter-4 perf fix: outcome_rows_at_position / outcome_row_at_single_horizon are byte-identical
+# to outcome_rows_after_trigger's own output -- added when a live Scout run against the real
+# 18-dataset corpus (J-04) exposed an O(n^2) cost in the O(n) `.index()` lookup + a per-call
+# O(n) slice copy inside `_shares_horizon_row`/`_clock_horizon_row`; both are rewritten here to
+# avoid an O(n)-per-call cost, with zero output change -----------------------------------------
+
+
+def test_outcome_rows_at_position_matches_outcome_rows_after_trigger_exactly(pg_snapshot):
+    trade_rows = pg_snapshot["trade_rows"]
+    rows = pg_snapshot["rows"]
+    dataset_meta = pg_snapshot["dataset_meta"]
+    session_end_ts = micro_join._session_end_logical_ts(dataset_meta)
+
+    for anchor_pos in (0, 9, 49, 50, len(trade_rows) - 3, len(trade_rows) - 1):
+        anchor_row = trade_rows[anchor_pos]
+        via_trigger = micro_join.outcome_rows_after_trigger(rows, anchor_row, session_end_ts, side=None)
+        via_position = micro_join.outcome_rows_at_position(trade_rows, anchor_pos, session_end_ts, side=None)
+        assert via_position == via_trigger
+
+
+def test_outcome_rows_at_position_matches_with_a_hypothesis_side(pg_snapshot):
+    trade_rows = pg_snapshot["trade_rows"]
+    rows = pg_snapshot["rows"]
+    dataset_meta = pg_snapshot["dataset_meta"]
+    session_end_ts = micro_join._session_end_logical_ts(dataset_meta)
+    anchor_pos = 9
+    anchor_row = trade_rows[anchor_pos]
+
+    via_trigger = micro_join.outcome_rows_after_trigger(rows, anchor_row, session_end_ts, side="buy")
+    via_position = micro_join.outcome_rows_at_position(trade_rows, anchor_pos, session_end_ts, side="buy")
+    assert via_position == via_trigger
+
+
+def test_outcome_row_at_single_horizon_matches_the_corresponding_entry_of_the_full_closed_set(pg_snapshot):
+    trade_rows = pg_snapshot["trade_rows"]
+    dataset_meta = pg_snapshot["dataset_meta"]
+    session_end_ts = micro_join._session_end_logical_ts(dataset_meta)
+
+    horizon_pairs = [
+        ("trades", 20), ("trades", 100),
+        ("shares", 5_000), ("shares", 50_000),
+        ("clock_seconds", 30), ("clock_seconds", 60), ("clock_seconds", 300),
+    ]
+    for anchor_pos in (9, 49, len(trade_rows) - 3):
+        full_set = micro_join.outcome_rows_at_position(trade_rows, anchor_pos, session_end_ts, side=None)
+        for kind, value in horizon_pairs:
+            single = micro_join.outcome_row_at_single_horizon(
+                trade_rows, anchor_pos, kind, value, session_end_ts, side=None
+            )
+            expected = next(o for o in full_set if o["horizon_kind"] == kind and o["horizon_value"] == value)
+            assert single == expected
+
+
+def test_outcome_row_at_single_horizon_rejects_an_unknown_horizon_kind(pg_snapshot):
+    trade_rows = pg_snapshot["trade_rows"]
+    dataset_meta = pg_snapshot["dataset_meta"]
+    session_end_ts = micro_join._session_end_logical_ts(dataset_meta)
+    with pytest.raises(ValueError):
+        micro_join.outcome_row_at_single_horizon(trade_rows, 9, "not-a-real-kind", 20, session_end_ts)
+
+
+def test_shares_and_clock_horizon_rows_are_unchanged_by_the_index_iteration_rewrite(pg_snapshot):
+    """A hand-computed oracle over the SAME small fixture TC-1 already trusts: the rewritten
+    ``_shares_horizon_row``/``_clock_horizon_row`` (index iteration, never a slice copy) return
+    the identical row a naive, obviously-correct reference implementation finds."""
+    trade_rows = pg_snapshot["trade_rows"]
+    anchor_pos = 9
+
+    def _reference_shares_horizon_row(threshold):
+        cumulative = 0.0
+        for row in trade_rows[anchor_pos + 1 :]:
+            cumulative += row["size"]
+            if cumulative >= threshold:
+                return row
+        return None
+
+    def _reference_clock_horizon_row(horizon_ts):
+        candidate = None
+        for row in trade_rows[anchor_pos:]:
+            if row["anchor_at"] <= horizon_ts:
+                candidate = row
+            else:
+                break
+        return candidate
+
+    assert micro_join._shares_horizon_row(trade_rows, anchor_pos, 5_000) == _reference_shares_horizon_row(5_000)
+    assert micro_join._shares_horizon_row(trade_rows, anchor_pos, 50_000) == _reference_shares_horizon_row(50_000)
+    horizon_ts = trade_rows[anchor_pos]["anchor_at"] + 60
+    assert micro_join._clock_horizon_row(trade_rows, anchor_pos, horizon_ts) == _reference_clock_horizon_row(horizon_ts)

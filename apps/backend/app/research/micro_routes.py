@@ -34,6 +34,8 @@ from .micro_snapshots import (
     resolve_micro_snapshots_dir,
 )
 from .routes import get_dataset_store
+from .scout import ScoutComputeManager, list_scout_families
+from .scout_ledger import ScoutLedger, resolve_scout_ledger_dir
 
 router = APIRouter(prefix="/research/desk/micro", tags=["micro"])
 
@@ -152,3 +154,96 @@ def get_micro_snapshots_runs(snapshots_dir: str = Depends(get_micro_snapshots_di
     """The durable build-run history, newest first -- never 404 on zero runs (an honest empty
     list)."""
     return {"runs": read_run_log(snapshots_dir)}
+
+
+# --- J-04: the Scout + exploratory candidate ledger (scout.py, scout_ledger.py) -----------------
+
+
+def get_scout_ledger_dir() -> str:
+    """The scout ledger's directory -- ``TAPEOLOGY_MICRO_SCOUT_DIR`` if set, else a SIBLING of the
+    config-owned dataset directory (``scout_ledger.resolve_scout_ledger_dir`` -- see that
+    function's own docstring)."""
+    return resolve_scout_ledger_dir(CONFIG.dataset_dir_resolved())
+
+
+# The single in-flight (or last-terminal) scout-screening job for THIS process -- the same
+# module-singleton-behind-a-Depends-accessor precedent as the snapshot manager above.
+_scout_compute_manager = ScoutComputeManager()
+
+
+def get_scout_compute_manager() -> ScoutComputeManager:
+    """A FastAPI dependency so a test overrides it outright with a fresh, isolated manager (the
+    ``get_micro_snapshot_compute_manager`` precedent) -- never reaches into the module-level
+    singleton directly."""
+    return _scout_compute_manager
+
+
+@router.get("/scout")
+def get_scout(ledger_dir: str = Depends(get_scout_ledger_dir)) -> dict:
+    """Every registered family's trials, verbatim as ledgered (``scout.list_scout_families`` --
+    see that function's own docstring), BESIDE the ledger's own chain-verification verdict. Never
+    404/500 on an empty ledger -- an honest empty ``families`` list, the desk router's established
+    never-404-on-absence convention. Page-load GETs never compute (T-8): a screening RUN is an
+    explicit operator act through ``POST /scout/compute``.
+
+    ``chain_verification`` is ``ScoutLedger.verify_chain()`` verbatim (iter-4 audit fix): the
+    ledger's tamper check existed but nothing that SERVED the ledger ever ran it, so a row whose
+    ``decision`` had been flipped from ``killed_null`` to ``survive`` on disk was served as a
+    survivor with no hint anything was wrong -- exactly the "no code path silently accepts the
+    tampered chain" clause this iteration's own TC-3 requires. Surfaced beside the data rather
+    than refused, the same discipline this iteration's ``playbook_integrity_errors`` passenger fix
+    chose for a corrupt playbook record: a reader is handed the corruption, never denied the
+    (honestly labelled) evidence. Verification is a cheap re-hash of the ledger file -- a read,
+    never a compute (T-8)."""
+    ledger = ScoutLedger(ledger_dir)
+    return {
+        "families": list_scout_families(ledger),
+        "chain_verification": ledger.verify_chain(),
+    }
+
+
+@router.post("/scout/compute")
+def trigger_scout_compute(
+    dataset_store: DatasetStore = Depends(get_dataset_store),
+    snapshots_dir: str = Depends(get_micro_snapshots_dir),
+    ledger_dir: str = Depends(get_scout_ledger_dir),
+    manager: ScoutComputeManager = Depends(get_scout_compute_manager),
+) -> dict:
+    """Start a Scout screening run over the bounded reference candidate grid (ensuring
+    prerequisite snapshots exist first -- reuse-or-build), or refuse (single-flight) if one is
+    already running."""
+    result = manager.trigger(dataset_store, CONFIG, snapshots_dir, ledger_dir)
+    if result["state"] == "refused":
+        return result
+    return {"state": result["state"], "run_id": result["run_id"]}
+
+
+@router.get("/scout/compute")
+def get_scout_compute(manager: ScoutComputeManager = Depends(get_scout_compute_manager)) -> dict:
+    """The current (or last-terminal) screening job's progress -- never 404 (the idle default
+    before any job has ever run this process)."""
+    snap = manager.snapshot()
+    return {
+        "state": snap["state"],
+        "progress": snap["progress"],
+        "started_utc": snap["started_utc"],
+        "finished_utc": snap["finished_utc"],
+        "error": snap["error"],
+    }
+
+
+@router.post("/scout/compute/cancel")
+def cancel_scout_compute(manager: ScoutComputeManager = Depends(get_scout_compute_manager)) -> dict:
+    """Signal cooperative cancellation for the in-flight job -- a 409 for an idle manager (the
+    snapshot-compute-cancel route's own precedent), else ``{"state": "cancelled"}`` acknowledging
+    the REQUEST (the worker itself settles at the next candidate boundary)."""
+    if manager.snapshot()["state"] != "running":
+        raise HTTPException(status_code=409, detail="no scout screening run is currently running")
+    manager.cancel()
+    return {"state": "cancelled"}
+
+
+@router.get("/scout/runs")
+def get_scout_runs(ledger_dir: str = Depends(get_scout_ledger_dir)) -> dict:
+    """The durable run history, newest first -- never 404 on zero runs (an honest empty list)."""
+    return {"runs": read_run_log(ledger_dir)}
