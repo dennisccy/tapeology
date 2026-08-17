@@ -1,31 +1,37 @@
-"""``/research/desk/micro/*`` -- Era "The Rapid Microscope": J-01's readiness fold plus J-02's
-three snapshot routes. A fresh router/file mounted separately in ``main.py``, mirroring
-``referee_routes.py``'s own precedent and rationale (that file's own docstring: "the SAME
-rationale desk_routes.py itself gives for splitting off routes.py"). The era's own Data Contract
-table (``docs/goal.md``'s Product Shape) names four MORE micro routes landing in later iterations
-(scout, walkforward, vault, recorder, graduation) under this SAME ``/research/desk/micro`` prefix
--- a dedicated file is the right home from the start.
+"""``/research/desk/micro/*`` -- Era "The Rapid Microscope": J-01's readiness fold, J-02's three
+snapshot routes, J-04's Scout routes, and J-05's three walk-forward routes. A fresh router/file
+mounted separately in ``main.py``, mirroring ``referee_routes.py``'s own precedent and rationale
+(that file's own docstring: "the SAME rationale desk_routes.py itself gives for splitting off
+routes.py"). The era's own Data Contract table (``docs/goal.md``'s Product Shape) names THREE more
+micro routes landing in later iterations (vault, recorder, graduation) under this SAME
+``/research/desk/micro`` prefix -- a dedicated file is the right home from the start.
 
-Depends on a store this route does NOT own: the dataset store dependency is imported verbatim
-from ``routes.get_dataset_store`` (never a second, redefined provider). The readiness cache and
-the snapshot-compute manager are this module's OWN wiring (the ``referee_routes.py`` precedent:
-"this module owns its own wiring end to end") -- the manager lives as a module-level singleton
+Depends on stores this route does NOT own: the dataset store dependency is imported verbatim from
+``routes.get_dataset_store``, the universe/bar-store dependencies from ``desk_routes.
+get_universe_store``/``routes.get_bar_store`` (never a second, redefined provider). The readiness
+cache and every compute manager are this module's OWN wiring (the ``referee_routes.py`` precedent:
+"this module owns its own wiring end to end") -- each manager lives as a module-level singleton
 behind a ``Depends``-able accessor (the ``desk_routes.py`` ``get_desk_playbook_compute_manager``
 precedent, so a test overrides the DEPENDENCY with a fresh manager, never reaches into the
 module-level singleton directly).
 
-``GET /readiness`` and ``GET /snapshots``/``GET /snapshots/runs`` are plain reads: page-load GETs
-never compute (T-8) -- a snapshot BUILD is an explicit operator act through
-``POST /snapshots/compute``, exactly like the desk's own compute-manager pattern."""
+``GET /readiness``, ``GET /snapshots``/``GET /snapshots/runs``, ``GET /scout``/``GET
+/scout/runs``, and ``GET /walkforward``/``GET /walkforward/runs`` are all plain reads: page-load
+GETs never compute (T-8) -- a build/screen/fold-evaluation RUN is always an explicit operator act
+through its own ``POST .../compute``, exactly the same desk compute-manager pattern three times
+over."""
 
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..config import CONFIG
+from .bars import BarStore
 from .datasets import DatasetStore
 from .desk_playbook import PlaybookStore
-from .desk_routes import get_playbook_store
+from .desk_routes import get_playbook_store, get_universe_store
+from .desk_universe import UniverseStore
+from .micro_accessor import ExposureRegistry, resolve_micro_exposure_registry_dir
 from .micro_readiness import MicroReadinessCache, build_readiness, resolve_micro_readiness_cache_db_path
 from .micro_snapshots import (
     MicroSnapshotComputeManager,
@@ -33,9 +39,11 @@ from .micro_snapshots import (
     read_run_log,
     resolve_micro_snapshots_dir,
 )
-from .routes import get_dataset_store
+from .routes import get_bar_store, get_dataset_store
 from .scout import ScoutComputeManager, list_scout_families
 from .scout_ledger import ScoutLedger, resolve_scout_ledger_dir
+from . import walkforward as wf
+from .walkforward_ledger import WalkForwardLedger
 
 router = APIRouter(prefix="/research/desk/micro", tags=["micro"])
 
@@ -245,5 +253,119 @@ def cancel_scout_compute(manager: ScoutComputeManager = Depends(get_scout_comput
 
 @router.get("/scout/runs")
 def get_scout_runs(ledger_dir: str = Depends(get_scout_ledger_dir)) -> dict:
+    """The durable run history, newest first -- never 404 on zero runs (an honest empty list)."""
+    return {"runs": read_run_log(ledger_dir)}
+
+
+# --- J-05: the chronological walk-forward engine (walkforward.py, walkforward_ledger.py) --------
+
+
+def get_walkforward_ledger_dir() -> str:
+    """The walk-forward ledger's directory -- ``TAPEOLOGY_MICRO_WALKFORWARD_DIR`` if set, else a
+    SIBLING of the config-owned dataset directory (``walkforward.resolve_walkforward_ledger_dir``
+    -- see that function's own docstring)."""
+    return wf.resolve_walkforward_ledger_dir(CONFIG.dataset_dir_resolved())
+
+
+def get_micro_exposure_registry_dir() -> str:
+    """The exposure registry's directory -- ``TAPEOLOGY_MICRO_EXPOSURE_REGISTRY_DIR`` if set, else
+    a SIBLING of the config-owned dataset directory (``micro_accessor.resolve_micro_exposure_
+    registry_dir`` -- see that function's own docstring). Shared by every J-05 caller that logs or
+    reads exposure state, not owned exclusively by this route file."""
+    return resolve_micro_exposure_registry_dir(CONFIG.dataset_dir_resolved())
+
+
+# The single in-flight (or last-terminal) walk-forward job for THIS process -- the same
+# module-singleton-behind-a-Depends-accessor precedent as the snapshot/scout managers above.
+_walkforward_compute_manager = wf.WalkForwardComputeManager()
+
+
+def get_walkforward_compute_manager() -> "wf.WalkForwardComputeManager":
+    """A FastAPI dependency so a test overrides it outright with a fresh, isolated manager (the
+    ``get_scout_compute_manager`` precedent) -- never reaches into the module-level singleton
+    directly."""
+    return _walkforward_compute_manager
+
+
+@router.get("/walkforward")
+def get_walkforward(ledger_dir: str = Depends(get_walkforward_ledger_dir)) -> dict:
+    """Every registered fold spec plus every sequence's fold results, decay view, and sequence
+    verdict (``wf.list_fold_specs``/``wf.list_walkforward_sequences`` -- see those functions' own
+    docstrings), BESIDE the ledger's own chain-verification verdict (the ``GET /scout`` precedent:
+    surfaced beside the data rather than refused, never silently accepted if tampered). Never
+    404/500 on an empty ledger -- an honest empty ``fold_specs``/``sequences``, the desk router's
+    established never-404-on-absence convention. Page-load GETs never compute (T-8): a fold-
+    evaluation RUN is an explicit operator act through ``POST /walkforward/compute``."""
+    ledger = WalkForwardLedger(ledger_dir)
+    return {
+        "fold_specs": wf.list_fold_specs(ledger),
+        "sequences": wf.list_walkforward_sequences(ledger),
+        "chain_verification": ledger.verify_chain(),
+    }
+
+
+@router.post("/walkforward/compute")
+def trigger_walkforward_compute(
+    ledger_dir: str = Depends(get_walkforward_ledger_dir),
+    exposure_registry_dir: str = Depends(get_micro_exposure_registry_dir),
+    universe_store: UniverseStore = Depends(get_universe_store),
+    bar_store: BarStore = Depends(get_bar_store),
+    playbook_store: PlaybookStore = Depends(get_playbook_store),
+    manager: "wf.WalkForwardComputeManager" = Depends(get_walkforward_compute_manager),
+) -> dict:
+    """Start the diagnostic acceptance run (goal.md J-05 IN SCOPE item 8) against the operator's
+    REAL playbook/universe/bar stores, or refuse (single-flight) if one is already running. The
+    ONLY mode this iteration wires -- Mode A/pilot-study registrations are J-09's own scope."""
+    ledger = WalkForwardLedger(ledger_dir)
+    exposure_registry = ExposureRegistry(exposure_registry_dir)
+
+    def _work(publish, should_abort) -> dict:
+        result = wf.run_diagnostic_walkforward(
+            ledger, exposure_registry, playbook_store, universe_store, bar_store, CONFIG,
+            progress=publish, should_abort=should_abort,
+        )
+        return {
+            "folds_evaluated": result["folds_evaluated"],
+            # Disclosed beside the count above so a repeat trigger's run-log entry reads honestly:
+            # a re-run replays the SAME folds' existing ledger rows rather than recording the same
+            # evidence twice (``walkforward_ledger.append_fold_result``'s own docstring).
+            "folds_replayed": result["folds_replayed"],
+            "validation_sessions": result["validation_sessions"],
+            "session_count": result["session_count"],
+        }
+
+    result = manager.trigger(_work, run_log_dir=ledger_dir, steps_total=1)
+    if result["state"] == "refused":
+        return result
+    return {"state": result["state"], "run_id": result["run_id"]}
+
+
+@router.get("/walkforward/compute")
+def get_walkforward_compute(manager: "wf.WalkForwardComputeManager" = Depends(get_walkforward_compute_manager)) -> dict:
+    """The current (or last-terminal) run's progress -- never 404 (the idle default before any job
+    has ever run this process)."""
+    snap = manager.snapshot()
+    return {
+        "state": snap["state"],
+        "progress": snap["progress"],
+        "started_utc": snap["started_utc"],
+        "finished_utc": snap["finished_utc"],
+        "error": snap["error"],
+    }
+
+
+@router.post("/walkforward/compute/cancel")
+def cancel_walkforward_compute(manager: "wf.WalkForwardComputeManager" = Depends(get_walkforward_compute_manager)) -> dict:
+    """Signal cooperative cancellation for the in-flight job -- a 409 for an idle manager (the
+    snapshot/scout-compute-cancel routes' own precedent), else ``{"state": "cancelled"}``
+    acknowledging the REQUEST (the worker itself settles at the next fold boundary)."""
+    if manager.snapshot()["state"] != "running":
+        raise HTTPException(status_code=409, detail="no walk-forward run is currently running")
+    manager.cancel()
+    return {"state": "cancelled"}
+
+
+@router.get("/walkforward/runs")
+def get_walkforward_runs(ledger_dir: str = Depends(get_walkforward_ledger_dir)) -> dict:
     """The durable run history, newest first -- never 404 on zero runs (an honest empty list)."""
     return {"runs": read_run_log(ledger_dir)}

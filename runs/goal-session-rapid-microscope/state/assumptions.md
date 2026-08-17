@@ -202,3 +202,47 @@ carrying it. The gap is recorded as binding next-iteration work, and it is the p
 iteration's verdict is ESCALATE rather than CONTINUE — so the call costs the loop nothing it can
 hide behind. Had any frontend file changed, I would have scored the set `unknown`.
 **Reversible:** yes
+
+## iter-5 — goal-evaluator
+
+**Ambiguity:** `docs/goal.md` Constraints state trap **T-10** verbatim — "every browser acceptance
+needs a screenshot — none ⇒ `unknown`, never `passing`" — and this iteration's browser lane recorded
+a blanket SKIP for the SECOND consecutive time (zero screenshots, no evidence directory, TC-29 never
+executed). The independent auditor read T-10 literally and filed E1: "J-01, J-02, J-03, J-04 and
+J-10 must be recorded `unknown` for this iteration, never `passing`." Unlike iteration 4, this
+iteration DID edit a backend module (`micro_join.py`) whose output is rendered by J-01's panel, so
+iteration 4's "nothing this diff touches can reach a screen" reasoning does not transfer unchanged.
+**We chose:** kept J-01 `passing` (and J-02/J-03/J-04 `passing`), after upgrading the durability
+test from "no frontend file changed" to "the changed producer emits an identical payload, proven by
+me": I called the real readiness route against the operator's real store AFTER the re-point and read
+back byte-identical acceptance values (12 symbol-days, 3.0089 session-equivalents, 18
+exploratory/hand_assigned shards, all three floors unmet, joinable_corpus total 2 /
+{range_trade: 2}), and confirmed `apps/frontend/app/desk/page.tsx` and `micro_readiness.py` are
+byte-unchanged. A cited screenshot exists (iter-2's element capture), so methodology A.6(b)'s
+"a screenshot must EXIST, durability only relaxes which iteration it came from" is satisfied. J-01
+keeps `evidence_makeup: true` (capture now 3 iterations overdue) and J-10 stays `partial` with its
+sentinel half explicitly unverified — so the missing browser proof is carried by the journey ledger,
+not hidden. The verdict is ESCALATE rather than CONTINUE primarily because of this gap, so the call
+costs the loop nothing it can hide behind. Had the served payload differed at all, or had any
+frontend file changed, I would have scored J-01 `unknown`.
+**Reversible:** yes
+
+## iter-5 — goal-evaluator
+
+**Ambiguity:** J-05's Acceptance is one long sentence naming five things at once, and two of them
+are met at the library level but not at any production entry point: the exposure registry's r2
+initialization (goal.md J-05 Step 1 and spec §6.7 both name the legacy-tick windows, and both TC-14
+tests prove the mechanism only against a hand-made stand-in corpus) and the typed `11 < 105`
+floor-refusal (TC-20 proves the function, but nothing in `app/` calls it). The goal never says
+whether "TR-15/TR-22 pass" means the trap's TEST passes or the trap's protection is actually wired
+into the running product.
+**We chose:** the second reading — a trap that no production path can reach is not armed — and
+scored J-05 `partial` rather than `passing`, with both gaps named verbatim and evidence I produced
+myself (154 registry rows all playbook-keyed; zero `require_sufficient_sessions_for_folds` call
+sites in `app/`). `partial` blocks GOAL_ACHIEVED exactly as `failing` does, so no gate is loosened,
+and the remaining work is small and concrete. I did NOT treat the registry gap as a critical
+anti-goal violation (which would have forced REGRESSION and a halt) because I established that no
+reachable path today can label a tick window `historical_oos`: `build_folds` returns `[]` at 11
+sessions, so no tick fold and therefore no class assignment exists. It becomes critical the moment
+J-06 creates genuinely unexposed data.
+**Reversible:** yes

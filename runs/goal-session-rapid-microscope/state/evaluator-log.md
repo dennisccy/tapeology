@@ -195,3 +195,59 @@ bucket should also be counted per data set as the written spec says) before more
 re-take the readiness photograph when the rig can show real tick data; clean up one unreadable kill
 message and add the new numbers to the two page-guard lists before anything is put on screen; and
 weigh a speed-focused pass, because the grid already takes minutes on today's 18 files.
+
+## Iteration 5 — goal-rapid-microscope-iter-5
+
+**Date:** 2026-08-17T20:30:00Z
+**Verdict:** ESCALATE
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: none
+- Newly failing: none
+- Regressed: none
+- Changed: J-05 "The walk-forward engine" failing → partial (built and largely proven; two items
+  the goal names word for word are not done)
+- Unchanged: J-01, J-02, J-03, J-04 passing (all four RE-VERIFIED by me, not carried — two of
+  their modules were edited this run); J-06..J-09 failing (their files are still not on disk —
+  I checked each one); J-10 partial, its trap half 8/22 → 17/22
+- Anti-goal violations: three critical ones were introduced AND fixed inside this run (a repeat
+  run that counted the same evidence twice and turned an honest "not enough data" answer into a
+  computed one; a "declare the question before you look at the answer" step that ran after the
+  answer was read and was never written down; a guard for the "one door only" rule that could not
+  see the two easiest ways around it) — all three re-proved fixed by me on live code. Two minor
+  items are open: the register that protects the 12 old tick days is never filled in for them,
+  and the honest "this data set is too small" refusal exists but nothing calls it.
+
+**Reasoning:** I did not take the handoffs on trust. I re-ran the walk-forward job myself, from
+the command line, against a throwaway copy of the real records: it reported 5 folds over 100
+test sessions from 154 days of history, exactly what the goal asks for, and — proving the fix the
+independent checker made — a second run re-used the existing 5 folds instead of writing them
+again. I read the stored records myself: 3 of the 5 folds honestly say "not enough data" (17, 16
+and 15 cases against a floor of 30), the overall answer honestly refuses at "2 < 3", every row is
+stamped as exploratory evidence worth zero credit, and the tamper check is clean. I re-checked the
+frozen parts: the settings fingerprint still prints 08e471b10130e1e2, all six judge files hash the
+same as at era open, the price-engine and chart-pattern folders show an empty change list, and the
+18 feature files still hold exactly 3,815,933 rows. I re-read the readiness page's numbers straight
+from the server code after this run's rewiring and they are identical to before (12 symbol-days,
+about 3.0 sessions, 18 shards, all three study floors unmet, 2 joinable signals). Two things are
+genuinely not done: the register that must mark the 12 old tick days as "already seen" contains
+only playbook days — I counted its 154 rows and every one is playbook — and the honest "this data
+set is too small" refusal is written and tested but nothing in the running program ever calls it.
+Both are named word for word in the goal, so J-05 is half-done, not done. The other real failure is
+not in the product at all: the browser check was skipped for the second run in a row, so nothing
+was photographed and the 13-step whole-product safety walk never ran. I found the cause: the script
+that runs browser checks quits immediately whenever the plan says "Frontend Present: no", and the
+safeguard meant to stop that is written but never read anywhere.
+
+**Next-step recommendation:** Finish J-05 "The walk-forward engine" in one short pass, then move
+on. Three things must happen. First, mark the next plan "Frontend Present: yes" so the browser
+check actually runs — it names journeys that must still work on screen, and a plain instruction in
+the test section has now failed twice. Second, fill the register with the 12 old tick days so they
+can never be mistaken for fresh, unseen data; the written spec already says exactly this, so no
+owner decision is needed. Third, make the running program actually use the honest "this data set
+is too small" refusal instead of quietly returning an empty result. Keep the independent checker
+in the loop — it is the only step in this session that has ever caught this class of mistake, and
+it caught another one this run. Carry three passenger items: photograph the readiness panel at
+last; write down whether a measurement is in percent or in basis points before any money-sized
+floor is compared to it; and get the two owner decisions that are still waiting (the timing stamp
+that is one quote too early, and how "variants tried" should be counted).

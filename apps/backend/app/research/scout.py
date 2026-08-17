@@ -17,8 +17,9 @@ only builds and proves the generic screening machinery, and runs it on a bounded
 values yet.
 
 **Read-side law: no second outcome implementation.** Anchor extraction reads snapshot rows through
-``micro_snapshots.read_snapshot_rows`` (after ``load_snapshot_meta`` confirms currency, TR-7) and
-computes each anchor's outcome through ``micro_join.outcome_rows_after_trigger`` -- the SAME closed
+``micro_accessor.MicroAccessor`` (J-05 re-point, unfenced -- TR-3's import-ban; after
+``load_snapshot_meta`` confirms currency, TR-7) and computes each anchor's outcome through
+``micro_join.outcome_rows_after_trigger`` -- the SAME closed
 outcome set ``micro_join.py`` already proved end to end. This module adds no new outcome math, only
 the STATISTICAL SCREEN over outcomes ``micro_join.py`` already knows how to compute.
 
@@ -78,10 +79,10 @@ from ..config import CONFIG, Config
 from . import micro_features as mf
 from . import micro_join as mj
 from .datasets import DatasetNotFound, DatasetStore, parse_utc_epoch
+from .micro_accessor import MicroAccessor
 from .micro_snapshots import (
     append_run_log,
     load_snapshot_meta,
-    read_snapshot_rows,
     resolve_micro_snapshots_dir,
     run_snapshot_build_and_record,
 )
@@ -340,7 +341,15 @@ def _cached_dataset_rows(
         return None, None
     if rows_cache is not None and dataset_id in rows_cache:
         return dataset_meta, rows_cache[dataset_id]
-    rows = read_snapshot_rows(snapshots_dir, dataset_id)
+    # J-05 re-point (TR-3's import-ban): the ONLY door onto a snapshot's persisted rows is now
+    # micro_accessor.py. `origin=None` is the disclosed UNFENCED mode (micro_accessor.py's own
+    # module docstring, "Two callers, two disciplines") -- this call site has never been
+    # chronologically fenced, the legacy corpus it reads is r2-pre-marked exposed regardless, and
+    # fencing/exposure-logging it now would reintroduce exactly the O(n)-per-anchor cost the iter-4
+    # audit's perf fixes eliminated for a registry entry that would be redundant with r2's own
+    # initialization. Output is byte-identical to the direct `read_snapshot_rows` call it replaces
+    # (TC-5).
+    rows = MicroAccessor(dataset_store, snapshots_dir, config).read_snapshot_rows(dataset_id)
     if rows_cache is not None:
         rows_cache[dataset_id] = rows
     return dataset_meta, rows

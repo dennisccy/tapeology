@@ -119,3 +119,36 @@ ledger rows, or every re-run of the same grid inflates it and eventually trips t
 **Applies to:** every future hash-chained ledger in this era (`walkforward.py`'s fold ledger, the
 vault exposure ledger, `micro_graduation.py`'s bundle) — copy `scout_ledger.py`'s anchor +
 `distinct_variant_count` pattern rather than the pre-audit chain-only design.
+
+## iter-5 — 2026-08-17T20:30:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** Iteration 4's browser-lane lesson was addressed to the wrong audience, so writing it in
+bold into iteration 5's TESTING REQUIREMENTS changed nothing: `scripts/automation/browser-qa-phase.sh:52`
+short-circuits to N/A stubs whenever the plan says `Frontend Present: no`, **before browser-qa-agent
+is ever dispatched** — no agent reads the spec paragraph. Worse, the safeguard for exactly this case
+already exists on paper and is dead code: `run-goal.sh:2548` exports `CHAIN_GOAL_TARGET_JOURNEYS`
+with the comment "forces the browser lane whenever this iteration names journeys — even if the plan
+mis-states Frontend Present: no", and a repo-wide grep finds **one write and zero reads** —
+`detect_frontend_in_plan` (`lib/common.sh:1502`) only greps for "frontend present: yes". The one
+remedy fully inside the loop's control is to declare `Frontend Present: yes` in any spec that names
+required-still-passing journeys with browser acceptances; the durable fix is to make
+`detect_frontend_in_plan` (or the browser-qa skip branch) actually read that export.
+**Applies to:** every `Frontend Present: no` iteration spec that names required-still-passing
+journeys or a sentinel script — i.e. J-06, J-07 and J-09 in this era; also any framework maintenance
+pass touching browser-lane gating.
+
+## iter-5 — 2026-08-17T20:30:00Z (second)
+
+**Verdict:** ESCALATE
+**Lesson:** An append-only ledger that is idempotent *everywhere else* can still fabricate a verdict
+through the one write path that is not. `walkforward_ledger.append_fold_result` appended a fresh row
+per call while `register_fold_spec` replayed and the exposure-registry seeding was re-seed-guarded —
+so pressing the diagnostic Compute button twice doubled all five folds and converted the sequence's
+honest "2 < 3 sufficient folds — refused" into a computed verdict over `n_sufficient_folds: 4` built
+from 2 real folds counted twice, plus a 1.0-vs-0.0 decay recency line invented from the duplicate.
+The era's "denominator never shrinks" rail has a mirror the code did not enforce: it must not
+spuriously GROW. Key a replay branch on the identity of one evaluation act (`sequence_id`,
+`fold_index`, `spec_hash`) and disclose `appended` vs `replayed` in the run log.
+**Applies to:** every remaining hash-chained ledger in this era (the vault exposure ledger, J-07's
+graduation bundle) and any statistic whose floor is a row COUNT rather than a distinct-identity count.

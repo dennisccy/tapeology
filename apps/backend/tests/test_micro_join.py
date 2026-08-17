@@ -34,7 +34,7 @@ from app.research import micro_join
 from app.research.datasets import DatasetStore
 from app.research.desk_playbook import PlaybookStore, playbook_parameters
 from app.research.desk_playbook_context import BandMapResolver
-from app.research.micro_snapshots import read_snapshot_rows, run_snapshot_build_and_record
+from app.research.micro_snapshots import read_snapshot_rows, resolve_micro_snapshots_dir, run_snapshot_build_and_record
 from app.research.tradability_cache import TradabilityCache
 
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures" / "datasets_j03"
@@ -626,6 +626,40 @@ def test_tc16_real_corpus_joinable_corpus_arithmetic_is_unchanged_by_the_passeng
     assert counts["total"] == 2  # total == playbook_signal_count alone now (module docstring)
     assert counts["playbook_integrity_errors"] == []  # the real corpus is healthy
     assert counts["band_touch_count"] == {"status": micro_join.BAND_TOUCH_STATUS_NOT_ENUMERATED, "count": None}
+
+
+# --- J-05 TC-4: the accessor re-point (micro_accessor.MicroAccessor, unfenced) serves the SAME ------
+# --- real-corpus join result as the pre-re-point direct micro_snapshots.read_snapshot_rows call. ----
+
+
+def test_tc4_real_corpus_join_playbook_signal_is_unaffected_by_the_accessor_re_point():
+    """The ONE real recorded playbook signal whose window falls inside a recorded tick dataset AND
+    already carries a currently-valid built snapshot on disk (verified live, not assumed) --
+    ``_join_core``'s re-pointed ``MicroAccessor(...).read_snapshot_rows(...)`` call (J-05) must
+    still resolve this join exactly as the pre-re-point direct call did: ``status == "joined"``, a
+    non-``None`` ``feature_at_trigger``, and a full closed outcome set."""
+    from app.research.desk_playbook import resolve_desk_playbook_dir
+
+    dataset_store = DatasetStore(CONFIG.dataset_dir_resolved())
+    playbook_store = PlaybookStore(resolve_desk_playbook_dir(CONFIG.desk_universe_dir_resolved()))
+    snapshots_dir = resolve_micro_snapshots_dir(CONFIG.dataset_dir_resolved())
+
+    playbook_records, _errors = playbook_store.list()
+    signal = None
+    for record in playbook_records:
+        for candidate in record.get("signals") or []:
+            if candidate.get("symbol") == "AMZN" and candidate.get("trigger_ts") == "2026-06-26T16:20:00.000000Z":
+                signal = candidate
+                break
+        if signal is not None:
+            break
+    assert signal is not None, "the fixed real-corpus signal this test pins is no longer on disk"
+
+    result = micro_join.join_playbook_signal(signal, dataset_store, snapshots_dir, CONFIG)
+    assert result["status"] == micro_join.JOIN_STATUS_JOINED
+    assert result["feature_at_trigger"] is not None
+    assert result["dataset_id"] == "60e0cd6613804fdaa87d549dcef38d31"
+    assert len(result["outcomes"]) == 7  # the closed outcome set: 2 trades + 2 shares + 3 clock
 
 
 # --- iter-4 perf fix: outcome_rows_at_position / outcome_row_at_single_horizon are byte-identical

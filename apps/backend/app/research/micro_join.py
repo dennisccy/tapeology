@@ -70,10 +70,13 @@ caller conditioning on a DEFERRED feature (whose ``available_at`` is later than 
 not this module -- this join's own outcome rows are unconditioned.
 
 **Never a second replay, never a second parse.** Feature rows are read through
-``micro_snapshots.read_snapshot_rows`` (this module's ONLY door onto a snapshot's persisted rows,
-never a raw ``open()``) after ``load_snapshot_meta`` confirms the snapshot is CURRENT (TR-7); a
-dataset with no covering window, or a covering dataset with no currently-valid snapshot, is an
-honest ``no_covering_snapshot`` -- never a fabricated join."""
+``micro_accessor.MicroAccessor`` (J-05 re-point -- the sole legal door onto a snapshot's persisted
+rows, TR-3's import-ban; this module constructs it unfenced, ``origin=None``, since this call site
+has never been chronologically fenced and the legacy corpus it reads is r2-pre-marked exposed for
+its entire span regardless -- see ``micro_accessor.py``'s own module docstring, "Two callers, two
+disciplines") after ``load_snapshot_meta`` confirms the snapshot is CURRENT (TR-7); a dataset with
+no covering window, or a covering dataset with no currently-valid snapshot, is an honest
+``no_covering_snapshot`` -- never a fabricated join."""
 
 from __future__ import annotations
 
@@ -81,7 +84,8 @@ from typing import TYPE_CHECKING, Sequence
 
 from . import micro_features as mf
 from .datasets import DatasetStore, parse_utc_epoch
-from .micro_snapshots import load_snapshot_meta, read_snapshot_rows
+from .micro_accessor import MicroAccessor
+from .micro_snapshots import load_snapshot_meta
 
 if TYPE_CHECKING:  # pragma: no cover -- type-checking only, never a runtime import (no cycle risk)
     from ..config import Config
@@ -413,7 +417,13 @@ def _join_core(
     if found is None:
         return {"status": JOIN_STATUS_NO_COVERING_SNAPSHOT, **_ABSENT_JOIN}
     dataset_meta, _snapshot_meta = found
-    rows = read_snapshot_rows(snapshots_dir, dataset_meta["id"])
+    # J-05 re-point (TR-3's import-ban): the ONLY door onto a snapshot's persisted rows is now
+    # micro_accessor.py. `origin=None` is the disclosed UNFENCED mode -- this call site has never
+    # been chronologically fenced and the legacy corpus it reads is r2-pre-marked exposed for its
+    # entire span regardless (micro_accessor.py's own module docstring, "Two callers, two
+    # disciplines"); output is byte-identical to the direct `read_snapshot_rows` call it replaces
+    # (TC-4).
+    rows = MicroAccessor(dataset_store, snapshots_dir, config).read_snapshot_rows(dataset_meta["id"])
     trade_rows = _trade_rows(rows)
     trigger_logical_ts = _logical_ts(dataset_meta, at_epoch)
     i = _locate_at_or_before(trade_rows, trigger_logical_ts)

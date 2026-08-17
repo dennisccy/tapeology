@@ -645,6 +645,29 @@ def test_tc10_a_failed_run_never_writes_a_silently_short_ledger(tmp_path, monkey
 # === TC-11: manager-triggered and CLI-triggered runs produce identical ledger content ================
 
 
+# === J-05 TC-5: the accessor re-point (micro_accessor.MicroAccessor, unfenced) is byte-identical ===
+
+
+def test_tc5_the_iteration_4_bounded_fixture_grid_still_reads_killed_insufficient_n_after_the_re_point(tmp_path):
+    """``_cached_dataset_rows``'s re-pointed ``MicroAccessor(...).read_snapshot_rows(...)`` call
+    (J-05) must reproduce the EXACT documented iteration-4 baseline for the default fixture grid --
+    every one of its 6 candidates over the committed ``datasets``/``datasets_j03`` fixtures (all
+    one session date) honestly reads ``killed_insufficient_n`` (the iter-4 dev handoff's own
+    finding: "zero survivors is a passing grade")."""
+    store = _combined_fixture_store(tmp_path)
+    snapshots_dir = str(tmp_path / "snapshots")
+    run_snapshot_build_and_record(store, CONFIG, snapshots_dir, None)
+    ledger = scout_ledger.ScoutLedger(tmp_path / "ledger")
+    grid = scout.default_fixture_grid(store, grid_version=1)
+
+    rows = scout.run_scout_grid_and_record(grid, ledger, store, snapshots_dir, CONFIG)
+
+    assert len(rows) == 6
+    for row in rows:
+        assert row["decision"] == "killed_insufficient_n"
+        assert row["reason"] == "killed_insufficient_n"
+
+
 def test_tc11_manager_and_cli_produce_byte_identical_spec_hash_and_decision_per_candidate(tmp_path):
     store = _combined_fixture_store(tmp_path)
     snapshots_dir = str(tmp_path / "snapshots")
