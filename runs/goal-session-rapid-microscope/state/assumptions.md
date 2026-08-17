@@ -330,3 +330,38 @@ with a citation, so methodology A.6(b)'s no-screenshot rail is satisfied. The ow
 recorded verbatim: seed the rig from the real 18-dataset corpus, or amend J-01's acceptance to accept
 an endpoint-level proof beside a fixture-corpus render. Inventing either would breach T-1.
 **Reversible:** yes
+
+## iter-7 — goal-decomposer
+
+**Ambiguity:** goal.md J-06 step 1 (spec §7.1 r2 + §2.6) requires the event schema to ship both
+the Card-5.1 preservation fields AND "the §2.6 stamping" (`schema_basis`/`quote_size_unit`)
+before any recording — but `micro_features.py`'s own docstring explicitly reserves the
+dated-vendor-rule constant `ALPACA_QUOTE_SIZE_UNIT_EFFECTIVE` for `tick_recorder.py` (J-06 step
+2, not yet built), warning that minting it early risks "a second, independently-valued copy the
+day those modules land." The goal never says whether step 1 (this iteration) must implement the
+DATE-TO-UNIT RULE or merely the STORAGE CAPABILITY to carry a caller-supplied value.
+**We chose:** storage capability only. `DatasetStore.record()`/`record_from_source()` gain
+optional `schema_basis`/`quote_size_unit` kwargs, persisted verbatim when supplied (validated
+against the EXISTING `micro_features.QUOTE_SIZE_UNITS`, never a second tuple) and simply absent
+otherwise — exactly the `observer=` kwarg precedent already used on `replay()`. The dated-rule
+DECISION logic stays deferred to `tick_recorder.py`, precisely where the codebase's own docstring
+already reserves it.
+**Reversible:** yes — `tick_recorder.py` (J-06 step 2) will define `ALPACA_QUOTE_SIZE_UNIT_EFFECTIVE`
+and call `record(..., quote_size_unit=<computed>)`; nothing about this iteration's plumbing needs
+to move or be redone.
+
+## iter-7 — goal-decomposer (second)
+
+**Ambiguity:** goal.md J-05's Acceptance says "the tick-family fold request returns the typed
+floor-refusal naming `11 < 105`" without naming which caller (the `POST /walkforward/compute`
+route, the CLI, or both) must carry the request. The iter-6 evaluator's own finding named BOTH
+existing callers (`micro_routes.py:323`, `walkforward.py:1221`) as lacking a corpus/family
+parameter.
+**We chose:** the CLI only (a new flag alongside the existing `--diagnostic`), mirroring the
+CLI's own established role as "the operator's REAL... run" entry point (its module docstring)
+and keeping this passenger item small beside J-06's primary, riskier diff. No UI or MCP journey
+names an operator-facing "request tick folds" control yet (that is J-08/J-09 territory); wiring
+the shared single-flight `POST /walkforward/compute` route is deferred until a real consumer
+needs it, avoiding a second, currently-unused code path through the same manager.
+**Reversible:** yes — the route can gain the same optional `family` parameter later, calling the
+identical underlying function this iteration adds; nothing about the CLI wiring needs to move.
