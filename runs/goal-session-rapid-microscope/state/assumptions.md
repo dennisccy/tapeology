@@ -86,3 +86,47 @@ gap `capture-defect`, so the make-up photograph (real 12/18/~3.0 totals, and the
 column that is clipped off the right edge of this capture) rides a later iteration as a passenger
 task — never as an iteration goal, and never as a reason to rebuild J-01 code.
 **Reversible:** yes
+
+## iter-3 — goal-decomposer
+
+**Ambiguity:** `docs/rapid-validation-spec.md` §6.1 states "`micro_accessor.py` is the sole legal
+reader of snapshot, ledger-input, and vault event data" as a standing rule, and trap T-5 repeats
+it as a rule to "read before EVERY iteration" — but `micro_accessor.py` and its TR-3 import-ban
+guard are explicitly J-05 deliverables (`docs/goal.md` J-05 step 2 lists TR-3), and the natural
+dependency order runs J-03 before J-05. The goal never says whether J-03's join may read snapshot
+rows directly before the accessor exists.
+**We chose:** J-03's `micro_join.py` reads snapshot rows through a plain reader function added to
+`micro_snapshots.py` (co-located with the writer, so exactly one module touches the on-disk
+snapshot files before the accessor exists), on the era's still-fully-exploratory legacy corpus
+only — no origin fencing or sealed-shard concern applies to this reader today. When J-05 lands
+`micro_accessor.py` + the TR-3 import-ban guard, `micro_join.py`'s read call is expected to be
+re-pointed through the accessor as part of J-05's own scope, not preempted here.
+**Reversible:** yes — a small import-path change inside J-05, not a data or contract change.
+
+## iter-3 — goal-decomposer
+
+**Ambiguity:** spec §4 defines "Outcome start = the conditioning feature set's maximum
+`available_at`" — but "conditioning feature set" is a per-candidate concept from
+`scout_ledger.py`'s frozen candidate spec (§5.1: `feature: {name, transform, params}`), which does
+not exist until J-04. J-03's join serves generic feature-row-at-trigger + outcome-row-after-trigger
+pairs, not one candidate's conditioning feature, so the goal does not define this term at the join
+layer.
+**We chose:** for J-03, outcome start = `anchor_at` (the trigger's own timestamp) directly; every
+feature family is served at the trigger row with its own `available_at`/`unavailable` flag intact
+(deferred constructs stay `unavailable`, never folded into the outcome-start calculation). A
+per-candidate conditioning-set-aware outcome start is J-04/J-05's concern once a candidate names a
+specific feature.
+**Reversible:** yes — J-04 may compute a candidate-specific outcome start from J-03's served rows
+without changing what J-03 itself serves.
+
+## iter-3 — goal-decomposer
+
+**Ambiguity:** J-03's Acceptance requires "the joinable-corpus count is served on the readiness
+endpoint with its per-study breakdown," but the three pilot studies are not predeclared until J-09
+(`docs/goal.md` J-09 step 1), so no study identifier exists yet to break the count down by.
+**We chose:** break the joinable-corpus count down by `structure_context` kind (`playbook_signal`
+vs `band_touch`, matching spec §5.1's own vocabulary) and, within `playbook_signal`, by playbook
+`setup_id` — the finest grouping the corpus supports before J-09 registers its studies, and the one
+each pilot study's mechanism (range-wall, level-test, capitulation) will map onto once registered.
+**Reversible:** yes — J-09 may re-key or add a coarser "by predeclared study" view over the same
+counts without changing how J-03 computes or serves them.

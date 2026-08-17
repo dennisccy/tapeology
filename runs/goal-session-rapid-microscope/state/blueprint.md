@@ -51,7 +51,7 @@ recompute or re-fetch it from anywhere else. **New rows this era** (transcribed 
 
 | Value | Owner (module) | Serving endpoint |
 |---|---|---|
-| Corpus readiness truth (inventory, floors, exposure states) | new `app/research/micro_readiness.py` | `GET /research/desk/micro/readiness` |
+| Corpus readiness truth (inventory, floors, exposure states) + joinable-corpus counts (iter-3/J-03 addition: `total`/`playbook_signal_count`/`band_touch_count`/`by_setup_id`, computed by new `app/research/micro_join.py`, called from `micro_readiness.py` — no second endpoint) | new `app/research/micro_readiness.py` (+ `micro_join.py` contributes the joinable-corpus computation only) | `GET /research/desk/micro/readiness` |
 | Feature snapshot metadata + build progress/runs | new `app/research/micro_snapshots.py` (+ manager) | `GET /research/desk/micro/snapshots`, `POST/GET/POST-cancel /research/desk/micro/snapshots/compute`, `GET .../snapshots/runs` |
 | Scout trials, kills, denominators, screens | new `app/research/scout_ledger.py` + `scout.py` | `GET /research/desk/micro/scout`, `POST/GET/POST-cancel /research/desk/micro/scout/compute`, `GET .../scout/runs` |
 | Fold specs, folds, sequences, decay view | new `app/research/walkforward.py` + its ledger | `GET /research/desk/micro/walkforward`, `POST/GET/POST-cancel /research/desk/micro/walkforward/compute`, `GET .../walkforward/runs` |
@@ -73,3 +73,8 @@ lists (full history in `docs/goal-archive/goal-2026-08-16.md` — not re-enumera
 fold/sequence result and its evidence class (walkforward ledger); a shard's exposure state
 (vault ledger); the corpus readiness floors (`micro_readiness`) — each computed once, served
 from its one endpoint, read verbatim by UI/MCP/reports.
+
+<!-- iter-3 note: the joinable-corpus field above is served ahead of its UI wiring, same accepted
+     pattern iter-2's coherence audit approved for J-02's snapshot endpoints — the wiring iteration
+     (J-08) is already named in the Information Architecture table above, so this is not an orphan
+     feature. No nav-skeleton change this iteration; no reapproval file written. -->
