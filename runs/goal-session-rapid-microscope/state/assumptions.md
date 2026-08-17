@@ -162,3 +162,22 @@ store rather than carried, and this iteration's `UT-J-03-readiness-endpoint.png`
 photographs the same served body. A blank artifact is treated as a capture defect, not as evidence
 of a broken panel.
 **Reversible:** yes
+
+## iter-4 — goal-decomposer
+
+**Ambiguity:** `runs/goal-session-rapid-microscope/state/iteration-state.md` (written by the
+iter-3 evaluator) marks the `micro_observer.py` depletion `available_at` timing question (the
+"one quote early" stamp at `micro_observer.py:636/:657`) as an owner ruling now DUE, specifically
+because "J-04 is the first journey that conditions a result on it." Neither `docs/goal.md` nor
+`docs/rapid-validation-spec.md` says whether J-04's own bounded candidate grid must include a
+`quote_depletion`-conditioned candidate this iteration, or may simply avoid registering one until
+the ruling lands.
+**We chose:** this iteration's registered bounded fixture grid excludes every candidate whose
+conditioning `feature.name` is `quote_depletion` (or any feature deriving its `available_at` from
+that flagged code path). This keeps the Scout buildable and testable now without measuring any
+result off the unresolved timing stamp, and without inventing a reading of it (T-1). Every other
+Wave-1 feature family (F-FLOW, F-RESPONSE, the rest of F-LIQUIDITY: spread change, quote
+imbalance, microprice, `refill_consistent`) stays eligible.
+**Reversible:** yes — once the owner rules on the timing stamp, a later iteration can register
+`quote_depletion`-conditioned candidates as an ordinary grid addition (a new `grid_version`)
+without touching this iteration's already-ledgered rows; the union-N denominator only grows.
