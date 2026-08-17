@@ -251,3 +251,57 @@ it caught another one this run. Carry three passenger items: photograph the read
 last; write down whether a measurement is in percent or in basis points before any money-sized
 floor is compared to it; and get the two owner decisions that are still waiting (the timing stamp
 that is one quote too early, and how "variants tried" should be counted).
+
+## Iteration 6 — goal-rapid-microscope-iter-6
+
+**Date:** 2026-08-17T23:30:00Z
+**Verdict:** ESCALATE
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: none
+- Newly failing: none
+- Regressed: none
+- Changed content (status unchanged): J-05 "The walk-forward engine" partial — both items iteration 5
+  named are now closed and proven on the running program; one item the goal names word for word is
+  still not reachable. J-10 "The kept product stands" partial — its whole-product safety walk is
+  green for the first time this era; its trap half is still about 17 of 22. J-01 "The corpus truth on
+  the record" keeps passing and its overdue-photograph flag is cleared.
+- Unchanged: J-02, J-03, J-04 passing (their re-checks were cut for time — "deferred", not tested, so
+  they keep their prior status; I spot-checked two of them against the real data myself); J-06..J-09
+  failing (their files are still not on disk — this iteration's whole change list is two files)
+- Anti-goal violations: no critical ones. Two minor items from iteration 5 are now CLOSED (the
+  register that protects the 12 old tick days is filled in; the honest "this data set is too small"
+  refusal is genuinely used by the running program). Two new minor items are OPEN, both about the
+  same new register: a damaged recording would be left out of it silently and permanently, and once
+  sealed recordings exist the register could mark one as already-seen forever. One older minor item
+  is still open and still waiting on the owner (the timing stamp that is one quote too early).
+
+**Reasoning:** I did not take the handoffs on trust. I ran the walk-forward job myself against a
+throwaway copy of the real records: a too-small data set now stops with a clear refusal, exit code 1,
+the words "0 < 105 -- refused (TR-15)" and no crash text at all; the register gained exactly 11 days
+covering every one of the 12 old tick days with no hole, and a second run left it at 11. The real
+job is unchanged at 5 folds over 100 test sessions. I re-read the readiness numbers straight from the
+real data — 12 symbol-days, 18 recordings, about 3.0 sessions, all three study floors unmet, no
+integrity errors — and I opened the new photograph: the panel really renders, legibly, with real
+checksums, coverage gaps and fallback fractions. I re-ran the frozen checks myself (the settings
+fingerprint prints 08e471b10130e1e2; all six judge files hash the same as at era open) and the guard
+suite (203 tests). Two things are genuinely not done. The goal asks in plain words for a refusal
+saying "11 < 105" when someone asks for folds on the tick data; I grepped the running program myself
+and there is exactly one place folds are built, always over the playbook data, with no way to name a
+different data set — so that sentence is only satisfied by a test over made-up dates. And the browser
+check reported a real failure, which a broken piece of the pipeline's own tooling silently turned into
+a "pass" that then flowed into the run record; the independent checker caught it and wrote the
+correction into both files. That failure is not a product fault — the test's expected numbers can
+never be produced by the small test rig the same test insists on using.
+
+**Next-step recommendation:** Build the first step of J-06 "The recorder and the Vault" on its own,
+under the full pipeline with the independent checker — the optional trade and quote detail fields
+that must land before any new tape is recorded. It is the era's most dangerous change (every old
+recording and fixture must still load exactly as before, and the price engine must still produce
+byte-identical output), so that run must not be shortened for time. Carry five passengers: make a
+tick-data fold request possible so the "11 < 105" refusal is real; report a damaged recording instead
+of dropping it from the register; make the register mark days by a recorded identity before sealed
+recordings exist; ask a framework-maintenance session to fix the tool that turns a browser "fail"
+into a "pass"; and get the two owner answers still waiting (the one-quote-early timing stamp, and
+whether the readiness photograph must show the real 12-day corpus when the test rig can only show a
+two-day one).

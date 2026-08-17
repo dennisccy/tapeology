@@ -1,40 +1,40 @@
 # Iteration State — rapid-microscope
 
-**After iteration:** 5 · **Date:** 2026-08-17 · **Verdict:** ESCALATE
+**After iteration:** 6 · **Date:** 2026-08-17 · **Verdict:** ESCALATE
 
 ## Journeys
 
-4 passing (J-01 J-02 J-03 J-04) · 2 partial (J-05 J-10) · 4 failing (J-06..J-09) — 10 total
+4 passing (J-01 J-02 J-03 J-04) · 2 partial (J-05 J-10) · 4 failing (J-06 J-07 J-08 J-09) — 10 total
 
 ## Active blockers
 
-- **Browser lane never runs (dev; fix it in the next spec).** `browser-qa-phase.sh:52` exits with
-  N/A stubs on `Frontend Present: no` before browser-qa-agent is dispatched, and `run-goal.sh:2548`'s
-  `CHAIN_GOAL_TARGET_JOURNEYS` safeguard has 1 write / 0 reads. Skipped 2 iters running. **Declare
-  `Frontend Present: yes`** — J-10's 13-step sentinel + J-01's make-up capture depend on it.
-- **J-05's two unwired items (dev; #1 DUE BEFORE J-06).** (1) the exposure registry is never
-  r2-seeded for the 12 legacy tick days — `exposure_registry.jsonl` = 154 rows all playbook, only
-  caller `walkforward.py:1073`, though spec §6.7 + J-05 Step 1 name them. (2)
-  `require_sufficient_sessions_for_folds` (`walkforward.py:335`) has 0 call sites in `app/`, so the
-  wired path returns an empty fold report, not the typed `11 < 105`.
-- **Two owner rulings (human), due before J-06.** `micro_observer.py:636/657` one-quote-early stamp; whether Scout's "variants tried" is also counted per data-set.
-- **J-09 prerequisite (dev).** `playbook_observations` `value` is percent while `econ_floor` is bps
-  (`walkforward.py:970` vs `:676`) — pin a unit before any real economic floor is compared.
+- J-05 (dev, small): goal.md names "the tick-family fold request returns the typed floor-refusal naming
+  `11 < 105`", but `app/` has ONE `build_folds` call site (`walkforward.py:1149`), always the playbook
+  corpus, no corpus param anywhere — the string lives only in `test_walkforward.py:478` over synthetic
+  dates. `_tick_dataset_session_dates` already resolves the real 11 dates.
+- J-10 (blocked on J-06): traps TR-2/4/12/19/20 are J-06-owned per goal.md's own J-06 acceptance line.
+- Pipeline (human/framework): `merge_ui_test_results.py:64` accepts only bare `PASS`/`FAIL` tokens, so a
+  `**FAIL**` cell parsed as no verdict and a green headline reached `status.json` + closure. One line +
+  one self-test row. Third consecutive iteration losing/corrupting browser evidence.
+- J-01 (human ruling): the mandated rig seeds 2 PG fixtures by design, so the readiness panel can never
+  show J-01's own 12/18/≈3.0 values. Seed the rig from the real corpus (its launcher forbids it) or
+  amend J-01's acceptance. Do NOT schedule another retake.
+- Owner rulings open: depletion stamp (`micro_observer.py:636/:657`); per-dataset "variants tried"; the percent-vs-bps unit pin (before J-09).
+- New minor (J-06 scope): `_tick_dataset_session_dates` (`walkforward.py:995`) drops `list()`'s `_errors`
+  channel (a corrupt shard is silently, permanently under-seeded) and the seed has no sealed filter — a
+  sealed window could later be marked exposed forever. Seed by recorded legacy identity.
 
 ## Last 2 verdicts
 
-- iter 5: ESCALATE — J-05 built + verified by me (5 folds / 100 validation sessions, all diagnostic,
-  honestly refused) but 2 goal-named items unwired → partial; browser lane skipped a 2nd time; the auditor caught a 3rd critical fault review + QA had passed.
-- iter 4: ESCALATE — J-04 newly passing; browser lane skipped entirely; auditor fixed 3 criticals.
+- iter 6: ESCALATE — J-05's two gaps closed and proven live, J-10's sentinel green at last; but a P1
+  browser FAIL was consumed as PASS by a parser defect, and J-06 step 1 touches frozen store/engine
+  byte-compat, so the auditor must not be budget-demoted next run.
+- iter 5: ESCALATE — walk-forward built, but two goal-named items unwired and the browser lane skipped.
 
 ## Do not redo
 
-- J-05's `micro_accessor.py`/`walkforward*.py`/`micro_chain_ledger.py`, their manager, CLI and the
-  real diagnostic run are BUILT and verified — close the two gaps only; never rebuild or re-run.
-- The audit's 3 in-run fixes are re-proved live: idempotent fold replay, ledgered Mode B
-  predeclaration, whole-`app/` TR-3 guard. Do not re-derive them.
-- `journey-scripts/J-10.json` is repaired (iter-3) — re-run unmodified, never re-point it.
-- Re-verified, no code work needed: J-01's endpoint values (12 / 18 / 3.0089 / floors unmet), J-03's
-  joinable counts (2, `{range_trade: 2}`), fingerprint `08e471b10130e1e2`, 6 referee hashes,
-  3,815,933 snapshot rows, suite 3033/8/0.
-- Parked for J-08: the "approximately None bps" copy fix, the `_PRICE_ARITHMETIC_FIELDS`/copy-discipline additions, and disclosing which denominator `sign_agreement`/decay use.
+- J-05's TR-15 wiring (`walkforward.py:1148`) + CLI catch (`:1220-1228`) — DONE, re-proved live.
+- Tick-corpus exposure seed (`TICK_LEGACY_CORPUS_ID`, `walkforward.py:1127-1130`) — DONE, 11 windows
+  covering all 12 symbol-days, idempotent; readiness still serves `exploratory` for all 18 shards.
+- The real 154-session diagnostic run (5 folds / 100 sessions) and J-01..J-04's machinery — verified.
+- `Frontend Present: yes` WORKED — keep it. Blank `UT-02-microscope-readiness*.png` are dead; cite `UT-02-fail.png`.

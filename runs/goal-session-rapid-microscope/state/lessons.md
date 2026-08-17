@@ -152,3 +152,33 @@ spuriously GROW. Key a replay branch on the identity of one evaluation act (`seq
 `fold_index`, `spec_hash`) and disclose `appended` vs `replayed` in the run log.
 **Applies to:** every remaining hash-chained ledger in this era (the vault exposure ledger, J-07's
 graduation bundle) and any statistic whose floor is a row COUNT rather than a distinct-identity count.
+
+## iter-6 — 2026-08-17T23:30:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** Browser evidence has now been lost or corrupted three iterations running for three
+DIFFERENT mechanical reasons — `Frontend Present: no` short-circuiting the whole lane (iters 4-5),
+and now `merge_ui_test_results.py:64` accepting a verdict cell only as a bare `PASS`/`FAIL` token, so
+a markdown-emphasised `**FAIL**` parsed as *no verdict at all* and `compute_overall` derived a green
+headline from the surviving PASS rows (the source file's own FAIL headline is consulted only when no
+row parses). That green headline propagated into `status.json` `qa_verdict` and past closure; only
+the independent auditor caught it. Treat any merged browser headline as unverified until the LLM
+lane's own `...-ui-test-results.llm.md` verdict line is read directly.
+**Applies to:** every iteration that dispatches browser-qa; any evaluator reading
+`reports/phase-*-ui-test-results.md`
+
+## iter-6 — 2026-08-17T23:30:00Z (second)
+
+**Verdict:** ESCALATE
+**Lesson:** "The typed refusal now has ≥1 call site in `app/`" is NOT the same claim as "the goal's
+named refusal is reachable". Wiring `require_sufficient_sessions_for_folds` defensively into the one
+existing fold-building entry point (`walkforward.py:1148`, playbook corpus only) closed the iteration's
+DEFINITION OF DONE checkbox while leaving goal.md J-05's acceptance sentence — "the tick-family fold
+request returns the typed floor-refusal naming `11 < 105`" — vacuous, because no route, CLI flag, or
+function in `app/` takes a corpus or family parameter. When an acceptance sentence names a SPECIFIC
+input ("the tick family", "`11 < 105`"), a guard that can only ever see a different input does not
+satisfy it. Related: a UI test plan can demand values the rig it also mandates is designed never to
+produce (`qa_playbook_iter7_fixture_scoped_backend.sh` seeds 2 PG fixtures; UT-02 demanded 12/18) —
+that reads as a product FAIL but is an expectation defect.
+**Applies to:** any iteration closing an "unwired guard / zero call sites" gap; any iteration whose
+browser acceptance names concrete corpus values while using the store-scoped rig

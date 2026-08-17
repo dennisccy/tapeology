@@ -1,0 +1,188 @@
+{
+  "journeys": {
+    "J-01": {
+      "id": "J-01",
+      "name": "The era transition stands — the corpus truth on the record",
+      "status": "passing",
+      "last_verified_iter": "goal-rapid-microscope-iter-5",
+      "last_passing_iter": "goal-rapid-microscope-iter-5",
+      "first_seen_iter": "goal-rapid-microscope-iter-0",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-2-evidence/UT-02-result.png",
+      "spec_hash": "1791ebcd14c10fa789e1048509f8f8af20a7696fe11a7de4bf946b446d4fbb52",
+      "evidence_makeup": true,
+      "notes": "ENDPOINT HALF RE-VERIFIED THIS ITERATION BY THE EVALUATOR, not carried: micro_join.py changed (the accessor re-point), and micro_join feeds joinable_corpus INTO the readiness payload the panel renders, so durability could not be assumed. Called the real route function micro_routes.get_micro_readiness() against the operator's real .data/datasets + playbook stores: totals {distinct_symbol_days: 12, distinct_datasets: 18, rth_minutes_covered: 1173.49, session_equivalents: 3.0089, referee_tick_gate_symbol_days: 150}, 18 shards ALL exposure_state='exploratory' AND split_provenance='hand_assigned', all three study_floors 'floor_unmet' (11/60), integrity_errors []. Every acceptance value is byte-identical to iteration 4's - the re-point is provably inert on the served payload. BROWSER HALF carried under evidence durability (methodology A.6): apps/frontend/app/desk/page.tsx and micro_readiness.py are byte-unchanged since the snapshot sha (git diff empty, working tree clean), and I proved the only changed producer emits an identical payload, so iter-2's element capture still evidences the same render. GAP (second consecutive iteration): the browser lane recorded a blanket SKIP again - reports/phase-goal-rapid-microscope-iter-5-ui-test-results.md is a 4-line 'Backend-only phase' stub, status.json has browser_checks_run: false, and no reports/qa/goal-rapid-microscope-iter-5-evidence/ directory exists. Root cause is harness wiring, NOT a product defect: scripts/automation/browser-qa-phase.sh:52 exits with N/A stubs whenever the plan says 'Frontend Present: no', before browser-qa-agent is ever dispatched. evidence_makeup stays true; the make-up capture (real 12/18/~3.0 totals plus the clipped exposure_state column) is now 3 iterations overdue and rides as a PASSENGER task, never an iteration goal."
+    },
+    "J-02": {
+      "id": "J-02",
+      "name": "The micro observer — one pass, prefix-honest, benchmarked",
+      "status": "passing",
+      "last_verified_iter": "goal-rapid-microscope-iter-5",
+      "last_passing_iter": "goal-rapid-microscope-iter-5",
+      "first_seen_iter": "goal-rapid-microscope-iter-0",
+      "last_evidence_path": "docs/handoffs/goal-rapid-microscope-iter-2-dev.md",
+      "spec_hash": "01f4f43564cba7431118d4a504b9dbeb20f1a994fdb52be5ceded15529d8b27a",
+      "notes": "CARRIED UNDER EVIDENCE DURABILITY (A.6), with the precondition checked by the evaluator rather than assumed: micro_observer.py, micro_snapshots.py and micro_features.py are byte-unchanged since this iteration's snapshot sha (git diff --stat empty AND git status --porcelain empty for all three), so iter-2's evidence stands unexpired. Independently re-counted the snapshot corpus straight off disk: 18 .jsonl files totalling exactly 3,815,933 rows - unchanged, and the iteration-3 lesson's cheap rebuild proxy therefore reads clean. The frozen-equivalence and golden-trace tests re-ran green inside the full suite (3033 pass / 8 skip / 0 fail). No browser surface (keyless/automated journey by goal.md's own framing), so this iteration's browser skip does not touch it."
+    },
+    "J-03": {
+      "id": "J-03",
+      "name": "Structure x flow — the join that never looks ahead",
+      "status": "passing",
+      "last_verified_iter": "goal-rapid-microscope-iter-5",
+      "last_passing_iter": "goal-rapid-microscope-iter-5",
+      "first_seen_iter": "goal-rapid-microscope-iter-0",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-3-evidence/UT-J-03-readiness-endpoint.png",
+      "spec_hash": "a671f63835247f7fca66a41a2dc48ec4fe3e83fe0bda85d3703ef385cb20de83",
+      "notes": "RE-VERIFIED THIS ITERATION BY THE EVALUATOR - micro_join.py changed (its snapshot-row read is now re-pointed through micro_accessor.MicroAccessor, TR-3's sole-door rule), so iteration-4 evidence could NOT be carried. Called the real readiness route against the operator's real stores AFTER the re-point: joinable_corpus = {total: 2, playbook_signal_count: 2, by_setup_id: {'range_trade': 2}, band_touch_count: {'status': 'not_enumerated', 'count': null}, playbook_integrity_errors: []} - byte-identical to iterations 3 and 4, so TC-4's byte-identity claim holds against the real store and not only against the fixture. Both prior fix-forward items stay closed (typed not_enumerated, surfaced integrity errors). Ran tests/test_micro_join.py myself as part of a 169-test targeted run across the six touched test files: all passed. Acceptance is endpoint-side only (no browser element), so this iteration's browser skip does not touch it."
+    },
+    "J-04": {
+      "id": "J-04",
+      "name": "The Scout and the ledger — every trial on the record",
+      "status": "passing",
+      "last_verified_iter": "goal-rapid-microscope-iter-5",
+      "last_passing_iter": "goal-rapid-microscope-iter-5",
+      "first_seen_iter": "goal-rapid-microscope-iter-0",
+      "last_evidence_path": "docs/handoffs/goal-rapid-microscope-iter-4-audit.md",
+      "spec_hash": "d188d138b6c84c4ff7302bf60f5da2f95b247b58a6cd7c42874d740801bc19d0",
+      "notes": "RE-VERIFIED THIS ITERATION BY THE EVALUATOR - scout.py changed (its direct read_snapshot_rows call at the candidate-cell construction site is re-pointed through micro_accessor), so iteration-4 evidence could not be carried unexamined. Ran tests/test_scout.py + test_scout_ledger.py myself inside the 169-test targeted run: all pass, including TC-5's post-re-point byte-identity assertion on every candidate's decision/reason. The coherence auditor independently reproduced the same byte-identity (runs/.../iter-5/coherence.md row 2, citing tests/test_scout.py:648-672). I also called GET /research/desk/micro/scout against the operator's REAL ledger dir: {families: [], chain_verification: {ok: true}} - the real store carries no trials by design (J-04's evidence was produced through the CLI against a scoped throwaway copy of the fixtures), and the chain verifies clean. Audit note (T3): TC-5's delivered assertion covers decision/reason but not spec_hash literally; spec_hash is a pure function of the candidate spec, so a read-path re-point cannot move it. OPEN, unchanged: the grid_version/family_id union-N counting question remains an owner ruling due before J-06."
+    },
+    "J-05": {
+      "id": "J-05",
+      "name": "The walk-forward engine — chronology, fences, and the diagnostic run",
+      "status": "partial",
+      "last_verified_iter": "goal-rapid-microscope-iter-5",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-rapid-microscope-iter-0",
+      "last_evidence_path": "docs/handoffs/goal-rapid-microscope-iter-5-audit.md",
+      "spec_hash": "1b84144912ebd9de2f4731f2209f6f7354ac8e563f633f14825644d2f838fa1e",
+      "notes": "SUBSTANTIALLY BUILT AND INDEPENDENTLY VERIFIED BY THE EVALUATOR, but two items goal.md names verbatim are NOT met in production, so this is partial, not passing. WHAT I VERIFIED MYSELF (not read off the handoff): (a) re-ran the production CLI `python -m app.research.walkforward --diagnostic` against a scoped COPY of the real ledger + exposure registry (TAPEOLOGY_MICRO_WALKFORWARD_DIR / _EXPOSURE_REGISTRY_DIR redirected; the operator's real store untouched) - output 'diagnostic walk-forward complete: 5 fold(s) (0 newly recorded, 5 replayed from the existing ledger), 100 validation session(s) over 154 corpus session(s)', which is TC-23's exact acceptance shape AND proves the audit's B1 idempotent-replay fix on live code; (b) read the real ledger off disk: 1 fold_spec + 5 fold_result rows, geometry train=40/embargo=5/test=20/step=20, every fold evidence_class 'historical_exposed_diagnostic', 3 of 5 honestly 'insufficient' (17/16/15 observations vs a floor of 30) and the sequence_verdict honestly refused at '2 < 3 sufficient folds'; (c) chain_verification {ok: true} before and after the replay run, and the run added exactly one new row - the mode_b_spec predeclaration the audit's B3 fix persists BEFORE any outcome read; (d) ran the six touched test files: 169 passed, with TC-1..TC-26 all present. GAP 1 (blocks passing): goal.md J-05 Step 1 requires the section 6.7 exposure registry 'initialized with every playbook AND legacy-tick window pre-marked exposed', and rapid-validation-spec.md section 6.7 + the TR-22 trap row say the same. I read the real registry: 154 rows, ALL corpus_id 'playbook_setups_diagnostic_v1'; ZERO legacy-tick windows. My own grep confirms initialize_r2_exposure_registry has exactly one production caller (walkforward.py:1073) and it seeds the playbook corpus only. Not reachable today (build_folds returns [] on 11 sessions, so no tick fold and no class assignment), but it is the safeguard for the critical anti-goal 'the 12 pre-existing tick symbol-days ... never historical_oos', and J-06 is the iteration that makes it reachable. NOT an owner ruling: spec section 6.7 pins the requirement verbatim; only the corpus_id string is an implementation naming choice of the same kind already made for 'playbook_setups_diagnostic_v1'. GAP 2 (blocks passing): J-05's Acceptance names 'the tick-family fold request returns the typed floor-refusal naming 11 < 105'. require_sufficient_sessions_for_folds raises exactly that string and TC-20 proves it, but my grep finds ZERO production call sites in app/ - the only wired run path goes straight to build_folds and reports folds_evaluated: 0 with no reason, which the function's own docstring calls out as 'an empty fold report standing in for one'. Everything else in the acceptance line is met and verified."
+    },
+    "J-06": {
+      "id": "J-06",
+      "name": "The recorder and the Vault — new tape, sealed at birth",
+      "status": "failing",
+      "last_verified_iter": "goal-rapid-microscope-iter-5",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-rapid-microscope-iter-0",
+      "last_evidence_path": "reports/phase-goal-rapid-microscope-iter-0-ui-test-results.md#UT-J-06",
+      "spec_hash": "68c9e0e14d8377c27f8fa65fdf25f4c5ad7c432d75abbd95d82ec5b25c6b26fc",
+      "notes": "tick_recorder.py and vault.py both confirmed ABSENT on disk by the evaluator this iteration (file-existence check, not inference). Correctly OUT OF SCOPE per the iteration spec. PREREQUISITE RECORDED: the audit's B2 (the exposure registry's missing legacy-tick r2 seeding) must close before J-06 writes a sealed shard - J-06 creates the first genuinely unexposed data, which is the first moment historical_oos can be awarded at all, and therefore the first moment it can be awarded wrongly."
+    },
+    "J-07": {
+      "id": "J-07",
+      "name": "Graduation — provenance in, nothing laundered out",
+      "status": "failing",
+      "last_verified_iter": "goal-rapid-microscope-iter-5",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-rapid-microscope-iter-0",
+      "last_evidence_path": "reports/phase-goal-rapid-microscope-iter-0-ui-test-results.md#UT-J-07",
+      "spec_hash": "6bd325e2c1511b9d2745bdcd612a12d2142f32498a7aa85055d31209c9e46b28",
+      "notes": "micro_graduation.py confirmed ABSENT on disk by the evaluator this iteration. Correctly OUT OF SCOPE per the iteration spec (only walk-forward's own native WF_SURVIVOR_RULE_V1 predicate landed, never the four-state graduation machine). Now genuinely unblocked: the survivor predicate it must read exists and returns the spec-literal token 'walkforward_survivor', and the TR-16 planted-effect oracle proves the survivor path is reachable at all."
+    },
+    "J-08": {
+      "id": "J-08",
+      "name": "The surface and MCP v6 — the funnel is visible",
+      "status": "failing",
+      "last_verified_iter": "goal-rapid-microscope-iter-5",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-rapid-microscope-iter-0",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-2-evidence/UT-01-result.png",
+      "spec_hash": "037874a8933089ff99b53568d5aedac2843043741d83fa4958759ba898145572",
+      "notes": "Confirmed by the evaluator this iteration: EXPECTED_TOOLS still carries exactly 22 names (desk_scout and desk_walkforward both absent), and apps/frontend/app/desk/page.tsx contains zero 'Scout Ledger' / 'Walk-Forward' / 'Validation Vault' section strings. Zero frontend files changed this iteration. Carry-forward items explicitly parked for this journey: the 'approximately None bps' kill-message copy fix, the _PRICE_ARITHMETIC_FIELDS / copy-discipline additions for the new micro numerics, and audit B7's note that the served sign_agreement and decay recency shares use an eligible-fold denominator - the rendering should say which denominator a reader is looking at."
+    },
+    "J-09": {
+      "id": "J-09",
+      "name": "The pilot studies — three predeclared questions, honest answers",
+      "status": "failing",
+      "last_verified_iter": "goal-rapid-microscope-iter-5",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-rapid-microscope-iter-0",
+      "last_evidence_path": "reports/phase-goal-rapid-microscope-iter-0-ui-test-results.md#UT-J-09",
+      "spec_hash": "7dd99ef032e14d2c86d69962f917efb8840d2496fa07765e9488264ecbd8a58a",
+      "notes": "No study family is predeclared or ledgered - verified by the evaluator: the real scout ledger serves {families: []} and the only rules registered this iteration are the diagnostic playbook-setup set plus the synthetic TR-16 oracle fixtures, never a microstructure hypothesis (correctly OUT OF SCOPE). Prerequisite recorded by the audit (B6): playbook_observations feeds a percent-denominated 'value' while WF_SURVIVOR_RULE_V1 condition 3 compares it against a bps-denominated econ_floor - harmless today only because the diagnostic run's econ_floor is honestly None and the condition fails closed. A study supplying a real bps floor to a percent-valued corpus would be wrong by 100x. Pin a unit on the observation contract before J-09 wires any real economic floor."
+    },
+    "J-10": {
+      "id": "J-10",
+      "name": "The kept product stands — traps armed, sentinel green",
+      "status": "partial",
+      "last_verified_iter": "goal-rapid-microscope-iter-5",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-rapid-microscope-iter-0",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-3-evidence/UT-J-10-result.png",
+      "spec_hash": "471d5b5b05f81c2922457651075a07f2c6ae428df8055f0ecd7a9f841b432814",
+      "notes": "STILL PARTIAL, but its trap half advanced the most of any iteration so far: 8/22 -> 17/22 (TR-3 accessor import-ban, TR-5 class-mixing, TR-6 purge exactness, TR-13 geometry freeze, TR-14 rule identity, TR-15 the typed session floor, TR-16 the known-null + planted-effect oracles, TR-21 process labels, TR-22 exposure registry). Five remain (TR-2/4/12/19/20, all vault/recorder-scoped). FROZEN-FOUNDATION HALF RE-VERIFIED BY THE EVALUATOR: Config().config_fingerprint() prints 08e471b10130e1e2; all six referee_*.py SHA-256 hashes are byte-identical to the iteration-0 listing (compared line by line); git diff over app/engine/, desk_playbook.py, desk_playbook_context.py, config.py, micro_readiness.py and apps/frontend is empty; full suite 3033 pass / 8 skip / 0 fail (era-open baseline 2691, iteration-4 baseline 2949 - grows, never shrinks). SENTINEL HALF NOT RUN FOR THE SECOND CONSECUTIVE ITERATION: journey-scripts/J-10.json's 13-step browser sentinel never executed, zero screenshots exist, and the iteration spec's TC-29 forbade exactly this in bold. Root cause is harness wiring, not agent judgment: scripts/automation/browser-qa-phase.sh:52 short-circuits to N/A stubs whenever the plan says 'Frontend Present: no', BEFORE browser-qa-agent is dispatched, and run-goal.sh:2548's CHAIN_GOAL_TARGET_JOURNEYS export - whose own comment says it exists to force the browser lane in exactly this case - is read nowhere in the codebase (grep: one write, zero reads). The two extended guard tests J-10 step 1 names for micro copy and _PRICE_ARITHMETIC_FIELDS are still absent (J-08-scoped)."
+    }
+  },
+  "anti_goal_violations": [
+    {
+      "iter": "goal-rapid-microscope-iter-2",
+      "anti_goal": "No cross-unit liquidity arithmetic. No feature, screen, or study relates trade shares to displayed quote sizes unless the dataset's `quote_size_unit` is verified (spec §2.6); unverified or mixed units are a typed refusal; unit normalization exists only as a recorded verification act, never silent arithmetic. (critical)",
+      "severity": "critical",
+      "evidence": "apps/backend/app/research/micro_observer.py:613 (pre-fix) served quote_depletion's share-denominated magnitude ungated; caught by the reviewer (review round 1 FAIL), fixed at the one emission site _resolve_depletion (now micro_observer.py:680-687 calling mf.require_share_denominated_magnitude_allowed) and counter-tested; whole-corpus sweep in docs/handoffs/goal-rapid-microscope-iter-2-audit.md shows 1,824,729/1,824,729 completions refused, 0 serving a raw magnitude under 'unverified'. Iter-5 re-check: micro_observer.py byte-unchanged since the snapshot sha (git diff and git status both empty).",
+      "resolved": true
+    },
+    {
+      "iter": "goal-rapid-microscope-iter-2",
+      "anti_goal": "No value is served before it exists. Every feature carries `anchor_at`/`observed_through`/`available_at`; a deferred construct is `unavailable` until its observations exist. (critical)",
+      "severity": "critical",
+      "evidence": "audit B1 — micro_observer.py finalize() published a quote_depletion window the session cut short as a COMPLETED observation (unavailable: False), 36 such rows across the shipped 18-dataset corpus. Fixed by the auditor, corpus rebuilt, before/after whole-corpus sweep in docs/handoffs/goal-rapid-microscope-iter-2-audit.md (36 rows now unavailable: True / value: None), regression tests added. Iter-5 re-check: the 18 snapshot files still total exactly 3,815,933 rows, re-counted off disk by the evaluator.",
+      "resolved": true
+    },
+    {
+      "iter": "goal-rapid-microscope-iter-2",
+      "anti_goal": "No lookahead — every value computed as-of T uses only events/bars fully completed at T. (critical)",
+      "severity": "minor",
+      "evidence": "audit B5 — apps/backend/app/research/micro_observer.py:636/:657 (locked by tests/test_micro_observer.py:291): a price-change-terminated quote_depletion stamps observed_through at the last same-price quote, one quote BEFORE the price change that proves the window closed, so available_at is earlier than the moment the completion could be known. STILL OPEN and STILL HUMAN-OWNED after iteration 5 (an owner ruling, never a developer invention — T-1). || ITER-5 RE-CHECK: still MINOR and still not consumed. micro_observer.py is byte-unchanged. The iteration-5 diagnostic run measures effects from the playbook corpus's already-computed forward/MDD statistics (Era B2 reuse), never from a quote_depletion-conditioned micro feature, so no walk-forward result rests on the early stamp. Deadline unchanged: due before J-06 records new tape.",
+      "resolved": false
+    },
+    {
+      "iter": "goal-rapid-microscope-iter-4",
+      "anti_goal": "The denominator never shrinks. Every evaluated variant lands in the hash-chained ledger with a closed-vocabulary decision; kills are never deleted; the union-N across grid versions is served beside every family. (critical)",
+      "severity": "critical",
+      "evidence": "INTRODUCED AND FIXED INSIDE ITERATION 4, found by the independent auditor after review and QA both passed the code: (B2) scout_ledger.py's chain walk could not detect TAIL truncation; (B3) variants_tried_for_family counted ledger ROWS rather than distinct candidate_ids. Fixed by a durable chain_head.json tail anchor plus scout_ledger.distinct_variant_count, and re-proved on live code by the iteration-4 evaluator. Iter-5 re-check: the same tail-anchor pattern is now the shared micro_chain_ledger.py used by the new walk-forward ledger, and TC-26 proves tail truncation is caught there too.",
+      "resolved": true
+    },
+    {
+      "iter": "goal-rapid-microscope-iter-4",
+      "anti_goal": "Referee-era / Rapid-Microscope screening honesty: no threshold, grid, formula, embargo, or fold parameter is chosen or revised from validation outcomes; the screening null must not be anti-conservative. (critical)",
+      "severity": "critical",
+      "evidence": "INTRODUCED AND FIXED INSIDE ITERATION 4. Audit B4: scout.py's _block_length_for_horizon returned a 20-event block for EVERY shares and clock horizon, narrowing the null on a permanently-ledgered path. Fixed by REFUSING rather than inventing (T-1): a typed ScoutUnsupportedHorizonError raised at the registration boundary. Iter-5 re-check: unchanged and still in force (scout.py's only iteration-5 edit is the accessor re-point; tests/test_scout.py passes in the evaluator's own 169-test run).",
+      "resolved": true
+    },
+    {
+      "iter": "goal-rapid-microscope-iter-5",
+      "anti_goal": "The denominator never shrinks ... kills are never deleted; the union-N across grid versions is served beside every family. (critical) — read in its mirror form: a denominator must not spuriously GROW either.",
+      "severity": "critical",
+      "evidence": "INTRODUCED AND FIXED INSIDE THIS ITERATION (the third time this session that only the independent auditor caught an integrity fault review and QA both passed). Audit B1: walkforward_ledger.py:251 appended a new physical fold_result row on EVERY call, so a second press of the diagnostic Compute button — or a second CLI run — duplicated all five folds, and the sequence's honest refusal ('2 < 3 sufficient folds') became a COMPUTED verdict over n_sufficient_folds: 4 built from the same 2 folds counted twice, with a fabricated 1.0-vs-0.0 decay recency line. Fixed by an idempotent-replay branch in append_fold_result keyed on (sequence_id, fold_index, spec_hash), plus folds_appended/folds_replayed disclosure in the CLI line and the route's run-log entry. VERIFIED FIXED BY THE EVALUATOR ON LIVE CODE, not read off the handoff: re-ran the production CLI against a scoped copy of the real ledger — '5 fold(s) (0 newly recorded, 5 replayed from the existing ledger), 100 validation session(s)'; the ledger stayed at 5 fold_result rows with indices [0,1,2,3,4]; the served sequence_verdict stayed {refused: true, '2 < 3 sufficient folds', n_sufficient_folds: 2}; chain_verification {ok: true}.",
+      "resolved": true
+    },
+    {
+      "iter": "goal-rapid-microscope-iter-5",
+      "anti_goal": "No threshold, grid, formula, embargo, or fold parameter is chosen or revised from validation, sealed, or holdout outcomes. Fitting rules are data functionals frozen before reveal. (critical) — spec §6.5's registration-first discipline.",
+      "severity": "critical",
+      "evidence": "INTRODUCED AND FIXED INSIDE THIS ITERATION. Audit B3: run_diagnostic_walkforward read the corpus's outcomes (playbook_observations) BEFORE calling register_mode_b_spec, and register_mode_b_spec was a pure in-memory construction that never wrote to the ledger at all — so nothing on disk could evidence the registration order spec §6.5 demands, and both the docstring and the dev handoff asserted the opposite. No misclassification resulted this run (every playbook window is r2-marked exposed at 2026-08-16T00:00:00Z, before any registered_at). Fixed by hoisting the predeclaration to the function's first act and persisting it as a hash-chained mode_b_spec row. VERIFIED BY THE EVALUATOR: my scoped re-run of the production CLI added exactly one row to the ledger and it is the mode_b_spec predeclaration (row_index 6), with the chain still verifying clean.",
+      "resolved": true
+    },
+    {
+      "iter": "goal-rapid-microscope-iter-5",
+      "anti_goal": "The accessor is the only data door. No module but `micro_accessor.py` opens snapshot or vault event data; origin fences fail closed; import-ban and source-scan guards enforce it. (critical)",
+      "severity": "critical",
+      "evidence": "INTRODUCED AND FIXED INSIDE THIS ITERATION. Audit T1: the delivered TR-3 guard globbed app/research/*.py only (one of four packages under app/) and inspected only Import/ImportFrom nodes, so any module could bypass it with `from . import micro_snapshots` followed by an attribute call — a guard for a critical rail that could see neither case. Fixed by widening the scan to all 101 modules under app/ (asserting >50 files and that app/engine is covered) and flagging module-qualified attribute references, with a seeded proof that the bypass is caught and the legal accessor call is not. VERIFIED BY THE EVALUATOR: tests/test_micro_accessor.py passes in my own 169-test targeted run, and the coherence auditor independently reproduced 'exactly one file references the raw opener across all 101 modules'.",
+      "resolved": true
+    },
+    {
+      "iter": "goal-rapid-microscope-iter-5",
+      "anti_goal": "The 12 pre-existing tick symbol-days are permanently exploratory — never sealed, never `historical_oos`, never relabeled. (critical)",
+      "severity": "minor",
+      "evidence": "OPEN — a MISSING SAFEGUARD, not a present breach; I considered scoring this critical and ruled it out only after establishing that no reachable code path can award historical_oos to a tick window today. Audit B2, confirmed independently by the evaluator: rapid-validation-spec.md §6.7 and goal.md's J-05 Step 1 both require the exposure registry to be r2-initialized with every playbook AND legacy-tick window pre-marked exposed, but the real registry holds 154 rows all keyed 'playbook_setups_diagnostic_v1' and zero legacy-tick windows, and grep shows initialize_r2_exposure_registry has exactly one production caller (walkforward.py:1073) seeding the playbook corpus alone. Both TC-14 tests prove the mechanism only against a hand-made 'legacy_tick' stand-in corpus with invented window strings (audit T2) — which is how this stayed invisible through review and QA. Unreachable today because build_folds returns [] for an 11-session corpus, so no tick fold and therefore no class assignment exists. Becomes CRITICAL the moment J-06 creates genuinely unexposed data. NOT an owner ruling: spec §6.7 pins the requirement verbatim and only the corpus_id string is an implementation naming choice of the same kind already made for 'playbook_setups_diagnostic_v1'. DUE BEFORE J-06 WRITES A SEALED SHARD.",
+      "resolved": false
+    },
+    {
+      "iter": "goal-rapid-microscope-iter-5",
+      "anti_goal": "Trap T-7 · Insufficient is an answer. Floors never loosen; a below-floor fold serves `insufficient` with its arithmetic; the tick family's refusal at today's corpus is a FEATURE and is pinned by TR-15. (critical rail; this instance scored MINOR — see evidence)",
+      "severity": "minor",
+      "evidence": "OPEN — audit B5, confirmed independently by the evaluator's own grep: require_sufficient_sessions_for_folds (walkforward.py:335) raises the typed refusal naming the exact '11 < 105' shortfall and TC-20 proves it, but there are ZERO call sites in app/ — the only wired run path goes straight to build_folds, which returns [] for a below-floor corpus, and the run then reports folds_evaluated: 0 with no reason attached. The function's own docstring calls this out: 'never an empty fold report standing in for one'. Scored MINOR: the failure direction is an under-informative honest empty, never a fabricated pass, and no tick-family fold request surface exists in production yet. It is nonetheless a verbatim clause of J-05's Acceptance and is the reason J-05 scores partial rather than passing. Fix is small: call the typed check at the run entry point and decide what an empty store should return.",
+      "resolved": false
+    }
+  ],
+  "updated_at": "2026-08-17T20:30:00Z"
+}

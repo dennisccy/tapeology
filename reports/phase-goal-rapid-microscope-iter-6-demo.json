@@ -1,0 +1,282 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-rapid-microscope-iter-6",
+  "base_url": "http://localhost:3301",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the Playbook Signals page",
+      "narration": "Let's start by confirming the main Playbook Signals page loads without errors. This is our baseline check.",
+      "point_out": "The Playbook Signals heading is visible at the top, and the page has fully loaded.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "goto",
+        "url": "/desk"
+      },
+      "expect": {
+        "text": "Playbook Signals"
+      }
+    },
+    {
+      "n": 2,
+      "title": "Check the Microscope Readiness section",
+      "narration": "Next, we'll scroll down and open the Microscope Readiness section at the bottom of the page to see the corpus summary tables.",
+      "point_out": "After expanding, you should see the Corpus Totals table and the Legacy Tick Shards data, confirming the product still has access to its diagnostic datasets.",
+      "journey": "J-01",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "role": "button",
+          "name": "Microscope Readiness"
+        }
+      },
+      "expect": {
+        "text": "Corpus Totals"
+      }
+    },
+    {
+      "n": 3,
+      "title": "Visit the Cockpit page",
+      "narration": "Now let's check the Cockpit dashboard. We'll verify it loads and shows the empty state before a ticker is watched.",
+      "point_out": "The Cockpit page is ready, and you should see the text 'No ticker watched' showing the empty state.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "goto",
+        "url": "/"
+      },
+      "expect": {
+        "text": "No ticker watched"
+      }
+    },
+    {
+      "n": 4,
+      "title": "Watch a test ticker in the Cockpit",
+      "narration": "Let's watch a ticker to confirm the real-time quote and tape features still work. We'll use the SIM-BUYER symbol.",
+      "point_out": "After watching, the page should show 'Buyer Control' confirming the simulation data is flowing and the watch flow is operational.",
+      "journey": "J-10",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "fill",
+        "target": {
+          "label": "Ticker"
+        },
+        "text": "SIM-BUYER"
+      }
+    },
+    {
+      "n": 5,
+      "title": "Confirm the watch is active",
+      "narration": "Click the Watch button to activate the ticker watch.",
+      "point_out": "You should see 'Buyer Control' appear, confirming the watch is working and live data is streaming.",
+      "journey": "J-10",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": {
+        "type": "click",
+        "target": {
+          "role": "button",
+          "name": "Watch"
+        }
+      },
+      "expect": {
+        "text": "Buyer Control"
+      }
+    },
+    {
+      "n": 6,
+      "title": "Open the Structure page",
+      "narration": "Let's check the Structure page to see the Tradable Map feature. This shows the support and resistance bands.",
+      "point_out": "The Tradable Map heading should appear, showing the page is ready to load structure data.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "goto",
+        "url": "/structure"
+      },
+      "expect": {
+        "text": "Tradable Map"
+      }
+    },
+    {
+      "n": 7,
+      "title": "Load a specific Tradable Map",
+      "narration": "We'll load the S/R bands for AAPL as of June 22, 2026, which is a key data point for our testing.",
+      "point_out": "The band range '300.11–302.2' should appear after loading, confirming the structure engine is computing correctly.",
+      "journey": "J-10",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "fill",
+        "target": {
+          "label": "Structure symbol"
+        },
+        "text": "AAPL"
+      }
+    },
+    {
+      "n": 8,
+      "title": "Set the date for the structure lookup",
+      "narration": "Now we'll set the date to June 22, 2026, 5 PM ET, to match our reference data.",
+      "point_out": "The as-of date field should accept this timestamp.",
+      "journey": "J-10",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": {
+        "type": "fill",
+        "target": {
+          "css": "[data-testid=\"structure-as-of-input\"]"
+        },
+        "text": "2026-06-22 17:00:00"
+      }
+    },
+    {
+      "n": 9,
+      "title": "Load the structure data",
+      "narration": "Click the Load button to retrieve the Tradable Map for these parameters.",
+      "point_out": "The support-resistance band should appear, showing the product is correctly computing structure levels.",
+      "journey": "J-10",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": {
+        "type": "click",
+        "target": {
+          "css": "[data-testid=\"structure-load-button\"]"
+        }
+      },
+      "expect": {
+        "text": "300.11–302.2"
+      }
+    },
+    {
+      "n": 10,
+      "title": "Return to Playbook Signals",
+      "narration": "Let's go back to the Desk page to verify the Playbook Evidence section and other core surfaces.",
+      "point_out": "We're back on the Desk page with the Playbook Signals heading visible.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": {
+        "type": "goto",
+        "url": "/desk"
+      },
+      "expect": {
+        "text": "Playbook Signals"
+      }
+    },
+    {
+      "n": 11,
+      "title": "Open the Playbook Evidence section",
+      "narration": "We'll open the Playbook Evidence section to confirm it's rendering real signals from our recorded playbook.",
+      "point_out": "The section should expand and show 'Built from signature:' text, indicating real playbook data is being served.",
+      "journey": "J-10",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": {
+        "type": "click",
+        "target": {
+          "css": "[data-testid=\"desk-section-expand-playbookEvidence\"]"
+        }
+      },
+      "expect": {
+        "text": "Built from signature:"
+      }
+    },
+    {
+      "n": 12,
+      "title": "Filter Playbook Evidence by date",
+      "narration": "Let's filter the playbook signals to June 22, 2026, to see the real signals for that date.",
+      "point_out": "After entering the date, the text 'recorded signals, none hidden' should appear, confirming the filter is working.",
+      "journey": "J-10",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": {
+        "type": "fill",
+        "target": {
+          "css": "[data-testid=\"desk-playbook-date-input\"]"
+        },
+        "text": "2026-06-22"
+      },
+      "expect": {
+        "text": "recorded signals, none hidden"
+      }
+    },
+    {
+      "n": 13,
+      "title": "Check the Referee Registry",
+      "narration": "Now let's open the Referee Registry section to confirm the configuration fingerprint is frozen.",
+      "point_out": "The section should show 'config fingerprint 08e471b10130e1e2', confirming that the frozen configuration foundation is in place.",
+      "journey": "J-10",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": {
+        "type": "click",
+        "target": {
+          "css": "[data-testid=\"desk-section-expand-refereeRegistry\"]"
+        }
+      },
+      "expect": {
+        "text": "config fingerprint 08e471b10130e1e2"
+      }
+    },
+    {
+      "n": 14,
+      "title": "Verify Referee Adjudications is empty",
+      "narration": "Let's check the Referee Adjudications section to confirm there are no hypotheses registered yet.",
+      "point_out": "This section should show 'No hypotheses registered', which is the correct honest-empty state.",
+      "journey": "J-10",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": {
+        "type": "click",
+        "target": {
+          "css": "[data-testid=\"desk-section-expand-refereeAdjudications\"]"
+        }
+      },
+      "expect": {
+        "text": "No hypotheses registered"
+      }
+    },
+    {
+      "n": 15,
+      "title": "Verify Referee Runs is empty",
+      "narration": "Finally, let's check the Referee Runs section to confirm there are no evaluation runs yet.",
+      "point_out": "This section should show 'No evaluation runs recorded yet.', which is the correct honest-empty state for a fresh configuration.",
+      "journey": "J-10",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": {
+        "type": "click",
+        "target": {
+          "css": "[data-testid=\"desk-section-expand-refereeRuns\"]"
+        }
+      },
+      "expect": {
+        "text": "No evaluation runs recorded yet."
+      }
+    }
+  ]
+}

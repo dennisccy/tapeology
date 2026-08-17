@@ -55,9 +55,11 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
+from zoneinfo import ZoneInfo
 
 from ..config import CONFIG, Config
 from .bars import BarStore
+from .datasets import DatasetStore
 from .desk_playbook import PlaybookStore, compute_playbook_input_signature, resolve_desk_playbook_dir
 from .desk_universe import UniverseStore
 from .micro_accessor import (
@@ -147,6 +149,7 @@ __all__ = [
     "PLAYBOOK_DIAGNOSTIC_SETUP_IDS",
     "PLAYBOOK_DIAGNOSTIC_HORIZON_LABEL",
     "PLAYBOOK_DIAGNOSTIC_ORPHAN_SESSION_DATE",
+    "TICK_LEGACY_CORPUS_ID",
     "playbook_observations",
     "run_diagnostic_walkforward",
     "main",
@@ -966,6 +969,37 @@ PLAYBOOK_DIAGNOSTIC_HORIZON_LABEL = "1h"
 # ordering is a genuine, contiguous trading calendar rather than one artifact date sitting alone.
 PLAYBOOK_DIAGNOSTIC_ORPHAN_SESSION_DATE = "2025-06-03"
 
+# The legacy tick corpus's OWN corpus_id for the section 6.7 exposure registry (iter-6, closing
+# iter-5 audit finding B2: "the exposure registry is never r2-initialized for the 12 legacy tick
+# symbol-days in production -- a latent breach of the 'never historical_oos' anti-goal"). A name
+# DISTINCT from PLAYBOOK_DIAGNOSTIC_CORPUS_ID -- an implementation choice this iteration's own plan
+# explicitly authorizes and asks to be logged (T-1: never invented silently); "_v1" mirrors that
+# sibling constant's own versioned-name shape, so a future Card-5.2 recorder revision that changes
+# what "the legacy tick corpus" even means is a distinguishable v2, never a silent redefinition.
+TICK_LEGACY_CORPUS_ID = "tick_legacy_symbol_days_v1"
+
+_ET_ZONE = ZoneInfo("America/New_York")
+
+
+def _tick_dataset_session_dates(dataset_store: DatasetStore) -> list[str]:
+    """Every currently-registered tick dataset's own ET session date (spec section 0: "a session
+    is an ET RTH trading date"), one entry per DISTINCT date -- the SAME ET-conversion technique
+    ``micro_readiness.py``'s own ``_et_datetime`` and ``micro_accessor.py``'s own
+    ``_session_date_for_dataset`` already use (mirrored, not imported -- the established
+    per-module private-``ZoneInfo`` idiom those modules' own docstrings document), read straight
+    off ``DatasetStore.list()``'s own already-checksum-verified metadata -- no second inventory
+    mechanism, no hardcoded date list (iter-6 plan). Cheap: ``list()`` is metadata-only (no event
+    replay), the identical cost ``micro_readiness.py``'s own per-shard ``session_date`` derivation
+    already pays."""
+    records, _errors = dataset_store.list()
+    session_dates: set[str] = set()
+    for meta in records:
+        parsed = datetime.fromisoformat(meta["window_start_utc"].replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        session_dates.add(parsed.astimezone(_ET_ZONE).date().isoformat())
+    return sorted(session_dates)
+
 
 def playbook_observations(
     playbook_store, *, setup_ids: tuple[str, ...], horizon_label: str, default_signature: str, exclude_session_dates: tuple[str, ...] = ()
@@ -1031,7 +1065,19 @@ def run_diagnostic_walkforward(
     classifies every window honestly from whatever IS on record -- never a special-cased 'diagnostic
     always' shortcut). Never a blocking pytest recomputation (the Constraints' own iteration-hygiene
     rail) -- this function is the ONE body both ``WalkForwardComputeManager``'s worker and the CLI's
-    ``main()`` call."""
+    ``main()`` call.
+
+    **iter-6 additions (closing iter-5 audit findings B5 and B2).** Immediately before
+    ``build_folds``, this function now calls ``require_sufficient_sessions_for_folds`` (TR-15) --
+    a below-floor corpus raises ``InsufficientSessionsForFoldsError`` naming the exact shortfall,
+    caught by both the CLI's ``main()`` (prints + non-zero exit) and
+    ``WalkForwardComputeManager.trigger``'s existing generic handler (resolves the run to
+    ``"failed"``); today's real 155-session corpus stays far above the 105-session floor, so this
+    is defensive and does not change the served result. It also self-initializes a SECOND,
+    corpus-scoped r2 exposure registry seed for ``TICK_LEGACY_CORPUS_ID`` (the 12 legacy tick
+    symbol-days), mirroring the playbook seed immediately above it -- so the critical anti-goal
+    ("never `historical_oos`" for those 12 symbol-days) can never be breached by an unseeded
+    registry once a future spec is registered against a tick window."""
     # THE PREDECLARATION, FIRST -- before this function reads anything at all (goal.md J-05 IN
     # SCOPE item 8: "predeclare (ledgered, before any outcome read) ... the run's candidate
     # rule(s)"; spec section 6.5's own "registered (ledger row, spec hash, timestamp) FIRST").
@@ -1072,6 +1118,17 @@ def run_diagnostic_walkforward(
     if not has_any_exposure_entries(exposure_registry, PLAYBOOK_DIAGNOSTIC_CORPUS_ID):
         initialize_r2_exposure_registry(exposure_registry, corpus_id=PLAYBOOK_DIAGNOSTIC_CORPUS_ID, windows=session_dates)
 
+    # iter-6 (closing iter-5 audit finding B2): the SAME r2 initialization, for the legacy TICK
+    # corpus -- resolved via `config.dataset_dir_resolved()` the exact way `micro_readiness.py`
+    # already does (no second inventory mechanism), under its OWN distinct corpus_id so the two
+    # corpora's exposure rows are never conflated (TC-7 proves `micro_readiness.py`'s separately-
+    # served, per-shard `exposure_state` is untouched by this). Fires from this SAME operator-act
+    # entry point -- never a GET route (era Non-Goal: "No scheduling").
+    if not has_any_exposure_entries(exposure_registry, TICK_LEGACY_CORPUS_ID):
+        tick_dataset_store = DatasetStore(config.dataset_dir_resolved())
+        tick_session_dates = _tick_dataset_session_dates(tick_dataset_store)
+        initialize_r2_exposure_registry(exposure_registry, corpus_id=TICK_LEGACY_CORPUS_ID, windows=tick_session_dates)
+
     corpus_manifest_hash = _sha256(_canonical(session_dates))
     floors = {
         "wf_fold_min_observations": WF_FOLD_MIN_OBSERVATIONS,
@@ -1082,6 +1139,13 @@ def run_diagnostic_walkforward(
         ledger, corpus_id=PLAYBOOK_DIAGNOSTIC_CORPUS_ID, corpus_manifest_hash=corpus_manifest_hash,
         geometry=DIAGNOSTIC_GEOMETRY, floors=floors,
     )
+    # iter-6 (closing iter-5 audit finding B5): TR-15's typed floor refusal, wired into the ONE
+    # production fold-building call site -- immediately before `build_folds`, so a below-floor
+    # corpus raises `InsufficientSessionsForFoldsError` naming the exact shortfall instead of
+    # `build_folds` silently returning `[]` (the "empty fold report standing in for the refusal"
+    # TR-15's own wording forbids). Placed AFTER `register_fold_spec` -- the frozen geometry is
+    # still committed to the ledger even for a below-floor corpus; only fold EVALUATION is refused.
+    require_sufficient_sessions_for_folds(session_dates, DIAGNOSTIC_GEOMETRY)
     folds = build_folds(session_dates, DIAGNOSTIC_GEOMETRY)
 
     observations = playbook_observations(
@@ -1153,10 +1217,15 @@ def main() -> int:
         print("nothing to do -- pass --diagnostic to run the acceptance run.")
         return 0
 
-    result = run_diagnostic_walkforward(
-        ledger, exposure_registry, playbook_store, universe_store, bar_store, config,
-        progress=lambda step: print(f"  [{step}] fold evaluated", flush=True),
-    )
+    try:
+        result = run_diagnostic_walkforward(
+            ledger, exposure_registry, playbook_store, universe_store, bar_store, config,
+            progress=lambda step: print(f"  [{step}] fold evaluated", flush=True),
+        )
+    except InsufficientSessionsForFoldsError as exc:
+        # TC-4: the typed refusal, printed and exited non-zero -- never an unhandled traceback.
+        print(f"diagnostic walk-forward refused: {exc}")
+        return 1
     print(
         f"diagnostic walk-forward complete: {result['folds_evaluated']} fold(s) "
         f"({result['folds_appended']} newly recorded, {result['folds_replayed']} replayed from the "

@@ -283,3 +283,50 @@ frozen identity list the spec never names.
 **Reversible:** yes — the registry is additive and idempotent (guarded like the playbook seeding);
 J-06's own universe registration is a distinct, separately-keyed corpus_id, so nothing about this
 seeding needs to move or be redone once new shards exist.
+
+## iter-6 — goal-evaluator
+
+**Ambiguity:** `docs/goal.md` J-05's Acceptance names, word for word, "the tick-family fold request
+returns the typed floor-refusal naming `11 < 105`", and the spec's TR-15 row says "the fold engine
+pointed at the 18-dataset corpus returns the typed floor-refusal naming the failed minima". This
+iteration closed both gaps the iteration-5 evaluator named (zero call sites in `app/`; the exposure
+registry never seeded for the tick corpus) and met its own DEFINITION OF DONE ("≥1 real call site").
+The goal never says whether that acceptance sentence is discharged by a guard that is genuinely live
+on the ONE production fold path (which always builds folds over the playbook corpus) plus a unit test
+over a synthetic 11-date list, or whether it requires a production path that can actually point the
+fold engine at the tick corpus.
+**We chose:** the second, stricter reading — scored J-05 `partial`, not `passing`. Grounds I
+established myself, not read off a report: `app/` contains exactly one `build_folds` call site
+(`walkforward.py:1149`), inside `run_diagnostic_walkforward`, which is hardcoded to the playbook
+corpus; its only two callers (`micro_routes.py:323`, `walkforward.py:1221`) take no corpus or family
+parameter; and the `11 < 105` string appears only in `tests/test_walkforward.py:478` over
+`[f"2026-06-{d:02d}" for d in range(1,12)]`, never over the 18-dataset corpus the trap's own wording
+names. The independent auditor filed the same finding (B3) and explicitly warned the evaluator not to
+read the DoD checkbox as the goal acceptance. `partial` blocks GOAL_ACHIEVED exactly as `failing`
+does, so no gate is loosened, and the remaining work is small — `_tick_dataset_session_dates` already
+resolves the real 11 dates. I did NOT treat this as an anti-goal violation: the honest-refusal
+machinery IS live on the one production path, so the failure direction is an unreachable branch,
+never a fabricated pass.
+**Reversible:** yes
+
+## iter-6 — goal-evaluator
+
+**Ambiguity:** the evaluation methodology (A.7) says `evidence_makeup` clears "the moment a fresh
+capture lands — whatever the outcome". A fresh, legible Microscope Readiness element capture DID land
+this iteration (`UT-02-fail.png`, 1668x3179, opened and confirmed by me). But it carries the SAME
+defect class the flag was raised for in iteration 2: the store-scoped rig the test plan mandates seeds
+two PG fixture datasets by design, so the panel renders 1 symbol-day / 2 datasets / 0.0045
+session-equivalents, never the 12 / 18 / ≈3.0 that J-01's own acceptance names as "those same served
+values". The methodology's clearing rule does not say what to do when the fresh capture reproduces the
+defect rather than fixing it.
+**We chose:** cleared `evidence_makeup` and kept J-01 `passing`, then recorded the residual as an
+OWNER RULING (audit E3) rather than as a make-up capture. Reasoning: the flag's purpose is "a capture
+is owed and a retake will fix it", and a retake demonstrably cannot fix this — the rig's own launcher
+forbids pointing at or copying the real `.data/datasets` store. Keeping the flag would schedule an
+impossible retake for a fourth iteration. The endpoint half was re-derived by me directly against the
+operator's real store this iteration (12 / 18 / 1173.49 / 3.0089 / 150, 18/18 `exploratory` +
+`hand_assigned`, three floors `floor_unmet` at 11/60, `integrity_errors: []`), and a screenshot EXISTS
+with a citation, so methodology A.6(b)'s no-screenshot rail is satisfied. The owner's two options are
+recorded verbatim: seed the rig from the real 18-dataset corpus, or amend J-01's acceptance to accept
+an endpoint-level proof beside a fixture-corpus render. Inventing either would breach T-1.
+**Reversible:** yes

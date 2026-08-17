@@ -11,9 +11,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.providers.base import QuoteEvent, Side, TradeEvent
 from app.research import walkforward as wf
 from app.research import walkforward_ledger as wl
-from app.research.micro_accessor import ExposureRegistry, initialize_r2_exposure_registry
+from app.research.datasets import DatasetStore
+from app.research.micro_accessor import ExposureRegistry, has_any_exposure_entries, initialize_r2_exposure_registry
+from app.research.micro_readiness import EXPOSURE_STATE_EXPLORATORY, MicroReadinessCache, build_readiness
 from app.research.micro_routes import (
     get_micro_exposure_registry_dir,
     get_walkforward_compute_manager,
@@ -509,11 +512,45 @@ class _FakeUniverseStore:
 
 
 class _FakeConfig:
-    """A stand-in for ``app.config.Config`` -- the ONLY method ``run_diagnostic_walkforward``'s
-    own (monkeypatched-away in this test) ``compute_playbook_input_signature`` call needs."""
+    """A stand-in for ``app.config.Config`` -- the two methods ``run_diagnostic_walkforward``
+    calls on it: ``config_fingerprint`` (via ``compute_playbook_input_signature``, monkeypatched
+    away in most of these tests) and, since iter-6, ``dataset_dir_resolved`` (the tick-corpus
+    exposure-seeding call, TC-5/TC-6/TC-7). Defaults to a directory that deliberately does not
+    exist, so ``DatasetStore.list()`` honestly answers zero tick datasets (``DatasetStore``'s own
+    documented "construction is cheap, no I/O" contract; ``list()`` returns ``[]`` for a
+    non-existent root) rather than every test that does not care about the tick corpus needing to
+    fabricate one."""
+
+    def __init__(self, dataset_dir: str = "no-tick-corpus-for-this-fake-config") -> None:
+        self._dataset_dir = dataset_dir
 
     def config_fingerprint(self) -> str:
         return "fake-fingerprint"
+
+    def dataset_dir_resolved(self) -> str:
+        return self._dataset_dir
+
+
+def _tick_events(symbol: str, *, price: float) -> list:
+    """A minimal one-quote/one-trade pair -- these tests only need ``DatasetStore.list()``'s own
+    metadata (``window_start_utc``), never event CONTENT, so the fixture stays tiny (the
+    ``test_micro_readiness.py`` ``_events``/``_plant_dataset`` precedent, trimmed to what this
+    file's own tests actually exercise). ``price`` is a pure content differentiator -- ``DatasetStore.
+    record``'s own checksum hashes ``(symbol, data_feed, epoch_anchor, rows)``, NOT the window
+    times, so two shards for the SAME symbol on two DIFFERENT session dates need distinct content
+    or the store's immutable-dataset guard (correctly) refuses the second as an exact re-record."""
+    return [
+        QuoteEvent(symbol, 0.0, 99.99, 100.02, 100, 100),
+        TradeEvent(symbol, 0.1, price, 10, Side.BUY),
+    ]
+
+
+def _plant_tick_dataset(store: DatasetStore, *, symbol: str, window_start_utc: str, window_end_utc: str, price: float = 100.00) -> dict:
+    return store.record(
+        symbol=symbol, source="fixture", source_kind="fixture", source_id=f"{symbol}-fixture",
+        split="train", window_start_utc=window_start_utc, window_end_utc=window_end_utc,
+        data_feed="sip", epoch_anchor=0.0, events=_tick_events(symbol, price=price),
+    )
 
 
 def _fake_signal(setup_id: str, symbol: str, return_pct: float) -> dict:
@@ -613,6 +650,148 @@ def test_tc23_and_tc24_the_diagnostic_run_over_a_small_synthetic_corpus(tmp_path
     operator_folds = _five_sufficient_oos_rule_process_folds(process_label=wf.PROCESS_LABEL_OPERATOR, effect=1_000.0, sign="positive")
     operator_verdict = wf.sequence_verdict(operator_folds, sidedness="long", econ_floor=_ECON_FLOOR, voided=False)
     assert operator_verdict["verdict"] == "not_survivor"
+
+
+# === iter-6: TR-15 wiring + tick-corpus exposure seeding (closing iter-5 audit findings B5/B2) ======
+
+
+def test_tc2_run_diagnostic_walkforward_itself_raises_the_typed_refusal_below_the_session_floor(tmp_path, monkeypatch):
+    """TR-15, wired into the ONE production fold-building call site: a below-floor session list
+    must raise through the REAL ``run_diagnostic_walkforward`` path (not merely the standalone
+    ``require_sufficient_sessions_for_folds`` TC-20 already covers) -- never a success dict with
+    an empty ``rows`` list standing in for the refusal (iter-5 audit finding B5)."""
+    signature = "sig-below-floor"
+    sessions = [f"2026-06-{d:02d}" for d in range(1, 11)]  # 10 sessions, far below the 105 floor
+    records = [
+        _fake_playbook_record(s, signature, [_fake_signal("range_trade", "AAPL", 0.3), _fake_signal("range_trade", "MSFT", 0.3)])
+        for s in sessions
+    ]
+    monkeypatch.setattr(wf, "PLAYBOOK_DIAGNOSTIC_ORPHAN_SESSION_DATE", "2020-01-01")
+    monkeypatch.setattr(wf, "compute_playbook_input_signature", lambda bar_store, members, config_fingerprint: signature)
+
+    ledger = wl.WalkForwardLedger(str(tmp_path / "wf"))
+    registry = ExposureRegistry(str(tmp_path / "exposure"))
+
+    with pytest.raises(wf.InsufficientSessionsForFoldsError, match=r"10 < 105"):
+        wf.run_diagnostic_walkforward(
+            ledger, registry, _FakePlaybookStore(records), _FakeUniverseStore(["AAPL"]), bar_store=None, config=_FakeConfig(),
+        )
+
+    # register_fold_spec ran (the frozen geometry is committed even for a below-floor corpus) but
+    # fold EVALUATION never did -- never a success dict with an empty `rows` list standing in for
+    # the refusal (B5's own wording).
+    assert wl.latest_fold_spec(ledger, wf.PLAYBOOK_DIAGNOSTIC_CORPUS_ID) is not None
+    assert ledger.rows_of_kind(wl.ROW_KIND_FOLD_RESULT) == []
+
+
+def test_tc5_first_diagnostic_run_seeds_one_tick_exposure_entry_per_session_window(tmp_path, monkeypatch):
+    """TC-5 (closing iter-5 audit finding B2): the FIRST diagnostic walk-forward operator act
+    against a tick ``DatasetStore`` that has never been exposure-seeded gains one entry per
+    session window of EVERY currently-registered tick dataset, under ``wf.TICK_LEGACY_CORPUS_ID``
+    -- a corpus_id DISTINCT from ``PLAYBOOK_DIAGNOSTIC_CORPUS_ID``, resolved via
+    ``config.dataset_dir_resolved()`` the SAME way ``micro_readiness.py`` already does (no second
+    inventory mechanism, no hardcoded date list)."""
+    signature = "sig-tc5"
+    sessions = [f"2026-07-{d:03d}" for d in range(1, 156)]
+    records = [
+        _fake_playbook_record(s, signature, [_fake_signal("range_trade", "AAPL", 0.3), _fake_signal("range_trade", "MSFT", 0.3)])
+        for s in sessions
+    ]
+    monkeypatch.setattr(wf, "PLAYBOOK_DIAGNOSTIC_ORPHAN_SESSION_DATE", "2020-01-01")
+    monkeypatch.setattr(wf, "compute_playbook_input_signature", lambda bar_store, members, config_fingerprint: signature)
+
+    tick_dir = tmp_path / "tick_datasets"
+    tick_store = DatasetStore(tick_dir)
+    _plant_tick_dataset(tick_store, symbol="AAPL", window_start_utc="2026-06-08T13:30:00Z", window_end_utc="2026-06-08T20:00:00Z")
+    _plant_tick_dataset(tick_store, symbol="MSFT", window_start_utc="2026-06-08T13:30:00Z", window_end_utc="2026-06-08T20:00:00Z")
+    _plant_tick_dataset(tick_store, symbol="AAPL", window_start_utc="2026-06-09T13:30:00Z", window_end_utc="2026-06-09T20:00:00Z", price=101.00)
+
+    ledger = wl.WalkForwardLedger(str(tmp_path / "wf"))
+    registry = ExposureRegistry(str(tmp_path / "exposure"))
+    assert not has_any_exposure_entries(registry, wf.TICK_LEGACY_CORPUS_ID)
+
+    wf.run_diagnostic_walkforward(
+        ledger, registry, _FakePlaybookStore(records), _FakeUniverseStore(["AAPL"]), bar_store=None,
+        config=_FakeConfig(dataset_dir=str(tick_dir)),
+    )
+
+    assert wf.TICK_LEGACY_CORPUS_ID != wf.PLAYBOOK_DIAGNOSTIC_CORPUS_ID
+    tick_rows = [r for r in registry.all_rows() if r["corpus_id"] == wf.TICK_LEGACY_CORPUS_ID]
+    # one entry per DISTINCT session window, not per shard (3 shards, 2 distinct dates) -- the
+    # playbook seeding's own convention, mirrored.
+    assert {r["window"] for r in tick_rows} == {"2026-06-08", "2026-06-09"}
+    assert len(tick_rows) == 2
+
+    # the two corpora's rows never mix.
+    playbook_rows = [r for r in registry.all_rows() if r["corpus_id"] == wf.PLAYBOOK_DIAGNOSTIC_CORPUS_ID]
+    assert len(playbook_rows) == 155
+
+
+def test_tc6_a_second_diagnostic_run_leaves_the_tick_corpus_exposure_row_count_unchanged(tmp_path, monkeypatch):
+    """TC-6: mirrors the existing playbook ``has_any_exposure_entries`` guard (module docstring)
+    -- a repeated operator act against the SAME durable registry must never re-append the tick
+    corpus's whole window list a second time (idempotent seeding)."""
+    signature = "sig-tc6"
+    sessions = [f"2026-08-{d:03d}" for d in range(1, 156)]
+    records = [
+        _fake_playbook_record(s, signature, [_fake_signal("range_trade", "AAPL", 0.3), _fake_signal("range_trade", "MSFT", 0.3)])
+        for s in sessions
+    ]
+    monkeypatch.setattr(wf, "PLAYBOOK_DIAGNOSTIC_ORPHAN_SESSION_DATE", "2020-01-01")
+    monkeypatch.setattr(wf, "compute_playbook_input_signature", lambda bar_store, members, config_fingerprint: signature)
+
+    tick_dir = tmp_path / "tick_datasets"
+    tick_store = DatasetStore(tick_dir)
+    _plant_tick_dataset(tick_store, symbol="AAPL", window_start_utc="2026-06-08T13:30:00Z", window_end_utc="2026-06-08T20:00:00Z")
+
+    ledger = wl.WalkForwardLedger(str(tmp_path / "wf"))
+    registry = ExposureRegistry(str(tmp_path / "exposure"))
+    config = _FakeConfig(dataset_dir=str(tick_dir))
+
+    wf.run_diagnostic_walkforward(ledger, registry, _FakePlaybookStore(records), _FakeUniverseStore(["AAPL"]), bar_store=None, config=config)
+    rows_after_first = len([r for r in registry.all_rows() if r["corpus_id"] == wf.TICK_LEGACY_CORPUS_ID])
+    assert rows_after_first == 1
+
+    wf.run_diagnostic_walkforward(ledger, registry, _FakePlaybookStore(records), _FakeUniverseStore(["AAPL"]), bar_store=None, config=config)
+    rows_after_second = len([r for r in registry.all_rows() if r["corpus_id"] == wf.TICK_LEGACY_CORPUS_ID])
+    assert rows_after_second == rows_after_first
+
+
+def test_tc7_micro_readiness_exposure_state_is_unaffected_by_the_new_tick_exposure_registry(tmp_path, monkeypatch):
+    """TC-7: the walk-forward-internal ``ExposureRegistry`` (this iteration's own
+    ``historical_oos`` classification mechanism) and ``micro_readiness.py``'s served, PER-SHARD
+    ``exposure_state`` (``exploratory``/``hand_assigned`` -- the vault's own, separate vocabulary)
+    are two DIFFERENT mechanisms and must never be conflated: seeding the former must never move
+    the latter (the critical anti-goal -- "the 12 pre-existing tick symbol-days are permanently
+    exploratory")."""
+    tick_dir = tmp_path / "tick_datasets"
+    tick_store = DatasetStore(tick_dir)
+    _plant_tick_dataset(tick_store, symbol="AAPL", window_start_utc="2026-06-08T13:30:00Z", window_end_utc="2026-06-08T20:00:00Z")
+    _plant_tick_dataset(tick_store, symbol="MSFT", window_start_utc="2026-06-09T13:30:00Z", window_end_utc="2026-06-09T20:00:00Z")
+
+    signature = "sig-tc7"
+    sessions = [f"2026-09-{d:03d}" for d in range(1, 156)]
+    records = [
+        _fake_playbook_record(s, signature, [_fake_signal("range_trade", "AAPL", 0.3), _fake_signal("range_trade", "MSFT", 0.3)])
+        for s in sessions
+    ]
+    monkeypatch.setattr(wf, "PLAYBOOK_DIAGNOSTIC_ORPHAN_SESSION_DATE", "2020-01-01")
+    monkeypatch.setattr(wf, "compute_playbook_input_signature", lambda bar_store, members, config_fingerprint: signature)
+
+    ledger = wl.WalkForwardLedger(str(tmp_path / "wf"))
+    registry = ExposureRegistry(str(tmp_path / "exposure"))
+    wf.run_diagnostic_walkforward(
+        ledger, registry, _FakePlaybookStore(records), _FakeUniverseStore(["AAPL"]), bar_store=None,
+        config=_FakeConfig(dataset_dir=str(tick_dir)),
+    )
+    tick_rows = [r for r in registry.all_rows() if r["corpus_id"] == wf.TICK_LEGACY_CORPUS_ID]
+    assert len(tick_rows) == 2  # the seeding genuinely happened
+
+    cache = MicroReadinessCache(str(tmp_path / "readiness_cache.db"))
+    readiness = build_readiness(tick_store, cache, dataset_dir=str(tick_dir))
+    assert len(readiness["shards"]) == 2
+    for shard in readiness["shards"]:
+        assert shard["exposure_state"] == EXPOSURE_STATE_EXPLORATORY
 
 
 # === audit regression: a REPEAT operator run never double-counts a sequence's own evidence =========
@@ -795,11 +974,14 @@ def test_tc26_a_truncated_walkforward_ledger_tail_is_caught_even_though_the_chai
 # === the CLI is a thin wrapper, never a second implementation (the scout.py CLI-test precedent) ======
 
 
-def test_the_cli_runs_the_same_run_diagnostic_walkforward_against_real_env_var_scoped_stores(tmp_path, monkeypatch):
+def test_the_cli_prints_the_typed_refusal_and_exits_non_zero_on_a_below_floor_corpus(tmp_path, monkeypatch, capsys):
     """``python -m app.research.walkforward --diagnostic`` -- points every store at ``tmp_path``
     via the SAME env-var overrides ``CONFIG.dataset_dir_resolved()``/``desk_universe_dir_resolved
-    ()``/``bar_dir_resolved()`` already read, never touches the real ``.data`` corpus. An empty
-    store tree is an honest 0-fold run, never a crash."""
+    ()``/``bar_dir_resolved()`` already read, never touching the real ``.data`` corpus (this
+    test's original intent, preserved). TC-4: a completely empty store tree is a below-floor
+    corpus (0 sessions, far under the 105-session floor) -- since iter-6's TR-15 wiring, this now
+    prints the typed refusal and exits non-zero, never an unhandled Python traceback (previously:
+    an honest-but-unrefused 0-fold run -- exactly the B5 gap this iteration closes)."""
     import sys
 
     monkeypatch.setenv("TAPEOLOGY_DATASET_DIR", str(tmp_path / "datasets"))
@@ -810,13 +992,20 @@ def test_the_cli_runs_the_same_run_diagnostic_walkforward_against_real_env_var_s
     monkeypatch.setattr(sys, "argv", ["walkforward.py", "--diagnostic"])
 
     exit_code = wf.main()
-    assert exit_code == 0
+    assert exit_code != 0
+
+    captured = capsys.readouterr()
+    assert captured.err == ""  # never an unhandled traceback
+    assert "0 < 105" in captured.out
+    assert "TR-15" in captured.out
 
     ledger = wl.WalkForwardLedger(str(tmp_path / "wf"))
-    # an empty universe/playbook tree registers the fold spec but evaluates zero folds -- honest,
-    # never a crash (build_folds([], ...) == []).
+    # the fold spec IS registered (require_sufficient_sessions_for_folds fires AFTER register_
+    # fold_spec, per this iteration's own call-site placement) -- but zero fold_result rows, never
+    # a fabricated evaluation over an insufficient sample.
     fold_specs = wl.latest_fold_spec(ledger, wf.PLAYBOOK_DIAGNOSTIC_CORPUS_ID)
     assert fold_specs is not None
+    assert ledger.rows_of_kind(wl.ROW_KIND_FOLD_RESULT) == []
     assert fold_specs["geometry"] == wf.DIAGNOSTIC_GEOMETRY
 
 
@@ -839,6 +1028,11 @@ def test_walkforward_routes_serve_empty_state_honestly_and_the_compute_trigger_r
     ]
     monkeypatch.setattr(wf, "PLAYBOOK_DIAGNOSTIC_ORPHAN_SESSION_DATE", "2020-01-01")
     monkeypatch.setattr(wf, "compute_playbook_input_signature", lambda bar_store, members, config_fingerprint: signature)
+    # trigger_walkforward_compute passes the REAL CONFIG (not FastAPI-injected) straight through
+    # to run_diagnostic_walkforward, which -- since iter-6 -- also reads CONFIG.dataset_dir_
+    # resolved() for the tick-corpus exposure seed; redirect it so this route test never touches
+    # the real .data/datasets corpus.
+    monkeypatch.setenv("TAPEOLOGY_DATASET_DIR", str(tmp_path / "no_tick_datasets"))
 
     ledger_dir = str(tmp_path / "wf_ledger")
     exposure_dir = str(tmp_path / "wf_exposure")
@@ -877,6 +1071,54 @@ def test_walkforward_routes_serve_empty_state_honestly_and_the_compute_trigger_r
 
             refused = client.post("/research/desk/micro/walkforward/compute/cancel")
             assert refused.status_code == 409
+    finally:
+        for dep in (get_walkforward_ledger_dir, get_micro_exposure_registry_dir, get_walkforward_compute_manager, get_universe_store, get_bar_store, get_playbook_store):
+            app.dependency_overrides.pop(dep, None)
+
+
+def test_tc3_the_compute_routes_worker_resolves_the_typed_refusal_to_a_failed_run_never_a_500(tmp_path, monkeypatch):
+    """TC-3: ``WalkForwardComputeManager.trigger``'s EXISTING generic exception handler
+    (``walkforward.py``'s own ``except Exception as exc: self._resolve_terminal(..., "failed",
+    error=str(exc))``, read-and-confirmed rather than re-plumbed -- iter-6 plan item 2) already
+    resolves a raised ``InsufficientSessionsForFoldsError`` from the compute route's worker to
+    ``{"state": "failed", "error": "<message>"}`` -- never an unhandled 500, never a
+    silently-empty success."""
+    signature = "sig-route-below-floor"
+    sessions = [f"2026-10-{d:02d}" for d in range(1, 11)]  # 10 sessions, below the 105 floor
+    records = [
+        _fake_playbook_record(s, signature, [_fake_signal("range_trade", "AAPL", 0.3), _fake_signal("range_trade", "MSFT", 0.3)])
+        for s in sessions
+    ]
+    monkeypatch.setattr(wf, "PLAYBOOK_DIAGNOSTIC_ORPHAN_SESSION_DATE", "2020-01-01")
+    monkeypatch.setattr(wf, "compute_playbook_input_signature", lambda bar_store, members, config_fingerprint: signature)
+    monkeypatch.setenv("TAPEOLOGY_DATASET_DIR", str(tmp_path / "no_tick_datasets"))  # never the real corpus
+
+    ledger_dir = str(tmp_path / "wf_ledger")
+    exposure_dir = str(tmp_path / "wf_exposure")
+    manager = wf.WalkForwardComputeManager()
+
+    app.dependency_overrides[get_walkforward_ledger_dir] = lambda: ledger_dir
+    app.dependency_overrides[get_micro_exposure_registry_dir] = lambda: exposure_dir
+    app.dependency_overrides[get_walkforward_compute_manager] = lambda: manager
+    app.dependency_overrides[get_universe_store] = lambda: _FakeUniverseStore(["AAPL"])
+    app.dependency_overrides[get_bar_store] = lambda: None
+    app.dependency_overrides[get_playbook_store] = lambda: _FakePlaybookStore(records)
+    try:
+        with TestClient(app) as client:
+            triggered = client.post("/research/desk/micro/walkforward/compute")
+            assert triggered.status_code == 200
+            assert triggered.json()["state"] == "running"
+
+            manager.join_all(timeout=30.0)
+            polled = client.get("/research/desk/micro/walkforward/compute")
+            assert polled.status_code == 200
+            body = polled.json()
+            assert body["state"] == "failed"
+            assert "10 < 105" in body["error"]
+
+            # the run log carries the SAME "failed" terminal state, never a silently-empty success
+            runs = client.get("/research/desk/micro/walkforward/runs")
+            assert runs.json()["runs"][0]["state"] == "failed"
     finally:
         for dep in (get_walkforward_ledger_dir, get_micro_exposure_registry_dir, get_walkforward_compute_manager, get_universe_store, get_bar_store, get_playbook_store):
             app.dependency_overrides.pop(dep, None)
