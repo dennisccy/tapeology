@@ -246,3 +246,40 @@ reachable path today can label a tick window `historical_oos`: `build_folds` ret
 sessions, so no tick fold and therefore no class assignment exists. It becomes critical the moment
 J-06 creates genuinely unexposed data.
 **Reversible:** yes
+
+## iter-6 — goal-decomposer
+
+**Ambiguity:** goal.md J-05's acceptance requires "the tick-family fold request returns the typed
+floor-refusal naming `11 < 105`," and the iter-5 evaluator's binding next-step says to make the
+running program "actually use" `require_sufficient_sessions_for_folds` instead of a silent empty
+result — but no route, CLI flag, or function anywhere in `app/` lets an operator request a
+walk-forward run against any corpus other than the hardcoded ~155-session playbook one
+(`run_diagnostic_walkforward` is the sole fold-building production entry point, and always well
+above the floor). Neither the goal nor the spec says whether this iteration must build a new
+corpus-selectable entry point to make the tick case concretely reachable, or may wire the guard
+defensively into the existing single entry point.
+**We chose:** wire `require_sufficient_sessions_for_folds` into `run_diagnostic_walkforward`'s
+existing (and only) fold-building call site, immediately before `build_folds`, guarding EVERY
+corpus that function ever builds folds for — today, only the always-sufficient playbook one —
+rather than inventing a new corpus-selectable route. This closes "zero call sites in `app/`"
+honestly and makes the refusal genuinely live in the one production path, ready for J-09 (which
+explicitly reuses this same walk-forward machinery against smaller, possibly below-floor corpora)
+without adding a capability no journey this era names as in-scope yet.
+**Reversible:** yes — J-09 or a future corpus-selectable entry point can call the same guard
+function directly; nothing about this call site needs to move.
+
+## iter-6 — goal-decomposer
+
+**Ambiguity:** spec §6.7 and goal.md J-05 Step 1 both say the exposure registry must be
+initialized "with every playbook and legacy-tick window pre-marked exposed," but neither names
+which module resolves "the 12 legacy tick symbol-days" or whether that set is a frozen list
+versus whatever the tick `DatasetStore` currently holds.
+**We chose:** resolve it dynamically, at seed time, from the SAME tick `DatasetStore` listing
+`micro_readiness.py` already reads (via `config.dataset_dir_resolved()`) — never a hardcoded date
+list — because J-06 (the only future source of NEW tick datasets) has not landed yet, so "every
+dataset currently registered" and "the 12 legacy symbol-days" are, today, the exact same set;
+seeding now, before J-06 ships, is what makes that equivalence safe without inventing a separate
+frozen identity list the spec never names.
+**Reversible:** yes — the registry is additive and idempotent (guarded like the playbook seeding);
+J-06's own universe registration is a distinct, separately-keyed corpus_id, so nothing about this
+seeding needs to move or be redone once new shards exist.

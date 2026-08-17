@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<title>goal-rapid-microscope-iter-5 — Iteration Summary</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  margin: 0; padding: 0; color: #1f2328; background: #f6f8fa; line-height: 1.5;
+}
+.container { max-width: 880px; margin: 0 auto; padding: 24px 16px 80px; }
+.hero {
+  background: white; border: 1px solid #d0d7de; border-radius: 8px;
+  padding: 28px; margin-bottom: 16px; text-align: center;
+}
+.hero.pass { border-top: 6px solid #1a7f37; }
+.hero.fail { border-top: 6px solid #cf222e; }
+.hero.inprogress { border-top: 6px solid #d4a72c; }
+.hero h1 { margin: 0 0 6px 0; font-size: 1.6rem; }
+.hero h2 { margin: 0 0 14px 0; font-size: 1rem; color: #57606a; font-weight: 500; }
+.badge-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 10px; }
+.badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 14px; border-radius: 999px; font-weight: 600; font-size: 0.95rem;
+}
+.badge.pass { background: #dafbe1; color: #1a7f37; }
+.badge.fail { background: #ffebe9; color: #cf222e; }
+.badge.inprogress { background: #fff8c5; color: #9a6700; }
+.badge .badge-enum { font-size: 0.68em; opacity: 0.7; font-weight: 500; margin-left: 6px; }
+.signal-badge { padding: 6px 14px; border-radius: 999px; font-weight: 600; font-size: 0.9rem; }
+.signal-badge.improving { background: #dafbe1; color: #1a7f37; }
+.signal-badge.holding { background: #ddf4ff; color: #0969da; }
+.signal-badge.stalling { background: #fff8c5; color: #9a6700; }
+.signal-badge.regressing { background: #ffebe9; color: #cf222e; }
+.signal-badge.na { background: #f6f8fa; color: #57606a; }
+.meta { color: #57606a; font-size: 0.875rem; margin: 10px 0 16px; }
+.journey-row {
+  display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 12px 0 4px;
+}
+.journey-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 999px; font-size: 0.85rem;
+  background: #f6f8fa; border: 1px solid #d0d7de;
+}
+.journey-pill.passing, .journey-pill.already_passing { background: #dafbe1; color: #1a7f37; border-color: #b4e2c0; }
+.journey-pill.failing, .journey-pill.regressed { background: #ffebe9; color: #cf222e; border-color: #f1aeb0; }
+.journey-pill.partial { background: #fff8c5; color: #9a6700; border-color: #eed888; }
+.journey-pill.unknown { background: #f6f8fa; color: #57606a; }
+.hero-image { margin-top: 18px; }
+.hero-image img { max-width: 100%; height: auto; border-radius: 6px; border: 1px solid #d0d7de; }
+details {
+  background: white; border: 1px solid #d0d7de; border-radius: 8px;
+  margin-bottom: 12px;
+}
+details > summary {
+  cursor: pointer; padding: 14px 18px; font-weight: 600; font-size: 1.05rem;
+  list-style: none; user-select: none; display: flex; align-items: center; gap: 8px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: '▶'; transition: transform 0.15s; font-size: 0.75rem; color: #57606a;
+}
+details[open] > summary::before { transform: rotate(90deg); }
+.accordion-body { padding: 0 18px 18px; }
+.accordion-body h3 { font-size: 0.95rem; color: #57606a; margin: 16px 0 6px; }
+.why-text { background: #f6f8fa; padding: 10px 12px; border-radius: 6px; margin: 4px 0 12px; }
+ul.bullets { margin: 6px 0 14px; padding-left: 22px; }
+ul.bullets li { margin-bottom: 4px; }
+ol.steps { padding-left: 0; list-style: none; counter-reset: step; }
+ol.steps > li {
+  counter-increment: step; padding: 12px 0 12px 44px;
+  border-top: 1px solid #eaeef2; position: relative;
+}
+ol.steps > li:first-child { border-top: none; }
+ol.steps > li::before {
+  content: counter(step); position: absolute; left: 0; top: 14px;
+  width: 30px; height: 30px; border-radius: 50%;
+  background: #0969da; color: white; display: flex;
+  align-items: center; justify-content: center; font-size: 0.85rem; font-weight: 600;
+}
+.step-shot { margin-top: 10px; }
+.step-shot img { max-width: 100%; height: auto; border-radius: 6px; border: 1px solid #d0d7de; }
+.next-step-box {
+  background: #ddf4ff; padding: 12px 16px; border-radius: 6px;
+  border-left: 4px solid #0969da; margin: 12px 0;
+}
+.drill-table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+.drill-table th, .drill-table td {
+  text-align: left; padding: 8px 6px; border-bottom: 1px solid #eaeef2;
+}
+.drill-table th { background: #f6f8fa; }
+.verdict-cell.PASS, .verdict-cell.CLOSURE-PASS, .verdict-cell.GOAL_ACHIEVED { color: #1a7f37; font-weight: 600; }
+.verdict-cell.FAIL, .verdict-cell.CLOSURE-FAIL, .verdict-cell.REGRESSION { color: #cf222e; font-weight: 600; }
+.verdict-cell.CONTINUE, .verdict-cell.ESCALATE, .verdict-cell.STALLED { color: #9a6700; font-weight: 600; }
+.verdict-cell.SKIPPED, .verdict-cell.UNKNOWN, .verdict-cell.IN-PROGRESS { color: #57606a; }
+.footer-note { text-align: center; color: #6e7781; font-size: 0.8rem; margin-top: 24px; }
+.iter-card {
+  background: white; border: 1px solid #d0d7de; border-radius: 8px;
+  padding: 16px 18px; margin-bottom: 12px; display: flex; align-items: center; gap: 14px;
+}
+.iter-card .left { flex-shrink: 0; }
+.iter-card .body { flex: 1 1 auto; }
+.iter-card .body .title { font-weight: 600; }
+.iter-card .body .sub { color: #57606a; font-size: 0.88rem; margin-top: 2px; }
+.iter-card a.open { color: #0969da; text-decoration: none; font-weight: 500; }
+.iter-card a.open:hover { text-decoration: underline; }
+.matrix { width: 100%; border-collapse: collapse; margin: 12px 0 22px; font-size: 0.88rem; }
+.matrix th, .matrix td { padding: 6px 8px; border: 1px solid #d0d7de; text-align: center; }
+.matrix th:first-child, .matrix td:first-child { text-align: left; }
+.matrix .cell-passing, .matrix .cell-already_passing { background: #dafbe1; color: #1a7f37; }
+.matrix .cell-failing, .matrix .cell-regressed { background: #ffebe9; color: #cf222e; }
+.matrix .cell-partial { background: #fff8c5; color: #9a6700; }
+.matrix .cell-unknown { background: #f6f8fa; color: #57606a; }
+.no-summary {
+  background: #fff8c5; border: 1px solid #eed888; padding: 14px 18px;
+  border-radius: 8px; color: #9a6700; margin-bottom: 14px;
+}
+/* Plain-language layer — the primary, non-technical view. */
+.plain-words {
+  background: linear-gradient(180deg, #ffffff 0%, #f6fbff 100%);
+  border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 22px 24px; margin: 18px 0 6px;
+  box-shadow: 0 1px 2px rgba(20, 40, 80, 0.04);
+}
+.plain-words .pw-heading {
+  margin: 0 0 14px; font-size: 1.15rem; color: #0969da;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.pw-grid {
+  display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+.pw-card {
+  background: white; border-radius: 8px; padding: 14px 16px;
+  border: 1px solid #e3eaf3;
+}
+.pw-card .pw-label {
+  font-size: 0.78rem; font-weight: 600; color: #57606a;
+  text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px;
+}
+.pw-card .pw-text {
+  margin: 0; font-size: 1rem; color: #1f2328; line-height: 1.45;
+}
+.pw-empty { color: #8c959f; font-style: italic; font-size: 0.95rem; }
+.tech-divider {
+  margin: 18px 0 8px; text-align: center;
+  color: #6e7781; font-size: 0.82rem; font-style: italic;
+  border-top: 1px dashed #d0d7de; padding-top: 12px;
+}
+/* Watch-it-work — narrated screenshot gallery from demo-narrator. */
+.watch-it-work {
+  background: white; border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 18px 22px; margin: 10px 0 6px;
+}
+.wiw-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; margin-bottom: 14px; flex-wrap: wrap;
+}
+.wiw-heading {
+  margin: 0; font-size: 1.05rem; color: #0969da;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.demo-badge {
+  font-size: 0.75rem; font-weight: 600; padding: 4px 10px; border-radius: 12px;
+  border: 1px solid transparent; letter-spacing: 0.04em;
+}
+.demo-badge.demo-recorded { background: #dafbe1; color: #1a7f37; border-color: #aceebb; }
+.demo-badge.demo-notes    { background: #fff8c5; color: #9a6700; border-color: #e8d97e; }
+.demo-badge.demo-skipped  { background: #f6f8fa; color: #57606a; border-color: #d0d7de; }
+.demo-badge.demo-pending  { background: #ddf4ff; color: #0969da; border-color: #b6e3ff; }
+.demo-grid {
+  display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+.demo-step {
+  margin: 0; padding: 12px; background: #f6f8fa;
+  border: 1px solid #d0d7de; border-radius: 8px;
+}
+.demo-step-head {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+  font-size: 0.9rem;
+}
+.demo-step-num {
+  font-weight: 600; color: #57606a; font-variant-numeric: tabular-nums;
+}
+.demo-step-title { color: #1f2328; font-weight: 500; }
+.demo-new {
+  background: #ddf4ff; color: #0969da; font-size: 0.7rem; font-weight: 700;
+  padding: 2px 6px; border-radius: 4px; letter-spacing: 0.06em;
+}
+.demo-shot { margin-bottom: 8px; }
+.demo-shot img {
+  width: 100%; height: auto; border-radius: 4px; border: 1px solid #d0d7de;
+  display: block;
+}
+.demo-narration {
+  margin: 0; color: #1f2328; font-size: 0.92rem; line-height: 1.4;
+}
+.demo-empty {
+  margin: 8px 0 0; color: #57606a; font-style: italic;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.demo-notes-wrap { margin-top: 14px; }
+.demo-notes-wrap summary {
+  cursor: pointer; color: #9a6700; font-weight: 500; font-size: 0.9rem;
+}
+.demo-notes-wrap[open] summary { margin-bottom: 6px; }
+/* Story so far + latest demo (session index plain-language top). */
+.story-so-far {
+  background: linear-gradient(180deg, #ffffff 0%, #f6fbff 100%);
+  border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 22px 26px; margin: 14px 0 6px;
+  box-shadow: 0 1px 2px rgba(20, 40, 80, 0.04);
+}
+.story-heading {
+  margin: 0 0 12px; font-size: 1.1rem; color: #0969da;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.story-body { font-size: 1rem; color: #1f2328; line-height: 1.55; }
+.story-body .story-h { margin: 14px 0 6px; color: #1f2328; }
+.story-body p { margin: 0 0 10px; }
+.session-demo {
+  background: white; border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 0; margin: 8px 0 6px; overflow: hidden;
+}
+.session-demo-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; padding: 12px 22px;
+  background: #f6f8fa; border-bottom: 1px solid #d6e4f0;
+  font-weight: 600; color: #1f2328; font-size: 0.95rem;
+}
+.session-demo-head a.open { color: #0969da; text-decoration: none; font-weight: 500; font-size: 0.9rem; }
+.session-demo-head a.open:hover { text-decoration: underline; }
+.session-demo .watch-it-work {
+  border: none; border-radius: 0; box-shadow: none; margin: 0;
+}
+/* Delivered link banner — sits on the session index when GOAL_ACHIEVED. */
+.delivered-link {
+  margin: 14px 0; padding: 14px 22px;
+  background: #dafbe1; border: 1px solid #aceebb; border-radius: 10px;
+  color: #1a7f37; font-size: 1rem;
+}
+.delivered-link a {
+  color: #1a7f37; font-weight: 600; text-decoration: none; margin-left: 8px;
+}
+.delivered-link a:hover { text-decoration: underline; }
+.delivered-back {
+  margin: 8px 0 14px; padding: 0; font-size: 0.9rem;
+}
+.delivered-back a { color: #0969da; text-decoration: none; }
+.delivered-back a:hover { text-decoration: underline; }
+.delivered-body {
+  background: white; border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 22px 28px; margin: 12px 0;
+}
+.delivered-body h2.story-h { margin-top: 0; }
+/* Feature manual (session index, top of page). */
+.cover-vision {
+  margin: 8px 0 14px; color: #57606a; font-size: 1.02rem;
+  font-style: italic; max-width: 60ch;
+}
+.feature-toc {
+  background: white; border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 20px 26px; margin: 14px 0;
+  box-shadow: 0 1px 2px rgba(20, 40, 80, 0.04);
+}
+.feature-toc-heading {
+  margin: 0 0 14px; font-size: 1.05rem; color: #0969da;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.feature-toc-list {
+  margin: 0; padding-left: 22px; font-size: 1rem; line-height: 1.7;
+}
+.feature-toc-list li { padding: 2px 0; }
+.feature-toc-list a {
+  color: #1f2328; text-decoration: none; font-weight: 500;
+}
+.feature-toc-list a:hover { color: #0969da; text-decoration: underline; }
+.toc-extra-header {
+  list-style: none; margin: 10px 0 4px -22px;
+  font-size: 0.82rem; color: #57606a; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.feature-manual { margin: 14px 0; }
+.feature-section {
+  background: white; border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 22px 26px; margin: 16px 0;
+  box-shadow: 0 1px 2px rgba(20, 40, 80, 0.04);
+  scroll-margin-top: 12px;
+}
+.feature-heading {
+  margin: 0 0 10px; font-size: 1.2rem; color: #1f2328;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+.feature-description {
+  margin: 0 0 16px; color: #1f2328; font-size: 1rem; line-height: 1.55;
+}
+.feature-description-label {
+  font-weight: 600; color: #57606a; margin-right: 4px;
+}
+.feature-note {
+  margin: 8px 0 12px; padding: 8px 12px;
+  background: #fff8c5; border: 1px solid #eed888; border-radius: 6px;
+  color: #9a6700; font-size: 0.88rem;
+}
+.feature-source {
+  margin: 12px 0 0; font-size: 0.88rem; color: #57606a;
+}
+.feature-source a { color: #0969da; text-decoration: none; }
+.feature-source a:hover { text-decoration: underline; }
+.feature-empty {
+  margin: 10px 0; padding: 12px 16px;
+  background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 6px;
+  color: #57606a; font-style: italic;
+}
+.status-pill {
+  font-size: 0.78rem; font-weight: 600; padding: 3px 10px; border-radius: 12px;
+  letter-spacing: 0.04em; white-space: nowrap; display: inline-block;
+}
+.status-pill-passing { background: #dafbe1; color: #1a7f37; border: 1px solid #aceebb; }
+.status-pill-failing { background: #ffebe9; color: #cf222e; border: 1px solid #f2b8b5; }
+.status-pill-regressed { background: #ffebe9; color: #cf222e; border: 1px solid #f2b8b5; }
+.status-pill-partial { background: #fff8c5; color: #9a6700; border: 1px solid #e8d97e; }
+.status-pill-unknown { background: #f6f8fa; color: #57606a; border: 1px solid #d0d7de; }
+.status-pill-coming-soon { background: #f6f8fa; color: #57606a; border: 1px solid #d0d7de; }
+.developer-view {
+  margin: 28px 0 6px;
+  border: 1px dashed #d0d7de; border-radius: 8px;
+}
+.developer-view > summary {
+  cursor: pointer; padding: 12px 16px;
+  color: #57606a; font-size: 0.92rem; font-weight: 500;
+  background: #f6f8fa; border-radius: 8px;
+}
+.developer-view[open] > summary {
+  border-bottom: 1px dashed #d0d7de;
+  border-radius: 8px 8px 0 0;
+}
+.developer-view-body { padding: 12px 18px; }
+</style>
+</head><body><div class='container'>
+<section class='hero inprogress'><div class='badge-row'><div class='badge inprogress'><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+<circle cx="12" cy="12" r="11" fill="#d4a72c"/>
+<path d="M12 6v6l4 2.5" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+</svg><span>Needs a deeper pass</span><span class='badge-enum'>ESCALATE</span></div><span class='signal-badge holding'>Direction: holding</span></div><h1>Iteration 5  ·  session rapid-microscope</h1><h2>Walk-forward engine built and diagnostic-run on real data — two acceptance items still unmet</h2><div class='meta'>2026-08-17 · goal-full</div><div class='meta'>Journeys: 4/10 passing</div><div class='journey-row'><span class='journey-pill passing' title='The era transition stands — the corpus truth on the record — passing'>J-01 · ✓ working</span><span class='journey-pill passing' title='The micro observer — one pass, prefix-honest, benchmarked — passing'>J-02 · ✓ working</span><span class='journey-pill passing' title='Structure x flow — the join that never looks ahead — passing'>J-03 · ✓ working</span><span class='journey-pill passing' title='The Scout and the ledger — every trial on the record — passing'>J-04 · ✓ working</span><span class='journey-pill partial' title='The walk-forward engine — chronology, fences, and the diagnostic run — partial'>J-05 · ~ partial</span><span class='journey-pill failing' title='The recorder and the Vault — new tape, sealed at birth — failing'>J-06 · ✗ broken</span><span class='journey-pill failing' title='Graduation — provenance in, nothing laundered out — failing'>J-07 · ✗ broken</span><span class='journey-pill failing' title='The surface and MCP v6 — the funnel is visible — failing'>J-08 · ✗ broken</span><span class='journey-pill failing' title='The pilot studies — three predeclared questions, honest answers — failing'>J-09 · ✗ broken</span><span class='journey-pill partial' title='The kept product stands — traps armed, sentinel green — partial'>J-10 · ~ partial</span></div></section>
+<section class='plain-words'><h2 class='pw-heading'>In plain words</h2><div class='pw-grid'><div class='pw-card'><div class='pw-label'>What you can do now</div><p class='pw-text'>On the Desk page, a &quot;Microscope Readiness&quot; panel lets you check how much tick-by-tick market data has been gathered so far and whether it&#x27;s enough yet for reliable research. Behind the scenes, three research tools are already running and passing their own checks — reading market activity tick-by-tick, matching chart signals to that activity, and screening trading ideas with a permanent, tamper-evident record of every result — though none of those three has its own screen to look at yet.</p></div><div class='pw-card'><div class='pw-label'>What changed this time</div><p class='pw-text'>Nothing changed on any screen this round — this was backend-only work. The team built a new &quot;walk-forward checker&quot; that takes a research result and tests it against multiple time windows of real trading history to decide whether it&#x27;s trustworthy enough to count, then ran it for real against 154 days of the desk&#x27;s own trading history. An independent check also caught and fixed a bug where running that test twice would have silently double-counted the evidence.</p></div><div class='pw-card'><div class='pw-label'>What&#x27;s next</div><p class='pw-text'>Next, the team will close two small loose ends in the new checker (marking the old market-data days as &quot;already seen,&quot; and making an existing safety refusal actually kick in), and make sure the routine safety check of every already-working screen actually runs this time — it&#x27;s been skipped by mistake for two rounds in a row.</p></div></div></section>
+<div class='tech-divider'><span>Technical detail below — open if you want the developer view.</span></div>
+<details><summary>What was done</summary><div class='accordion-body'><ul class='bullets'><li>Product changes: apps/backend/app/research/micro_chain_ledger.py, apps/backend/app/research/micro_accessor.py, apps/backend/app/research/micro_join.py, apps/backend/app/research/scout.py, apps/backend/app/research/walkforward_ledger.py, apps/backend/app/research/walkforward.py, apps/backend/app/research/micro_routes.py (+3 new routes: `GET /research/desk/micro/walkforward`, `POST`/`GET`/`POST .../compute/cancel` on `.../walkforward/compute`, `GET .../walkforward/runs`)</li><li>Built `micro_accessor.py`: an origin-fenced accessor + `ExposureRegistry`, the sole legal door onto snapshot data (TR-3); re-pointed `micro_join.py` and `scout.py` through it with byte-identical served/ledgered output (TC-4, TC-5).</li><li>Built `walkforward.py` + `walkforward_ledger.py`: fold-spec registration, purge/embargo, Mode A (rolling-origin) and Mode B (registered-first) evaluation, the five-condition `WF_SURVIVOR_RULE_V1`, decay view, and a `WalkForwardComputeManager` (single-flight, cancelable, CLI-runnable).</li><li>Landed 9 traps (TR-3/5/6/13/14/15/16/21/22), taking the era&#x27;s trap suite from 8/22 to 17/22; added TR-16 synthetic known-null and planted-effect oracle fixtures, both proven end-to-end and byte-identical on rerun.</li><li>Ran the real diagnostic walk-forward acceptance run against the actual 154-session playbook corpus: 5 folds / 100 validation sessions, all `historical_exposed_diagnostic`, honestly refusing a sequence verdict at &quot;2 &lt; 3 sufficient folds.&quot;</li><li>Independent audit found and fixed 3 critical integrity bugs before handoff closed: a repeat run that double-counted fold evidence, an unlogged/late Mode B predeclaration, and a TR-3 import-ban guard that only scanned one directory — all re-verified fixed on live code by the evaluator.</li><li>Full backend suite: 3028 pass / 8 skip / 0 fail after dev (+79 tests over the iter-4 baseline), 3033 pass / 8 skip / 0 fail after audit fixes (+5 more); frozen-foundation checks (fingerprint, referee hashes, snapshot row count) all unchanged.</li><li>Verified 0 target journeys pass browser QA — the browser lane was skipped again (a `Frontend Present: no` harness short-circuit, not a product defect); this is the second consecutive iteration this has happened, and it is the primary reason for the ESCALATE verdict.</li></ul></div></details>
+<details><summary>What's left + Next step</summary><div class='accordion-body'><h3>Still open</h3><ul class='bullets'><li>Journey J-06 (&quot;The recorder and the Vault — new tape, sealed at birth&quot;) failing — `tick_recorder.py`/`vault.py` not yet built.</li><li>Journey J-07 (&quot;Graduation — provenance in, nothing laundered out&quot;) failing — `micro_graduation.py` not built; now unblocked since the survivor predicate exists and is proven reachable.</li><li>Journey J-08 (&quot;The surface and MCP v6 — the funnel is visible&quot;) failing — no `/desk` rendering of Scout/Walk-Forward/Vault sections yet; MCP tool count still 22, not 26.</li><li>Journey J-09 (&quot;The pilot studies — three predeclared questions, honest answers&quot;) failing — no study family predeclared; the scout ledger still serves `{families: []}`.</li><li>Journey J-05 (&quot;The walk-forward engine&quot;) stays `partial`: the exposure registry is never seeded with the 12 legacy tick symbol-days in production (playbook corpus only), and the typed &quot;11 &lt; 105&quot; floor-refusal has zero production call sites — both named word-for-word in the goal.</li><li>Journey J-10 (&quot;The kept product stands&quot;) stays `partial`: trap suite now 17/22 (up from 8/22), but the browser sentinel has not executed for two consecutive iterations.</li><li>The required-still-passing browser regression (J-01/J-02/J-03/J-04 shared-panel check + J-10&#x27;s 13-step sentinel) has not run for two iterations in a row — root cause is a harness bug (the browser-qa script exits on `Frontend Present: no` before dispatch; the intended override flag is written but never read anywhere), not a product defect.</li><li>Audit gap (unfixed, important): the exposure registry has no legacy-tick seeding path in production — must close before J-06 writes its first sealed shard, or a genuinely unexposed tick window could wrongly be labeled `historical_oos`.</li><li>Two owner rulings remain open and are due before J-06: the one-quote-early `available_at` timing stamp in `micro_observer.py`, and whether Scout&#x27;s &quot;variants tried&quot; count should also be counted per data-set.</li></ul><h3>Next step</h3><div class='next-step-box'>Finish J-05 &quot;The walk-forward engine&quot; in one short, focused pass, then move on to J-06 &quot;The recorder and the Vault.&quot; Three things must happen: set the next iteration&#x27;s spec to `Frontend Present: yes` so the browser check actually runs — it has been skipped twice in a row because the harness quits on that flag before any agent reads the test-section wording; seed the exposure registry with the 12 legacy tick days so they can never be mistaken for fresh, unseen data (the spec already states this, no owner decision needed); and wire the existing &quot;data set is too small&quot; refusal into the running program instead of letting it quietly return an empty result. Keep the independent auditor in the loop — it is the only step in this session that has ever caught a real integrity fault, and it caught a third one this run. Carry three passenger items: take the overdue readiness-panel photograph with real numbers at last; record whether a measurement is in percent or basis points before any money-sized floor is compared against it; and get the two still-open owner rulings (the one-quote-early timing stamp, and how &quot;variants tried&quot; should be counted).</div></div></details>
+<details><summary>Assumptions made</summary><div class='accordion-body'><ul class='bullets'><li>iter-5 · goal-evaluator — Ambiguity: Trap T-10 requires a screenshot for every browser acceptance (none ⇒ unknown, never passing); the browser lane recorded a blanket skip for the second consecutive iteration, and unlike iteration 4 this iteration DID edit a backend module (`micro_join.py`) that feeds J-01&#x27;s panel, so iteration 4&#x27;s &quot;nothing this diff touches a screen&quot; reasoning didn&#x27;t transfer automatically. We chose: kept J-01/J-02/J-03/J-04 passing after independently confirming the changed producer serves a byte-identical payload against the real store and that the frontend file is unchanged — durability requires a screenshot to exist (from iteration 2), not that it come from this iteration. Reversible: yes.</li><li>iter-5 · goal-evaluator — Ambiguity: J-05&#x27;s Acceptance names five things in one sentence, and two are met only at the library level, not at any production entry point (the exposure registry&#x27;s legacy-tick seeding; the typed &quot;data set too small&quot; floor-refusal); the goal doesn&#x27;t say whether &quot;passes&quot; means the test passes or the protection is actually wired into the running product. We chose: the stricter reading — an unreachable trap is not armed — and scored J-05 `partial`, not `passing`, with both gaps self-verified (154 registry rows all playbook-keyed; zero production call sites for the refusal). Reversible: yes.</li><li>iter-4 · goal-decomposer — Ambiguity: the `micro_observer.py` one-quote-early timing stamp was flagged as an owner ruling due because J-04 is the first journey to condition a result on it, but neither goal.md nor the spec says whether J-04&#x27;s candidate grid must include a `quote_depletion`-conditioned candidate this iteration or may simply wait. We chose: exclude every candidate whose conditioning feature derives from that flagged code path from this iteration&#x27;s registered grid, keeping Scout buildable without measuring off the unresolved stamp. Reversible: yes.</li><li>iter-4 · goal-evaluator — Ambiguity: Trap T-10 requires a screenshot for every browser acceptance; this iteration&#x27;s browser lane recorded a blanket skip, and the goal doesn&#x27;t say whether T-10 re-asserts every iteration even when nothing that journey renders has changed. We chose: the reading aligned with the evidence-durability rail (evidence expires with change, not time) — kept J-01/J-02/J-03 passing and J-10 partial on existing captures after confirming no changed field this diff touches can reach a screen. Reversible: yes.</li><li>iter-3 · goal-evaluator — Ambiguity: J-01 needs a screenshot per Trap T-10, and this iteration&#x27;s fresh capture came out blank while the product code under it (`micro_readiness.py`) had gained a field; the methodology says a fresh capture clears `evidence_makeup` &quot;whatever the outcome,&quot; but not what to do when the fresh capture is itself defective. We chose: kept J-01 passing with `evidence_makeup` still true, citing iteration 2&#x27;s good capture instead, since the renderer is byte-unchanged and the endpoint half was independently re-verified rather than carried. Reversible: yes.</li><li>iter-3 · goal-evaluator — Ambiguity: J-03&#x27;s Acceptance requires the joinable-corpus count served with its per-study breakdown including touches, but no module enumerates band-map wall-touch instants yet (J-09&#x27;s scope), and the goal doesn&#x27;t say whether an unenumerated side may be served as a bare 0. We chose: scored J-03 passing on a served `band_touch_count: 0` disclosed as &quot;honestly zero&quot; in the docstring and handoff, since the playbook-signal side is genuinely enumerated and the failure direction is an undercount, never a fabricated positive — recorded as a required fix-forward item. Reversible: yes.</li><li>iter-3 · goal-decomposer — Ambiguity: J-03&#x27;s Acceptance requires the joinable-corpus count broken down &quot;per study,&quot; but the three pilot studies aren&#x27;t predeclared until J-09, so no study identifier exists yet. We chose: break the count down by `structure_context` kind (`playbook_signal` vs `band_touch`) and, within `playbook_signal`, by playbook `setup_id` — the finest grouping the corpus supports before J-09 registers its studies. Reversible: yes.</li><li>iter-3 · goal-decomposer — Ambiguity: spec §4 defines &quot;outcome start&quot; via a per-candidate &quot;conditioning feature set&quot; that doesn&#x27;t exist until J-04&#x27;s candidate spec lands, so the term is undefined at J-03&#x27;s join layer. We chose: for J-03, outcome start = the trigger&#x27;s own timestamp directly, with every feature family served at the trigger row carrying its own `available_at`/`unavailable` flag intact. Reversible: yes.</li><li>iter-3 · goal-decomposer — Ambiguity: the spec names `micro_accessor.py` as the sole legal reader of snapshot/ledger-input/vault event data as a standing rule, but `micro_accessor.py` itself is a J-05 deliverable, and J-03 (the join) naturally comes first in dependency order. We chose: J-03&#x27;s join reads snapshot rows through a plain reader function co-located with the writer, on the era&#x27;s fully-exploratory legacy corpus only. Reversible: yes — a small import-path change inside J-05.</li><li>iter-2 · goal-evaluator — Ambiguity: J-01&#x27;s Acceptance names literal real-corpus figures (12 symbol-days, ~3.0 session-equivalents, 18 shards) and requires the panel to render &quot;those same served values verbatim,&quot; but doesn&#x27;t say whether that means those exact numbers or whatever the endpoint serves for the store the rig is pointed at — and the rig can&#x27;t safely point at the real store this iteration. We chose: the rendering-fidelity reading — scored J-01 passing on the endpoint half (proven in iteration 1 against the real store) plus the rendering half (this iteration&#x27;s screenshot of a real, non-fabricated small corpus); flagged `evidence_makeup: true` so the make-up capture of the literal totals rides a later iteration. Reversible: yes.</li><li>iter-2 · goal-decomposer — Ambiguity: J-01&#x27;s Acceptance names literal real-corpus browser figures for the `/desk` panel&#x27;s screenshot, but the store-scoped QA rig can never safely point at the real `.data/datasets` store this iteration, because J-02 also adds the era&#x27;s first write-capable route (the snapshot-compute manager) under that same directory family, risking a stray compute writing beside the operator&#x27;s real data. We chose: seed the rig&#x27;s own throwaway root with the two already-committed tick fixtures, so the screenshot proves the same rendering path on a real, non-fabricated corpus, while the literal totals stay proven the way iteration 1 already proved them. Reversible: yes.</li></ul></div></details>
+<details><summary>Direction signal</summary><div class='accordion-body'><div class='why-text'><strong>Why:</strong> J-05 &quot;The walk-forward engine&quot; was built and run for real against 154 sessions of playbook history, and the audit caught and fixed three critical integrity bugs (duplicate fold counting, a late/unlogged Mode B predeclaration, and a too-narrow import-ban guard) before the iteration closed — but two acceptance items goal.md names verbatim (seeding the exposure registry for the 12 legacy tick days; wiring the &quot;data set too small&quot; refusal into the running program) are still unmet, so J-05 lands `partial`, not `passing`. No journey crossed into fully-passing status this iteration, and the required browser regression check (J-01/J-02/J-03/J-04/J-10) has now been skipped for two iterations running due to a harness bug — the reason the evaluator escalated for the second consecutive time.</div><h3>Trend</h3><ul class='bullets'><li>Newly passing this iter: none</li><li>Newly passing in last 5 iters total: J-01, J-02, J-03, J-04</li><li>Regressions in last 5 iters: none</li><li>Anti-goal violations in last 5 iters: iter-2: 2 critical (fixed same iter); iter-4: 3 critical (fixed same iter); iter-5: 3 critical (fixed same iter) — none left unresolved at any iteration&#x27;s close; a handful of minor items remain open (see What&#x27;s left)</li><li>Iters with no journey state change: 1 of last 5 (iter-1)</li></ul><h3>Latest evaluator reasoning</h3><div class='why-text'>&quot;The walk-forward engine is real and I proved it myself: I re-ran the job from the command line against a throwaway copy of the real records and got 5 folds over 100 test sessions, with 3 of the 5 honestly saying &#x27;not enough data&#x27; and the overall answer honestly refusing. Two things the goal asks for word for word are still missing, so J-05 &#x27;The walk-forward engine&#x27; is half-done rather than done: the register that must mark the 12 old tick days as already-seen contains only playbook days, and the honest &#x27;this data set is too small&#x27; refusal is written and tested but nothing in the running program calls it. Separately, and for the second run in a row, the browser check never ran, so nothing was photographed and the 13-step whole-product safety walk did not happen — I traced that to the script that runs browser checks, which quits the moment a plan says the front end is not involved.&quot;</div></div></details>
+<details><summary>Artifacts</summary><div class='accordion-body'><table class='drill-table'><thead><tr><th>Report</th><th>Verdict</th><th>Path</th></tr></thead><tbody><tr><td>Iter spec</td><td><span class='verdict-cell —'>—</span></td><td><a href='../docs/phases/goal-rapid-microscope-iter-5.md'>docs/phases/goal-rapid-microscope-iter-5.md</a></td></tr><tr><td>Dev handoff</td><td><span class='verdict-cell —'>—</span></td><td><a href='../docs/handoffs/goal-rapid-microscope-iter-5-dev.md'>docs/handoffs/goal-rapid-microscope-iter-5-dev.md</a></td></tr><tr><td>Review</td><td><span class='verdict-cell PASS'>PASS</span></td><td><a href='reviews/goal-rapid-microscope-iter-5-review.md'>reports/reviews/goal-rapid-microscope-iter-5-review.md</a></td></tr><tr><td>Browser QA</td><td><span class='verdict-cell SKIPPED'>SKIPPED</span></td><td><a href='phase-goal-rapid-microscope-iter-5-ui-test-results.md'>reports/phase-goal-rapid-microscope-iter-5-ui-test-results.md</a></td></tr><tr><td>Implementation summary</td><td><span class='verdict-cell —'>—</span></td><td><a href='phase-goal-rapid-microscope-iter-5-implementation-summary.md'>reports/phase-goal-rapid-microscope-iter-5-implementation-summary.md</a></td></tr><tr><td>User-visible changes</td><td><span class='verdict-cell —'>—</span></td><td><a href='phase-goal-rapid-microscope-iter-5-user-visible-changes.md'>reports/phase-goal-rapid-microscope-iter-5-user-visible-changes.md</a></td></tr><tr><td>What to click</td><td><span class='verdict-cell —'>—</span></td><td><a href='phase-goal-rapid-microscope-iter-5-what-to-click.md'>reports/phase-goal-rapid-microscope-iter-5-what-to-click.md</a></td></tr><tr><td>UI surface map</td><td><span class='verdict-cell —'>—</span></td><td><a href='phase-goal-rapid-microscope-iter-5-ui-surface-map.md'>reports/phase-goal-rapid-microscope-iter-5-ui-surface-map.md</a></td></tr><tr><td>UI test plan</td><td><span class='verdict-cell —'>—</span></td><td><a href='phase-goal-rapid-microscope-iter-5-ui-test-plan.md'>reports/phase-goal-rapid-microscope-iter-5-ui-test-plan.md</a></td></tr><tr><td>QA</td><td><span class='verdict-cell PASS'>PASS</span></td><td><a href='qa/goal-rapid-microscope-iter-5-qa.md'>reports/qa/goal-rapid-microscope-iter-5-qa.md</a></td></tr><tr><td>Audit</td><td><span class='verdict-cell PASS_WITH_GAPS'>PASS_WITH_GAPS</span></td><td><a href='../docs/handoffs/goal-rapid-microscope-iter-5-audit.md'>docs/handoffs/goal-rapid-microscope-iter-5-audit.md</a></td></tr><tr><td>Closure</td><td><span class='verdict-cell CLOSURE-PASS'>CLOSURE-PASS</span></td><td><a href='phase-goal-rapid-microscope-iter-5-closure-verdict.md'>reports/phase-goal-rapid-microscope-iter-5-closure-verdict.md</a></td></tr><tr><td>Goal evaluation</td><td><span class='verdict-cell ESCALATE'>ESCALATE</span></td><td><a href='../runs/goal-session-rapid-microscope/iter-5/eval.md'>runs/goal-session-rapid-microscope/iter-5/eval.md</a></td></tr><tr><td>Journey history</td><td><span class='verdict-cell —'>—</span></td><td><a href='../runs/goal-session-rapid-microscope/state/journey-history.json'>runs/goal-session-rapid-microscope/state/journey-history.json</a></td></tr></tbody></table></div></details>
+<details><summary>Timing — where this iteration's wall time went</summary><div class='accordion-body'><pre>== Wall-time report: session rapid-microscope
+  goal-rapid-microscope-iter-5  depth=full  verdict=ESCALATE  wall=188.3m
+      developer                   72.3m  calls=1
+      auditor                     37.4m  calls=1
+      goal-evaluator              20.3m  calls=1
+      goal-decomposer             17.9m  calls=1
+      reviewer                    16.9m  calls=1
+      qa                          13.0m  calls=1
+      iteration-summarizer        10.2m  calls=1
+      orchestrator                 5.2m  calls=1
+      coherence-auditor            5.0m  calls=1
+      [engine] full-pipeline     145.0m  (contains agent time above)
+      [engine] showcase-join       0.0m  (contains agent time above)
+      pump-wait                  0.6m
+      OVER BUDGET at post-dev-fanout: 6743s &gt; 3600s (mode=trim)
+      overlap saved             10.0m  (parallel steps)</pre></div></details>
+<div class='footer-note'>Generated 2026-08-17 20:28 by <code>render_iteration_summary.py</code> · source: <a href='phase-goal-rapid-microscope-iter-5-iteration-summary.md'>phase-goal-rapid-microscope-iter-5-iteration-summary.md</a></div>
+</div></body></html>
