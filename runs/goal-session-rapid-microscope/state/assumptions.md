@@ -44,3 +44,26 @@ status `partial`, which blocks GOAL_ACHIEVED exactly as `failing` does — no ga
 NOT flag it `evidence_makeup`, because a plain re-capture would reproduce the same empty screenshot;
 the rig itself must first be able to serve tick data.
 **Reversible:** yes
+
+## iter-2 — goal-decomposer
+
+**Ambiguity:** J-01's Acceptance names literal real-corpus browser figures
+(`distinct_symbol_days: 12`, `session_equivalents` ≈ 3.0, 18 `exploratory`/`hand_assigned`
+shards) for the `/desk` panel's browser screenshot, but the mandated store-scoped QA rig
+(`:8301`) can never safely point at the real `.data/datasets` store this iteration: J-02 also
+adds the era's first write-capable route under that same directory family (the snapshot-compute
+manager), whose derived-cache storage dir defaults to a sibling of wherever
+`TAPEOLOGY_DATASET_DIR` points — so pointing the rig at the real store risks a stray compute
+leaving derived files beside the operator's real tree instead of inside the throwaway scoped
+root. Literally reproducing the exact figures through the browser is therefore unsafe this
+iteration.
+**We chose:** seed the rig's own throwaway root with the two already-committed tick fixtures at
+`apps/backend/tests/fixtures/datasets/` (1 symbol, 1 date, 2 shards) so the browser screenshot
+shows a real, non-fabricated, non-empty corpus proving the SAME rendering path — while the
+literal 12/18/~3.0 totals stay proven the way iteration 1's evaluator already proved them:
+computed directly against the real store, credited as endpoint-side evidence, never re-derived
+through the rig.
+**Reversible:** yes — a later iteration may instead scope the readiness cache to read the real
+corpus read-only (the lesson's second option) once the snapshot-compute route's own storage dir
+is confirmed fully isolated from `TAPEOLOGY_DATASET_DIR`'s sibling-default resolution, at which
+point the rig could show the literal real totals too.

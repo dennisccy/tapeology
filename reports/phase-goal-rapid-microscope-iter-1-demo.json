@@ -1,0 +1,169 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-rapid-microscope-iter-1",
+  "base_url": "http://localhost:3301",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the Cockpit homepage",
+      "narration": "Let's start with the live cockpit. This is where you watch real market tape and live charts.",
+      "point_out": "The cockpit page with the Ticker field, Tape State, Quote, and live candle chart.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "goto",
+        "url": "/"
+      },
+      "expect": {
+        "text": "Live"
+      }
+    },
+    {
+      "n": 2,
+      "title": "Watch a symbol and connect live tape",
+      "narration": "Type a ticker symbol into the Ticker field and click Watch to connect live market data.",
+      "point_out": "The Tape State showing 'Buyer Control', the Quote panel with real prices, and the live 10-second candle chart.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "fill",
+        "target": {
+          "placeholder": "Symbol"
+        },
+        "text": "SIM-BUYER"
+      }
+    },
+    {
+      "n": 3,
+      "title": "Connect to the tape",
+      "narration": "Click the Watch button to connect live tape.",
+      "point_out": "The Tape State should change to 'Buyer Control' and the Quote panel should populate with Bid/Ask prices.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "role": "button",
+          "name": "Watch"
+        }
+      },
+      "expect": {
+        "text": "Buyer Control"
+      }
+    },
+    {
+      "n": 4,
+      "title": "Navigate to Structure",
+      "narration": "Now let's look at the Structure page to examine support and resistance bands.",
+      "point_out": "The Structure page with the Symbol field, as-of date picker, and the Tradable Map.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "goto",
+        "url": "/structure"
+      },
+      "expect": {
+        "text": "Map basis"
+      }
+    },
+    {
+      "n": 5,
+      "title": "Load structure for a symbol",
+      "narration": "Enter a symbol and select an as-of date to analyze its support and resistance levels.",
+      "point_out": "The Tradable Map table showing quality-scored bands with Class ratings and member counts.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "fill",
+        "target": {
+          "placeholder": "Symbol"
+        },
+        "text": "AAPL"
+      }
+    },
+    {
+      "n": 6,
+      "title": "Set the analysis date",
+      "narration": "Pick the date for the historical analysis.",
+      "point_out": "The as-of date field populated.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": {
+        "type": "fill",
+        "target": {
+          "label": "as-of"
+        },
+        "text": "2026-06-22 17:00:00"
+      }
+    },
+    {
+      "n": 7,
+      "title": "Load the structure",
+      "narration": "Click Load to compute the Tradable Map for this symbol and date.",
+      "point_out": "The Tradable Map table populated with real quality-scored bands.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "role": "button",
+          "name": "Load"
+        }
+      },
+      "expect": {
+        "text": "Class A"
+      }
+    },
+    {
+      "n": 8,
+      "title": "Navigate to the Desk",
+      "narration": "Open the Desk page to see the Microscope Readiness panel, the era's first honest inventory of what research data exists.",
+      "point_out": "The Desk page with all sections including the new Microscope Readiness panel at the bottom.",
+      "journey": "J-10",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "goto",
+        "url": "/desk"
+      },
+      "expect": {
+        "text": "Microscope Readiness"
+      }
+    },
+    {
+      "n": 9,
+      "title": "Expand the Microscope Readiness section",
+      "narration": "Click to expand the Microscope Readiness section and see the corpus inventory — how many symbol-days of tick data exist and whether they meet the research floor.",
+      "point_out": "The Corpus Totals showing the distinct symbol-days, distinct datasets, and session-equivalents; the Legacy Tick Shards table; the Pilot-Study Floors table showing which floors are met.",
+      "journey": "J-01",
+      "new": true,
+      "verified": false,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "css": "[data-testid='desk-section-expand-microReadiness']"
+        }
+      },
+      "expect": {
+        "text": "Distinct symbol-days"
+      }
+    }
+  ]
+}
