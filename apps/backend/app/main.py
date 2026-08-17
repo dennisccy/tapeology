@@ -40,6 +40,7 @@ from .providers.adapters.base import (
 from .providers.historical import HistoricalProvider
 from .providers.live import LiveProvider
 from .research.desk_routes import router as desk_router
+from .research.micro_routes import router as micro_router
 from .research.referee_routes import router as referee_router
 from .research.routes import (
     ResearchRegistry,
@@ -207,6 +208,13 @@ app.include_router(desk_router)
 # referee_routes.py's own docstring). Reached by the MCP get_endpoint's existing /research/
 # prefix allowlist automatically — no MCP change needed.
 app.include_router(referee_router)
+
+# Era "The Rapid Microscope" (J-01): the corpus-truth fold, under /research/desk/micro — its own
+# module for the SAME reason referee_routes.py itself is separate (already large; see
+# micro_routes.py's own docstring). Reached by the MCP get_endpoint's existing /research/ prefix
+# allowlist automatically — no MCP change needed (no new MCP tool this iteration; desk_micro_
+# readiness lands in J-08).
+app.include_router(micro_router)
 
 # The meta namespace (Data Contract row 35, J-01): the canonical UI route map. The rendered nav
 # and the MCP ``ui_route_map`` tool read it — never a hand-maintained duplicate list.

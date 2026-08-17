@@ -28,3 +28,19 @@ today's 11 legacy sessions read `floor_unmet` under either reading — matching 
 J-01 acceptance ("every pilot study reads `floor_unmet`") regardless.
 **Reversible:** yes — J-09 may register a different, study-specific floor later; this reading
 only affects a descriptive readiness column, never a gate.
+
+## iter-1 — goal-evaluator
+
+**Ambiguity:** J-01's Acceptance is one combined sentence naming BOTH real-corpus endpoint values
+(`distinct_symbol_days: 12`, `session_equivalents` ≈ 3.0, 18 shards `exploratory`/`hand_assigned`)
+AND a browser element screenshot of the `/desk` panel rendering "those same served values." The
+goal never says which channel proves which half, and the mandated store-scoped QA rig cannot serve
+a non-empty tick corpus at all — so the two halves are not simultaneously observable today.
+**We chose:** credited the endpoint half from evidence I produced myself (calling `build_readiness`
+against the real `.data/datasets` store and reading the exact acceptance values, plus re-running
+the 31 real-corpus unit tests), and refused to credit the browser half at all, since the only
+screenshot shows an empty corpus and the 18-row shard-table render path was never exercised. Net
+status `partial`, which blocks GOAL_ACHIEVED exactly as `failing` does — no gate is loosened. I did
+NOT flag it `evidence_makeup`, because a plain re-capture would reproduce the same empty screenshot;
+the rig itself must first be able to serve tick data.
+**Reversible:** yes

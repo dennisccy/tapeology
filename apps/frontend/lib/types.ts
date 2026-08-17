@@ -2474,3 +2474,46 @@ export interface RefereeEvidenceResponse {
   playbook_occurrence: RefereePlaybookOccurrenceReadiness;
   strategy_trade: RefereeStrategyTradeReadiness;
 }
+
+// GET /research/desk/micro/readiness -- goal-rapid-microscope-iter-1 (J-01): the era's first
+// served value, the corpus-truth surface every later Rapid-Microscope journey depends on. Served
+// verbatim -- see MicroReadinessSection in app/desk/page.tsx.
+export interface MicroReadinessTotals {
+  distinct_symbol_days: number;
+  distinct_datasets: number;
+  rth_minutes_covered: number;
+  session_equivalents: number;
+  referee_tick_gate_symbol_days: number;
+}
+
+export interface MicroReadinessShard {
+  dataset_id: string;
+  symbol: string;
+  session_date: string;
+  data_feed: string;
+  window_start_utc: string;
+  window_end_utc: string;
+  trade_count: number;
+  quote_count: number;
+  bytes: number;
+  coverage_gaps: string[];
+  fallback_frac: number;
+  checksum: string;
+  split_provenance: string;
+  exposure_state: string;
+}
+
+export interface MicroReadinessStudyFloor {
+  study_id: string;
+  floor_name: string;
+  required_sessions: number;
+  available_sessions: number;
+  status: string;
+}
+
+export interface MicroReadinessResponse {
+  totals: MicroReadinessTotals;
+  shards: MicroReadinessShard[];
+  study_floors: MicroReadinessStudyFloor[];
+  integrity_errors: { file: string; error: string }[];
+}

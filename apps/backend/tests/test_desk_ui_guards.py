@@ -295,6 +295,16 @@ _PRICE_ARITHMETIC_FIELDS = (
     r"|evidence\.playbook_occurrence\.(?:records|distinct_sessions|signals_at_current_basis)"
     r"|evidence\.strategy_trade\.(?:dataset_count|trade_count)"
     r"|evidence\.strategy_trade\.per_split_counts\.(?:train|holdout)"
+    # goal-rapid-microscope-iter-1 (J-01): the new Microscope Readiness section's own served
+    # numerics -- GET /research/desk/micro/readiness read verbatim for the first time in the
+    # browser. Every corpus total, per-shard count/byte-size/fallback-fraction, and per-study
+    # floor pair renders as served (`.toFixed()`/`.toLocaleString()` are FORMATTING calls, never
+    # arithmetic); no client-side symbol-day share, byte-to-MB conversion, fallback percentage,
+    # or floor-shortfall arithmetic is ever legitimate here.
+    r"|readiness\.totals\.(?:distinct_symbol_days|distinct_datasets|rth_minutes_covered"
+    r"|session_equivalents|referee_tick_gate_symbol_days)"
+    r"|shard\.(?:trade_count|quote_count|bytes|fallback_frac)"
+    r"|floor\.(?:required_sessions|available_sessions)"
 )
 _PRICE_ARITHMETIC_PATTERN = re.compile(
     rf"({_PRICE_ARITHMETIC_FIELDS})\s*[-+*/]|[-+*/]\s*({_PRICE_ARITHMETIC_FIELDS})"
@@ -506,6 +516,27 @@ def test_desk_page_price_arithmetic_guard_catches_evidence_basis_field_arithmeti
     precedent applied to each new field individually."""
     seeded_signal_unmeasured = "const measured = cell.signal.n - cell.signal.n_unmeasured;"
     assert _PRICE_ARITHMETIC_PATTERN.search(seeded_signal_unmeasured) is not None
+
+
+def test_desk_page_price_arithmetic_guard_catches_micro_readiness_field_arithmetic():
+    """goal-rapid-microscope-iter-1 (J-01) TC-9 counter-test: the extended guard catches
+    arithmetic on the new Microscope Readiness section's own served numerics -- proving the
+    widened pattern actually fails on injected client-side arithmetic, not just that it passes on
+    unmodified source."""
+    seeded_share = (
+        "const share = readiness.totals.distinct_symbol_days / "
+        "readiness.totals.referee_tick_gate_symbol_days;"
+    )
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_share) is not None
+
+    seeded_pct = "const pct = shard.fallback_frac * 100;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_pct) is not None
+
+    seeded_mb = "const mb = shard.bytes / 1_000_000;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_mb) is not None
+
+    seeded_shortfall = "const shortfall = floor.required_sessions - floor.available_sessions;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_shortfall) is not None
 
     seeded_signal_sessions = "const perSession = cell.signal.n / cell.signal.n_sessions;"
     assert _PRICE_ARITHMETIC_PATTERN.search(seeded_signal_sessions) is not None

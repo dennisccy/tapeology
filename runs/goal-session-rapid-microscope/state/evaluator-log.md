@@ -29,3 +29,36 @@ iteration and the store-scope guard shows the operator's real data store was not
 module, its read-only endpoint, and the "Microscope Readiness" panel at the bottom of the Desk
 page. Everything else in this era depends on that surface existing. Keep the next iteration
 lean; switch to full depth when the leakage rails of J-02 "The micro observer" land.
+
+## Iteration 1 — goal-rapid-microscope-iter-1
+
+**Date:** 2026-08-17T02:20:00Z
+**Verdict:** ESCALATE
+**Depth dispatched:** lean
+**Journey deltas:**
+- Newly passing: none
+- Newly failing: none
+- Regressed: none
+- Partial (unchanged status, changed content): J-01 (endpoint half now genuinely met on the real
+  corpus; browser half blocked by an empty QA rig), J-10 (sentinel half re-verified green and
+  deeper than iter-0; trap suite still absent)
+- Anti-goal violations: none
+
+**Reasoning:** I did not take the handoff on trust. I ran the readiness code myself against the
+real tick files and read 12 symbol-days, 18 shards, 3.0089 session-equivalents, every shard
+marked exploratory and hand-assigned, and all three studies below their floor — so the served
+numbers are real. The browser evidence tells a different story only because the test rig the
+project forces browser checks onto points at an empty data folder: the new panel on the Desk page
+honestly showed zeros, and the eighteen-row table was never drawn even once. That is a hole in
+the proof, not a broken feature, so J-01 stays half-done. I also re-ran the frozen-foundation
+checks myself: the fingerprint still prints 08e471b10130e1e2, all six referee files are
+byte-for-byte unchanged since era open, and 239 guard and golden-trace tests pass. The Cockpit,
+Structure and Desk screenshots show every shipped surface still working, and the store guard
+proves nothing was written into the owner's real data.
+
+**Next-step recommendation:** Build the micro observer (J-02) next under the full pipeline — it
+edits the two files this era promises to keep byte-identical and lands the first no-peeking
+checks, so it deserves the auditor and closure steps. Alongside it, make the browser test rig
+able to show tick data so the corpus panel can finally be photographed with real numbers, and
+move the five misplaced checks in `apps/backend/tests/test_desk_ui_guards.py` back into their own
+test.

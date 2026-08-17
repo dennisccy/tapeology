@@ -21,3 +21,17 @@ and never refreshed) — trust `reports/phase-*-ui-test-results.md` and the evid
 not that flag.
 **Applies to:** every iteration that records the backend suite count for J-10, and any agent
 reading status.json to decide whether browser QA ran.
+
+## iter-1 — 2026-08-17T02:20:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** The mandated store-scoped browser rig (`:8301`, forced on by
+`project-extensions/store-scope/store-scope.env` + `apps/backend/scripts/start_scoped_qa_backend.sh`)
+sets `TAPEOLOGY_DATASET_DIR` to a fixture dir its seeder never populates with tick datasets — so a
+tick-corpus panel renders an honest but empty 0/0/[] and any acceptance naming real-corpus values
+(J-01's `distinct_symbol_days: 12`) is structurally unprovable through the browser lane, no matter
+how correct the code is. The repo already ships usable tick fixtures at
+`apps/backend/tests/fixtures/datasets/`; seed them (or scope the readiness cache and let the rig
+read the real corpus read-only) BEFORE a browser acceptance depends on non-empty tick data.
+**Applies to:** any iteration whose browser acceptance reads the tick corpus — J-06's vault
+states, J-08's four `/desk` micro sections, and J-09's study results all hit this same wall.

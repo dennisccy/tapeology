@@ -56,6 +56,7 @@ import {
   postRefereeRegistryHypothesis,
   triggerRefereeEvaluate,
   triggerRefereeNullsCompute,
+  fetchMicroReadiness,
 } from "@/lib/api";
 import type {
   DeskDeepBackfillComputeSnapshot,
@@ -119,6 +120,7 @@ import type {
   DeskTopupRun,
   DeskTopupRunMeta,
   DeskTopupRunsListResult,
+  MicroReadinessResponse,
   RefereeAdjudicationEntry,
   RefereeAdjudicationsResponse,
   RefereeEvaluateRunsListResult,
@@ -362,7 +364,8 @@ type DeskCollapsibleSection =
   | "playbookEvidence"
   | "refereeRegistry"
   | "refereeAdjudications"
-  | "refereeRuns";
+  | "refereeRuns"
+  | "microReadiness";
 // DESK-COLLAPSED-END
 
 const PRIMARY_BUTTON_CLASS =
@@ -5846,6 +5849,229 @@ function RefereeRunsSection({
   );
 }
 
+// goal-rapid-microscope-iter-1 (J-01): the Microscope Readiness section -- the era's FIRST
+// Rapid-Microscope `/desk` section, rendered directly BELOW the shipped Referee Runs section
+// (the current last section, T-11: new data-testids only, no shipped data-testid or heading
+// string reused). A plain deferred read (no compute manager, T-8 -- "page-load GETs never
+// compute"): the totals line, the per-shard inventory table, and the per-study floor table all
+// render GET /research/desk/micro/readiness's own fetched body, zero client-side arithmetic on
+// any numeric read here (test_desk_ui_guards.py's widened _PRICE_ARITHMETIC_FIELDS covers every
+// one -- `.toFixed()`/`.toLocaleString()` below are FORMATTING calls, never `+`/`-`/`*`/`/`
+// combined with a served field), and every honest-absence/degraded case reuses the shipped
+// EmptyState/UnavailablePanel components rather than rendering blank.
+function MicroReadinessSection({
+  readinessResult,
+}: {
+  readinessResult: { ok: boolean; data: MicroReadinessResponse | null; error?: string } | null;
+}) {
+  if (readinessResult === null) {
+    return <LoadingPanel testid="micro-readiness-loading" />;
+  }
+  if (!readinessResult.ok || readinessResult.data === null) {
+    return (
+      <UnavailablePanel
+        testid="micro-readiness-unavailable"
+        message={readinessResult.error ?? "The microscope readiness corpus could not be loaded."}
+      />
+    );
+  }
+  const readiness = readinessResult.data;
+  return (
+    <div data-testid="micro-readiness-section">
+      <p className="mb-3 text-xs text-slate-500">
+        The era&apos;s honest corpus truth (GET /research/desk/micro/readiness, read verbatim):
+        exactly what tick evidence exists on disk today, and which predeclared pilot-study floor
+        it clears — today, none.
+      </p>
+
+      <div data-testid="micro-readiness-totals-block" className="mb-4">
+        <h4 className="mb-2 text-xs font-semibold text-slate-400">Corpus Totals</h4>
+        <div className="overflow-x-auto">
+          <table
+            data-testid="micro-readiness-totals-table"
+            className="w-full min-w-[420px] border-collapse text-xs"
+          >
+            <tbody>
+              <tr className="border-b border-slate-900">
+                <td className="px-1.5 py-1 text-slate-500">Distinct symbol-days</td>
+                <td
+                  data-testid="micro-readiness-distinct-symbol-days"
+                  className="px-1.5 py-1 text-right font-mono text-slate-300"
+                >
+                  {readiness.totals.distinct_symbol_days}
+                </td>
+              </tr>
+              <tr className="border-b border-slate-900">
+                <td className="px-1.5 py-1 text-slate-500">Distinct datasets</td>
+                <td
+                  data-testid="micro-readiness-distinct-datasets"
+                  className="px-1.5 py-1 text-right font-mono text-slate-300"
+                >
+                  {readiness.totals.distinct_datasets}
+                </td>
+              </tr>
+              <tr className="border-b border-slate-900">
+                <td className="px-1.5 py-1 text-slate-500">RTH minutes covered</td>
+                <td
+                  data-testid="micro-readiness-rth-minutes-covered"
+                  className="px-1.5 py-1 text-right font-mono text-slate-300"
+                >
+                  {readiness.totals.rth_minutes_covered.toFixed(2)}
+                </td>
+              </tr>
+              <tr className="border-b border-slate-900">
+                <td className="px-1.5 py-1 text-slate-500">Session-equivalents</td>
+                <td
+                  data-testid="micro-readiness-session-equivalents"
+                  className="px-1.5 py-1 text-right font-mono text-slate-300"
+                >
+                  {readiness.totals.session_equivalents.toFixed(4)}
+                </td>
+              </tr>
+              <tr>
+                <td className="px-1.5 py-1 text-slate-500">Referee tick-gate (symbol-days)</td>
+                <td
+                  data-testid="micro-readiness-referee-tick-gate-symbol-days"
+                  className="px-1.5 py-1 text-right font-mono text-slate-300"
+                >
+                  {readiness.totals.referee_tick_gate_symbol_days}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div data-testid="micro-readiness-shards-block" className="mb-4">
+        <h4 className="mb-2 text-xs font-semibold text-slate-400">Legacy Tick Shards</h4>
+        {readiness.shards.length === 0 ? (
+          <EmptyState testid="micro-readiness-shards-empty" title="No tick shards recorded." />
+        ) : (
+          <div className="overflow-x-auto">
+            <table
+              data-testid="micro-readiness-shards-table"
+              className="w-full min-w-[1100px] border-collapse text-xs"
+            >
+              <thead>
+                <tr className="border-b border-slate-800 text-left text-slate-500">
+                  <th className="px-1.5 py-1">Symbol</th>
+                  <th className="px-1.5 py-1">Session date</th>
+                  <th className="px-1.5 py-1">Feed</th>
+                  <th className="px-1.5 py-1">Window (ET)</th>
+                  <th className="px-1.5 py-1 text-right">Trades</th>
+                  <th className="px-1.5 py-1 text-right">Quotes</th>
+                  <th className="px-1.5 py-1 text-right">Bytes</th>
+                  <th className="px-1.5 py-1">Coverage gaps</th>
+                  <th className="px-1.5 py-1 text-right">Fallback frac</th>
+                  <th className="px-1.5 py-1">Checksum</th>
+                  <th className="px-1.5 py-1">Split provenance</th>
+                  <th className="px-1.5 py-1">Exposure state</th>
+                </tr>
+              </thead>
+              <tbody data-testid="micro-readiness-shard-rows">
+                {readiness.shards.map((shard) => (
+                  <tr key={shard.dataset_id} className="border-b border-slate-900">
+                    <td className="px-1.5 py-1 text-slate-300">{shard.symbol}</td>
+                    <td className="px-1.5 py-1 font-mono text-slate-300">{shard.session_date}</td>
+                    <td className="px-1.5 py-1 text-slate-400">{shard.data_feed}</td>
+                    <td className="whitespace-nowrap px-1.5 py-1 font-mono text-slate-400">
+                      {formatDateTimeET(shard.window_start_utc, { seconds: false })}
+                      {" – "}
+                      {formatDateTimeET(shard.window_end_utc, { seconds: false })}
+                    </td>
+                    <td className="px-1.5 py-1 text-right font-mono text-slate-300">
+                      {shard.trade_count.toLocaleString()}
+                    </td>
+                    <td className="px-1.5 py-1 text-right font-mono text-slate-300">
+                      {shard.quote_count.toLocaleString()}
+                    </td>
+                    <td className="px-1.5 py-1 text-right font-mono text-slate-300">
+                      {shard.bytes.toLocaleString()}
+                    </td>
+                    <td className="px-1.5 py-1 text-amber-300">
+                      {shard.coverage_gaps.length === 0 ? (
+                        <span className="text-slate-500">none</span>
+                      ) : (
+                        shard.coverage_gaps.join("; ")
+                      )}
+                    </td>
+                    <td className="px-1.5 py-1 text-right font-mono text-slate-300">
+                      {shard.fallback_frac.toFixed(2)}
+                    </td>
+                    <td className="whitespace-nowrap px-1.5 py-1 font-mono text-[10px] text-slate-500">
+                      {shard.checksum}
+                    </td>
+                    <td className="px-1.5 py-1 text-slate-400">{shard.split_provenance}</td>
+                    <td className="px-1.5 py-1 text-slate-400">{shard.exposure_state}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div data-testid="micro-readiness-floors-block" className="mb-4">
+        <h4 className="mb-2 text-xs font-semibold text-slate-400">Pilot-Study Floors</h4>
+        <div className="overflow-x-auto">
+          <table
+            data-testid="micro-readiness-floors-table"
+            className="w-full min-w-[560px] border-collapse text-xs"
+          >
+            <thead>
+              <tr className="border-b border-slate-800 text-left text-slate-500">
+                <th className="px-1.5 py-1">Study</th>
+                <th className="px-1.5 py-1">Floor</th>
+                <th className="px-1.5 py-1 text-right">Required sessions</th>
+                <th className="px-1.5 py-1 text-right">Available sessions</th>
+                <th className="px-1.5 py-1">Status</th>
+              </tr>
+            </thead>
+            <tbody data-testid="micro-readiness-floor-rows">
+              {readiness.study_floors.map((floor) => (
+                <tr key={floor.study_id} className="border-b border-slate-900">
+                  <td className="px-1.5 py-1 text-slate-300">{floor.study_id}</td>
+                  <td className="px-1.5 py-1 text-slate-400">{floor.floor_name}</td>
+                  <td className="px-1.5 py-1 text-right font-mono text-slate-300">
+                    {floor.required_sessions}
+                  </td>
+                  <td className="px-1.5 py-1 text-right font-mono text-slate-300">
+                    {floor.available_sessions}
+                  </td>
+                  <td
+                    className={
+                      floor.status === "floor_met"
+                        ? "px-1.5 py-1 text-emerald-400"
+                        : "px-1.5 py-1 text-amber-300"
+                    }
+                  >
+                    {floor.status}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {readiness.integrity_errors.length === 0 ? (
+        <EmptyState testid="micro-readiness-integrity-errors-empty" title="No integrity errors." />
+      ) : (
+        <ul
+          data-testid="micro-readiness-integrity-errors"
+          className="mt-2 space-y-0.5 text-[11px] text-red-300"
+        >
+          {readiness.integrity_errors.map((e) => (
+            <li key={e.file}>
+              {e.file}: {e.error}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 // era-desk-iter-14 (J-10): a third compute control, wired exactly like `TopupComputeControl` — the
 // operation has no per-pair counters (it is a single classify-repair-verify walk, not a walk over
 // many pairs), so the running indicator shows the compute's own `progress.phase` label instead of
@@ -8686,6 +8912,16 @@ export default function DeskPage() {
     Record<string, RefereeComputeControlState>
   >({});
 
+  // goal-rapid-microscope-iter-1 (J-01): the Microscope Readiness section's own state -- a plain
+  // deferred read (no compute manager, T-8 -- "page-load GETs never compute"), the SAME shape
+  // every other read-only desk section's own result state already uses (e.g.
+  // refereeEvidenceResult immediately above).
+  const [microReadinessResult, setMicroReadinessResult] = useState<{
+    ok: boolean;
+    data: MicroReadinessResponse | null;
+    error?: string;
+  } | null>(null);
+
   // --- the six collapsed sections (see the DESK-COLLAPSED block at the top of this file) ---------
   // Which are currently open. A Set keyed by section, mirroring `PlaybookSummaryView`'s own
   // `expandedPools` — nothing outside this component reads it, and it is deliberately NOT
@@ -8742,6 +8978,8 @@ export default function DeskPage() {
       fetchRefereeRegistry().then(setRefereeRegistryResult);
       fetchRefereeNullRuns().then(setRefereeNullRunsResult);
       fetchRefereeEvaluateRuns().then(setRefereeEvaluateRunsResult);
+    } else if (section === "microReadiness") {
+      fetchMicroReadiness().then(setMicroReadinessResult);
     }
   }
 
@@ -10816,6 +11054,21 @@ export default function DeskPage() {
               onTriggerEvaluate={handleTriggerRefereeEvaluate}
               onCancelEvaluate={handleCancelRefereeEvaluate}
             />
+          </CollapsibleSection>
+        </section>
+
+        {/* goal-rapid-microscope-iter-1 (J-01): the Microscope Readiness section -- the era's
+            FIRST Rapid-Microscope section, rendered directly BELOW the shipped Referee Runs
+            section above (the current last section, T-11: new data-testids only, no shipped
+            data-testid or heading string reused anywhere else on this page). */}
+        <section aria-label="Microscope Readiness" className="mt-6">
+          <CollapsibleSection
+            id="microReadiness"
+            title="Microscope Readiness"
+            open={expandedSections.has("microReadiness")}
+            onToggle={() => toggleSection("microReadiness")}
+          >
+            <MicroReadinessSection readinessResult={microReadinessResult} />
           </CollapsibleSection>
         </section>
       </main>

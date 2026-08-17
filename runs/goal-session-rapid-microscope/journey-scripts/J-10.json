@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "journey": "J-10",
+  "name": "The kept product stands — traps armed, sentinel green",
+  "default_timeout_ms": 10000,
+  "steps": [
+    {"n": 1, "journey": "J-10", "action": {"type": "goto", "url": "/"}, "expect": {"text": "No ticker watched"}},
+    {"n": 2, "journey": "J-10", "action": {"type": "fill", "target": {"label": "Ticker"}, "text": "SIM-BUYER"}},
+    {"n": 3, "journey": "J-10", "action": {"type": "click", "target": {"role": "button", "name": "Watch"}}, "expect": {"text": "Buyer Control"}},
+    {"n": 4, "journey": "J-10", "action": {"type": "goto", "url": "/structure"}, "expect": {"text": "Tradable Map"}},
+    {"n": 5, "journey": "J-10", "action": {"type": "fill", "target": {"label": "Structure symbol"}, "text": "AAPL"}},
+    {"n": 6, "journey": "J-10", "action": {"type": "fill", "target": {"testid": "structure-as-of-input"}, "text": "2026-06-22 17:00:00"}},
+    {"n": 7, "journey": "J-10", "action": {"type": "click", "target": {"testid": "structure-load-button"}}, "expect": {"text": "300.11–302.2"}},
+    {"n": 8, "journey": "J-10", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Playbook Signals"}},
+    {"n": 9, "journey": "J-10", "action": {"type": "click", "target": {"testid": "desk-section-expand-playbookEvidence"}}, "expect": {"text": "b06e0bc289c54d77"}},
+    {"n": 10, "journey": "J-10", "action": {"type": "click", "target": {"testid": "desk-section-expand-refereeRegistry"}}, "expect": {"text": "config fingerprint 08e471b10130e1e2"}},
+    {"n": 11, "journey": "J-10", "action": {"type": "click", "target": {"testid": "desk-section-expand-refereeAdjudications"}}, "expect": {"text": "No hypotheses registered"}},
+    {"n": 12, "journey": "J-10", "action": {"type": "click", "target": {"testid": "desk-section-expand-refereeRuns"}}, "expect": {"text": "No evaluation runs recorded yet."}}
+  ]
+}

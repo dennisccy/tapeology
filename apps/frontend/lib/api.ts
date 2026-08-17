@@ -38,6 +38,7 @@ import type {
   LevelsResponse,
   MarketClock,
   MergedCandlesPage,
+  MicroReadinessResponse,
   PnlLedger,
   ProfilesPayload,
   RecordBarSeriesResult,
@@ -2136,6 +2137,32 @@ export async function fetchRefereeEvidence(): Promise<{
       return { ok: true, data: (await res.json()) as RefereeEvidenceResponse };
     }
     let error = "The referee evidence readiness could not be loaded.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, data: null, error };
+  } catch {
+    return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// GET /research/desk/micro/readiness -- goal-rapid-microscope-iter-1 (J-01): the era's FIRST
+// Rapid-Microscope route. Served VERBATIM -- zero client-side arithmetic on any numeric this
+// component reads (test_desk_ui_guards.py's widened _PRICE_ARITHMETIC_FIELDS covers every one).
+export async function fetchMicroReadiness(): Promise<{
+  ok: boolean;
+  data: MicroReadinessResponse | null;
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/micro/readiness`);
+    if (res.ok) {
+      return { ok: true, data: (await res.json()) as MicroReadinessResponse };
+    }
+    let error = "The microscope readiness corpus could not be loaded.";
     try {
       const data = await res.json();
       if (typeof data?.detail === "string") error = data.detail;

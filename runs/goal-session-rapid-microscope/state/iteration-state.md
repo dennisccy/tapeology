@@ -1,6 +1,6 @@
 # Iteration State — rapid-microscope
 
-**After iteration:** 0 · **Date:** 2026-08-17 · **Verdict:** CONTINUE
+**After iteration:** 1 · **Date:** 2026-08-17 · **Verdict:** ESCALATE
 
 ## Journeys
 
@@ -8,31 +8,32 @@
 
 ## Active blockers
 
-- none blocking iteration 1 — J-01's corpus-truth work is keyless, reads from disk, and no
-  human act is needed.
-- later, human-owned (not now): J-06 step 4 is an operator-attended Alpaca recording act, and
-  the vault secret must live outside the repo at `TAPEOLOGY_VAULT_SECRET_FILE`.
-- `runs/goal-session-rapid-microscope/iter-0/coherence.md` was not produced; make sure the
-  coherence audit runs once iteration 1 serves its first new value.
+- **Empty tick corpus on the browser QA rig (owner: dev).** The forced store-scoped backend
+  (`:8301`, from `apps/backend/scripts/start_scoped_qa_backend.sh`) points `TAPEOLOGY_DATASET_DIR`
+  at a fixture dir with 0 tick files, so `/desk`'s Microscope Readiness panel photographs as
+  0/0/[]. This is the ONLY reason J-01 is not passing, and it will block J-06/J-08/J-09 the same
+  way. Usable fixtures already exist at `apps/backend/tests/fixtures/datasets/`.
+- **MINOR (owner: dev).** `apps/backend/tests/test_desk_ui_guards.py:510-559` — 5 checks sit in the
+  wrong test function; both function names now misdescribe their bodies.
 
 ## Last 2 verdicts
 
-- iter 0: CONTINUE — honest baseline; none of the era's modules exist, kept product verified green.
-- iter -1: n/a — first evaluated iteration
+- iter 1: ESCALATE — the readiness endpoint is genuinely correct on the real corpus (evaluator
+  re-computed 12 / 18 / 3.0089 / all floors unmet), but the browser lane cannot see any tick data,
+  and J-02 next touches the two byte-frozen files; both warrant the full pipeline.
+- iter 0: CONTINUE — verify-only baseline; era-open numbers recorded, nothing built yet.
 
 ## Do not redo
 
-- Era-open baseline is RECORDED and re-verified by the evaluator: suite 2691 pass / 8 skip,
-  fingerprint `08e471b10130e1e2`, six `referee_*.py` SHA-256s — all listed in
-  `docs/handoffs/goal-rapid-microscope-iter-0-dev.md`. Re-check against it; do not re-derive it.
-- J-01 steps 1-2 are DONE: every era-transition document verified present
-  (`docs/goal-archive/goal-2026-08-16.md`, `docs/rapid-validation-spec.md`, the
-  `research-directions.md` amendments, `proposer-guidance.md` §5.3). J-01's remaining work is
-  only `micro_readiness.py` + `GET /research/desk/micro/readiness` + the `/desk` panel.
-- Absence of all era modules is CONFIRMED — no need to re-scan for `micro_*`, `scout*`,
-  `walkforward*`, `tick_recorder.py`, `vault.py`; none exist under `apps/backend/app/`.
-- MCP surface is confirmed at 22 tools (`tests/test_mcp_server.py` `EXPECTED_TOOLS`); it grows
-  to 26 only in J-08.
-- Blueprint at `runs/goal-session-rapid-microscope/state/blueprint.md` is drafted and verified
-  against goal.md §Product Shape — build into its data contract, do not redraft it.
-- Run the backend suite as `pytest tests/` (no extra `-q`) — see lessons.md iter-0.
+- `micro_readiness.py` + `GET /research/desk/micro/readiness` are built and verified correct on the
+  real store (12 symbol-days / 18 shards / 3.0089 session-equivalents / 3 floors `floor_unmet` /
+  `integrity_errors: []`); `tests/test_micro_readiness.py` 31/31 green. Only its browser screenshot
+  is missing — do not rebuild or re-derive the module.
+- The `/desk` "Microscope Readiness" section exists below "Referee Runs", renders the served body
+  verbatim with zero client-side arithmetic, non-colliding testids; coherence.md = COHERENCE-PASS.
+- Era-open invariants re-verified by the evaluator: fingerprint `08e471b10130e1e2`, 6/6
+  `referee_*.py` SHA-256 match iter-0, observer-equivalence + golden trace green, MCP still a
+  22-tuple, store-scope guard CLEAN. No need to re-baseline them.
+- `REFEREE_TICK_GATE_SYMBOL_DAYS` (150) is imported from `referee_evidence.py`, never duplicated.
+- `WF_TRAIN_MIN_SESSIONS`=40 / `WF_TEST_MIN_SESSIONS`=20 already live in `micro_readiness.py`
+  (~line 580); J-05's `walkforward.py` must import or supersede them, never re-declare a value.
