@@ -1,0 +1,517 @@
+"""``micro_snapshots.py`` -- Era "The Rapid Microscope" J-02: snapshot identity + load-time
+
+verification (``docs/rapid-validation-spec.md`` section 2.3), persistence, the single-flight
+compute manager + CLI (the shipped desk pattern: ``desk_forward_compute.py`` /
+``desk_playbook_compute.py`` -- one in-flight job slot, an in-memory progress snapshot, cooperative
+cancel, no new pattern invented), and the section 2.4 granularity-benchmark helpers.
+
+**Storage shape.** One snapshot = two sibling files under the resolved snapshots directory: a
+row-oriented ``<dataset_id>.jsonl`` (one ``micro_observer.MicroObserver`` row per line -- JSONL,
+not one giant JSON array, so a build WRITES streaming and a future reader can iterate without
+loading the whole file) and a small ``<dataset_id>.meta.json`` sidecar (the identity tuple +
+``row_count``/``bytes_on_disk``/``built_utc``/``quote_size_unit`` -- exactly what
+``GET /research/desk/micro/snapshots`` serves; the boundary note in the iteration spec is explicit
+that this route serves BUILD METADATA only, never raw per-event rows -- an origin-fenced,
+event-level reader is ``micro_accessor.py``'s exclusive door, J-05, not built here).
+
+**Derived, rebuildable, owns nothing** (spec section 2.3) -- exactly the ``dataset_index.py`` /
+``tradability_cache.py`` discipline applied to a bigger artifact: losing every snapshot file loses
+nothing irreplaceable, the next build reproduces it byte-identically from the immutable dataset +
+the frozen algorithm. There is therefore no tamper checksum ON the meta file itself (unlike
+``datasets.py``'s own irreplaceable recordings) -- staleness is instead caught by RE-VERIFYING the
+three identity components spec section 2.3 names (``dataset_checksum``, ``config_fingerprint``,
+``feature_source_hash``) against a FRESH computation on every load; any mismatch is an honest
+cache MISS (rebuild), never a served stale value (TR-7)."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import threading
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Callable
+
+from ..config import CONFIG, Config
+from . import micro_features as mf
+from . import micro_observer as mo
+from .datasets import DatasetNotFound, DatasetStore
+from .micro_observer import MicroObserver, MicroObserverFailure
+
+__all__ = [
+    "SNAPSHOT_FORMAT_VERSION",
+    "MicroSnapshotIntegrityError",
+    "MicroObserverFailure",
+    "resolve_micro_snapshots_dir",
+    "feature_source_hash",
+    "snapshot_identity",
+    "quote_size_unit_for_dataset",
+    "build_snapshot_rows",
+    "write_snapshot",
+    "load_snapshot_meta",
+    "list_snapshot_meta",
+    "run_snapshot_build_and_record",
+    "MicroSnapshotComputeManager",
+    "append_run_log",
+    "read_run_log",
+]
+
+# spec section 2.4's benchmark pins this; see scripts/micro_snapshot_granularity_benchmark.py and
+# the dev handoff's measured table.
+SNAPSHOT_FORMAT_VERSION = "micro-snapshot-v1"
+
+_SNAPSHOTS_DIR_ENV = "TAPEOLOGY_MICRO_SNAPSHOTS_DIR"
+
+_IDENTITY_KEYS = (
+    "dataset_checksum",
+    "micro_algo_version",
+    "snapshot_format_version",
+    "feature_source_hash",
+    "config_fingerprint",
+    "params_hash",
+)
+
+
+class MicroSnapshotIntegrityError(Exception):
+    """A snapshot meta file failed its on-load shape check -- corrupted or tampered, surfaced
+    explicitly (the ``datasets.DatasetIntegrityError`` discipline, reused in spirit -- module
+    docstring; a distinct class because a snapshot is a different failure domain, the codebase's
+    own one-exception-class-per-module-domain convention)."""
+
+
+def resolve_micro_snapshots_dir(dataset_dir_resolved: str) -> str:
+    """``TAPEOLOGY_MICRO_SNAPSHOTS_DIR`` if set, else a ``micro_snapshots`` SIBLING of the
+    caller's already-resolved dataset directory -- the ``resolve_desk_playbook_dir`` pattern,
+    deliberately NOT a ``Config`` field (the ``TAPEOLOGY_MICRO_*`` family, goal.md Constraints)."""
+    override = os.environ.get(_SNAPSHOTS_DIR_ENV)
+    if override:
+        return override
+    return str(Path(dataset_dir_resolved).parent / "micro_snapshots")
+
+
+_IDENTITY_SOURCE_MODULES = (mf, mo)
+
+
+def feature_source_hash() -> str:
+    """sha256 over the source bytes of EVERY module a persisted row's values depend on, hashed in
+    the fixed ``_IDENTITY_SOURCE_MODULES`` order -- the early-warning for ANY constant/formula
+    change (TR-7); recomputed fresh on every call, never cached, since it must reflect whatever
+    code is ACTUALLY running right now.
+
+    Spec section 2.3 names "sha256 over the feature-module bytes"; the arithmetic lives in
+    ``micro_features.py`` but the values that actually LAND in a row are produced by
+    ``micro_observer.py``'s streaming state machine (the windows, the cumulative accumulators, the
+    deferred-construct resolution, the section 2.6 emission gate). Hashing only the former left a
+    real hole: an observer-only edit CHANGES every stored row's values while every stored identity
+    still verifies, so the corpus would be served as valid against code that no longer produces it.
+    Covering both is strictly MORE conservative than the spec's literal wording -- it can only ever
+    turn a would-be hit into an honest MISS (rebuild), never the reverse -- which is the
+    fail-closed direction section 2.3 exists to guarantee."""
+    digest = hashlib.sha256()
+    for module in _IDENTITY_SOURCE_MODULES:
+        digest.update(Path(module.__file__).read_bytes())
+    return digest.hexdigest()
+
+
+def quote_size_unit_for_dataset(dataset_meta: dict) -> str:
+    """spec section 2.6: every LEGACY dataset (none carries a recorded verification act) is
+    ``"unverified"``. Forward-compatible with a FUTURE (J-06) recorder that stamps
+    ``dataset_meta["quote_size_unit"]`` at record time -- read verbatim when present, defaulted to
+    ``"unverified"`` when absent (every dataset on disk today)."""
+    return dataset_meta.get("quote_size_unit", "unverified")
+
+
+def snapshot_identity(dataset_meta: dict, config: Config) -> dict:
+    """The section 2.3 seven-component identity tuple (as a dict; ``dataset_id`` plus the six
+    ``_IDENTITY_KEYS`` re-verified on every load)."""
+    return {
+        "dataset_id": dataset_meta["id"],
+        "dataset_checksum": dataset_meta["checksum"],
+        "micro_algo_version": mf.MICRO_ALGO_VERSION,
+        "snapshot_format_version": SNAPSHOT_FORMAT_VERSION,
+        "feature_source_hash": feature_source_hash(),
+        "config_fingerprint": config.config_fingerprint(),
+        "params_hash": mf.micro_parameters_hash(),
+    }
+
+
+def _iso_utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")
+
+
+def _rows_path(root: Path, dataset_id: str) -> Path:
+    return root / f"{dataset_id}.jsonl"
+
+
+def _meta_path(root: Path, dataset_id: str) -> Path:
+    return root / f"{dataset_id}.meta.json"
+
+
+# --- build (the ONE replay pass, per the additive observer= seam) --------------------------------
+
+
+def build_snapshot_rows(
+    dataset_store: DatasetStore, dataset_id: str, config: Config, *, quote_size_unit: str
+) -> list[dict]:
+    """The ONE replay pass (spec section 2.1): attach a fresh ``MicroObserver`` to
+    ``DatasetStore.replay``, drain it to completion, then ``finalize()`` to sweep any still-
+    pending deferred construct into an honest ``unavailable`` close-out (module docstring of
+    ``micro_observer.py``). Never a second replay implementation.
+
+    Refuses (``MicroObserverFailure``) if the observer raised anywhere mid-stream: the engine
+    isolates observer exceptions by design, so WITHOUT this check a failed stream would be
+    persisted as a silently TRUNCATED snapshot and identity-verified as complete. Nothing is
+    written on that path -- fail-closed, the compute manager surfaces it as ``state: "failed"``
+    with the error verbatim."""
+    observer = MicroObserver(quote_size_unit=quote_size_unit)
+    for _snapshot in dataset_store.replay(dataset_id, config, observer=observer):
+        pass
+    if observer.failure is not None:
+        raise MicroObserverFailure(
+            f"the micro observer failed while streaming dataset '{dataset_id}' "
+            f"({type(observer.failure).__name__}: {observer.failure}) -- refusing to persist a "
+            "partial snapshot"
+        ) from observer.failure
+    observer.finalize()
+    return observer.rows
+
+
+def write_snapshot(root_dir: str, dataset_id: str, rows: list[dict], identity_and_unit: dict) -> dict:
+    """Persist ONE snapshot: the JSONL rows file, then the meta sidecar (``row_count``/
+    ``bytes_on_disk``/``built_utc`` computed from what was ACTUALLY written, never estimated)."""
+    root = Path(root_dir)
+    root.mkdir(parents=True, exist_ok=True)
+    rows_path = _rows_path(root, dataset_id)
+    with rows_path.open("w", encoding="utf-8") as fh:
+        for row in rows:
+            fh.write(json.dumps(row, sort_keys=True))
+            fh.write("\n")
+    meta = {
+        **identity_and_unit,
+        "row_count": len(rows),
+        "bytes_on_disk": rows_path.stat().st_size,
+        "built_utc": _iso_utc_now(),
+    }
+    _meta_path(root, dataset_id).write_text(json.dumps(meta, sort_keys=True))
+    return meta
+
+
+# --- load, with re-verification (TR-7) ------------------------------------------------------------
+
+
+def load_snapshot_meta(
+    root_dir: str, dataset_store: DatasetStore, dataset_id: str, config: Config
+) -> dict | None:
+    """The stored meta dict IFF it exists AND its identity still matches a FRESH computation of
+    the dataset's current checksum + the current ``config_fingerprint`` + the current
+    ``feature_source_hash`` (and the algo/format-version/params-hash components too, for full
+    honesty) -- else ``None``, an honest cache MISS meaning "rebuild, never serve stale" (TR-7).
+    A malformed meta FILE (present but unparseable) is a distinct, louder failure -- corruption,
+    not staleness -- surfaced as ``MicroSnapshotIntegrityError``, never silently treated as a
+    miss."""
+    meta_path = _meta_path(Path(root_dir), dataset_id)
+    if not meta_path.exists():
+        return None
+    try:
+        stored = json.loads(meta_path.read_text())
+    except (OSError, ValueError) as exc:
+        raise MicroSnapshotIntegrityError(
+            f"snapshot meta file for '{dataset_id}' is not parseable ({exc}) -- corrupted or tampered"
+        ) from exc
+    try:
+        dataset_meta = dataset_store.get(dataset_id)
+    except DatasetNotFound:
+        return None  # the underlying dataset vanished -- nothing to verify against; an honest miss
+    current = snapshot_identity(dataset_meta, config)
+    for key in _IDENTITY_KEYS:
+        if stored.get(key) != current[key]:
+            return None  # MISS -- rebuild rather than serve stale (TR-7)
+    return stored
+
+
+def list_snapshot_meta(root_dir: str, dataset_store: DatasetStore, config: Config) -> list[dict]:
+    """Every CURRENTLY VALID (identity re-verified) snapshot's meta, sorted by ``dataset_id`` for
+    deterministic ordering. A stale meta file (present but no longer identity-matching) is
+    silently excluded -- exactly the honest "never serve stale" TR-7 discipline applied to the
+    listing surface, not merely the single-dataset loader."""
+    root = Path(root_dir)
+    if not root.exists():
+        return []
+    out: list[dict] = []
+    for meta_file in sorted(root.glob("*.meta.json")):
+        dataset_id = meta_file.name[: -len(".meta.json")]
+        meta = load_snapshot_meta(root_dir, dataset_store, dataset_id, config)
+        if meta is not None:
+            out.append(meta)
+    out.sort(key=lambda m: m["dataset_id"])
+    return out
+
+
+# --- the run-and-record orchestration (reuse-or-build per dataset) -------------------------------
+
+
+def run_snapshot_build_and_record(
+    dataset_store: DatasetStore,
+    config: Config,
+    root_dir: str,
+    dataset_ids: list[str] | None = None,
+    *,
+    progress: Callable[[str], None] | None = None,
+    should_abort: Callable[[], bool] | None = None,
+) -> list[dict]:
+    """Builds (or REUSES, if a currently-valid snapshot already exists -- ``load_snapshot_meta``)
+    a snapshot for every id in ``dataset_ids`` (default: every dataset currently in the store, in
+    ``DatasetStore.list()``'s own oldest-first order), returning each result's meta dict in order.
+    A requested abort is honoured at DATASET boundaries only -- the current dataset's build always
+    completes or is skipped-as-already-done; nothing is ever recorded half-built."""
+    if dataset_ids is None:
+        records, _errors = dataset_store.list()
+        dataset_ids = [r["id"] for r in records]
+    results: list[dict] = []
+    for dataset_id in dataset_ids:
+        if should_abort is not None and should_abort():
+            break
+        existing = load_snapshot_meta(root_dir, dataset_store, dataset_id, config)
+        if existing is not None:
+            results.append(existing)
+        else:
+            dataset_meta = dataset_store.get(dataset_id)
+            quote_size_unit = quote_size_unit_for_dataset(dataset_meta)
+            rows = build_snapshot_rows(dataset_store, dataset_id, config, quote_size_unit=quote_size_unit)
+            identity = snapshot_identity(dataset_meta, config)
+            meta = write_snapshot(root_dir, dataset_id, rows, {**identity, "quote_size_unit": quote_size_unit})
+            results.append(meta)
+        if progress is not None:
+            progress(dataset_id)
+    return results
+
+
+# --- the durable run log (GET .../snapshots/runs) --------------------------------------------------
+
+
+def _runs_log_path(root_dir: str) -> Path:
+    return Path(root_dir) / "runs.jsonl"
+
+
+def append_run_log(root_dir: str, entry: dict) -> None:
+    """Append ONE terminal run outcome -- a plain JSONL append-only history (a build-run log, not
+    a research evidence ledger; no hash-chaining -- that discipline belongs to ledgers research
+    CLAIMS depend on, e.g. ``scout_ledger.py``, not this operational build-progress record)."""
+    path = _runs_log_path(root_dir)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(entry, sort_keys=True))
+        fh.write("\n")
+
+
+def read_run_log(root_dir: str, *, limit: int = 50) -> list[dict]:
+    """The most recent ``limit`` runs, NEWEST FIRST. A missing/corrupted log is an honest empty
+    list (a build-run history is convenience bookkeeping, never a claim of record -- unlike a
+    dataset or a ledger, losing it loses nothing the snapshots themselves do not already prove)."""
+    path = _runs_log_path(root_dir)
+    if not path.exists():
+        return []
+    try:
+        lines = path.read_text().splitlines()
+    except OSError:
+        return []
+    out: list[dict] = []
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            out.append(json.loads(line))
+        except ValueError:
+            continue
+    out.reverse()
+    return out[:limit]
+
+
+# --- the single-flight compute manager (the desk_forward_compute / desk_playbook_compute pattern) -
+
+
+_IDLE_SNAPSHOT: dict = {
+    "run_id": None,
+    "state": "idle",
+    "progress": {"datasets_total": 0, "datasets_done": 0, "current_dataset_id": None},
+    "started_utc": None,
+    "finished_utc": None,
+    "error": None,
+}
+
+
+class MicroSnapshotComputeManager:
+    """Owns the SINGLE in-flight (or last-terminal) snapshot-build job for this process. Construct
+    with no arguments -- every ``trigger()`` call takes its stores/config/dataset-ids explicitly
+    (the ``DeskPlaybookComputeManager`` per-call-injection precedent)."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._snapshot: dict = dict(_IDLE_SNAPSHOT)
+        self._run_id: str | None = None
+        self._cancel_event: threading.Event | None = None
+        self._thread: threading.Thread | None = None
+
+    def snapshot(self) -> dict:
+        with self._lock:
+            return dict(self._snapshot)
+
+    def trigger(
+        self,
+        dataset_store: DatasetStore,
+        config: Config,
+        root_dir: str,
+        dataset_ids: list[str] | None = None,
+    ) -> dict:
+        """Start a NEW build job, or -- if one is already ``state == "running"`` -- refuse
+        (single-flight, process-wide). Never blocks: the walk runs on a dedicated worker thread."""
+        with self._lock:
+            if self._snapshot["state"] == "running":
+                return {"state": "refused", "reason": "already_running"}
+
+            if dataset_ids is None:
+                records, _errors = dataset_store.list()
+                resolved_ids = [r["id"] for r in records]
+            else:
+                resolved_ids = list(dataset_ids)
+
+            run_id = uuid.uuid4().hex
+            self._run_id = run_id
+            cancel_event = threading.Event()
+            self._cancel_event = cancel_event
+            self._snapshot = {
+                "run_id": run_id,
+                "state": "running",
+                "progress": {
+                    "datasets_total": len(resolved_ids),
+                    "datasets_done": 0,
+                    "current_dataset_id": resolved_ids[0] if resolved_ids else None,
+                },
+                "started_utc": _iso_utc_now(),
+                "finished_utc": None,
+                "error": None,
+            }
+            published = dict(self._snapshot)
+
+        def _publish(dataset_id: str) -> None:
+            with self._lock:
+                if self._run_id != run_id:
+                    return  # a NEWER job already replaced this one -- a stale reporter, ignored
+                current = self._snapshot
+                self._snapshot = {
+                    **current,
+                    "progress": {
+                        **current["progress"],
+                        "datasets_done": current["progress"]["datasets_done"] + 1,
+                        "current_dataset_id": dataset_id,
+                    },
+                }
+
+        def _work() -> None:
+            try:
+                run_snapshot_build_and_record(
+                    dataset_store, config, root_dir, resolved_ids,
+                    progress=_publish, should_abort=cancel_event.is_set,
+                )
+            except Exception as exc:  # noqa: BLE001 -- surfaced verbatim, never swallowed
+                self._resolve_terminal(run_id, root_dir, "failed", error=str(exc))
+                return
+            if cancel_event.is_set():
+                self._resolve_terminal(run_id, root_dir, "cancelled")
+            else:
+                self._resolve_terminal(run_id, root_dir, "done")
+
+        thread = threading.Thread(target=_work, name=f"micro-snapshot-compute:{run_id}", daemon=True)
+        with self._lock:
+            self._thread = thread
+        thread.start()
+        return published
+
+    def _resolve_terminal(self, run_id: str, root_dir: str, state: str, *, error: str | None = None) -> None:
+        with self._lock:
+            if self._run_id != run_id:
+                return  # superseded -- never resolve a job that is no longer the current one
+            current = self._snapshot
+            finished_utc = _iso_utc_now()
+            self._snapshot = {**current, "state": state, "finished_utc": finished_utc, "error": error}
+            entry = {
+                "run_id": run_id,
+                "state": state,
+                "started_utc": current["started_utc"],
+                "finished_utc": finished_utc,
+                "datasets_done": current["progress"]["datasets_done"],
+                "datasets_total": current["progress"]["datasets_total"],
+                "error": error,
+            }
+        append_run_log(root_dir, entry)
+
+    def cancel(self) -> dict:
+        """Signal cooperative cancellation. Idempotent (a no-op if not running). The manager's
+        visible ``state`` stays ``"running"`` until the worker actually observes the abort at the
+        next dataset boundary and resolves to ``"cancelled"`` -- the CALLER (the route) is the one
+        that always answers a cancel REQUEST with ``{"state": "cancelled"}`` regardless (module
+        docstring); this method just arms the event."""
+        with self._lock:
+            cancel_event = self._cancel_event
+            is_running = self._snapshot["state"] == "running"
+        if cancel_event is not None:
+            cancel_event.set()
+        return {"state": "cancelled", "accepted": is_running}
+
+    def join_all(self, timeout: float = 30.0) -> None:
+        """Wait for the in-flight job thread, if any (test/shutdown hygiene)."""
+        with self._lock:
+            thread = self._thread
+        if thread is not None:
+            thread.join(timeout=timeout)
+
+
+# --- the CLI ----------------------------------------------------------------------------------------
+
+
+def _cli_progress_printer() -> Callable[[str], None]:
+    done = {"n": 0}
+
+    def _print(dataset_id: str) -> None:
+        done["n"] += 1
+        print(f"  [{done['n']}] snapshot ready for dataset {dataset_id}", flush=True)
+
+    return _print
+
+
+def main() -> int:
+    """``python -m app.research.micro_snapshots [--dataset-id ID ...] [--all]`` -- builds (or
+    reuses) snapshots against the operator's REAL dataset/snapshot directories, synchronously, in-
+    process (the ``desk_playbook_compute`` CLI-warmer precedent). ``--all`` (the default with no
+    ``--dataset-id`` given) builds every dataset currently in the store."""
+    parser = argparse.ArgumentParser(
+        description="Micro-observer snapshot CLI warmer -- build (or reuse) the prefix-honest "
+        "flow/response/liquidity feature snapshot for one or more real recorded tick datasets, "
+        "persisting through the SAME store GET /research/desk/micro/snapshots serves."
+    )
+    parser.add_argument(
+        "--dataset-id", action="append", dest="dataset_ids", default=None,
+        help="a specific dataset id to build (repeatable); omit (or pass --all) to build every "
+        "dataset currently registered in the store.",
+    )
+    parser.add_argument("--all", action="store_true", help="build every registered dataset (the default).")
+    args = parser.parse_args()
+
+    config = CONFIG
+    dataset_store = DatasetStore(config.dataset_dir_resolved())
+    root_dir = resolve_micro_snapshots_dir(config.dataset_dir_resolved())
+
+    dataset_ids = None if (args.all or not args.dataset_ids) else args.dataset_ids
+    results = run_snapshot_build_and_record(
+        dataset_store, config, root_dir, dataset_ids, progress=_cli_progress_printer()
+    )
+    print(f"snapshot build complete: {len(results)} dataset(s) processed; store={root_dir}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

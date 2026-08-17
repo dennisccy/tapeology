@@ -36,6 +36,17 @@
 # (read-only) so J-10's /structure step measures the kept product, not a fixture. See that script's
 # own docstring for the nineteen-member universe and the two computes it records.
 #
+# goal-rapid-microscope-iter-2 (J-01's browser gap + J-02 test infra) extends it once more, again
+# in place (never rewritten — this file's own long-standing rule): stages the two ALREADY-COMMITTED
+# PG SIP tick-dataset fixtures (tests/fixtures/datasets/*.json — the exact on-disk DatasetStore file
+# shape, so a plain copy suffices; never a pointer at, or copy of, the real .data/datasets store)
+# into this rig's own throwaway $ROOT/datasets before backend start, mirroring how the datasets dir
+# was already exported (TAPEOLOGY_DATASET_DIR) but left with zero tick shards. This closes the gap
+# iteration 1 left open: the Microscope Readiness panel could only be proven via API/text-extract
+# through this mandated rig, never a real non-empty screenshot (T-10). Real, non-fabricated, but
+# deliberately small — seeding the full 18-dataset/12-symbol-day corpus is deferred to whichever
+# LATER iteration first needs it (J-06/J-08/J-09), per the rubric's "smallest fix that unblocks now."
+#
 # The default root name changes to playbook-iter8-replay-fixture-qa (a genuinely FRESH root, never
 # an earlier one reused) — the universe/signature composition is wider again, and the script's own
 # long-standing rule ("use a fresh root whenever the seeded composition changed") applies to this
@@ -74,6 +85,13 @@ JOURNAL_DB="$ROOT/journal.db"
 
 mkdir -p "$BAR_DIR" "$UNIVERSE_DIR" "$PLAYBOOK_DIR" "$PLAYBOOK_LOG_DIR" \
          "$PLAYBOOK_BACKSCAN_LOG_DIR" "$SCREEN_DIR" "$DATASET_DIR"
+
+# goal-rapid-microscope-iter-2: seed the two already-committed PG SIP tick-dataset fixtures (a
+# plain file copy — the fixture IS the on-disk DatasetStore shape already) so J-01's Microscope
+# Readiness panel finally photographs a real, non-empty shard table through this rig instead of an
+# empty corpus (see the header comment above).
+cp "$BACKEND_DIR/tests/fixtures/datasets/6c9bf2c700d749e0993efd92c5807de3.json" "$DATASET_DIR/"
+cp "$BACKEND_DIR/tests/fixtures/datasets/d9f9dbe04fb24a7caccc53f0c6805412.json" "$DATASET_DIR/"
 
 export TAPEOLOGY_BAR_DIR="$BAR_DIR"
 export TAPEOLOGY_DESK_UNIVERSE_DIR="$UNIVERSE_DIR"

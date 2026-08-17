@@ -35,3 +35,32 @@ how correct the code is. The repo already ships usable tick fixtures at
 read the real corpus read-only) BEFORE a browser acceptance depends on non-empty tick data.
 **Applies to:** any iteration whose browser acceptance reads the tick corpus — J-06's vault
 states, J-08's four `/desk` micro sections, and J-09's study results all hit this same wall.
+
+## iter-2 — 2026-08-17T07:20:00Z
+
+**Verdict:** CONTINUE
+**Lesson:** A snapshot's identity tuple proves "this file was produced by this code", NOT "this
+file is complete". The engine isolates observer exceptions by design, so a mid-stream raise in
+`micro_observer.py` silently dropped that row and every row after it, and the short file was
+persisted and re-verified as a VALID snapshot (audit B2). Any streamed research artifact needs its
+own explicit completeness/failure channel (`MicroObserver.failure` → typed `MicroObserverFailure` →
+build refusal) beside its identity check — and the same sweep found a sibling defect where a
+session-truncated deferred construct was published as a completed observation instead of
+`unavailable` (audit B1, 36 rows across all 18 datasets).
+**Applies to:** any iteration persisting rows produced through the engine's `add_observer` seam or
+any other exception-isolated callback — J-03's join, J-04's screens, J-05's fold outputs, J-06's
+recorder chunks.
+
+## iter-2 — 2026-08-17T07:20:00Z
+
+**Verdict:** CONTINUE
+**Lesson:** The J-10 sentinel keeps FAILING for test-rig reasons rather than product reasons: its
+plan asks for `/structure` bands on PG (the rig seeds tick shards, not bar series, for PG) and for
+playbook filters on the rig's default session (which has never had `Run Playbook` executed). Both
+surfaces are provably fine — AAPL as-of 2026-06-22 rendered the same `300.11–302.2 Class A` band
+iteration 1 recorded, in the same browser session. Separately, the QA agent's own report claimed a
+ten-row J-10 "PASS … byte-identical" table while its own browser lane recorded FAIL 6/9; the
+auditor caught it (F1). Pin the sentinel steps to data the rig actually holds, and always
+cross-read `ui-test-results.md` before believing a QA regression table.
+**Applies to:** every future iteration — J-10 is the standing required-still-passing journey, so
+this fires each run until the plan is parameterized to the rig's real data state.

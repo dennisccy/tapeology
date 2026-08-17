@@ -517,6 +517,21 @@ def test_desk_page_price_arithmetic_guard_catches_evidence_basis_field_arithmeti
     seeded_signal_unmeasured = "const measured = cell.signal.n - cell.signal.n_unmeasured;"
     assert _PRICE_ARITHMETIC_PATTERN.search(seeded_signal_unmeasured) is not None
 
+    seeded_signal_sessions = "const perSession = cell.signal.n / cell.signal.n_sessions;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_signal_sessions) is not None
+
+    seeded_baseline_truncated = "const clean = cell.baseline.n_baseline - cell.baseline.n_truncated;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_baseline_truncated) is not None
+
+    seeded_baseline_unmeasured = "const total = cell.baseline.n_baseline + cell.baseline.n_unmeasured;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_baseline_unmeasured) is not None
+
+    seeded_baseline_sessions = "const perSession = cell.baseline.n_baseline / cell.baseline.n_sessions;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_baseline_sessions) is not None
+
+    seeded_basis = "const perDate = basis.n_records / basis.dates.length;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_basis) is not None
+
 
 def test_desk_page_price_arithmetic_guard_catches_micro_readiness_field_arithmetic():
     """goal-rapid-microscope-iter-1 (J-01) TC-9 counter-test: the extended guard catches
@@ -537,21 +552,6 @@ def test_desk_page_price_arithmetic_guard_catches_micro_readiness_field_arithmet
 
     seeded_shortfall = "const shortfall = floor.required_sessions - floor.available_sessions;"
     assert _PRICE_ARITHMETIC_PATTERN.search(seeded_shortfall) is not None
-
-    seeded_signal_sessions = "const perSession = cell.signal.n / cell.signal.n_sessions;"
-    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_signal_sessions) is not None
-
-    seeded_baseline_truncated = "const clean = cell.baseline.n_baseline - cell.baseline.n_truncated;"
-    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_baseline_truncated) is not None
-
-    seeded_baseline_unmeasured = "const total = cell.baseline.n_baseline + cell.baseline.n_unmeasured;"
-    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_baseline_unmeasured) is not None
-
-    seeded_baseline_sessions = "const perSession = cell.baseline.n_baseline / cell.baseline.n_sessions;"
-    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_baseline_sessions) is not None
-
-    seeded_basis = "const perDate = basis.n_records / basis.dates.length;"
-    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_basis) is not None
 
     # And the pattern does NOT over-match: the real page's own guard test below still finds zero
     # hits, so this new coverage does not accidentally flag legitimate, non-arithmetic JSX.

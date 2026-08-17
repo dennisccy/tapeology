@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-rapid-microscope-iter-2",
+  "base_url": "http://localhost:3301",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the Desk page",
+      "narration": "We start by opening the Desk page, which is the main hub for analyzing trading data and position quality.",
+      "point_out": "The page loads with no errors. You can see the Desk heading and various analysis sections below.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "goto", "url": "/desk"},
+      "expect": {"text": "Desk"}
+    },
+    {
+      "n": 2,
+      "title": "View the Microscope Readiness panel",
+      "narration": "Scroll to the bottom and expand the Microscope Readiness section. This shows a summary of the tick data that the analysis engine has processed.",
+      "point_out": "The panel displays a Corpus Totals table showing 1 distinct symbol-day and 2 datasets, plus a Legacy Tick Shards table with two rows of real PG data from the sip feed — proof that tick data is being recorded and tracked.",
+      "journey": "J-01",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "click", "target": {"data-testid": "desk-section-expand-microReadiness"}},
+      "expect": {"text": "Distinct symbol-days"}
+    },
+    {
+      "n": 3,
+      "title": "Verify the Referee Registry section",
+      "narration": "Scroll and expand the Referee Registry section to confirm all the regression analysis sections are still working.",
+      "point_out": "The Referee Registry expands to show a table of candidates and their configuration. This confirms the existing analysis infrastructure is intact and responsive.",
+      "journey": "J-10",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "click", "target": {"data-testid": "desk-section-expand-refereeRegistry"}},
+      "expect": {"text": "Registry"}
+    },
+    {
+      "n": 4,
+      "title": "Open the Cockpit for live market data",
+      "narration": "Now let's open the Cockpit, which displays live market prices and trading tape. This verifies the market data pipeline is still working.",
+      "point_out": "The page loads with the Tapeology header and a Ticker input field, ready for you to enter a symbol.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "goto", "url": "/"},
+      "expect": {"text": "Ticker"}
+    },
+    {
+      "n": 5,
+      "title": "Enter a ticker symbol to watch",
+      "narration": "Type SIM-BUYER into the Ticker field to select a symbol for analysis.",
+      "point_out": "The field accepts the ticker symbol and displays it, ready for the next action.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "fill", "target": {"label": "Ticker"}, "text": "SIM-BUYER"},
+      "expect": {"text": "SIM-BUYER"}
+    },
+    {
+      "n": 6,
+      "title": "Start watching the live price chart",
+      "narration": "Click the Watch button to begin viewing the live price chart and trading tape for the selected symbol.",
+      "point_out": "The page displays a live price chart with candles, volume, and tape data streaming in real-time. This confirms the cockpit's price feed and tape engine are both functioning correctly.",
+      "journey": "J-10",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "click", "target": {"role": "button", "name": "Watch"}},
+      "expect": {"text": "Watching SIM-BUYER"}
+    }
+  ]
+}

@@ -373,16 +373,29 @@ class DatasetStore:
         symbol = loaded.meta["symbol"]
         return [_row_to_event(symbol, row) for row in loaded.rows]
 
-    def replay(self, dataset_id: str, config: Config) -> Iterator[EngineSnapshot]:
+    def replay(
+        self, dataset_id: str, config: Config, *, observer: object | None = None
+    ) -> Iterator[EngineSnapshot]:
         """Replay the stored dataset UNPACED through a FRESH ``TapeEngine``, yielding every
         per-event snapshot. Deterministic: the stored stream, the stored
         source descriptor, and the stored epoch anchor fully determine the output — re-runs are
-        byte-identical, and both match replaying the original source stream."""
+        byte-identical, and both match replaying the original source stream.
+
+        ``observer`` (era "The Rapid Microscope" J-02, spec section 2.1) is an ADDITIVE,
+        default-``None`` kwarg: when given, it is registered on the fresh engine via the EXISTING
+        ``TapeEngine.add_observer`` seam (capability 20) once, before the event loop starts.
+        ``observer=None`` is byte-identical to before this kwarg existed — every pre-existing call
+        site (none of which pass it) is unaffected, and ``tests/test_observer_equivalence.py``
+        already proves attaching an observer never perturbs a single yielded snapshot. This is the
+        ONE replay entry point; no second replay implementation exists anywhere for research code
+        to attach to."""
         loaded = self._load_by_id(dataset_id)
         meta = loaded.meta
         engine = TapeEngine(
             meta["symbol"], meta["source"], config, epoch_anchor=meta["epoch_anchor"]
         )
+        if observer is not None:
+            engine.add_observer(observer)
         for row in loaded.rows:
             yield engine.process_event(_row_to_event(meta["symbol"], row))
 

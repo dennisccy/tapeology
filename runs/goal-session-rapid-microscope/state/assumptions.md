@@ -67,3 +67,22 @@ through the rig.
 corpus read-only (the lesson's second option) once the snapshot-compute route's own storage dir
 is confirmed fully isolated from `TAPEOLOGY_DATASET_DIR`'s sibling-default resolution, at which
 point the rig could show the literal real totals too.
+
+## iter-2 — goal-evaluator
+
+**Ambiguity:** J-01's Acceptance names the real-corpus figures (`distinct_symbol_days: 12`,
+`session_equivalents` ≈ 3.0, 18 `exploratory`/`hand_assigned` shards) AND requires the `/desk`
+panel to render "those same served values verbatim (element screenshot)". It never says whether
+"those same served values" means the specific 12/18/~3.0 numbers, or the values the endpoint serves
+for whatever store is behind it. The mandated store-scoped rig cannot safely be pointed at the
+operator's real store this iteration, so the two readings are not simultaneously observable.
+**We chose:** the second reading — rendering fidelity. Scored J-01 `passing` on the strength of two
+channels: the endpoint half proven in iteration 1 directly against the real `.data/datasets` store
+(and `micro_readiness.py` is byte-unchanged since, so that evidence stands under the durability
+rail), and the rendering half proven this iteration by UT-02's element screenshot of the panel
+showing a real, non-fabricated 2-shard PG corpus with matching checksums, fallback fractions,
+`hand_assigned` provenance and all three floors `floor_unmet`. Flagged `evidence_makeup: true` with
+gap `capture-defect`, so the make-up photograph (real 12/18/~3.0 totals, and the exposure_state
+column that is clipped off the right edge of this capture) rides a later iteration as a passenger
+task — never as an iteration goal, and never as a reason to rebuild J-01 code.
+**Reversible:** yes

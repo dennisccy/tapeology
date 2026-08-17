@@ -1,0 +1,116 @@
+{
+  "journeys": {
+    "J-01": {
+      "id": "J-01",
+      "name": "The era transition stands — the corpus truth on the record",
+      "status": "partial",
+      "last_verified_iter": "goal-rapid-microscope-iter-1",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-rapid-microscope-iter-0",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-1-evidence/UT-J-01-fail.png",
+      "spec_hash": "1791ebcd14c10fa789e1048509f8f8af20a7696fe11a7de4bf946b446d4fbb52",
+      "notes": "Steps 1-2 remain verified (iter-0). Step 3 now MET and independently re-verified by the evaluator: I called build_readiness() against the real .data/datasets corpus myself and read distinct_symbol_days=12, distinct_datasets=18, rth_minutes_covered=1173.49, session_equivalents=3.0089, referee_tick_gate_symbol_days=150, all 18 shards split_provenance=hand_assigned + exposure_state=exploratory, all 3 study_floors floor_unmet (required 60 / available 11), integrity_errors=[]. tests/test_micro_readiness.py 31/31 green (evaluator re-ran). Step 4 PARTIAL: the /desk Microscope Readiness section renders in the right place (below Referee Runs) and renders the served body verbatim, but the mandated store-scoped QA rig (:8301) has TAPEOLOGY_DATASET_DIR pointed at an empty fixture dir, so the screenshot shows an honest EMPTY corpus (0/0/0.00/0.0000, 'No tick shards recorded.'). The acceptance's named real-corpus values were never rendered in a browser and the 18-row shard-table rendering path is unexercised. Browser QA verdict FAIL (reports/phase-goal-rapid-microscope-iter-1-ui-test-results.md UT-J-01)."
+    },
+    "J-02": {
+      "id": "J-02",
+      "name": "The micro observer — one pass, prefix-honest, benchmarked",
+      "status": "failing",
+      "last_verified_iter": "goal-rapid-microscope-iter-1",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-rapid-microscope-iter-0",
+      "last_evidence_path": "reports/phase-goal-rapid-microscope-iter-0-ui-test-results.md#UT-J-02",
+      "spec_hash": "01f4f43564cba7431118d4a504b9dbeb20f1a994fdb52be5ceded15529d8b27a",
+      "notes": "Re-verified absent by the evaluator this iteration: DatasetStore.replay still reads `def replay(self, dataset_id: str, config: Config)` (datasets.py:376) with no observer= kwarg; micro_observer.py / micro_snapshots.py / micro_features.py do not exist under app/research/."
+    },
+    "J-03": {
+      "id": "J-03",
+      "name": "Structure x flow — the join that never looks ahead",
+      "status": "failing",
+      "last_verified_iter": "goal-rapid-microscope-iter-1",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-rapid-microscope-iter-0",
+      "last_evidence_path": "reports/phase-goal-rapid-microscope-iter-0-ui-test-results.md#UT-J-03",
+      "spec_hash": "a671f63835247f7fca66a41a2dc48ec4fe3e83fe0bda85d3703ef385cb20de83",
+      "notes": "Re-verified absent by the evaluator this iteration: micro_join.py does not exist; the readiness payload I computed carries no joinable-corpus count."
+    },
+    "J-04": {
+      "id": "J-04",
+      "name": "The Scout and the ledger — every trial on the record",
+      "status": "failing",
+      "last_verified_iter": "goal-rapid-microscope-iter-1",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-rapid-microscope-iter-0",
+      "last_evidence_path": "reports/phase-goal-rapid-microscope-iter-0-ui-test-results.md#UT-J-04",
+      "spec_hash": "d188d138b6c84c4ff7302bf60f5da2f95b247b58a6cd7c42874d740801bc19d0",
+      "notes": "Re-verified absent by the evaluator this iteration: scout.py / scout_ledger.py do not exist; micro_routes.py registers only the readiness GET."
+    },
+    "J-05": {
+      "id": "J-05",
+      "name": "The walk-forward engine — chronology, fences, and the diagnostic run",
+      "status": "failing",
+      "last_verified_iter": "goal-rapid-microscope-iter-1",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-rapid-microscope-iter-0",
+      "last_evidence_path": "reports/phase-goal-rapid-microscope-iter-0-ui-test-results.md#UT-J-05",
+      "spec_hash": "1b84144912ebd9de2f4731f2209f6f7354ac8e563f633f14825644d2f838fa1e",
+      "notes": "Re-verified absent by the evaluator this iteration: micro_accessor.py / walkforward.py do not exist. NOTE: micro_readiness.py:580-581 transcribes WF_TRAIN_MIN_SESSIONS=40 / WF_TEST_MIN_SESSIONS=20 as their first code representation, with a docstring saying walkforward.py should become their owner — J-05 must import or supersede those two names, never re-declare a second value."
+    },
+    "J-06": {
+      "id": "J-06",
+      "name": "The recorder and the Vault — new tape, sealed at birth",
+      "status": "failing",
+      "last_verified_iter": "goal-rapid-microscope-iter-1",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-rapid-microscope-iter-0",
+      "last_evidence_path": "reports/phase-goal-rapid-microscope-iter-0-ui-test-results.md#UT-J-06",
+      "spec_hash": "68c9e0e14d8377c27f8fa65fdf25f4c5ad7c432d75abbd95d82ec5b25c6b26fc",
+      "notes": "Re-verified absent by the evaluator this iteration: tick_recorder.py / vault.py do not exist. Card-5.1 preservation fields still absent from RawTrade/RawQuote. Step 4 is an operator-attended act reserved for a later iteration."
+    },
+    "J-07": {
+      "id": "J-07",
+      "name": "Graduation — provenance in, nothing laundered out",
+      "status": "failing",
+      "last_verified_iter": "goal-rapid-microscope-iter-1",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-rapid-microscope-iter-0",
+      "last_evidence_path": "reports/phase-goal-rapid-microscope-iter-0-ui-test-results.md#UT-J-07",
+      "spec_hash": "6bd325e2c1511b9d2745bdcd612a12d2142f32498a7aa85055d31209c9e46b28",
+      "notes": "Re-verified absent by the evaluator this iteration: micro_graduation.py does not exist."
+    },
+    "J-08": {
+      "id": "J-08",
+      "name": "The surface and MCP v6 — the funnel is visible",
+      "status": "failing",
+      "last_verified_iter": "goal-rapid-microscope-iter-1",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-rapid-microscope-iter-0",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-1-evidence/UT-J-01-fail.png",
+      "spec_hash": "037874a8933089ff99b53568d5aedac2843043741d83fa4958759ba898145572",
+      "notes": "Re-verified absent by the evaluator this iteration: the iter-1 /desk screenshot shows no Scout Ledger / Walk-Forward / Validation Vault section (Microscope Readiness is the only new one); tests/test_mcp_server.py EXPECTED_TOOLS is still a 22-tuple (target 26), test_mcp_server.py green unmodified. WATCH: J-08's browser acceptance will hit the same empty-QA-rig corpus problem J-01 hit this iteration."
+    },
+    "J-09": {
+      "id": "J-09",
+      "name": "The pilot studies — three predeclared questions, honest answers",
+      "status": "failing",
+      "last_verified_iter": "goal-rapid-microscope-iter-1",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-rapid-microscope-iter-0",
+      "last_evidence_path": "reports/phase-goal-rapid-microscope-iter-0-ui-test-results.md#UT-J-09",
+      "spec_hash": "7dd99ef032e14d2c86d69962f917efb8840d2496fa07765e9488264ecbd8a58a",
+      "notes": "Re-verified absent by the evaluator this iteration: no ledgered pilot-study specs; the scout ledger they would live in does not exist. The three study_ids are now NAMED in the readiness floors table (range_wall_failed_aggression / delta_divergence_level_tests / capitulation_exhaustion) but carry no registered Scout spec — naming is not registration. Downstream of J-04/J-05."
+    },
+    "J-10": {
+      "id": "J-10",
+      "name": "The kept product stands — traps armed, sentinel green",
+      "status": "partial",
+      "last_verified_iter": "goal-rapid-microscope-iter-1",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-rapid-microscope-iter-0",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-1-evidence/UT-J-10-desk-sections.png",
+      "spec_hash": "471d5b5b05f81c2922457651075a07f2c6ae428df8055f0ecd7a9f841b432814",
+      "notes": "Sentinel half improved and freshly verified (UT-J-10 PASS): cockpit / live tape + 10s chart exercised with SIM-BUYER (screenshot), /structure AAPL as-of 2026-06-22 Tradable Map with real Class-A bands (screenshot), all four shipped /desk sections expanded and populated (screenshot). Evaluator re-ran independently: fingerprint 08e471b10130e1e2, all 6 referee_*.py SHA-256 byte-identical to the iter-0 listing, and the frozen-foundation guards green (test_observer_equivalence, test_dense_replay_gate golden trace, test_mcp_server 22-tuple, test_meta_routes, test_referee_guards, test_desk_ui_guards, test_no_execution_path, test_copy_discipline = 197+42 passed). Store-scope guard CLEAN (11275 files unchanged). Not met: TR-1..TR-22 trap suite and the deterministic-rerun check still do not exist."
+    }
+  },
+  "anti_goal_violations": [],
+  "updated_at": "2026-08-17T02:20:00Z"
+}
