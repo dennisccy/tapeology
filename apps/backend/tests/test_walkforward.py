@@ -14,8 +14,14 @@ from app.main import app
 from app.providers.base import QuoteEvent, Side, TradeEvent
 from app.research import walkforward as wf
 from app.research import walkforward_ledger as wl
+from app.research import vault
 from app.research.datasets import DatasetStore
-from app.research.micro_accessor import ExposureRegistry, has_any_exposure_entries, initialize_r2_exposure_registry
+from app.research.micro_accessor import (
+    R2_REVISION_INSTANT,
+    ExposureRegistry,
+    has_any_exposure_entries,
+    initialize_r2_exposure_registry,
+)
 from app.research.micro_readiness import EXPOSURE_STATE_EXPLORATORY, MicroReadinessCache, build_readiness
 from app.research.micro_routes import (
     get_micro_exposure_registry_dir,
@@ -1148,7 +1154,11 @@ def test_tc14_run_tick_family_fold_request_surfaces_integrity_errors_on_its_succ
     # 110 distinct labels clear the WF_MIN_SUFFICIENT_FOLDS floor (105) under DIAGNOSTIC_GEOMETRY;
     # never parsed as real calendar dates by the function under test, only counted and hashed.
     fake_dates = [f"session-{i:04d}" for i in range(110)]
-    monkeypatch.setattr(wf, "_tick_dataset_session_dates", lambda store: (fake_dates, fake_errors))
+    # `**_kwargs` absorbs the r4 `excluded_dataset_ids` the caller now passes (spec section 7.5
+    # point 6) -- this stub is about the errors half, not about which ids were excluded.
+    monkeypatch.setattr(
+        wf, "_tick_dataset_session_dates", lambda store, **_kwargs: (fake_dates, fake_errors)
+    )
 
     ledger = wl.WalkForwardLedger(str(tmp_path / "wf"))
     config = _FakeConfig(dataset_dir=str(tmp_path / "unused-datasets"))
@@ -1276,3 +1286,221 @@ def test_tc3_the_compute_routes_worker_resolves_the_typed_refusal_to_a_failed_ru
     finally:
         for dep in (get_walkforward_ledger_dir, get_micro_exposure_registry_dir, get_walkforward_compute_manager, get_universe_store, get_bar_store, get_playbook_store):
             app.dependency_overrides.pop(dep, None)
+
+
+# === iter-9: the exposure-registry sealed filter (TC-10/TC-11) -- closes the known latent hole ======
+# a freshly `vault.py`-sealed tick dataset must never be marked "already exposed" by the
+# WALKFORWARD registry's own r2 seed for TICK_LEGACY_CORPUS_ID, which (pre-iter-9) read "every
+# currently-registered tick dataset" with no notion of sealing at all.
+
+
+def test_tc10_a_sealed_datasets_window_carries_no_r2_exposure_entry_while_an_unsealed_siblings_does(tmp_path, monkeypatch):
+    signature = "sig-tc10"
+    sessions = [f"2026-10-{d:03d}" for d in range(1, 156)]
+    records = [
+        _fake_playbook_record(s, signature, [_fake_signal("range_trade", "AAPL", 0.3), _fake_signal("range_trade", "MSFT", 0.3)])
+        for s in sessions
+    ]
+    monkeypatch.setattr(wf, "PLAYBOOK_DIAGNOSTIC_ORPHAN_SESSION_DATE", "2020-01-01")
+    monkeypatch.setattr(wf, "compute_playbook_input_signature", lambda bar_store, members, config_fingerprint: signature)
+
+    tick_dir = tmp_path / "tick_datasets"
+    tick_store = DatasetStore(tick_dir)
+    # D: sealed via vault.py before this run -- its own window must carry NO r2 exposure entry.
+    sealed_meta = _plant_tick_dataset(
+        tick_store, symbol="AAPL", window_start_utc="2026-06-08T13:30:00Z", window_end_utc="2026-06-08T20:00:00Z"
+    )
+    # E: an ordinary, unsealed sibling on a DIFFERENT date -- its window IS exposed, as before.
+    unsealed_meta = _plant_tick_dataset(
+        tick_store, symbol="MSFT", window_start_utc="2026-06-09T13:30:00Z", window_end_utc="2026-06-09T20:00:00Z", price=101.00
+    )
+
+    shard_ledger = vault.shard_ledger_for_dataset_dir(str(tick_dir))
+    vault.seal_shard(
+        shard_ledger, dataset_id=sealed_meta["id"], universe_id="starter-tranche-v1",
+        content_checksum=sealed_meta["checksum"], event_count=sealed_meta["event_counts"]["total"],
+        vault_secret=b"a-fixture-vault-secret",
+    )
+    assert vault.currently_sealed_dataset_ids(shard_ledger) == frozenset({sealed_meta["id"]})
+
+    ledger = wl.WalkForwardLedger(str(tmp_path / "wf"))
+    registry = ExposureRegistry(str(tmp_path / "exposure"))
+
+    wf.run_diagnostic_walkforward(
+        ledger, registry, _FakePlaybookStore(records), _FakeUniverseStore(["AAPL"]), bar_store=None,
+        config=_FakeConfig(dataset_dir=str(tick_dir)),
+    )
+
+    tick_rows = [r for r in registry.all_rows() if r["corpus_id"] == wf.TICK_LEGACY_CORPUS_ID]
+    windows = {r["window"] for r in tick_rows}
+    assert windows == {"2026-06-09"}  # E's date only -- D's 2026-06-08 is honestly absent
+    assert len(tick_rows) == 1
+    assert tick_rows[0]["logged_at"] == R2_REVISION_INSTANT
+    assert unsealed_meta["symbol"] == "MSFT"  # sanity: E really is the unsealed one
+
+
+def test_tc11_d_stays_absent_from_a_later_seed_inspection_even_after_the_vault_exposes_it(tmp_path, monkeypatch):
+    """TC-11: exposing D through vault.py's OWN lifecycle (assign -> expose) does not retroactively
+    (or on a later inspection) inject its window into the WALKFORWARD registry's r2 seed for
+    TICK_LEGACY_CORPUS_ID -- that seed is guarded to run at most once per registry
+    (``has_any_exposure_entries``) regardless of vault state, so D's exposure lives ONLY in the
+    vault's own shard ledger (TC-7), never double-recorded here."""
+    signature = "sig-tc11"
+    sessions = [f"2026-11-{d:03d}" for d in range(1, 156)]
+    records = [
+        _fake_playbook_record(s, signature, [_fake_signal("range_trade", "AAPL", 0.3), _fake_signal("range_trade", "MSFT", 0.3)])
+        for s in sessions
+    ]
+    monkeypatch.setattr(wf, "PLAYBOOK_DIAGNOSTIC_ORPHAN_SESSION_DATE", "2020-01-01")
+    monkeypatch.setattr(wf, "compute_playbook_input_signature", lambda bar_store, members, config_fingerprint: signature)
+
+    tick_dir = tmp_path / "tick_datasets"
+    tick_store = DatasetStore(tick_dir)
+    sealed_meta = _plant_tick_dataset(
+        tick_store, symbol="AAPL", window_start_utc="2026-06-08T13:30:00Z", window_end_utc="2026-06-08T20:00:00Z"
+    )
+    _plant_tick_dataset(
+        tick_store, symbol="MSFT", window_start_utc="2026-06-09T13:30:00Z", window_end_utc="2026-06-09T20:00:00Z", price=101.00
+    )
+
+    shard_ledger = vault.shard_ledger_for_dataset_dir(str(tick_dir))
+    vault.seal_shard(
+        shard_ledger, dataset_id=sealed_meta["id"], universe_id="starter-tranche-v1",
+        content_checksum=sealed_meta["checksum"], event_count=sealed_meta["event_counts"]["total"],
+        vault_secret=b"a-fixture-vault-secret",
+    )
+
+    ledger = wl.WalkForwardLedger(str(tmp_path / "wf"))
+    registry = ExposureRegistry(str(tmp_path / "exposure"))
+    config = _FakeConfig(dataset_dir=str(tick_dir))
+
+    wf.run_diagnostic_walkforward(ledger, registry, _FakePlaybookStore(records), _FakeUniverseStore(["AAPL"]), bar_store=None, config=config)
+    tick_rows_after_first_run = [r for r in registry.all_rows() if r["corpus_id"] == wf.TICK_LEGACY_CORPUS_ID]
+    assert {r["window"] for r in tick_rows_after_first_run} == {"2026-06-09"}
+
+    # NOW expose D through the vault's own one-way lifecycle.
+    family_root = vault.compute_family_root_id("impact_efficiency_trend", "band_wall_touch", "trades_20")
+    vault.assign_shard(shard_ledger, dataset_id=sealed_meta["id"], family_root_id=family_root, symbol="AAPL", session_date="2026-06-08")
+    vault.expose_shard(shard_ledger, dataset_id=sealed_meta["id"], family_root_id=family_root)
+    assert vault.currently_sealed_dataset_ids(shard_ledger) == frozenset()  # D is no longer sealed
+
+    # a SECOND diagnostic run (the "later seed inspection") -- the once-only guard means the r2
+    # seed for TICK_LEGACY_CORPUS_ID never re-examines vault state at all, so D's window stays
+    # absent from THIS registry regardless of its now-exposed vault state.
+    wf.run_diagnostic_walkforward(ledger, registry, _FakePlaybookStore(records), _FakeUniverseStore(["AAPL"]), bar_store=None, config=config)
+    tick_rows_after_second_run = [r for r in registry.all_rows() if r["corpus_id"] == wf.TICK_LEGACY_CORPUS_ID]
+    assert tick_rows_after_second_run == tick_rows_after_first_run  # unchanged -- no re-seed, no D
+    assert "2026-06-08" not in {r["window"] for r in tick_rows_after_second_run}
+
+
+# === iter-9 audit B4 + T3: the tick-family corpus inventory honours the seal, and the r2 filter's
+# === disclosed granularity limit is pinned rather than left to drift silently
+
+
+def test_b4_the_tick_family_corpus_inventory_excludes_and_discloses_withheld_shards(tmp_path):
+    """Spec section 7.5 point 6 (r4): ``run_tick_family_fold_request`` enumerates the whole store
+    to size ``TICK_LEGACY_CORPUS_ID``, so a withheld shard would silently inflate the floor count
+    and the ``corpus_manifest_hash`` registered in the fold ledger (section 7.7 makes the legacy
+    corpus permanently disjoint from any sealed tranche). Below floor -- which is every call today
+    -- the typed refusal itself carries the disclosure, since it is all a caller ever sees."""
+    tick_dir = tmp_path / "tick_datasets"
+    tick_store = DatasetStore(tick_dir)
+    sealed_meta = _plant_tick_dataset(
+        tick_store, symbol="AAPL", window_start_utc="2026-06-08T13:30:00Z", window_end_utc="2026-06-08T20:00:00Z"
+    )
+    _plant_tick_dataset(
+        tick_store, symbol="MSFT", window_start_utc="2026-06-09T13:30:00Z", window_end_utc="2026-06-09T20:00:00Z", price=101.00
+    )
+    ledger = wl.WalkForwardLedger(str(tmp_path / "wf"))
+    config = _FakeConfig(dataset_dir=str(tick_dir))
+
+    with pytest.raises(wf.InsufficientSessionsForFoldsError) as before:
+        wf.run_tick_family_fold_request(ledger, config)
+    assert str(before.value).startswith("2 < 105")  # both dates counted, no disclosure appended
+    assert "withheld" not in str(before.value)
+
+    vault.seal_shard(
+        vault.shard_ledger_for_dataset_dir(str(tick_dir)),
+        dataset_id=sealed_meta["id"], universe_id="starter-tranche-v1",
+        content_checksum=sealed_meta["checksum"], event_count=sealed_meta["event_counts"]["total"],
+        vault_secret=b"a-fixture-vault-secret",
+    )
+
+    with pytest.raises(wf.InsufficientSessionsForFoldsError) as after:
+        wf.run_tick_family_fold_request(ledger, config)
+    message = str(after.value)
+    assert message.startswith("1 < 105")  # the sealed shard's date no longer inflates the corpus
+    assert "excludes 1 withheld Validation-Vault shard(s)" in message  # ... and it SAYS so
+    assert sealed_meta["id"] not in message  # a count, never an id
+    assert ledger.all_rows() == []  # a request that never ran still writes nothing
+
+
+def test_b4_the_success_return_carries_the_withheld_count(tmp_path, monkeypatch):
+    """The floor-CLEARING half, monkeypatched exactly like TC-14 above so it stays hermetic: the
+    returned body carries the same disclosure the refusal does."""
+    fake_dates = [f"session-{i:04d}" for i in range(110)]
+    monkeypatch.setattr(
+        wf, "_tick_dataset_session_dates", lambda store, **_kwargs: (fake_dates, [])
+    )
+    tick_dir = tmp_path / "tick_datasets"
+    tick_store = DatasetStore(tick_dir)
+    sealed_meta = _plant_tick_dataset(
+        tick_store, symbol="AAPL", window_start_utc="2026-06-08T13:30:00Z", window_end_utc="2026-06-08T20:00:00Z"
+    )
+    vault.seal_shard(
+        vault.shard_ledger_for_dataset_dir(str(tick_dir)),
+        dataset_id=sealed_meta["id"], universe_id="starter-tranche-v1",
+        content_checksum=sealed_meta["checksum"], event_count=sealed_meta["event_counts"]["total"],
+        vault_secret=b"a-fixture-vault-secret",
+    )
+    ledger = wl.WalkForwardLedger(str(tmp_path / "wf"))
+
+    result = wf.run_tick_family_fold_request(ledger, _FakeConfig(dataset_dir=str(tick_dir)))
+
+    assert result["withheld_excluded"] == 1
+    assert result["session_count"] == 110
+
+
+def test_t3_a_sealed_shards_date_IS_still_seeded_when_an_unsealed_sibling_shares_it(tmp_path, monkeypatch):
+    """iter-9 audit finding T3 — pins the r2 filter's honestly DISCLOSED granularity limit (see
+    ``_tick_dataset_session_dates``' own docstring): the WALKFORWARD registry's unit is the DATE,
+    so the filter guarantees only "a sealed dataset contributes no date of its OWN". TC-10/TC-11
+    both give the sealed and unsealed shards DIFFERENT dates -- the only case where the stronger
+    reading holds. This is the shared-date case, asserted in the direction the code actually
+    behaves, so a future change in EITHER direction fails loudly instead of drifting."""
+    signature = "sig-t3"
+    sessions = [f"2026-12-{d:03d}" for d in range(1, 156)]
+    records = [
+        _fake_playbook_record(s, signature, [_fake_signal("range_trade", "AAPL", 0.3), _fake_signal("range_trade", "MSFT", 0.3)])
+        for s in sessions
+    ]
+    monkeypatch.setattr(wf, "PLAYBOOK_DIAGNOSTIC_ORPHAN_SESSION_DATE", "2020-01-01")
+    monkeypatch.setattr(wf, "compute_playbook_input_signature", lambda bar_store, members, config_fingerprint: signature)
+
+    tick_dir = tmp_path / "tick_datasets"
+    tick_store = DatasetStore(tick_dir)
+    sealed_meta = _plant_tick_dataset(
+        tick_store, symbol="AAPL", window_start_utc="2026-06-09T13:30:00Z", window_end_utc="2026-06-09T20:00:00Z"
+    )
+    # the SHARED-DATE sibling: same ET session date, a different symbol, not sealed
+    _plant_tick_dataset(
+        tick_store, symbol="MSFT", window_start_utc="2026-06-09T13:30:00Z", window_end_utc="2026-06-09T20:00:00Z", price=101.00
+    )
+    shard_ledger = vault.shard_ledger_for_dataset_dir(str(tick_dir))
+    vault.seal_shard(
+        shard_ledger, dataset_id=sealed_meta["id"], universe_id="starter-tranche-v1",
+        content_checksum=sealed_meta["checksum"], event_count=sealed_meta["event_counts"]["total"],
+        vault_secret=b"a-fixture-vault-secret",
+    )
+
+    ledger = wl.WalkForwardLedger(str(tmp_path / "wf"))
+    registry = ExposureRegistry(str(tmp_path / "exposure"))
+    wf.run_diagnostic_walkforward(
+        ledger, registry, _FakePlaybookStore(records), _FakeUniverseStore(["AAPL"]), bar_store=None,
+        config=_FakeConfig(dataset_dir=str(tick_dir)),
+    )
+
+    tick_rows = [r for r in registry.all_rows() if r["corpus_id"] == wf.TICK_LEGACY_CORPUS_ID]
+    # the date IS seeded -- through the UNSEALED sibling's own contribution, not the sealed shard's
+    assert {r["window"] for r in tick_rows} == {"2026-06-09"}
+    assert len(tick_rows) == 1  # exactly one entry: a date is seeded once, whoever contributed it

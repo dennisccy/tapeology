@@ -81,6 +81,10 @@ from .datasets import DatasetStore, SPLIT_HOLDOUT, SPLIT_TRAIN, parse_utc_epoch
 # second time -- see ``edge_report_backtest_cache.py``'s own module docstring for the full "why").
 from .edge_report_backtest_cache import EdgeReportBacktestCache, pair_cache_key
 from .edge_report_cache import EdgeReportCache, _config_content_hash
+# Spec section 7.5 point 6 (r4, owner ruling): the ONE withholding predicate every corpus-wide
+# enumerator shares -- imported, never re-implemented here (a divergent second copy is exactly how
+# the iter-9 audit's B2 leak survived the route-level fix).
+from .micro_snapshots import exclude_withheld
 # ``_store_signature`` imported PRIVATE (the identical ``_aggregate`` precedent above, and the
 # phase plan's own explicit suggestion): the ONE bar-store-signature tuple shape ``setups.py``
 # already computes for its OWN scan cache, reused verbatim here rather than duplicated.
@@ -104,6 +108,16 @@ _ALL_STRATEGY_IDS: tuple[str, ...] = (STRATEGY_V1_ID, STRATEGY_TAPE_ID, STRATEGY
 # The exact, honest empty finding (DoD-mandated literal string) — emitted whenever zero hold-out
 # datasets clear the positive-edge gate, including the true-empty-registry case.
 NO_POSITIVE_EDGE_FINDING = "no positive-edge dataset"
+
+# Spec section 7.5 point 6 (r4): "a run whose entire eligible corpus is withheld reports that
+# honestly rather than emitting an empty-but-shaped result". This finding replaces the
+# no-positive-edge one in exactly that case, so a reader can never mistake "every shard is sealed"
+# for "the champion was measured and showed no edge".
+FULLY_WITHHELD_FINDING = (
+    "no dataset was measured: every registered dataset is a withheld Validation-Vault shard "
+    "(spec section 7.5) -- this report measures nothing, rather than reporting an empty result "
+    "as if the corpus had been read"
+)
 
 # era-fast_wall J-01: the not-computed payload's own explanatory ``detail`` string (DoD: "a detail
 # naming the trigger") — ONE canonical literal, never restated inline at ``peek_strategy_
@@ -134,26 +148,40 @@ class EdgeReportComputeCancelled(Exception):
 # --- reused computation: ONE backtest per dataset, via the EXISTING runner ----------------------
 
 
-def _verified_records(dataset_store: DatasetStore) -> list[dict]:
-    """Every registered dataset metadata row, checksum-verified (the ONE ``DatasetStore.list``
-    read). A file that fails integrity verification anywhere in the store aborts explicitly — a
-    partial report is a misleading report. Shared by ``_split_datasets`` (below, filtered to one
-    split) and ``peek_strategy_comparison_report`` (era-fast_wall J-01, which needs the FULL,
-    unfiltered registry to key the cache and report ``dataset_count``) — ONE list-and-verify call
-    site, never a second copy of this error-formatting."""
+def _verified_corpus(dataset_store: DatasetStore) -> tuple[list[dict], int]:
+    """``(records, withheld_excluded)`` — the ONE ``DatasetStore.list`` read this module makes,
+    checksum-verified and seal-filtered. A file that fails integrity verification anywhere in the
+    store aborts explicitly — a partial report is a misleading report.
+
+    **Spec section 7.5 point 6 (r4, owner ruling).** This is the module's single enumeration choke
+    point, so it is where the seal is honoured: a shard whose vault lifecycle has not reached
+    ``exposed`` is EXCLUDED (its events would otherwise be replayed by a backtest, and
+    ``backtests.py`` embeds the stored manifest verbatim into every persisted result, which
+    ``GET /research/backtests`` then serves and ``pnl_ledger`` copies into an append-only row —
+    the iter-9 re-audit's finding B2). The exclusion is never silent: the returned COUNT (never
+    the ids) is carried into every report body this module produces. Byte-identical to the
+    pre-r4 behaviour while nothing is sealed."""
     records, errors = dataset_store.list()
     if errors:
         raise EdgeReportError(
             f"{len(errors)} dataset file(s) failed integrity verification "
             f"({[e['file'] for e in errors]}) — the report stops with nothing written"
         )
-    return records
+    return exclude_withheld(records, dataset_store)
 
 
-def _split_datasets(dataset_store: DatasetStore, split: str) -> list[dict]:
-    """Every registered dataset metadata row for ``split`` — see ``_verified_records`` for the
-    integrity discipline."""
-    return [r for r in _verified_records(dataset_store) if r["split"] == split]
+def _verified_records(dataset_store: DatasetStore) -> list[dict]:
+    """``_verified_corpus``'s records half, for the callers that need no disclosure of their own
+    (``_eligible_datasets``' parallel pre-warm task set) — never a second list-and-verify."""
+    return _verified_corpus(dataset_store)[0]
+
+
+def _split_datasets(records: list[dict], split: str) -> list[dict]:
+    """One split's rows out of an ALREADY-verified, already-seal-filtered record list (never a
+    second ``DatasetStore.list()`` read of its own — both report builders below enumerate once
+    through ``_verified_corpus`` and slice in memory, so the disclosed ``withheld_excluded`` count
+    and the measured rows can never come from two different reads of the store)."""
+    return [r for r in records if r["split"] == split]
 
 
 def _run_backtest(
@@ -259,8 +287,9 @@ def run_edge_report(store: JournalStore, dataset_store: DatasetStore, config: Co
     champion = store.get_champion_pointer()
     jobs = BacktestJobManager(store, config)
 
-    train_datasets = _split_datasets(dataset_store, SPLIT_TRAIN)
-    holdout_datasets = _split_datasets(dataset_store, SPLIT_HOLDOUT)
+    records, withheld_excluded = _verified_corpus(dataset_store)
+    train_datasets = _split_datasets(records, SPLIT_TRAIN)
+    holdout_datasets = _split_datasets(records, SPLIT_HOLDOUT)
 
     train_rows = _rank(
         [_dataset_row(jobs, store, dataset_store, ds, champion) for ds in train_datasets]
@@ -278,11 +307,14 @@ def run_edge_report(store: JournalStore, dataset_store: DatasetStore, config: Co
         if row["positive_edge"]:
             positive_edge_ids.append(row["dataset_id"])
 
-    finding = (
-        NO_POSITIVE_EDGE_FINDING
-        if not positive_edge_ids
-        else f"positive-edge dataset(s): {', '.join(positive_edge_ids)}"
-    )
+    if positive_edge_ids:
+        finding = f"positive-edge dataset(s): {', '.join(positive_edge_ids)}"
+    elif withheld_excluded and not records:
+        # r4: the whole eligible corpus was withheld — say so, rather than serving the
+        # indistinguishable "measured everything, found no edge" sentence.
+        finding = FULLY_WITHHELD_FINDING
+    else:
+        finding = NO_POSITIVE_EDGE_FINDING
 
     return {
         "register": REGISTER,
@@ -292,6 +324,9 @@ def run_edge_report(store: JournalStore, dataset_store: DatasetStore, config: Co
         "holdout": {"datasets": holdout_rows},
         "positive_edge_dataset_ids": positive_edge_ids,
         "finding": finding,
+        # Spec section 7.5 point 6 (r4): how many registered datasets this report did NOT measure
+        # because their vault shards are withheld — a count only, never an id.
+        "withheld_excluded": withheld_excluded,
     }
 
 
@@ -299,8 +334,8 @@ def run_edge_report(store: JournalStore, dataset_store: DatasetStore, config: Co
 # "edge-report cells") -- an ADDITIVE extension of THIS module, never a fork: reuses the ONE
 # ``BacktestJobManager.create`` + ``run_sync`` path above (``_run_backtest``, now threading
 # ``bar_store`` through, see its own docstring), the verbatim ``_aggregate`` trade-population
-# arithmetic (imported from ``backtests.py`` — never re-derived), and ``_split_datasets``' ONE
-# checksum-verified ``DatasetStore.list()`` read per split (a dataset failing integrity
+# arithmetic (imported from ``backtests.py`` — never re-derived), and ``_verified_corpus``' ONE
+# checksum-verified, seal-filtered ``DatasetStore.list()`` read (a dataset failing integrity
 # verification anywhere aborts the WHOLE report explicitly, same as ``run_edge_report`` above).
 # ``run_edge_report``/``main``/``_render_report`` and every helper above this comment stay
 # UNTOUCHED — the era-3 champion-only CLI's behaviour is byte-identical to before.
@@ -335,7 +370,7 @@ def _dataset_event(dataset_meta: dict, events: list[dict]) -> dict | None:
     ``setups._matching_dataset`` window-containment TEST, mirrored (numeric epoch comparison,
     inclusive both ends — the identical ``parse_utc_epoch`` discipline, never a lexicographic
     string compare) but in the OPPOSITE direction: given ONE already-verified dataset (from THIS
-    module's own ``_split_datasets`` read), scan the already-computed ``events`` list for a match,
+    module's own ``_verified_corpus`` read), scan the already-computed ``events`` list for a match,
     rather than re-opening a second ``DatasetStore.list()`` read the way ``_matching_dataset``
     itself does internally (which silently drops a corrupt file's error — inconsistent with this
     module's OWN all-or-nothing integrity discipline, so it is never called from here). Ties (more
@@ -873,7 +908,7 @@ def peek_strategy_comparison_report(
     ``registry.edge_report_compute.snapshot()`` — the SAME snapshot ``GET /research/edge-report/
     compute`` itself serves, so the two are byte-identical in shape by construction (one owner, one
     read, two callers)."""
-    records = _verified_records(dataset_store)
+    records, withheld_excluded = _verified_corpus(dataset_store)
     if not records:
         return _compute_strategy_comparison_report(store, dataset_store, bar_store, config)
     cached = cache.lookup(records, config)
@@ -885,6 +920,10 @@ def peek_strategy_comparison_report(
         "dataset_count": len(records),
         "register": REGISTER,
         "compute": compute,
+        # Spec section 7.5 point 6 (r4): `dataset_count` above is the SEAL-FILTERED registry the
+        # cache is keyed on, so the shards it leaves out are disclosed beside it rather than
+        # silently shrinking the stated basis.
+        "withheld_excluded": withheld_excluded,
     }
 
 
@@ -904,7 +943,7 @@ def _compute_strategy_comparison_report(
     called directly). Measures ``v1``, ``structure_tape``, and ``structure_tape_map`` over EVERY
     registered event-window dataset that resolves an owning, classified scan event, aggregated
     into per strategy x class x side x reaction x feed cells. Raises ``EdgeReportError`` for a
-    dishonest state (the identical ``_split_datasets`` integrity discipline ``run_edge_report``
+    dishonest state (the identical ``_verified_corpus`` integrity discipline ``run_edge_report``
     uses) — nothing is written by the CALLER in that case. Strictly read-only: promotes nothing,
     appends no ledger row, moves no champion pointer (see the module docstring).
 
@@ -928,8 +967,9 @@ def _compute_strategy_comparison_report(
     ``BacktestRunner``'s one-slot contract; byte-identical persisted reports, two of three
     full-engine replays removed)."""
     jobs = BacktestJobManager(store, config, reuse_replay_path=True)
-    train_datasets = _split_datasets(dataset_store, SPLIT_TRAIN)
-    holdout_datasets = _split_datasets(dataset_store, SPLIT_HOLDOUT)
+    records, withheld_excluded = _verified_corpus(dataset_store)
+    train_datasets = _split_datasets(records, SPLIT_TRAIN)
+    holdout_datasets = _split_datasets(records, SPLIT_HOLDOUT)
 
     # ONE ``compute_setups`` call for the WHOLE report (audit B2 hot-path guard) — never per
     # dataset, never per split; reused for both the train and hold-out join below. Skipped
@@ -957,13 +997,24 @@ def _compute_strategy_comparison_report(
         reporter=reporter, should_abort=should_abort, run_pair=run_pair,
     )
 
-    return {
+    body = {
         "register": REGISTER,
         "pnl_min_sample_size": config.pnl_min_sample_size,
         "train": {"cells": train_cells},
         "holdout": {"cells": holdout_cells},
         "surviving_train_cells": _surviving_train_cells(train_cells, holdout_cells, config),
+        # Spec section 7.5 point 6 (r4): the count of registered datasets this sweep never
+        # measured because their vault shards are withheld — never the ids, never omitted.
+        "withheld_excluded": withheld_excluded,
     }
+    if withheld_excluded and not records:
+        # r4's "a run whose entire eligible corpus is withheld reports that honestly rather than
+        # emitting an empty-but-shaped result": an all-empty `cells` list is otherwise a LEGITIMATE
+        # degenerate outcome here (see this section's own comment block), so the distinguishing
+        # statement is carried explicitly rather than left to the reader's arithmetic. Present ONLY
+        # in that case — the honest-omission convention, never a fabricated `null`.
+        body["finding"] = FULLY_WITHHELD_FINDING
+    return body
 
 
 def _render_report(report: dict) -> str:

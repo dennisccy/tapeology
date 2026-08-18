@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "journey": "J-04",
+  "name": "The Scout and the ledger — every trial on the record",
+  "default_timeout_ms": 10000,
+  "steps": [
+    {"n": 1, "journey": "J-04", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Screen Runs"}}
+  ]
+}

@@ -130,6 +130,10 @@ def test_trigger_members_total_is_known_synchronously_before_any_background_work
             "screen_date": SCREEN_DATE, "as_of": "2026-06-22T23:59:59Z",
             "universe_snapshot_id": "x", "config_fingerprint": "y", "bar_store_signature": "z", "screen_coverage_signature": "zc",
             "rows": [], "skipped": [],
+            "withheld_excluded": 0,  # r4 (spec section 7.5 point 6): the stub mirrors the real shape
+            # spec section 7.5 point 6 (r4): `compute_screen` now always reports what its
+            # dataset enumeration excluded; this stub mirrors the real return shape.
+            "withheld_excluded": 0,
         }
 
     monkeypatch.setattr(desk_screen_compute, "compute_screen", fake_compute_screen)
@@ -185,6 +189,10 @@ def test_second_trigger_while_running_returns_the_same_job_started_false(manager
             "screen_date": SCREEN_DATE, "as_of": "2026-06-22T23:59:59Z",
             "universe_snapshot_id": "x", "config_fingerprint": "y", "bar_store_signature": "z", "screen_coverage_signature": "zc",
             "rows": [], "skipped": [],
+            "withheld_excluded": 0,  # r4 (spec section 7.5 point 6): the stub mirrors the real shape
+            # spec section 7.5 point 6 (r4): `compute_screen` now always reports what its
+            # dataset enumeration excluded; this stub mirrors the real return shape.
+            "withheld_excluded": 0,
         }
 
     monkeypatch.setattr(desk_screen_compute, "compute_screen", fake_compute_screen)
@@ -209,6 +217,9 @@ def test_trigger_after_a_terminal_job_starts_a_genuinely_new_job(manager_env, mo
         lambda *a, **k: {
             "screen_date": SCREEN_DATE, "as_of": "2026-06-22T23:59:59Z", "universe_snapshot_id": "x",
             "config_fingerprint": "y", "bar_store_signature": "z", "screen_coverage_signature": "zc", "rows": [], "skipped": [],
+            # spec section 7.5 point 6 (r4): `compute_screen` now always reports what its
+            # dataset enumeration excluded; this stub mirrors the real return shape.
+            "withheld_excluded": 0,
         },
     )
 
@@ -247,6 +258,9 @@ def test_a_cancellation_signal_resolves_state_cancelled_with_partial_progress_an
         return {
             "screen_date": SCREEN_DATE, "as_of": "2026-06-22T23:59:59Z", "universe_snapshot_id": "x",
             "config_fingerprint": "y", "bar_store_signature": "z", "screen_coverage_signature": "zc", "rows": [], "skipped": [],
+            # spec section 7.5 point 6 (r4): `compute_screen` now always reports what its
+            # dataset enumeration excluded; this stub mirrors the real return shape.
+            "withheld_excluded": 0,
         }
 
     monkeypatch.setattr(desk_screen_compute, "compute_screen", fake_compute_screen)
@@ -298,6 +312,9 @@ def test_a_corrupted_snapshot_at_the_same_key_resolves_state_failed_never_a_sile
         lambda *a, **k: {
             "screen_date": SCREEN_DATE, "as_of": "2026-06-22T23:59:59Z", "universe_snapshot_id": "x",
             "config_fingerprint": "y", "bar_store_signature": "z", "screen_coverage_signature": "zc", "rows": [], "skipped": [],
+            # spec section 7.5 point 6 (r4): `compute_screen` now always reports what its
+            # dataset enumeration excluded; this stub mirrors the real return shape.
+            "withheld_excluded": 0,
         },
     )
 
@@ -331,6 +348,9 @@ def test_snapshot_returns_are_independent_copies_never_a_shared_mutable_referenc
         lambda *a, **k: {
             "screen_date": SCREEN_DATE, "as_of": "2026-06-22T23:59:59Z", "universe_snapshot_id": "x",
             "config_fingerprint": "y", "bar_store_signature": "z", "screen_coverage_signature": "zc", "rows": [], "skipped": [],
+            # spec section 7.5 point 6 (r4): `compute_screen` now always reports what its
+            # dataset enumeration excluded; this stub mirrors the real return shape.
+            "withheld_excluded": 0,
         },
     )
 
@@ -461,6 +481,10 @@ def test_initial_and_running_snapshot_carry_the_honest_reused_false_screen_id_nu
             "screen_date": SCREEN_DATE, "as_of": "2026-06-22T23:59:59Z",
             "universe_snapshot_id": "x", "config_fingerprint": "y", "bar_store_signature": "z", "screen_coverage_signature": "zc",
             "rows": [], "skipped": [],
+            "withheld_excluded": 0,  # r4 (spec section 7.5 point 6): the stub mirrors the real shape
+            # spec section 7.5 point 6 (r4): `compute_screen` now always reports what its
+            # dataset enumeration excluded; this stub mirrors the real return shape.
+            "withheld_excluded": 0,
         }
 
     monkeypatch.setattr(desk_screen_compute, "compute_screen", fake_compute_screen)
@@ -739,6 +763,9 @@ def test_cancel_while_running_succeeds_and_a_subsequent_cancel_is_409(route_ctx,
         return {
             "screen_date": SCREEN_DATE, "as_of": "2026-06-22T23:59:59Z", "universe_snapshot_id": "x",
             "config_fingerprint": "y", "bar_store_signature": "z", "screen_coverage_signature": "zc", "rows": [], "skipped": [],
+            # spec section 7.5 point 6 (r4): `compute_screen` now always reports what its
+            # dataset enumeration excluded; this stub mirrors the real return shape.
+            "withheld_excluded": 0,
         }
 
     monkeypatch.setattr(desk_screen_compute, "compute_screen", fake_compute_screen)
@@ -999,6 +1026,9 @@ def test_tc5_a_cancellation_mid_walk_records_state_cancelled_with_partial_attemp
         return {
             "screen_date": SCREEN_DATE, "as_of": "2026-06-22T23:59:59Z", "universe_snapshot_id": "x",
             "config_fingerprint": "y", "bar_store_signature": "z", "screen_coverage_signature": "zc", "rows": rows, "skipped": skipped,
+            # spec section 7.5 point 6 (r4): the real `compute_screen` always reports what its
+            # dataset enumeration excluded; this stub mirrors that shape.
+            "withheld_excluded": 0,
         }
 
     monkeypatch.setattr(desk_screen_compute, "compute_screen", fake_compute_screen)
@@ -1202,6 +1232,9 @@ def test_a_terminal_log_write_that_raises_is_never_re_logged_as_a_second_failed_
         return {
             "screen_date": SCREEN_DATE, "as_of": "2026-06-22T23:59:59Z", "universe_snapshot_id": "x",
             "config_fingerprint": "y", "bar_store_signature": "z", "screen_coverage_signature": "zc", "rows": [], "skipped": skipped,
+            # spec section 7.5 point 6 (r4): the real `compute_screen` always reports what its
+            # dataset enumeration excluded; this stub mirrors that shape.
+            "withheld_excluded": 0,
         }
 
     monkeypatch.setattr(desk_screen_compute, "compute_screen", fake_compute_screen)

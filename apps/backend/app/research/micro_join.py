@@ -85,7 +85,9 @@ from typing import TYPE_CHECKING, Sequence
 from . import micro_features as mf
 from .datasets import DatasetStore, parse_utc_epoch
 from .micro_accessor import MicroAccessor
-from .micro_snapshots import load_snapshot_meta
+# ``exclude_withheld``: spec section 7.5 point 6 (r4) -- the ONE withholding predicate every
+# corpus-wide enumerator shares, imported rather than re-implemented here.
+from .micro_snapshots import exclude_withheld, load_snapshot_meta
 
 if TYPE_CHECKING:  # pragma: no cover -- type-checking only, never a runtime import (no cycle risk)
     from ..config import Config
@@ -168,8 +170,14 @@ def _covering_dataset(symbol: str, at_epoch: float, records: Sequence[dict]) -> 
 def find_covering_dataset(symbol: str, at_epoch: float, dataset_store: DatasetStore) -> dict | None:
     """The single-lookup convenience form of ``_covering_dataset`` -- lists the store fresh for
     THIS one call. A caller checking many instants against the SAME store (``joinable_corpus_
-    counts`` below) lists once and calls ``_covering_dataset`` directly instead."""
+    counts`` below) lists once and calls ``_covering_dataset`` directly instead.
+
+    Withheld Validation-Vault shards are excluded (spec section 7.5 point 6, r4): this lookup is
+    the door onto a covering SNAPSHOT and therefore onto a shard's rows, so a sealed shard covering
+    the instant is an honest ``None`` (the same answer this function already gives when no window
+    covers it) rather than a read of held-out tape."""
     records, _errors = dataset_store.list()
+    records, _withheld_excluded = exclude_withheld(records, dataset_store)
     return _covering_dataset(symbol, at_epoch, records)
 
 
@@ -515,8 +523,16 @@ def joinable_corpus_counts(dataset_store: DatasetStore, playbook_store) -> dict:
     record (``playbook_store.list()``'s own error half) is skipped from the count -- there is no
     signal content to read from a file that failed verification -- but is never silently dropped
     from the RESPONSE: it is surfaced verbatim in ``playbook_integrity_errors`` (module docstring's
-    iter-4 passenger fix)."""
+    iter-4 passenger fix).
+
+    **Withheld shards are excluded, and the exclusion is disclosed (spec section 7.5 point 6, r4;
+    iter-9 audit finding B5).** A dataset whose vault shard has not reached ``exposed`` is not
+    available evidence, so counting its window as joinable would make this number disagree with
+    ``micro_readiness``' own ``totals.distinct_datasets`` (which already excludes it) inside one
+    payload. ``withheld_excluded`` carries the COUNT -- never the ids -- so the shrink is never
+    silent. Byte-identical (``0``) while nothing is sealed."""
     records, _errors = dataset_store.list()
+    records, withheld_excluded = exclude_withheld(records, dataset_store)
     total_playbook = 0
     by_setup_id: dict[str, int] = {}
     playbook_records, playbook_errors = playbook_store.list()
@@ -542,4 +558,7 @@ def joinable_corpus_counts(dataset_store: DatasetStore, playbook_store) -> dict:
         "band_touch_count": _band_touch_not_enumerated(),
         "by_setup_id": by_setup_id,
         "playbook_integrity_errors": playbook_errors,
+        # Spec section 7.5 point 6 (r4): the count of registered datasets whose windows were NOT
+        # eligible to make a signal joinable, because their vault shards are withheld.
+        "withheld_excluded": withheld_excluded,
     }

@@ -82,8 +82,17 @@ file that is NOT part of any previously-cached healthy subset coincidentally mat
 cached key and silently serving a result that never saw the corruption — never worth the risk for
 what is already the rare, explicit-failure path.
 
+**The key's corpus is SEAL-FILTERED (spec section 7.5 point 6, r4).** ``get_or_compute`` and
+``compute_and_publish`` derive their key from ``exclude_withheld(records, dataset_store)`` — the
+ONE withholding predicate ``edge_report._verified_corpus`` measures under and ``lookup``'s caller
+(``peek_strategy_comparison_report``) already passes in. Without this the two halves would key the
+SAME report under two different corpus views the moment a shard is sealed: the write half would
+publish under a key including the withheld shard, and every read would miss forever. Byte-identical
+while nothing is withheld, and a genuine re-key (a new sealed shard changes what the report
+measures, so it must change what the cache serves) once something is.
+
 **era-fast_wall J-01 additions — ``lookup``/``compute_and_publish`` beside ``get_or_compute``.**
-``get_or_compute`` stays UNTOUCHED (byte-identical, every one of its own tests unmodified). Two
+``get_or_compute`` keeps its J-01 behaviour (only the r4 key basis above changed). Two
 new methods split its "check cache, else compute" behaviour into its two named halves, for the
 interlude's headline "no compute on a GET, ever" anti-goal: ``lookup(records, config)`` is the
 READ-ONLY half (hot slot then durable row, returns ``None`` on a miss, NEVER calls a compute
@@ -110,6 +119,8 @@ from typing import Callable
 from ..config import Config
 from .algorithm_version import LEVELS_ALGORITHM_VERSION
 from .datasets import DatasetStore
+# Spec section 7.5 point 6 (r4): the ONE withholding predicate — imported, never re-implemented.
+from .micro_snapshots import exclude_withheld
 
 __all__ = ["EdgeReportCache", "resolve_cache_db_path"]
 
@@ -296,6 +307,10 @@ class EdgeReportCache:
         records, errors = dataset_store.list()
         if errors:
             return compute_fn()
+        # Spec section 7.5 point 6 (r4): key on the SEAL-FILTERED registry -- the identical basis
+        # `edge_report._verified_corpus` measures and `lookup`'s callers pass in, so the write and
+        # read halves of this cache can never key one report under two different corpus views.
+        records, _withheld_excluded = exclude_withheld(records, dataset_store)
         key = _cache_key(records, config)
 
         hot = self._hot  # read-local-reference-before-inspect
@@ -355,6 +370,10 @@ class EdgeReportCache:
         records, errors = dataset_store.list()
         if errors:
             return compute_fn()
+        # Spec section 7.5 point 6 (r4): key on the SEAL-FILTERED registry -- the identical basis
+        # `edge_report._verified_corpus` measures and `lookup`'s callers pass in, so the write and
+        # read halves of this cache can never key one report under two different corpus views.
+        records, _withheld_excluded = exclude_withheld(records, dataset_store)
         key = _cache_key(records, config)
 
         result = compute_fn()

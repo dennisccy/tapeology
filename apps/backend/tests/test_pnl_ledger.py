@@ -747,3 +747,44 @@ def test_committed_pnl_history_file_is_not_a_default_target_of_these_tests(fresh
     # explicit path=... — never the bare two-arg form that would target the committed file.
     assert "write_history_markdown(fresh_store, CONFIG)\n" not in src
     assert "write_history_markdown(store, CONFIG)\n" not in src
+
+
+# --- spec section 7.5 point 6 (r4): the append-only row discloses what its run left out ----------
+
+
+def test_r4_the_ledger_row_records_the_writing_runs_withheld_count(reports_ctx):
+    """An APPEND-ONLY row can never be corrected, so a promotion recorded over a shrunken corpus
+    must SAY the corpus shrank (spec section 7.5 point 6, r4 — ``pnl_scan``'s sweep is the caller
+    that passes this). A count, never an id."""
+    store, _dstore, train_report, holdout_report = reports_ctx
+
+    row = append_validation_row(
+        store,
+        CONFIG,
+        enhancement_id="e-withheld-disclosed",
+        title="a promotion measured over a partially withheld corpus",
+        candidate_train_report_id=train_report["id"],
+        candidate_holdout_report_id=holdout_report["id"],
+        withheld_excluded=3,
+    )
+
+    assert row["provenance"]["withheld_excluded"] == 3
+    assert store.get_pnl_ledger_row("e-withheld-disclosed").payload == row  # persisted verbatim
+
+
+def test_r4_a_caller_that_passes_nothing_records_the_pre_r4_shape_exactly(reports_ctx):
+    """The honest-omission counter-test: ``pnl_baseline``'s founding seed knows nothing about a
+    corpus enumeration, so its row carries NO ``withheld_excluded`` key at all — never a
+    fabricated ``0`` implying a check that never happened."""
+    store, _dstore, train_report, holdout_report = reports_ctx
+
+    row = append_validation_row(
+        store,
+        CONFIG,
+        enhancement_id="e-no-withheld-key",
+        title="founding seed shape",
+        candidate_train_report_id=train_report["id"],
+        candidate_holdout_report_id=holdout_report["id"],
+    )
+
+    assert "withheld_excluded" not in row["provenance"]

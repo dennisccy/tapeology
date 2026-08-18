@@ -21,7 +21,9 @@ import pytest
 from app.config import CONFIG
 from app.providers.base import QuoteEvent, Side, TradeEvent
 from app.research.datasets import DatasetStore, SPLIT_HOLDOUT, SPLIT_TRAIN
+from app.research import vault
 from app.research.edge_report_cache import EdgeReportCache, resolve_cache_db_path
+from app.research.micro_snapshots import exclude_withheld
 
 WINDOW_START, WINDOW_END = "2026-01-02T14:30:00Z", "2026-01-02T14:30:05Z"
 
@@ -594,3 +596,58 @@ def test_resolve_cache_db_path_defaults_to_a_sibling_of_the_dataset_dir(monkeypa
     dataset_dir = str(tmp_path / "datasets")
 
     assert resolve_cache_db_path(dataset_dir) == str(tmp_path / "edge_report_cache.db")
+
+
+# --- spec section 7.5 point 6 (r4): the key's corpus is the SEAL-FILTERED one -------------------
+# The write half (`get_or_compute`/`compute_and_publish`) and the read half (`lookup`, whose
+# caller `edge_report.peek_strategy_comparison_report` passes already-filtered records) must key
+# the SAME report under the SAME corpus view. Without the shared filter, the first sealed shard
+# would make every subsequent GET miss forever while the compute kept republishing.
+
+
+def _seal(dstore: DatasetStore, meta: dict) -> None:
+    vault.seal_shard(
+        vault.shard_ledger_for_dataset_dir(str(dstore.root)),
+        dataset_id=meta["id"], universe_id="starter-tranche-v1",
+        content_checksum=meta["checksum"], event_count=meta["event_counts"]["total"],
+        vault_secret=b"edge-report-cache-fixture-secret",
+    )
+
+
+def test_r4_a_warm_key_written_with_a_shard_sealed_is_found_by_the_read_half(tmp_path):
+    dstore = DatasetStore(tmp_path / "datasets")
+    _record(dstore, "SYN-A", split=SPLIT_TRAIN)
+    sealed = _record(dstore, "SYN-B", split=SPLIT_HOLDOUT)
+    _seal(dstore, sealed)
+    cache = EdgeReportCache(str(tmp_path / "cache.db"))
+    compute = _CountingCompute({"train": {"cells": ["only-the-public-sibling"]}, "holdout": {"cells": []}})
+
+    published = cache.get_or_compute(dstore, CONFIG, compute)
+
+    # the read half keys off the SAME seal-filtered registry the report was computed over
+    records, _errors = dstore.list()
+    kept, withheld_excluded = exclude_withheld(records, dstore)
+    assert withheld_excluded == 1
+    assert cache.lookup(kept, CONFIG) == published
+    assert compute.calls == 1  # a second dispatch through the write half is a genuine hit
+    assert cache.get_or_compute(dstore, CONFIG, compute) == published
+    assert compute.calls == 1
+
+
+def test_r4_sealing_a_shard_busts_the_cache_because_the_report_now_measures_less(tmp_path):
+    """The counter-test to the parity above: a sealed shard genuinely CHANGES what the report
+    measures, so it must change what the cache serves — never a stale report served under a
+    corpus that no longer exists."""
+    dstore = DatasetStore(tmp_path / "datasets")
+    _record(dstore, "SYN-A", split=SPLIT_TRAIN)
+    to_seal = _record(dstore, "SYN-B", split=SPLIT_HOLDOUT)
+    cache = EdgeReportCache(str(tmp_path / "cache.db"))
+    compute = _CountingCompute()
+
+    cache.get_or_compute(dstore, CONFIG, compute)
+    assert compute.calls == 1
+
+    _seal(dstore, to_seal)
+    cache.get_or_compute(dstore, CONFIG, compute)
+
+    assert compute.calls == 2  # a cold key: the corpus this report measures really did change

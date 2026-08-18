@@ -1,10 +1,16 @@
 """``/research/desk/micro/*`` -- Era "The Rapid Microscope": J-01's readiness fold, J-02's three
-snapshot routes, J-04's Scout routes, and J-05's three walk-forward routes. A fresh router/file
-mounted separately in ``main.py``, mirroring ``referee_routes.py``'s own precedent and rationale
-(that file's own docstring: "the SAME rationale desk_routes.py itself gives for splitting off
-routes.py"). The era's own Data Contract table (``docs/goal.md``'s Product Shape) names THREE more
-micro routes landing in later iterations (vault, recorder, graduation) under this SAME
-``/research/desk/micro`` prefix -- a dedicated file is the right home from the start.
+snapshot routes, J-04's Scout routes, J-05's three walk-forward routes, J-06 step 2's recorder
+routes, and J-06 step 3's ONE read-only vault route. A fresh router/file mounted separately in
+``main.py``, mirroring ``referee_routes.py``'s own precedent and rationale (that file's own
+docstring: "the SAME rationale desk_routes.py itself gives for splitting off routes.py"). The
+era's own Data Contract table (``docs/goal.md``'s Product Shape) names ONE more micro route
+landing in a later iteration (graduation) under this SAME ``/research/desk/micro`` prefix -- a
+dedicated file is the right home from the start.
+
+``GET /vault`` is GET-only this iteration -- no ``/vault/compute`` route and no CLI (the phase
+spec's own OUT OF SCOPE: "no operator act in this iteration or the next calls registration
+standalone; that lands with step 4"), so it needs no compute manager and no ``POST``/cancel
+sibling routes, unlike the sections above it.
 
 Depends on stores this route does NOT own: the dataset store dependency is imported verbatim from
 ``routes.get_dataset_store``, the universe/bar-store dependencies from ``desk_routes.
@@ -50,6 +56,7 @@ from .tick_recorder import (
     resolve_tick_recorder_checkpoint_dir,
     resolve_tick_recorder_log_dir,
 )
+from . import vault
 from . import walkforward as wf
 from .walkforward_ledger import WalkForwardLedger
 
@@ -140,7 +147,11 @@ def get_micro_snapshots_compute(
     manager: MicroSnapshotComputeManager = Depends(get_micro_snapshot_compute_manager),
 ) -> dict:
     """The current (or last-terminal) build job's progress -- never 404 (the ``_IDLE_SNAPSHOT``
-    default before any job has ever run this process)."""
+    default before any job has ever run this process).
+
+    ``withheld_excluded`` (spec section 7.5 point 6, r4) is this run's own disclosure of how many
+    Validation-Vault shards the build enumeration left out -- a COUNT only, never an id, and never
+    silently omitted. ``0`` whenever the vault holds nothing withheld, which is every run today."""
     snap = manager.snapshot()
     return {
         "state": snap["state"],
@@ -148,6 +159,7 @@ def get_micro_snapshots_compute(
         "started_utc": snap["started_utc"],
         "finished_utc": snap["finished_utc"],
         "error": snap["error"],
+        "withheld_excluded": snap["withheld_excluded"],
     }
 
 
@@ -493,3 +505,29 @@ def cancel_tick_recorder_compute(
 def get_tick_recorder_runs(run_log_dir: str = Depends(get_tick_recorder_log_dir)) -> dict:
     """The durable run history, newest first -- never 404 on zero runs (an honest empty list)."""
     return {"runs": read_run_log(run_log_dir)}
+
+
+# --- J-06 step 3: the Validation Vault (vault.py) -- GET-only this iteration ------------------------
+
+
+def get_vault_dir() -> str:
+    """The vault's storage directory -- ``TAPEOLOGY_MICRO_VAULT_DIR`` if set, else a SIBLING of
+    the config-owned dataset directory (``vault.resolve_vault_dir`` -- see that function's own
+    docstring)."""
+    return vault.resolve_vault_dir(CONFIG.dataset_dir_resolved())
+
+
+@router.get("/vault")
+def get_vault(vault_dir: str = Depends(get_vault_dir)) -> dict:
+    """Serves ``vault.py``'s own state verbatim (``vault.build_vault_state`` -- no second
+    computation in this handler): every shard's CURRENT lifecycle state (opaque-only while
+    ``sealed``, full symbol/date/family provenance from ``assigned`` onward -- section 7.5, TR-2),
+    every registered universe (never the raw secret, only its commitment -- and, while any of that
+    universe's shards is still withheld, only its ``rule_hash``/sizes rather than the
+    ``symbol_rule``/``date_rule`` LISTS, since those minus the public dataset listing would spell
+    out the sealed tranche by subtraction: iter-9 audit third pass, ``vault._serialize_universe``),
+    and both ledgers' own chain-verification verdicts. Never 404/500 on an empty vault -- the desk
+    router's established never-404-on-absence convention: an honest empty ``shards``/``universes``
+    before any universe is ever registered (registration is a step-4, operator-attended act, out of THIS iteration's
+    scope)."""
+    return vault.build_vault_state(vault.VaultShardLedger(vault_dir), vault.VaultUniverseLedger(vault_dir))

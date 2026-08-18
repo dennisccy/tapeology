@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "journey": "J-03",
+  "name": "Structure × flow — the join that never looks ahead",
+  "default_timeout_ms": 10000,
+  "steps": [
+    {"n": 1, "journey": "J-03", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Index Reconciliation"}}
+  ]
+}

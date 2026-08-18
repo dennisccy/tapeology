@@ -1325,3 +1325,35 @@ def test_tc8_durable_publish_failure_never_blocks_compute_setups_from_serving_th
     result = compute_setups(store, config)  # must not raise
 
     assert len(result["events"]) >= 1, "the freshly-scanned (correct) result must still be served"
+
+
+def test_r4_a_withheld_shard_is_never_replayed_into_a_served_drill_in(tmp_path):
+    """Spec section 7.5 point 6 (r4): this join enumerates the dataset store and then REPLAYS the
+    matched dataset's raw events into a served drill-in, so a withheld Validation-Vault shard must
+    never match -- the drill-in falls back to its existing, honest empty timeline (the same answer
+    it already gives when no window covers the touch), never a read of held-out tape."""
+    import shutil
+
+    from app.research import vault
+
+    bar_store = BarStore(tmp_path / "bars")
+    _seed_pg_join_bars(bar_store)
+    event = _pg_join_event(bar_store)
+    target = tmp_path / "j03-datasets"
+    shutil.copytree(FIXTURE_DATASETS_J03_DIR, target)
+    dataset_store = DatasetStore(target)
+
+    joined = enrich_with_tape_timeline(event, dataset_store, _pg_join_config())
+    assert joined["tape_timeline"], "the baseline join must be non-empty or this proves nothing"
+
+    (covering,) = dataset_store.list()[0]
+    vault.seal_shard(
+        vault.shard_ledger_for_dataset_dir(str(dataset_store.root)),
+        dataset_id=covering["id"], universe_id="starter-tranche-v1",
+        content_checksum=covering["checksum"], event_count=covering["event_counts"]["total"],
+        vault_secret=b"setups-fixture-secret",
+    )
+
+    after = enrich_with_tape_timeline(event, dataset_store, _pg_join_config())
+    assert after["tape_timeline"] == []
+    assert after == event  # the event is returned unchanged, exactly as for an unmatched touch

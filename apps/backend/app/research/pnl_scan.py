@@ -146,6 +146,10 @@ from ..config import CONFIG, Config, PROFILE_DEFAULT
 from .backtests import BacktestJobManager, REGISTER, STATUS_DONE
 from .bars import BarStore
 from .datasets import DatasetStore, SPLIT_HOLDOUT, SPLIT_TRAIN
+# Spec section 7.5 point 6 (r4, owner ruling): the ONE withholding predicate every corpus-wide
+# enumerator shares -- imported, never re-implemented (a divergent second copy is exactly how the
+# iter-9 audit's B2 leak survived the route-level fix).
+from .micro_snapshots import exclude_withheld
 from .pnl_ledger import LedgerCompositionError, append_validation_row
 from .referee_adjudicate import REFEREE_GATE_VERSION, authorize_promotion, referee_parameters_hash
 from .referee_registry import CertificateStore, resolve_referee_registry_dir
@@ -168,6 +172,15 @@ BREAKTHROUGH_ANCHOR_CAVEAT = (
     "frequency, and so the reported edge, relative to a tighter crossing rule. Disclosed rather "
     "than tightened this iteration to avoid a second risky change to the frozen J-04/J-05 arming "
     "(see docs/goal.md iter-6 NOTES, audit item B1)."
+)
+
+# Spec section 7.5 point 6 (r4): the sentence a fully-withheld corpus carries, so an empty sweep
+# can never read as "every registered dataset was measured and nothing survived". Static and
+# config-independent, exactly like the caveat above, so byte-identical reruns are unaffected.
+FULLY_WITHHELD_CAVEAT = (
+    "no dataset was measured: every registered dataset is a withheld Validation-Vault shard "
+    "(spec section 7.5) -- this sweep measures nothing, rather than reporting an empty result as "
+    "if the corpus had been read."
 )
 
 
@@ -213,16 +226,33 @@ def _run_backtest(
     return payload["id"], final["result"]
 
 
-def _split_datasets(dataset_store: DatasetStore, split: str) -> list[dict]:
-    """Every registered dataset metadata row for ``split`` (checksum-verified on load, the ONE
-    ``DatasetStore.list`` read). A file that fails integrity verification anywhere in the store
-    aborts the whole sweep explicitly — a partial report is a misleading report."""
+def _verified_corpus(dataset_store: DatasetStore) -> tuple[list[dict], int]:
+    """``(records, withheld_excluded)`` — the ONE ``DatasetStore.list`` read this sweep makes,
+    checksum-verified and seal-filtered. A file that fails integrity verification anywhere in the
+    store aborts the whole sweep explicitly — a partial report is a misleading report.
+
+    **Spec section 7.5 point 6 (r4, owner ruling).** This module drives ``BacktestJobManager``
+    directly, so a route-level refusal never sees it: a withheld Validation-Vault shard (state
+    != ``exposed``) is excluded HERE, at the single enumeration choke point, or its events would
+    be replayed and its stored manifest (id + raw checksum + window + counts) would land verbatim
+    in every persisted backtest result and, on a promotion, in the APPEND-ONLY PnL ledger — the
+    iter-9 re-audit's finding B2. Excluding it silently is equally forbidden ("a partial report is
+    a misleading report", above), so the COUNT — never the ids — travels into this run's report
+    body and into the ledger row it may write. Byte-identical while nothing is sealed."""
     records, errors = dataset_store.list()
     if errors:
         raise ScanError(
             f"{len(errors)} dataset file(s) failed integrity verification "
             f"({[e['file'] for e in errors]}) — the sweep stops with nothing written"
         )
+    return exclude_withheld(records, dataset_store)
+
+
+def _split_datasets(records: list[dict], split: str) -> list[dict]:
+    """One split's rows out of an ALREADY-verified, already-seal-filtered record list (never a
+    second ``DatasetStore.list()`` read of its own — ``run_sweep`` enumerates once through
+    ``_verified_corpus`` and slices in memory, so the disclosed ``withheld_excluded`` count and
+    the measured rows can never come from two different reads of the store)."""
     return [r for r in records if r["split"] == split]
 
 
@@ -305,6 +335,7 @@ def _promote(
     train_rows: list[dict],
     holdout_rows: list[dict],
     certificate_store: CertificateStore,
+    withheld_excluded: int = 0,
 ) -> dict:
     """Promote a genuine hold-out survivor: append ONE PnL-ledger row (the EXISTING single
     writer) THEN move the persisted champion pointer — in that crash-safe order (see the module
@@ -322,7 +353,12 @@ def _promote(
     era-6 J-08: with EXACTLY one train/hold-out dataset registered, ``authorize_promotion`` is
     consulted BEFORE ``append_validation_row`` — a valid, candidate-specific Referee certificate
     is REQUIRED or nothing is written and nothing moves (fail closed; no bypass of any kind).
-    ``live_scan_context`` is built FRESH from this run's own values every call, never cached."""
+    ``live_scan_context`` is built FRESH from this run's own values every call, never cached.
+
+    ``withheld_excluded`` (spec section 7.5 point 6, r4) is this sweep's own count of registered
+    datasets it never measured because their vault shards are withheld — stamped into the
+    APPEND-ONLY ledger row's provenance so a permanently recorded promotion can never claim a
+    corpus it did not read. A count only; never an id."""
     if len(train_datasets) != 1 or len(holdout_datasets) != 1:
         return {
             "candidate_id": candidate_id,
@@ -372,6 +408,7 @@ def _promote(
             candidate_train_report_id=train_rows[0]["candidate_report_id"],
             candidate_holdout_report_id=holdout_rows[0]["candidate_report_id"],
             baseline=baseline,
+            withheld_excluded=withheld_excluded,
         )
     except (LedgerCompositionError, DuplicateEnhancementError) as exc:
         raise ScanError(
@@ -444,8 +481,9 @@ def run_sweep(
         candidates = [p for p in config.profile_registry() if not p["is_default"]]
         champion_strategy_id, champion_profile = champion["strategy_id"], champion["profile"]
 
-    train_datasets = _split_datasets(dataset_store, SPLIT_TRAIN)
-    holdout_datasets = _split_datasets(dataset_store, SPLIT_HOLDOUT)
+    records, withheld_excluded = _verified_corpus(dataset_store)
+    train_datasets = _split_datasets(records, SPLIT_TRAIN)
+    holdout_datasets = _split_datasets(records, SPLIT_HOLDOUT)
 
     champion_train: list[tuple[str, dict]] = []
     champion_holdout: list[tuple[str, dict]] = []
@@ -532,7 +570,16 @@ def run_sweep(
                 train_rows=train_rows,
                 holdout_rows=holdout_rows,
                 certificate_store=certificate_store,
+                withheld_excluded=withheld_excluded,
             )
+
+    # r4's "a run whose entire eligible corpus is withheld reports that honestly rather than
+    # emitting an empty-but-shaped result": an all-empty sweep is otherwise indistinguishable from
+    # a genuinely empty registry, so the reason is stated. Static text, so byte-identical reruns
+    # are unaffected.
+    assumptions = [BREAKTHROUGH_ANCHOR_CAVEAT]
+    if withheld_excluded and not records:
+        assumptions.append(FULLY_WITHHELD_CAVEAT)
 
     return {
         "register": REGISTER,
@@ -541,9 +588,12 @@ def run_sweep(
         "champion_after": store.get_champion_pointer(),
         "candidates": candidate_entries,
         "promotion": promotion,
+        # Spec section 7.5 point 6 (r4): how many registered datasets this sweep never measured
+        # because their vault shards are withheld — a count only, never an id.
+        "withheld_excluded": withheld_excluded,
         # era-4 J-06 (audit item B1): disclosed, never re-armed this iteration — see the constant's
         # own docstring. Static and config-independent, so it never perturbs byte-identical reruns.
-        "provenance": {"assumptions": [BREAKTHROUGH_ANCHOR_CAVEAT]},
+        "provenance": {"assumptions": assumptions},
     }
 
 

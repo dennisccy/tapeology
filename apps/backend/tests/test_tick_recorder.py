@@ -279,16 +279,6 @@ def test_events_recorded_carry_the_card_5_1_preservation_fields_verbatim(rec_ctx
 # ==================================================================================================
 
 
-class _StrippedTradeEventMissingConditions:
-    """A deliberately-incomplete stand-in dataclass -- SIMULATES the preservation prerequisite
-    being absent without needing to monkeypatch the real, already-shipped ``TradeEvent`` (which
-    would be a fiction: the real class already carries these fields as of iter-7)."""
-
-    __dataclass_fields__ = {
-        name: None for name in ("ticker", "timestamp", "price", "size", "side", "exchange", "tape", "trade_id")
-    }  # deliberately missing "conditions"
-
-
 def test_tc8_the_recorder_refuses_to_record_anything_when_the_preservation_capability_is_absent(rec_ctx):
     import dataclasses as _dc
 
@@ -364,6 +354,40 @@ def test_tc10_recorded_datasets_carry_the_stamped_quote_size_unit_from_the_singl
     assert by_symbol["MSFT"]["quote_size_unit"] == "shares"
     assert by_symbol["AAPL"]["quote_size_unit"] in QUOTE_SIZE_UNITS
     assert by_symbol["AAPL"]["schema_basis"] == tr.RECORDER_SCHEMA_BASIS
+
+
+def test_tc12_finalize_day_stamps_the_rule_text_and_a_per_dataset_verification_note(rec_ctx):
+    """iter-9 TC-12 (spec section 2.6's own closing clause): ``_finalize_day``'s
+    ``record_from_source`` call gains the two new sibling fields alongside the existing
+    ``schema_basis``/``quote_size_unit`` stamps -- the rule text is the ONE frozen sentence
+    (``QUOTE_SIZE_UNIT_RULE_TEXT``) verbatim on every dataset regardless of which side of the
+    cutover it falls on; the verification note is genuinely PER-DATASET (names each dataset's own
+    ``session_date`` and the actual comparison direction against ``ALPACA_QUOTE_SIZE_UNIT_
+    EFFECTIVE``, TC-13's own "not one frozen sentence repeated regardless" contract)."""
+    adapter, dataset_store, checkpoint_store = rec_ctx
+    pre_chunks = tr.plan_recorder_chunks(["AAPL"], ["2025-10-15"], chunk_seconds=7800.0)
+    post_chunks = tr.plan_recorder_chunks(["MSFT"], ["2025-11-10"], chunk_seconds=7800.0)
+    tr.run_tick_recording(pre_chunks, dataset_store, checkpoint_store, adapter, CONFIG)
+    tr.run_tick_recording(post_chunks, dataset_store, checkpoint_store, adapter, CONFIG)
+
+    records, _errors = dataset_store.list()
+    by_symbol = {r["symbol"]: r for r in records}
+
+    for symbol in ("AAPL", "MSFT"):
+        assert by_symbol[symbol]["quote_size_unit_rule_text"] == tr.QUOTE_SIZE_UNIT_RULE_TEXT
+        assert "ALPACA_QUOTE_SIZE_UNIT_EFFECTIVE" in by_symbol[symbol]["quote_size_unit_verification_note"]
+
+    # the pre-cutover (round_lots) dataset's note names a "<" comparison; the post-cutover
+    # (shares) dataset's note names a ">=" comparison -- genuinely per-dataset, not one constant
+    # string copy-pasted onto every row regardless of its own date.
+    assert "('2025-10-15') < " in by_symbol["AAPL"]["quote_size_unit_verification_note"]
+    assert "('2025-11-10') >= " in by_symbol["MSFT"]["quote_size_unit_verification_note"]
+    assert by_symbol["AAPL"]["quote_size_unit_verification_note"] != by_symbol["MSFT"]["quote_size_unit_verification_note"]
+
+    # both survive a reload verbatim (the schema_basis/quote_size_unit reload precedent, extended).
+    reloaded = DatasetStore(str(Path(checkpoint_store._root).parent / "datasets")).get(by_symbol["AAPL"]["id"])
+    assert reloaded["quote_size_unit_rule_text"] == tr.QUOTE_SIZE_UNIT_RULE_TEXT
+    assert reloaded["quote_size_unit_verification_note"] == by_symbol["AAPL"]["quote_size_unit_verification_note"]
 
 
 def test_tc11_an_out_of_vocabulary_quote_size_unit_is_still_rejected_by_the_existing_guard(rec_ctx):
@@ -544,8 +568,9 @@ def test_tc6_a_concurrent_second_trigger_returns_the_in_flight_runs_snapshot_unc
 def test_tc7_cancel_on_an_idle_manager_is_rejected_by_the_route_layers_own_409_contract(manager_ctx):
     """The manager's OWN ``.cancel()`` is a harmless no-op when idle (module docstring); the route
     is what turns "idle" into an HTTP 409 (micro_routes.py's established convention, tested at the
-    route layer in test_micro_routes_recorder.py). Pinned here at the manager level: cancelling an
-    idle manager never raises, and its own ``accepted`` flag says nothing was running."""
+    route layer by ``test_cancelling_an_idle_recorder_is_a_409`` further down in THIS SAME file,
+    section 11's REST-route tests). Pinned here at the manager level: cancelling an idle manager
+    never raises, and its own ``accepted`` flag says nothing was running."""
     manager, _dataset_store, _checkpoint_store, _run_log_dir = manager_ctx
     result = manager.cancel()
     assert result == {"state": "cancelled", "accepted": False}

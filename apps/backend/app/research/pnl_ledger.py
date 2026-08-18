@@ -147,6 +147,7 @@ def append_validation_row(
     candidate_train_report_id: str,
     candidate_holdout_report_id: str,
     baseline: dict | None = None,
+    withheld_excluded: int | None = None,
 ) -> dict:
     """Compose and append ONE PnL-ledger row (row 32) at validation time — the single writer.
 
@@ -159,7 +160,14 @@ def append_validation_row(
     split); the shared provenance stamps (strategy id, profile, ``config_fingerprint``) must
     AGREE across the two reports — composing across mismatched stamps would pool across
     fingerprints, so it is an explicit refusal. Returns the appended payload (which the store now
-    serves verbatim). A duplicate enhancement id raises the store's ``DuplicateEnhancementError``."""
+    serves verbatim). A duplicate enhancement id raises the store's ``DuplicateEnhancementError``.
+
+    ``withheld_excluded`` (spec section 7.5 point 6, r4 — the sweep is its only caller today) is
+    the COUNT of registered datasets the writing run left out because their Validation-Vault
+    shards are withheld; it is stamped into ``provenance`` so an APPEND-ONLY row can never claim a
+    corpus its run never read. Never the ids. Omitted entirely when the caller passes nothing
+    (``pnl_baseline``'s founding seed) — the honest-omission convention this row already uses for
+    ``baseline``, and byte-identical to every row recorded before r4."""
     train = _completed_report(store, candidate_train_report_id, SPLIT_TRAIN)
     holdout = _completed_report(store, candidate_holdout_report_id, SPLIT_HOLDOUT)
     for stamp in ("strategy_id", "profile", "config_fingerprint"):
@@ -171,6 +179,15 @@ def append_validation_row(
                 f"was appended"
             )
     now = time.time()
+    provenance = {
+        "strategy_id": train["result"]["strategy_id"],
+        "profile": train["result"]["profile"],
+        "config_fingerprint": train["result"]["config_fingerprint"],
+        SPLIT_TRAIN: _split_provenance(train),
+        SPLIT_HOLDOUT: _split_provenance(holdout),
+    }
+    if withheld_excluded is not None:
+        provenance["withheld_excluded"] = withheld_excluded
     row = {
         "enhancement_id": enhancement_id,
         "title": title,
@@ -182,13 +199,7 @@ def append_validation_row(
             SPLIT_TRAIN: _split_measurement(train),
             SPLIT_HOLDOUT: _split_measurement(holdout),
         },
-        "provenance": {
-            "strategy_id": train["result"]["strategy_id"],
-            "profile": train["result"]["profile"],
-            "config_fingerprint": train["result"]["config_fingerprint"],
-            SPLIT_TRAIN: _split_provenance(train),
-            SPLIT_HOLDOUT: _split_provenance(holdout),
-        },
+        "provenance": provenance,
         "created_wall_ts": now,
         "created_utc": _iso_utc(now),
     }

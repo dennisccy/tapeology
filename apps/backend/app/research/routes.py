@@ -79,6 +79,7 @@ from .strategies import strategies_projection
 from .feed_basis import data_feed_for_scenario
 from .store import JournalStore
 from .taxonomy import taxonomy_payload
+from . import vault
 
 router = APIRouter(prefix="/research", tags=["research"])
 
@@ -390,20 +391,62 @@ def record_dataset(
     return {"dataset": meta}
 
 
+def get_withheld_dataset_ids() -> frozenset[str]:
+    """The dataset ids whose Validation-Vault shard has not yet reached ``exposed``
+    (``vault.withheld_dataset_ids`` — spec §7.5 point 3, r3). A FastAPI dependency resolved through
+    the SAME `TAPEOLOGY_MICRO_VAULT_DIR`-or-sibling-of-the-dataset-dir path every other vault
+    consumer uses (`vault.shard_ledger_for_dataset_dir`), so there is exactly one answer to "which
+    shards are sealed" in the process, and tests can override it outright.
+
+    Empty — and therefore a provable no-op for every existing behaviour — until the first shard is
+    ever sealed."""
+    return vault.withheld_dataset_ids(
+        vault.shard_ledger_for_dataset_dir(CONFIG.dataset_dir_resolved())
+    )
+
+
 @router.get("/datasets")
-def list_datasets(store: DatasetStore = Depends(get_dataset_store)) -> dict:
+def list_datasets(
+    store: DatasetStore = Depends(get_dataset_store),
+    withheld_ids: frozenset[str] = Depends(get_withheld_dataset_ids),
+) -> dict:
     """List every registered dataset's metadata (each file checksum-verified on load), oldest
     first. A file that fails verification is surfaced EXPLICITLY in ``integrity_errors`` — never
-    silently hidden, never served as data. The MCP ``datasets`` tool proxies this byte-for-byte."""
+    silently hidden, never served as data. The MCP ``datasets`` tool proxies this byte-for-byte.
+
+    Sealed-shard withholding (spec §7.5 point 3, r3): a dataset whose vault shard has not yet
+    reached ``exposed`` is OMITTED from ``datasets`` — its manifest carries the symbol, session
+    window and exact event counts §7.5 withholds, and this listing is the join surface the iter-9
+    audit's finding B1 demonstrated. The omission is DISCLOSED, never silent: ``sealed_withheld``
+    counts how many stored datasets were withheld, so a reader can always tell "nothing recorded"
+    from "recorded and sealed". The count alone reveals no shard identity, and the shards
+    themselves are served — opaquely — by their own canonical endpoint,
+    ``GET /research/desk/micro/vault``."""
     records, errors = store.list()
-    return {"datasets": records, "integrity_errors": errors}
+    served = [meta for meta in records if meta["id"] not in withheld_ids]
+    return {
+        "datasets": served,
+        "integrity_errors": errors,
+        "sealed_withheld": len(records) - len(served),
+    }
 
 
 @router.get("/datasets/{dataset_id}")
-def get_dataset(dataset_id: str, store: DatasetStore = Depends(get_dataset_store)) -> dict:
+def get_dataset(
+    dataset_id: str,
+    store: DatasetStore = Depends(get_dataset_store),
+    withheld_ids: frozenset[str] = Depends(get_withheld_dataset_ids),
+) -> dict:
     """One dataset's stored metadata, verbatim (checksum-verified on load). 404 for an unknown
     id; an explicit 500 integrity error for a corrupted/tampered file (never a fabricated
-    dataset)."""
+    dataset); and — spec §7.5 point 3 (r3) — a typed 403 refusal for a dataset whose vault shard
+    has not yet reached ``exposed``, checked BEFORE the file is even opened (fail-closed). The
+    refusal states only that the id is sealed: never the symbol, window, counts, or universe
+    (``vault.SealedShardWithheldError`` owns the single wording)."""
+    if dataset_id in withheld_ids:
+        raise HTTPException(
+            status_code=403, detail=str(vault.SealedShardWithheldError(dataset_id))
+        )
     try:
         meta = store.get(dataset_id)
     except DatasetNotFound:
@@ -1095,6 +1138,7 @@ def create_backtest(
     registry: ResearchRegistry = Depends(get_registry),
     store: DatasetStore = Depends(get_dataset_store),
     bar_store: BarStore = Depends(get_bar_store),
+    withheld_ids: frozenset[str] = Depends(get_withheld_dataset_ids),
 ) -> dict:
     """Create + START a deterministic backtest job (J-03; era-4 J-04 adds the additive
     ``structure_tape`` strategy) over one registered dataset under ``default`` or a registered
@@ -1122,6 +1166,16 @@ def create_backtest(
         raise HTTPException(
             status_code=422,
             detail=f"unknown profile '{body.profile}' — the registered profiles are {known}",
+        )
+    # 403 — a sealed shard is never READ (spec §7.5/§7.4 and the era's own *(critical)* anti-goal:
+    # "Event data and outcome aggregates of a `sealed` shard are refused everywhere ... fail-
+    # closed"). A backtest is exactly an outcome aggregate over a dataset's events, and its
+    # RESULT re-publishes the dataset's full manifest through `GET /research/backtests` and
+    # `GET /research/pnl/ledger` — so this refusal is what keeps those two surfaces provably clean
+    # for a sealed shard (TR-2's sweep asserts both). Checked before the dataset is even opened.
+    if body.dataset_id in withheld_ids:
+        raise HTTPException(
+            status_code=403, detail=str(vault.SealedShardWithheldError(body.dataset_id))
         )
     # 404-style — the dataset must exist (a checksum-verified load; never a fabricated dataset).
     try:

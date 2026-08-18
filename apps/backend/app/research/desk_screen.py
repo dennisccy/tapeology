@@ -149,6 +149,8 @@ from .datasets import DatasetStore
 from .desk_coverage import DESK_TOPUP_TIMEFRAMES, get_desk_coverage
 from .desk_meta_cache import SCREEN_TABLE, DeskMetaCache
 from .desk_universe import UniverseStore
+# Spec section 7.5 point 6 (r4): the ONE withholding predicate, imported not re-implemented.
+from .micro_snapshots import exclude_withheld
 from .tradability import compute_tradability
 
 # The two band sides `compute_tradability` serves. Only `RESISTANCE` is referenced by name below
@@ -703,6 +705,12 @@ def compute_screen(
     coverage_signature = screen_coverage_signature(coverage_payload, as_of)
 
     dataset_records, _dataset_errors = dataset_store.list()
+    # Spec section 7.5 point 6 (r4) + iter-9 audit finding B6: a symbol whose ONLY tick recording
+    # is a withheld Validation-Vault shard must not flip `tick_evidence` to true -- that boolean
+    # leaks sealed-tranche membership at symbol granularity, and section 7.5 withholds symbol
+    # membership until exposure. Excluded through the ONE shared predicate, and the count (never
+    # the ids) is disclosed in this screen's own payload and recorded snapshot below.
+    dataset_records, withheld_excluded = exclude_withheld(dataset_records, dataset_store)
     tick_symbols = {meta["symbol"] for meta in dataset_records}
 
     config_fingerprint = config.config_fingerprint()
@@ -783,6 +791,9 @@ def compute_screen(
         "screen_coverage_signature": coverage_signature,
         "rows": rows,
         "skipped": skipped,
+        # Spec section 7.5 point 6 (r4): how many recorded tick datasets were NOT eligible to
+        # supply `tick_evidence` for this screen, because their vault shards are withheld.
+        "withheld_excluded": withheld_excluded,
     }
 
 
@@ -1167,6 +1178,7 @@ class ScreenStore:
         rows: list[dict],
         skipped: list[dict],
         screen_coverage_signature: str | None = None,
+        withheld_excluded: int | None = None,
     ) -> dict:
         """Persist ONE new screen snapshot (record + register in a single explicit action). A
         snapshot already registered under this EXACT 5-pin key raises the 409-style
@@ -1181,7 +1193,13 @@ class ScreenStore:
         distinguishing power. Omitting it (the default) writes a snapshot in the pre-addition shape
         -- the key ABSENT from ``meta`` entirely, never ``null`` -- which is what every snapshot
         recorded before this addition looks like on disk and what a test planting a legacy record
-        wants; the compute path always passes a real value."""
+        wants; the compute path always passes a real value.
+
+        ``withheld_excluded`` (spec section 7.5 point 6, r4) follows the IDENTICAL optional shape,
+        for the identical reason: it is the count of recorded tick datasets ``run_screen`` left out
+        of this screen's ``tick_evidence`` basis because their Validation-Vault shards are withheld
+        -- a count, never an id, never part of the key or the id checksum. Omitted entirely when
+        not supplied, so every snapshot recorded before r4 stays byte-identical on disk."""
         existing = self.find_by_key(
             screen_date, as_of, universe_snapshot_id, config_fingerprint, bar_store_signature
         )
@@ -1218,6 +1236,8 @@ class ScreenStore:
         }
         if screen_coverage_signature is not None:
             meta["screen_coverage_signature"] = screen_coverage_signature
+        if withheld_excluded is not None:
+            meta["withheld_excluded"] = withheld_excluded
         record = {"meta": meta}
         payload = {"file_checksum": _sha256(_canonical(record)), "record": record}
         self._root.mkdir(parents=True, exist_ok=True)

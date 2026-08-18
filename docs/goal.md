@@ -564,9 +564,10 @@ operator-attended act inside the era.
        the published sha256 split beside the HMAC seal assignment
        (`TAPEOLOGY_VAULT_SECRET_FILE`, commitment recorded), one-way
        `sealed → assigned → exposed` exposure ledger keyed on the computed `family_root_id`,
-       **opaque pre-exposure metadata (spec §7.5 r2: no symbol, no date range until
-       assignment — aggregates only on readiness)**, TR-2 route sweep, TR-4 cherry-pick
-       refusal, TR-12 single-shot exposure, TR-20 root-lineage refusal.
+       **opaque pre-exposure metadata (spec §7.5 r3: surrogate shard id, salted commitment,
+       no symbol/date until assignment, sealed dataset ids refused on the dataset + MCP
+       surfaces — aggregates only on readiness)**, TR-2 join-resistance sweep, TR-4
+       cherry-pick refusal, TR-12 single-shot exposure, TR-20 root-lineage refusal.
     4. Operator act, inside the era: resolve Tier-B by the spec §7.2 mandatory order (screen
        by the frozen Card-5.2 criteria → record criteria hash, as-of, provenance, full output,
        resolved list → freeze the list → `symbol_rule` → register the universe → commitment +

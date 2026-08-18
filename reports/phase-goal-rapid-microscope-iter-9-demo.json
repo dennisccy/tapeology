@@ -1,0 +1,166 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-rapid-microscope-iter-9",
+  "base_url": "http://localhost:3301",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Cockpit home page loads",
+      "narration": "The home page shows the cockpit with live market tape and chart, ready to monitor any ticker.",
+      "point_out": "Notice the 'No ticker watched' message, indicating no active ticker is being monitored yet. The page is fully loaded with the tape viewer and chart components.",
+      "journey": "J-10",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "goto", "url": "/"},
+      "expect": {"text": "No ticker watched"}
+    },
+    {
+      "n": 2,
+      "title": "Enter ticker symbol",
+      "narration": "Type a ticker symbol to start monitoring live market activity.",
+      "journey": "J-10",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": {"type": "fill", "target": {"label": "Ticker"}, "text": "SIM-BUYER"}
+    },
+    {
+      "n": 3,
+      "title": "Watch ticker live activity",
+      "narration": "Clicking Watch activates the live tape for this symbol, showing real-time market events and dominance patterns.",
+      "point_out": "The 'Buyer Control' tape state has loaded, displaying the live market activity for the symbol. The Tape State panel shows the current dominance, and recent trades, quotes, and events appear below.",
+      "journey": "J-10",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "click", "target": {"role": "button", "name": "Watch"}},
+      "expect": {"text": "Buyer Control"}
+    },
+    {
+      "n": 4,
+      "title": "Structure analysis page",
+      "narration": "The Structure page provides tools to analyze support and resistance levels for any symbol on any date.",
+      "point_out": "The Tradable Map form is ready with input fields for symbol, date, and other parameters. The page is fully loaded and ready to analyze market structures.",
+      "journey": "J-10",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "goto", "url": "/structure"},
+      "expect": {"text": "Tradable Map"}
+    },
+    {
+      "n": 5,
+      "title": "Enter symbol for structure analysis",
+      "narration": "Enter the ticker symbol to analyze its support and resistance levels.",
+      "journey": "J-10",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": {"type": "fill", "target": {"label": "Structure symbol"}, "text": "AAPL"}
+    },
+    {
+      "n": 6,
+      "title": "Set analysis date",
+      "narration": "Set the date and time for the analysis. This date (June 22, 2026 at 5 PM ET) has been pre-analyzed with real support and resistance levels.",
+      "journey": "J-10",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": {"type": "fill", "target": {"data-testid": "structure-as-of-input"}, "text": "2026-06-22 17:00:00"}
+    },
+    {
+      "n": 7,
+      "title": "Load Tradable Map",
+      "narration": "Computing the Tradable Map displays the support and resistance bands, showing exactly where the market traded in compact, actionable zones.",
+      "point_out": "The pinned S/R band 300.11–302.2 appears for AAPL on that date. This band represents real, verified historical levels where the market clustered—the Tradable Map distills noise away to show only meaningful bands.",
+      "journey": "J-10",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "click", "target": {"data-testid": "structure-load-button"}},
+      "expect": {"text": "300.11–302.2"}
+    },
+    {
+      "n": 8,
+      "title": "Desk operations hub",
+      "narration": "The Desk page is the central command center, showing playbook signals, screen runs, referee status, and the microscope readiness report.",
+      "point_out": "The page displays multiple collapsible sections: Playbook Signals, Top-up Runs, Index Reconciliation, Screen Runs, Playbook Evidence, Referee Registry, Referee Adjudications, Referee Runs, and Microscope Readiness. Each section can be expanded to show detailed operational data.",
+      "journey": "J-10",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "goto", "url": "/desk"},
+      "expect": {"text": "Playbook Signals"}
+    },
+    {
+      "n": 9,
+      "title": "Microscope Readiness: corpus status",
+      "narration": "Expanding Microscope Readiness shows the current corpus state including dataset counts, symbol-date coverage, session equivalents, and the registry of all recorded tick shards.",
+      "point_out": "The Corpus Totals table shows 1 distinct symbol-day and 2 distinct datasets (the fixture rig's seeded PG shards). The Legacy Tick Shards table lists both with full metadata: Feed, Window, Trade/Quote counts, Bytes, Coverage gaps, Fallback fraction, Checksums, Split provenance (hand_assigned), and Exposure state (exploratory). Importantly, no 'Validation Vault' section appears anywhere on this page—it is built but not yet wired into the UI.",
+      "journey": "J-01",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "click", "target": {"data-testid": "desk-section-expand-microReadiness"}},
+      "expect": {"text": "Distinct symbol-days"}
+    },
+    {
+      "n": 10,
+      "title": "Referee Registry: frozen foundation",
+      "narration": "The Referee Registry section displays the frozen configuration fingerprint and other operational metadata, proving the research foundation is stable.",
+      "point_out": "The fingerprint 08e471b10130e1e2 matches the expected value. This frozen fingerprint proves no configuration fields were added or changed this iteration, maintaining the integrity of the research platform.",
+      "journey": "J-10",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "click", "target": {"data-testid": "desk-section-expand-refereeRegistry"}},
+      "expect": {"text": "config fingerprint 08e471b10130e1e2"}
+    },
+    {
+      "n": 11,
+      "title": "Referee Adjudications: no hypotheses yet",
+      "narration": "The Referee Adjudications section tracks evaluation hypotheses and judgments in the research ledger.",
+      "point_out": "The section shows the honest empty state: 'No hypotheses registered.' This is the correct state for a fresh environment before any hypotheses are formally registered.",
+      "journey": "J-10",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "click", "target": {"data-testid": "desk-section-expand-refereeAdjudications"}},
+      "expect": {"text": "No hypotheses registered"}
+    },
+    {
+      "n": 12,
+      "title": "Referee Runs: evaluation history",
+      "narration": "The Referee Runs section records the ledger of completed evaluation runs and their outcomes.",
+      "journey": "J-10",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": {"type": "click", "target": {"data-testid": "desk-section-expand-refereeRuns"}},
+      "expect": {"text": "No evaluation runs recorded yet"}
+    },
+    {
+      "n": 13,
+      "title": "Playbook Evidence: recorded signals",
+      "narration": "The Playbook Evidence section shows the detected trading signals for each setup, filtered by date.",
+      "journey": "J-10",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": {"type": "click", "target": {"data-testid": "desk-section-expand-playbookEvidence"}}
+    },
+    {
+      "n": 14,
+      "title": "Filter by date",
+      "narration": "Type a date to see signals recorded on that day.",
+      "journey": "J-10",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": {"type": "fill", "target": {"data-testid": "desk-playbook-date-input"}, "text": "2026-06-22"},
+      "expect": {"text": "recorded signals, none hidden"}
+    }
+  ]
+}

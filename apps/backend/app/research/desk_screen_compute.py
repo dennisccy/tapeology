@@ -287,6 +287,10 @@ def run_screen_and_record(
                 screen_coverage_signature=result["screen_coverage_signature"],
                 rows=result["rows"],
                 skipped=result["skipped"],
+                # Spec section 7.5 point 6 (r4): the screen's own disclosure of how many withheld
+                # vault shards were left out of its `tick_evidence` basis, recorded WITH the
+                # snapshot so a stored screen states the basis it was actually computed over.
+                withheld_excluded=result["withheld_excluded"],
             )
             # The replacement is on disk BEFORE its predecessors are removed, and the run is logged
             # `done` even if the prune itself raises (a full disk, a read-only dir): the snapshot

@@ -29,6 +29,7 @@ from __future__ import annotations
 import dataclasses
 import json
 import random
+import shutil
 import sys
 from pathlib import Path
 
@@ -44,6 +45,7 @@ from app.config import (
 )
 from app.providers.base import QuoteEvent, Side, TradeEvent
 from app.research import edge_report
+from app.research import vault
 from app.research.backtests import BacktestJobManager, REGISTER, STATUS_DONE
 from app.research.bars import BarStore
 from app.research.datasets import DatasetStore, SPLIT_HOLDOUT, SPLIT_TRAIN
@@ -1652,3 +1654,99 @@ def test_parallel_prewarm_with_zero_eligible_datasets_never_spins_up_a_process_p
     )
 
     assert results == []
+
+
+# === spec section 7.5 point 6 (r4, owner ruling): corpus enumerators honour the seal =============
+# iter-9 re-audit finding B2: this module drives ``BacktestJobManager`` directly, so the r3
+# route-level refusal never saw it -- a corpus-wide report replayed a sealed shard's events and
+# republished its stored manifest (id + raw checksum + window + counts) through
+# ``GET /research/backtests``. The fix EXCLUDES withheld shards at the single ``DatasetStore.list``
+# choke point and DISCLOSES the count; the tests below pin both halves, plus the counter-test that
+# the public siblings are still measured (a blanket break would "pass" an exclusion-only check).
+
+
+def _writable_fixture_store(tmp_path) -> DatasetStore:
+    target = tmp_path / "r4-datasets"
+    shutil.copytree(FIXTURE_DATASET_DIR, target)
+    return DatasetStore(target)
+
+
+def _seal(dataset_store: DatasetStore, meta: dict) -> None:
+    vault.seal_shard(
+        vault.shard_ledger_for_dataset_dir(str(dataset_store.root)),
+        dataset_id=meta["id"], universe_id="starter-tranche-v1",
+        content_checksum=meta["checksum"], event_count=meta["event_counts"]["total"],
+        vault_secret=b"edge-report-fixture-secret",
+    )
+
+
+def test_r4_a_withheld_shard_is_never_measured_and_the_count_is_disclosed(store, tmp_path):
+    dataset_store = _writable_fixture_store(tmp_path)
+    store.set_champion_pointer(strategy_id=STRATEGY_V1_ID, profile=PROFILE_DEFAULT, wall_ts=1.0)
+    records, _errors = dataset_store.list()
+    train_meta = next(r for r in records if r["split"] == SPLIT_TRAIN)
+    holdout_meta = next(r for r in records if r["split"] == SPLIT_HOLDOUT)
+
+    before = run_edge_report(store, dataset_store, CONFIG)
+    assert [r["dataset_id"] for r in before["train"]["datasets"]] == [train_meta["id"]]
+    assert [r["dataset_id"] for r in before["holdout"]["datasets"]] == [holdout_meta["id"]]
+    assert before["withheld_excluded"] == 0  # an empty vault withholds nothing
+
+    _seal(dataset_store, train_meta)
+    after = run_edge_report(store, dataset_store, CONFIG)
+
+    assert after["train"]["datasets"] == []  # the sealed shard was never backtested
+    assert after["withheld_excluded"] == 1  # ... and the shrink is stated, not silent
+    # the counter-test: withholding is TARGETED, not a blanket break of the report
+    assert [r["dataset_id"] for r in after["holdout"]["datasets"]] == [holdout_meta["id"]]
+    assert after["holdout"]["datasets"][0]["champion"] == before["holdout"]["datasets"][0]["champion"]
+    # a COUNT, never an identity: neither the id nor the raw checksum reaches the report body
+    rendered = json.dumps(after, sort_keys=True)
+    assert train_meta["id"] not in rendered
+    assert train_meta["checksum"] not in rendered
+
+
+def test_r4_a_fully_withheld_corpus_says_so_instead_of_looking_like_a_measured_empty(store, tmp_path):
+    """r4's "a run whose entire eligible corpus is withheld reports that honestly rather than
+    emitting an empty-but-shaped result" -- otherwise this report is byte-indistinguishable from
+    "every dataset was measured and none showed an edge"."""
+    dataset_store = _writable_fixture_store(tmp_path)
+    store.set_champion_pointer(strategy_id=STRATEGY_V1_ID, profile=PROFILE_DEFAULT, wall_ts=1.0)
+    for meta in dataset_store.list()[0]:
+        _seal(dataset_store, meta)
+
+    report = run_edge_report(store, dataset_store, CONFIG)
+
+    assert report["train"]["datasets"] == [] and report["holdout"]["datasets"] == []
+    assert report["withheld_excluded"] == 2
+    assert report["finding"] == edge_report.FULLY_WITHHELD_FINDING
+    assert report["finding"] != NO_POSITIVE_EDGE_FINDING
+    assert store.list_backtests(limit=10) == []  # not one sealed shard's events was ever replayed
+
+
+def test_r4_a_genuinely_empty_registry_still_reads_as_no_positive_edge_not_as_withholding(store, tmp_path):
+    """The counter-test for the finding above: zero datasets and zero withheld shards is the
+    pre-existing honest empty report, unchanged -- ``FULLY_WITHHELD_FINDING`` is reserved for the
+    case where something really was held back."""
+    dataset_store = DatasetStore(tmp_path / "empty-datasets")
+
+    report = run_edge_report(store, dataset_store, CONFIG)
+
+    assert report["finding"] == NO_POSITIVE_EDGE_FINDING
+    assert report["withheld_excluded"] == 0
+
+
+def test_r4_the_three_way_comparison_report_discloses_the_same_count(store, tmp_path):
+    dataset_store = _writable_fixture_store(tmp_path)
+    bar_store = BarStore(tmp_path / "r4-bars")  # empty: no scan event, so an honest cells-free run
+    train_meta = next(r for r in dataset_store.list()[0] if r["split"] == SPLIT_TRAIN)
+
+    before = run_strategy_comparison_report(store, dataset_store, bar_store, CONFIG)
+    assert before["withheld_excluded"] == 0
+    assert "finding" not in before  # honest omission while nothing is withheld
+
+    _seal(dataset_store, train_meta)
+    after = run_strategy_comparison_report(store, dataset_store, bar_store, CONFIG)
+
+    assert after["withheld_excluded"] == 1
+    assert train_meta["id"] not in json.dumps(after, sort_keys=True)

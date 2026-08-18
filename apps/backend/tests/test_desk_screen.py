@@ -93,11 +93,11 @@ def _register_fixture_universe(universe_dir: Path) -> UniverseStore:
     return UniverseStore(universe_dir)
 
 
-def _register_dataset(dataset_store: DatasetStore, symbol: str) -> None:
+def _register_dataset(dataset_store: DatasetStore, symbol: str) -> dict:
     """A minimal, single-trade synthetic dataset registration -- proves ONLY that ``symbol`` is a
     presence in the dataset store (the tick-evidence badge's own honest contract), never a claim
     about real tick content."""
-    dataset_store.record(
+    return dataset_store.record(
         symbol=symbol, source=f"synthetic {symbol}", source_kind="reference", source_id=symbol,
         split=SPLIT_TRAIN, window_start_utc="2026-01-02T14:30:00Z", window_end_utc="2026-01-02T14:30:01Z",
         data_feed="sim", epoch_anchor=None,
@@ -2227,3 +2227,41 @@ def test_sha256_of_every_universe_screen_topup_run_reconcile_run_file_is_unchang
 
     after = _checksums()
     assert after == before
+
+
+# ==================================================================================================
+# spec section 7.5 point 6 (r4) + iter-9 audit finding B6: `tick_evidence` honours the seal
+# ==================================================================================================
+
+
+def test_r4_a_withheld_shard_never_flips_tick_evidence_and_the_exclusion_is_disclosed(ctx):
+    """`tick_evidence` is a per-symbol boolean over the dataset store, so a symbol whose ONLY tick
+    recording is a withheld Validation-Vault shard would leak sealed-tranche membership at symbol
+    granularity -- spec section 7.5 withholds symbol membership until exposure. The count of
+    excluded shards is disclosed in the screen's own payload."""
+    universe_store, bar_store, bar_index, dataset_store = ctx
+    universe_records, _errors = universe_store.list()
+    members = list(universe_records[-1]["members"])
+    sealed_symbol, public_symbol = members[0], members[1]
+    sealed_meta = _register_dataset(dataset_store, sealed_symbol)
+    _register_dataset(dataset_store, public_symbol)
+
+    before = compute_screen(universe_store, bar_store, bar_index, dataset_store, CONFIG, SCREEN_DATE)
+    before_entries = {e["symbol"]: e for e in (*before["rows"], *before["skipped"])}
+    assert before_entries[sealed_symbol]["tick_evidence"] is True
+    assert before["withheld_excluded"] == 0
+
+    from app.research import vault
+
+    vault.seal_shard(
+        vault.shard_ledger_for_dataset_dir(str(dataset_store.root)),
+        dataset_id=sealed_meta["id"], universe_id="starter-tranche-v1",
+        content_checksum=sealed_meta["checksum"], event_count=sealed_meta["event_counts"]["total"],
+        vault_secret=b"desk-screen-fixture-secret",
+    )
+    after = compute_screen(universe_store, bar_store, bar_index, dataset_store, CONFIG, SCREEN_DATE)
+    after_entries = {e["symbol"]: e for e in (*after["rows"], *after["skipped"])}
+
+    assert after_entries[sealed_symbol]["tick_evidence"] is False  # membership no longer leaks
+    assert after_entries[public_symbol]["tick_evidence"] is True  # ... targeted, not a blanket break
+    assert after["withheld_excluded"] == 1  # ... and the exclusion is stated, never silent

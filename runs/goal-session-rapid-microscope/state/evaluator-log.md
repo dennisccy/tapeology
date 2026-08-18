@@ -411,3 +411,64 @@ please answer the two decisions still waiting on you. One choice is yours about 
 itself: rounds now run two to four times over their time budget and the machine responds by
 cutting the checker and the on-screen re-checks — either raise the budget for the next round or
 split the vault work into two smaller rounds, but do not let it run short-handed again.
+
+## Iteration 9 — goal-rapid-microscope-iter-9
+
+**Date:** 2026-08-18T17:05:00Z
+**Verdict:** CONTINUE
+**Depth dispatched:** full (the auditor ran — three times, across three fix rounds, under two owner
+rulings recorded as spec revisions r3 and r4)
+**Journey deltas:**
+- Newly passing: none
+- Newly failing: none
+- Regressed: none
+- Changed content (status unchanged): J-06 "The recorder and the Vault" partial — its third of five
+  steps landed and I proved its headline promise myself; J-10 "The kept product stands" partial —
+  four more traps armed (19 of 22 now), sentinel green for the fourth run in a row
+- Unchanged: J-01 passing (re-checked on screen AND re-computed by me under the new code);
+  J-02, J-03, J-04, J-05 passing — their on-screen re-checks were CUT FOR TIME ("deferred", not
+  tested), and unlike last round their own code CHANGED, so I re-derived each one myself against
+  your real data; J-07, J-08, J-09 failing (their files are still not on disk — I looked for each)
+- Anti-goal violations: no critical ones, introduced or open. Two older minor items are now CLOSED
+  and I checked both in the code (the register that protects the 12 old tick days now skips sealed
+  recordings; the recorder now writes the vendor rule text and the verification note beside the
+  unit stamp). Three NEW minor items are open, and ALL THREE need you, not a coder. One older minor
+  item stays open and also needs you (the timing stamp that is one quote too early, waiting since
+  round 2).
+
+**Reasoning:** I took nothing on trust. I ran the whole test suite myself and got 3,166 tests,
+3,158 passed, 8 skipped, 0 failures — and I ran it AFTER every file edit in the tree, so it is the
+true current number. The quality report's 3,130 is out of date and should not be quoted. I opened
+the pictures instead of reading the rows: the Desk page really shows your corpus panel with real
+numbers and honest "floor not met" lines, the Structure page really loads its full wall map with
+the pinned AAPL band reading 300.11-302.2, and the Cockpit really watches a live tape. Because the
+last round of edits landed AFTER those pictures were taken, I re-computed the corpus panel myself
+under the new code and got exactly the numbers in the picture, so the pictures still tell the
+truth. The new vault is real: I sealed a throwaway recording myself and read what the program then
+serves — only a made-up label, a rough size, a scrambled fingerprint and the word "sealed"; the
+real name, the real date, the real fingerprint and the exact count are all absent, and a second
+attempt to move the same recording is refused. The frozen parts are frozen: the settings
+fingerprint prints 08e471b10130e1e2, all six judge files match the era-open list exactly, the tool
+list is still 22, and your real recordings folder hashes identical before and after everything I
+ran. The one thing that is genuinely NOT achieved is the vault's headline promise. The independent
+checker attacked its own fix and found that anyone can still work out which recordings are hidden,
+just by listing the public ones and noticing which combinations are missing — it recovered all 5 of
+5 hidden days that way. Nothing inside the new vault file can fix that. So the vault is safe to
+LOOK at but not yet safe to HIDE real data in.
+
+**Next-step recommendation:** Build J-07 "Graduation — provenance in, nothing laundered out" next,
+under the full pipeline with the independent checker. It is the next step in order, it runs
+entirely on made-up test data, and it needs no decision from you — so it is real work that can
+start today while the vault questions wait. Do NOT let the next round record real tape: J-06's
+remaining two steps are now blocked until you decide three things, and they are all the same kind
+of question you already answered twice. (1) The big one: the hidden set can still be worked out
+from the public recordings list. Choose one — hide the whole batch's names and dates until the
+batch is finished with, add extra recordings so "missing" no longer means "hidden", or accept it in
+writing and say plainly that hiding protects the DATA but not the MEMBERSHIP. (2) Should a damaged
+vault record make everything refuse (safe) or make everything open (what happens today)? (3) One of
+the six frozen judge files counts hidden recordings toward a research threshold; fixing it means
+touching a file this era promised never to touch. Please also settle the timing stamp that has been
+waiting since round 2. One process note worth keeping: your ruling to split the work into smaller
+rounds rather than raise the clock budget WORKED — this round ran the full pipeline, the checker
+ran three times, and it caught a real fault that everything else had passed. Keep scoping one step
+per round.

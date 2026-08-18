@@ -507,3 +507,118 @@ new corpus_id no goal text names.
 **Reversible:** yes — the filter is a pure exclusion at seed time, still guarded by the existing
 `has_any_exposure_entries` once-only rule; a later-exposed shard simply stops being excluded on
 the next seed pass, with no prior row to undo.
+
+## iter-9 — OWNER RULING (2026-08-18, operator-decided, not an agent interpretation)
+
+**Ambiguity:** the iteration-9 audit's CRITICAL B1 — spec §7.5 (r2) required an "opaque
+`shard_id`" but the implementation served the `DatasetStore` dataset id, and §7.5 *also*
+mandated serving the raw `checksum commitment`, which is itself a join key to the public
+dataset record. Closing the leak necessarily changes published REST/MCP contracts, so it was
+escalated to the owner rather than patched by an agent.
+**The owner ruled (option 1 of 3):** close it with **opaque surrogate ids + seal-aware
+refusal**. Recorded as spec **revision r3** (2026-08-18) in `docs/rapid-validation-spec.md`:
+surrogate `shard_id` with no derivable relation to the dataset id; pre-exposure commitment is
+`HMAC(vault_secret, content_checksum)` with the raw checksum revealed only at exposure;
+`/research/datasets{,/{id}}`, the `datasets` MCP tool and `get_endpoint` return a typed
+refusal for a sealed dataset id; `micro_readiness` serves sealed-tranche aggregates only (no
+per-shard row, no per-shard `exposure_state`); TR-2 widened from a field whitelist to an
+adversarial join-resistance sweep. `docs/goal.md` J-06 step 3's acceptance updated to point at
+r3 (tightened wording only — the journey's required behaviour is unchanged in kind).
+**Rejected alternatives:** a separate sealed store path (strongest guarantee, largest build);
+accepting the leak with a documented caveat (cheapest, materially weaker vault).
+**Also settled:** `TAPEOLOGY_VAULT_SECRET_FILE` now exists at
+`~/.config/tapeology/vault-secret` (0600, outside the repo, generated 2026-08-18, contents
+never read by any agent). Its commitment is
+`e4b64e4399878594ff358d00f5f75261e0720919c0eb32f9629897222eee6a8d` — record this in the
+universe registration; never the secret itself. The operator must export the variable for any
+run that seals shards.
+**Reversible:** no — r3 is a named revision, and per the spec's own rule a change is a further
+named revision, never an edit of recorded meaning. Nothing re-keys: zero shards were sealed
+when the ruling landed.
+
+## iter-9 — OWNER RULING #2 (2026-08-18, operator-decided: "put on the fix")
+
+**Ambiguity:** the iteration-9 RE-audit's CRITICAL B2 — r3's sealed-shard refusals are
+route-scoped, but `edge_report._all_datasets` (`edge_report.py:144`) and
+`pnl_scan._split_datasets` (`pnl_scan.py:220`) each enumerate the whole `DatasetStore` and drive
+`BacktestJobManager` directly, so a corpus-wide report/sweep would read a sealed shard's events
+and republish its id, raw checksum and outcome aggregates via `GET /research/backtests` and the
+append-only PnL ledger. The auditor escalated rather than patching, because excluding sealed
+shards changes what a research report *measures* and what lands in an append-only ledger.
+**The owner ruled:** apply the fix — enumerators EXCLUDE withheld shards and DISCLOSE the
+exclusion. Recorded as spec **revision r4** (2026-08-18), §7.5 point 6.
+**Why this is a derivation rather than a free choice** (stated so no later agent re-litigates
+it): `docs/goal.md`'s critical rail already requires that event data and outcome aggregates of
+a sealed shard be "refused everywhere … fail-closed", which rules out reading them; and BOTH
+call sites already carry the convention "a partial report is a misleading report", which rules
+out excluding them silently. Exclusion + disclosure is the only reading satisfying both.
+**Shape:** filter at each module's single `DatasetStore.list()` choke point (reuse
+`micro_snapshots.withheld_dataset_ids_for_store`, never a second predicate); carry a
+`withheld_excluded` COUNT — never the ids — into the report body and into any append-only row
+the run writes; a fully-withheld corpus reports that honestly instead of emitting an
+empty-but-shaped result. TR-2 must exercise the operator compute acts (snapshot build, Scout,
+edge report, PnL sweep) BEFORE sweeping, so it cannot pass on an idle rig — the exact way the
+previous trap went green while the leak was live.
+**Rejected:** aborting a whole sweep whenever any sealed shard exists (renders the edge report
+unusable the moment the vault holds anything); accepting the bypass (re-opens what r3 closed).
+**Reversible:** no — r4 is a named revision; a change is a further named revision. Nothing
+re-keys: zero shards were sealed when the ruling landed, so no recorded report or ledger row
+moves.
+**Unblocks:** J-06 step 4 (the credentialed tranche) may proceed once r4 is implemented and
+TR-2 passes in its compute-first form.
+
+## iter-9 — goal-evaluator
+
+**Ambiguity:** the iter-8 evaluator set a precedent for keeping a `DEFERRED-BUDGET` journey at
+`passing` on an evaluator's own endpoint-level re-derivation — but it leaned explicitly on A.6
+evidence durability, because those journeys' modules were byte-untouched that round ("my
+re-derivation is corroboration, not the sole basis"). This round the situation is materially
+different and the precedent does not simply carry: J-02/J-03/J-04/J-05 were again DEFERRED-BUDGET at
+the browser layer, but their own modules (`micro_snapshots.py`, `micro_join.py`, `scout.py`,
+`walkforward.py`) ALL CHANGED in the r4 fix round, so durability covers none of them and my
+re-derivation IS the sole basis. My instructions do not say whether that is enough to hold
+`passing`, or whether a changed module plus an untested lane row forces `unknown`.
+**We chose:** hold `passing` for all four, with the deferral and the "durability does NOT cover
+this" caveat stated verbatim in each journey's note, and `last_verified_iter` set to iter-9. Grounds
+I established myself: J-02 — 18 snapshot feature files holding exactly 3,815,933 rows, the
+unchanged multi-iteration baseline; J-03 — `joinable_corpus.total` 2 with `by_setup_id
+{range_trade: 2}` and zero integrity errors against the real store with the real PlaybookStore;
+J-05 — its own acceptance command re-run under post-r4 code printing the literal `11 < 105 --
+refused (TR-15)` with exit 1, a scoped ledger left empty, and the real store hashing identically
+before and after. Decisive general fact: the r4 change is provably value-neutral today — no vault
+ledger file exists anywhere under `.data`, `withheld_dataset_ids` is empty on both stores, and
+`exclude_withheld` returns every record with `withheld_excluded = 0`, so the new filter is the
+identity function until something is sealed. J-04 is the honest weak one and I said so in its note
+rather than dressing it up: I could NOT re-run `verify_chain()` because no real scout ledger exists
+on disk (`.data/micro_scout` is absent — the Scout has never been run as an operator act), so J-04
+rests this round on my own full-suite run (test_scout 52 + test_scout_ledger 20 green inside 3,166
+/ 0 failures) plus the traced single-predicate reuse.
+**Reversible:** yes — golden replay scripts for J-01–J-06 and J-10 now exist on disk (J-02–J-05's
+were written this run), so the next iteration's deterministic replay lane can restore true
+lane-level verification for all four without any new developer work.
+
+## iter-9 — goal-evaluator (second)
+
+**Ambiguity:** the audit carries two CRITICALs (B2: sealed membership recoverable by cartesian
+closure of `GET /research/datasets`; B3: the recorder-compute route serving per-chunk
+symbol/date/raw dataset id) plus B4 (withholding predicates fail OPEN on a corrupted ledger) and B5
+(a frozen `referee_*.py` file counting withheld shards). My decision tree fires REGRESSION on "a
+critical anti-goal violation is unresolved", and my instructions say to fail closed when unsure. But
+an anti-goal violation requires the anti-goal's stated CONDITION to be breached, and every one of
+these is a condition about sealed shards at a moment when no shard is sealed.
+**We chose:** record all four as OPEN but `minor` severity, and return CONTINUE rather than
+REGRESSION. Grounds I verified myself, not read off the audit: no vault ledger file exists anywhere
+under `.data`; `seal_shard`/`assign_shard`/`expose_shard` have ZERO production call sites in `app/`
+(every grep hit is a docstring, an `__all__` entry, or the definition); `withheld_dataset_ids`
+returns an empty frozenset on both the real and the fixture store; and no real tape exists, so no
+recorded artifact is damaged and nothing can be re-keyed later. The read side genuinely holds — the
+anti-goal that events and outcome aggregates of a sealed shard are refused everywhere is currently
+TRUE. B4 is the one that touches an anti-goal's own wording ("the refusal is typed, tested, and
+fail-closed"), which is exactly why I recorded it as an open item against that rail rather than
+burying it in prose. All four are marked HARD GATES on J-06 step 4 in J-06's note and in the
+next-step recommendation, so nothing is lost by not halting now — and halting would stop tractable,
+owner-independent work (J-07) for questions only the owner can answer.
+**Reversible:** no in one direction — if J-06 step 4 ever runs before B2 is ruled, real tape gets
+sealed under a guarantee that is demonstrably false and the recorded manifests are immutable. That
+is precisely why the gate is written into the journey note, the anti-goal ledger, the recommendation
+and `iteration-state.md`'s "Do not redo" block rather than any single one of them.

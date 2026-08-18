@@ -77,6 +77,7 @@ from ..providers.base import Event, QuoteEvent, TradeEvent
 from .datasets import DatasetStore
 from .micro_join import BAND_TOUCH_STATUS_NOT_ENUMERATED, joinable_corpus_counts
 from .referee_evidence import REFEREE_TICK_GATE_SYMBOL_DAYS
+from . import vault
 
 __all__ = [
     "WF_TRAIN_MIN_SESSIONS",
@@ -300,16 +301,58 @@ def build_readiness(
     ``playbook_store`` (J-03, ``desk_playbook.PlaybookStore``) is OPTIONAL and defaults to
     ``None`` -- callers that do not pass one (every pre-J-03 test in this file) get the honest
     ``joinable_corpus`` zero rather than an error, since "no playbook evidence was even checked"
-    is a true statement in that case, never a fabricated one."""
+    is a true statement in that case, never a fabricated one.
+
+    **Sealed-tranche AGGREGATES only (iter-9, spec section 7.5 point 4, r3).** A dataset whose
+    Validation-Vault shard has not yet reached ``exposed`` gets NO per-shard row and NO per-shard
+    ``exposure_state`` here -- its row would carry the symbol, session date and exact trade/quote
+    counts section 7.5 withholds, and the iter-9 audit's finding B1 demonstrated this table doing
+    exactly that. Such a shard is counted instead in ``sealed_tranche`` (shard count, distinct
+    symbol-days, per-universe totals -- section 7.5's own enumerated aggregate list) and is
+    excluded from ``totals``/``study_floors``, since sealed evidence is by construction not
+    available to any study. The exclusion also means this fold never LOADS a sealed shard's
+    events, so the ``fallback_frac`` walk below can never become an exploratory read of sealed
+    tape (the era's *(critical)* anti-goal). The vault is read through the SAME
+    ``vault.shard_ledger_for_dataset_dir(dataset_dir)`` resolution every other consumer uses --
+    one vault location, never a second. With nothing sealed, ``sealed_tranche`` is an all-zero
+    row and every other value in this payload is byte-identical to its pre-iter-9 self.
+
+    Membership is the VAULT's answer, never re-derived here; the arithmetic over it is this
+    module's own, exactly as it already is for ``totals`` (the ``joinable_corpus`` precedent, where
+    ``micro_join`` owns the count and this module owns nothing but its placement). ``sealed_tranche``
+    counts the withheld shards PRESENT IN THIS STORE -- a vault ledger row naming a dataset that no
+    longer sits in ``dataset_dir`` contributes nothing here, since this payload's whole subject is
+    what evidence exists on this disk."""
     records, errors = store.list()
     root = Path(dataset_dir)
+    withheld_universe_by_id = vault.withheld_universe_by_dataset_id(
+        vault.shard_ledger_for_dataset_dir(dataset_dir)
+    )
 
     shards: list[dict] = []
     symbol_days: set[tuple[str, str]] = set()
     session_dates: set[str] = set()
     rth_minutes_total = 0.0
+    sealed_symbol_days: set[tuple[str, str]] = set()
+    sealed_shard_count = 0
+    sealed_symbol_days_by_universe: dict[str, set[tuple[str, str]]] = {}
+    sealed_shard_count_by_universe: dict[str, int] = {}
 
     for meta in records:
+        if meta["id"] in withheld_universe_by_id:
+            # Section 7.5 point 4: aggregates only. Computed from the store's own metadata
+            # SERVER-side and never served per shard -- the payload below carries counts, never a
+            # symbol, a date, or an id.
+            universe_id = withheld_universe_by_id[meta["id"]]
+            symbol_day = (meta["symbol"], _et_datetime(meta["window_start_utc"]).date().isoformat())
+            sealed_shard_count += 1
+            sealed_symbol_days.add(symbol_day)
+            sealed_shard_count_by_universe[universe_id] = (
+                sealed_shard_count_by_universe.get(universe_id, 0) + 1
+            )
+            sealed_symbol_days_by_universe.setdefault(universe_id, set()).add(symbol_day)
+            continue
+
         start_et = _et_datetime(meta["window_start_utc"])
         end_et = _et_datetime(meta["window_end_utc"])
         session_date = start_et.date()
@@ -368,7 +411,10 @@ def build_readiness(
 
     totals = {
         "distinct_symbol_days": len(symbol_days),
-        "distinct_datasets": len(records),
+        # The EXPLORATORY inventory: `shards` above, one row each. A sealed shard is deliberately
+        # absent from both (spec section 7.5 point 4) -- it is neither available evidence nor a
+        # servable row -- and is counted in `sealed_tranche` below instead.
+        "distinct_datasets": len(shards),
         "rth_minutes_covered": round(rth_minutes_total, 2),
         "session_equivalents": round(rth_minutes_total / _RTH_MINUTES_PER_SESSION, 4),
         "referee_tick_gate_symbol_days": REFEREE_TICK_GATE_SYMBOL_DAYS,
@@ -390,9 +436,25 @@ def build_readiness(
             "band_touch_count": {"status": BAND_TOUCH_STATUS_NOT_ENUMERATED, "count": None},
             "by_setup_id": {},
             "playbook_integrity_errors": [],
+            # Spec section 7.5 point 6 (r4): a run that enumerated nothing excluded nothing --
+            # a true statement about THIS fallback, not a copy of the real count (which only
+            # `joinable_corpus_counts` below is entitled to compute).
+            "withheld_excluded": 0,
         }
     else:
         joinable_corpus = joinable_corpus_counts(store, playbook_store)
+
+    sealed_tranche = {
+        "shard_count": sealed_shard_count,
+        "symbol_days": len(sealed_symbol_days),
+        "by_universe": {
+            universe_id: {
+                "shard_count": sealed_shard_count_by_universe[universe_id],
+                "symbol_days": len(sealed_symbol_days_by_universe[universe_id]),
+            }
+            for universe_id in sorted(sealed_shard_count_by_universe)
+        },
+    }
 
     return {
         "totals": totals,
@@ -400,4 +462,5 @@ def build_readiness(
         "study_floors": study_floors,
         "integrity_errors": errors,
         "joinable_corpus": joinable_corpus,
+        "sealed_tranche": sealed_tranche,
     }

@@ -55,6 +55,7 @@ from app.config import (
 from app.providers.base import QuoteEvent, Side, TradeEvent
 from app.providers.simulated import SIM_SCENARIOS, SimulatedProvider
 from app.research import pnl_scan
+from app.research import vault
 from app.research.bars import BarStore
 from app.research.datasets import DatasetStore, SPLIT_HOLDOUT, SPLIT_TRAIN, record_from_source
 from app.research.pnl_baseline import seed_founding_row
@@ -1278,3 +1279,75 @@ def test_no_bypass_guard_can_fail_on_a_seeded_violation():
     )
     with pytest.raises(AssertionError):
         _assert_no_bypass_tokens(seeded_source, label="seeded pnl_scan.py")
+
+
+# === spec section 7.5 point 6 (r4, owner ruling): corpus enumerators honour the seal =============
+# iter-9 re-audit finding B2: this sweep enumerates the whole store and drives
+# ``BacktestJobManager`` directly, so the r3 route-level refusal never saw it -- a sealed shard's
+# events were replayed and its stored manifest (id + raw checksum + window + counts) landed in
+# every persisted backtest result, and on a promotion in the APPEND-ONLY PnL ledger.
+
+
+def _writable_fixture_store(tmp_path) -> DatasetStore:
+    import shutil
+
+    target = tmp_path / "r4-datasets"
+    shutil.copytree(FIXTURE_DATASET_DIR, target)
+    return DatasetStore(target)
+
+
+def _seal(dataset_store: DatasetStore, meta: dict) -> None:
+    vault.seal_shard(
+        vault.shard_ledger_for_dataset_dir(str(dataset_store.root)),
+        dataset_id=meta["id"], universe_id="starter-tranche-v1",
+        content_checksum=meta["checksum"], event_count=meta["event_counts"]["total"],
+        vault_secret=b"pnl-scan-fixture-secret",
+    )
+
+
+def test_r4_a_withheld_shard_is_never_swept_and_the_count_is_disclosed(store, tmp_path, certificate_store):
+    dataset_store = _writable_fixture_store(tmp_path)
+    train_meta = next(r for r in dataset_store.list()[0] if r["split"] == SPLIT_TRAIN)
+    holdout_meta = next(r for r in dataset_store.list()[0] if r["split"] == SPLIT_HOLDOUT)
+
+    before = run_sweep(store, dataset_store, CONFIG, certificate_store=certificate_store)
+    (candidate_before,) = before["candidates"]
+    assert [d["dataset_id"] for d in candidate_before["train"]["datasets"]] == [train_meta["id"]]
+    assert before["withheld_excluded"] == 0
+
+    _seal(dataset_store, train_meta)
+    after = run_sweep(store, dataset_store, CONFIG, certificate_store=certificate_store)
+
+    (candidate_after,) = after["candidates"]
+    assert candidate_after["train"]["datasets"] == []  # the sealed shard was never backtested
+    assert after["withheld_excluded"] == 1  # ... and the shrink is stated, not silent
+    # the counter-test: the public hold-out sibling is still measured, byte-identically
+    assert [d["dataset_id"] for d in candidate_after["holdout"]["datasets"]] == [holdout_meta["id"]]
+    assert candidate_after["holdout"]["aggregate"] == candidate_before["holdout"]["aggregate"]
+    rendered = json.dumps(after, sort_keys=True)
+    assert train_meta["id"] not in rendered and train_meta["checksum"] not in rendered
+
+
+def test_r4_a_fully_withheld_corpus_says_so_rather_than_reporting_an_empty_sweep(
+    store, tmp_path, certificate_store
+):
+    dataset_store = _writable_fixture_store(tmp_path)
+    for meta in dataset_store.list()[0]:
+        _seal(dataset_store, meta)
+
+    report = run_sweep(store, dataset_store, CONFIG, certificate_store=certificate_store)
+
+    assert report["withheld_excluded"] == 2
+    assert pnl_scan.FULLY_WITHHELD_CAVEAT in report["provenance"]["assumptions"]
+    (candidate,) = report["candidates"]
+    assert candidate["train"]["datasets"] == [] and candidate["holdout"]["datasets"] == []
+    assert candidate["survivor"] is False
+    assert store.list_backtests(limit=10) == []  # not one sealed shard's events was ever replayed
+
+
+def test_r4_an_ordinary_sweep_carries_no_fully_withheld_caveat(store, certificate_store):
+    """The counter-test: the caveat is reserved for a genuinely fully-withheld corpus, never a
+    standing decoration on every report."""
+    report = run_sweep(store, DatasetStore(FIXTURE_DATASET_DIR), CONFIG, certificate_store=certificate_store)
+    assert report["withheld_excluded"] == 0
+    assert report["provenance"]["assumptions"] == [pnl_scan.BREAKTHROUGH_ANCHOR_CAVEAT]

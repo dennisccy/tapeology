@@ -1353,7 +1353,12 @@ async def test_edge_report_tool_byte_identical_to_rest(mcp_env):
     assert payload.get("status") == "not_computed", (
         "expected the not-computed shape: registry is non-empty and nothing has warmed the cache"
     )
-    assert set(payload) == {"status", "detail", "dataset_count", "register", "compute"}
+    # `withheld_excluded` (spec section 7.5 point 6, r4): the seal-filtered `dataset_count`
+    # above states this report's basis, so what it leaves out is disclosed beside it.
+    assert set(payload) == {
+        "status", "detail", "dataset_count", "register", "compute", "withheld_excluded",
+    }
+    assert payload["withheld_excluded"] == 0  # nothing is sealed on this live backend
     assert result.isError is False
     assert len(result.content) == 1
     assert result.content[0].text.encode("utf-8") == rest.content, "edge_report not byte-identical"

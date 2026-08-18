@@ -319,6 +319,15 @@ class DatasetStore:
         self._index_db_path = index_db_path
         self._index: DatasetIndex | None = None
 
+    @property
+    def root(self) -> Path:
+        """This store's own resolved directory (the ``desk_forward.ForwardStore.root`` precedent).
+        Read-only, no I/O. Exists so a caller holding only a store can resolve the SIBLING vault
+        location the same way every other vault consumer does
+        (``vault.shard_ledger_for_dataset_dir``) instead of reaching for ``CONFIG``, which would
+        resolve the OPERATOR's real store from a ``tmp_path``-scoped test."""
+        return self._root
+
     def _durable_index(self) -> DatasetIndex | None:
         if self._index_db_path is None:
             return None
@@ -498,6 +507,8 @@ class DatasetStore:
         events: list[Event],
         schema_basis: str | None = None,
         quote_size_unit: str | None = None,
+        quote_size_unit_rule_text: str | None = None,
+        quote_size_unit_verification_note: str | None = None,
     ) -> dict:
         """Persist ONE new dataset (record + register in a single explicit action). The split tag
         is assigned HERE and frozen: content already registered under any split raises the
@@ -516,7 +527,15 @@ class DatasetStore:
         supplied ``quote_size_unit`` is validated against the EXISTING
         ``micro_features.QUOTE_SIZE_UNITS`` tuple (the sole unit vocabulary in the repo — this
         module defines no second one) and rejected explicitly, never silently accepted, exactly
-        like the ``split`` check immediately below."""
+        like the ``split`` check immediately below.
+
+        ``quote_size_unit_rule_text``/``quote_size_unit_verification_note`` (era "The Rapid
+        Microscope" J-06 step 3, spec section 2.6's own closing clause: "the recorder records the
+        rule text and the verification note beside the stamp") are two FURTHER optional, additive
+        manifest siblings of ``quote_size_unit`` — same absent-key-is-absent stamping discipline
+        (TC-12), same checksum exclusion (manifest metadata, never tape content — TC-13's
+        byte-identical-checksum counter-test proves it, exactly like ``schema_basis``/
+        ``quote_size_unit`` already do)."""
         if split not in VALID_SPLITS:
             raise ValueError(f"unknown split {split!r} — expected one of {sorted(VALID_SPLITS)}")
         if quote_size_unit is not None and quote_size_unit not in QUOTE_SIZE_UNITS:
@@ -558,6 +577,10 @@ class DatasetStore:
             meta["schema_basis"] = schema_basis
         if quote_size_unit is not None:
             meta["quote_size_unit"] = quote_size_unit
+        if quote_size_unit_rule_text is not None:
+            meta["quote_size_unit_rule_text"] = quote_size_unit_rule_text
+        if quote_size_unit_verification_note is not None:
+            meta["quote_size_unit_verification_note"] = quote_size_unit_verification_note
         record = {"meta": meta, "events": rows}
         payload = {"file_checksum": _sha256(_canonical(record)), "record": record}
         self._root.mkdir(parents=True, exist_ok=True)
@@ -628,12 +651,15 @@ def record_from_source(
     historical_fetch: Callable[[], HistoricalWindow] | None = None,
     schema_basis: str | None = None,
     quote_size_unit: str | None = None,
+    quote_size_unit_rule_text: str | None = None,
+    quote_size_unit_verification_note: str | None = None,
 ) -> dict:
     """Record + register ONE dataset from a historical source (the explicit research action).
 
-    ``schema_basis``/``quote_size_unit`` (era "The Rapid Microscope" J-06 step 1) pass straight
-    through to ``DatasetStore.record`` — see that method's own docstring; omitted by every
-    existing caller (none pass these yet), so the manifest shape is byte-unchanged for them.
+    ``schema_basis``/``quote_size_unit``/``quote_size_unit_rule_text``/
+    ``quote_size_unit_verification_note`` (era "The Rapid Microscope" J-06 steps 1 and 3) pass
+    straight through to ``DatasetStore.record`` — see that method's own docstring; omitted by
+    every pre-J-06-step-3 caller, so the manifest shape is byte-unchanged for them.
 
     ``reference`` loads the committed keyless PG SIP fixture (optionally sliced to
     ``[start, end)``); ``historical`` calls the injected ``historical_fetch`` built on the
@@ -677,6 +703,8 @@ def record_from_source(
         events=events,
         schema_basis=schema_basis,
         quote_size_unit=quote_size_unit,
+        quote_size_unit_rule_text=quote_size_unit_rule_text,
+        quote_size_unit_verification_note=quote_size_unit_verification_note,
     )
 
 

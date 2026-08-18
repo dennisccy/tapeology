@@ -38,6 +38,7 @@ from typing import Callable
 from ..config import CONFIG, Config
 from . import micro_features as mf
 from . import micro_observer as mo
+from . import vault
 from .datasets import DatasetNotFound, DatasetStore
 from .micro_observer import MicroObserver, MicroObserverFailure
 
@@ -45,6 +46,8 @@ __all__ = [
     "SNAPSHOT_FORMAT_VERSION",
     "MicroSnapshotIntegrityError",
     "MicroObserverFailure",
+    "withheld_dataset_ids_for_store",
+    "exclude_withheld",
     "resolve_micro_snapshots_dir",
     "feature_source_hash",
     "snapshot_identity",
@@ -91,6 +94,46 @@ def resolve_micro_snapshots_dir(dataset_dir_resolved: str) -> str:
     if override:
         return override
     return str(Path(dataset_dir_resolved).parent / "micro_snapshots")
+
+
+def withheld_dataset_ids_for_store(dataset_store: DatasetStore) -> frozenset[str]:
+    """Every dataset id whose Validation-Vault shard has not yet reached ``exposed`` (spec
+    section 7.5 point 3, r3), resolved through the ONE
+    ``vault.shard_ledger_for_dataset_dir`` resolver every other vault consumer shares --
+    keyed on THIS store's own directory, never ``CONFIG``'s, so a ``tmp_path``-scoped caller
+    never reads the operator's real vault.
+
+    Snapshot building is where a sealed shard's raw EVENTS would be replayed, and the snapshot
+    listing is where its ``dataset_id``/raw ``dataset_checksum``/``row_count``/``bytes_on_disk``
+    would be re-published -- exactly the identity, exact counts and bytes section 7.5 withholds
+    until exposure. Both are closed against this set (iter-9 audit finding B1): the era's
+    *(critical)* anti-goal is that a sealed shard's event data and outcome aggregates are
+    "refused everywhere (routes, MCP, accessor, readiness) until its recorded exposure", and a
+    screening/feature pass over sealed tape would destroy the held-out property the vault exists
+    to create. Empty -- and therefore byte-identical to the pre-iter-9 behaviour -- until the
+    first shard is ever sealed."""
+    return vault.withheld_dataset_ids(vault.shard_ledger_for_dataset_dir(str(dataset_store.root)))
+
+
+def exclude_withheld(records: list[dict], dataset_store: DatasetStore) -> tuple[list[dict], int]:
+    """Spec section 7.5 point 6 (r4): the ONE exclusion-and-disclosure primitive every corpus-wide
+    enumerator shares. Returns ``(kept_records, withheld_excluded)`` -- the records whose shards
+    are servable, and the COUNT (never the ids) of the ones this run left out.
+
+    Owner ruling r4, stated as code: "a refusal wired only into a route is bypassed by any module
+    that enumerates the store itself", so every enumerator filters at its single
+    ``DatasetStore.list()`` choke point -- through THIS function, never a second predicate of its
+    own (a divergent copy is exactly how the iter-9 audit's B2 leak survived the route-level fix).
+    The count travels into the caller's report body and into any append-only row the run writes:
+    **silent exclusion is forbidden** -- these call sites already hold that "a partial report is a
+    misleading report", and the era's denominator rail forbids a corpus that shrinks without
+    saying so.
+
+    Zero-cost and byte-identical while nothing is sealed: an empty vault withholds nothing, so
+    ``kept is`` every record and the disclosed count is ``0``."""
+    withheld = withheld_dataset_ids_for_store(dataset_store)
+    kept = [record for record in records if record["id"] not in withheld]
+    return kept, len(records) - len(kept)
 
 
 _IDENTITY_SOURCE_MODULES = (mf, mo)
@@ -267,9 +310,17 @@ def list_snapshot_meta(root_dir: str, dataset_store: DatasetStore, config: Confi
     root = Path(root_dir)
     if not root.exists():
         return []
+    # Spec section 7.5 point 3 (r3), iter-9 audit B1: a withheld shard's meta carries its
+    # `dataset_id`, its RAW `dataset_checksum`, its exact `row_count` and `bytes_on_disk` -- the
+    # identity, counts and bytes withheld until exposure. Omitted here even if a snapshot file
+    # for it exists on disk (a shard sealed AFTER its snapshot was built), so the withholding is
+    # fail-closed rather than dependent on build order.
+    withheld = withheld_dataset_ids_for_store(dataset_store)
     out: list[dict] = []
     for meta_file in sorted(root.glob("*.meta.json")):
         dataset_id = meta_file.name[: -len(".meta.json")]
+        if dataset_id in withheld:
+            continue
         meta = load_snapshot_meta(root_dir, dataset_store, dataset_id, config)
         if meta is not None:
             out.append(meta)
@@ -297,6 +348,13 @@ def run_snapshot_build_and_record(
     if dataset_ids is None:
         records, _errors = dataset_store.list()
         dataset_ids = [r["id"] for r in records]
+    # Spec section 7.4/7.5 + the era's *(critical)* anti-goal, iter-9 audit B1: a sealed (or
+    # merely `assigned`) shard's raw events are NEVER replayed. Applied to an EXPLICITLY passed
+    # id list too, not only the default enumeration -- this is the one place snapshot rows are
+    # built, so it is the one place the guarantee can be fail-closed rather than dependent on
+    # every caller remembering to filter.
+    withheld = withheld_dataset_ids_for_store(dataset_store)
+    dataset_ids = [dataset_id for dataset_id in dataset_ids if dataset_id not in withheld]
     results: list[dict] = []
     for dataset_id in dataset_ids:
         if should_abort is not None and should_abort():
@@ -368,6 +426,9 @@ _IDLE_SNAPSHOT: dict = {
     "started_utc": None,
     "finished_utc": None,
     "error": None,
+    # Spec section 7.5 point 6 (r4): the disclosure of what this build left out. `0` on an idle
+    # manager is a true statement (no run has excluded anything yet), never a placeholder.
+    "withheld_excluded": 0,
 }
 
 
@@ -405,6 +466,17 @@ class MicroSnapshotComputeManager:
                 resolved_ids = [r["id"] for r in records]
             else:
                 resolved_ids = list(dataset_ids)
+            # iter-9 audit B1: the published progress block below carries
+            # `current_dataset_id`, so an unfiltered enumeration would serve a sealed shard's
+            # dataset id on `GET /snapshots/compute` for the duration of the run. Filtered here
+            # as well as in `run_snapshot_build_and_record` (which is authoritative for what is
+            # actually READ) so `datasets_total` counts what the walk will really do. The count
+            # of what was left out is DISCLOSED below and in this run's own append-only run-log
+            # row (spec section 7.5 point 6, r4) -- never silently dropped.
+            withheld = withheld_dataset_ids_for_store(dataset_store)
+            kept_ids = [dataset_id for dataset_id in resolved_ids if dataset_id not in withheld]
+            withheld_excluded = len(resolved_ids) - len(kept_ids)
+            resolved_ids = kept_ids
 
             run_id = uuid.uuid4().hex
             self._run_id = run_id
@@ -421,6 +493,7 @@ class MicroSnapshotComputeManager:
                 "started_utc": _iso_utc_now(),
                 "finished_utc": None,
                 "error": None,
+                "withheld_excluded": withheld_excluded,
             }
             published = dict(self._snapshot)
 
@@ -473,6 +546,9 @@ class MicroSnapshotComputeManager:
                 "datasets_done": current["progress"]["datasets_done"],
                 "datasets_total": current["progress"]["datasets_total"],
                 "error": error,
+                # Spec section 7.5 point 6 (r4): the append-only row this run writes discloses how
+                # many withheld shards the walk excluded -- the count only, never an id.
+                "withheld_excluded": current["withheld_excluded"],
             }
         append_run_log(root_dir, entry)
 
@@ -536,7 +612,13 @@ def main() -> int:
     results = run_snapshot_build_and_record(
         dataset_store, config, root_dir, dataset_ids, progress=_cli_progress_printer()
     )
-    print(f"snapshot build complete: {len(results)} dataset(s) processed; store={root_dir}")
+    # Spec section 7.5 point 6 (r4): what this run left out is stated, never silently dropped.
+    records, _errors = dataset_store.list()
+    _kept, withheld_excluded = exclude_withheld(records, dataset_store)
+    print(
+        f"snapshot build complete: {len(results)} dataset(s) processed "
+        f"({withheld_excluded} withheld vault shard(s) excluded); store={root_dir}"
+    )
     return 0
 
 

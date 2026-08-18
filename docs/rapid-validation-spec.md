@@ -23,6 +23,35 @@
 > registry + human/agent rules for `historical_oos` (§6.7); `rule_process` vs
 > `operator_process` sequence labels (§6.8); frozen clustering semantics and the explicit
 > `WF_SURVIVOR_RULE_V1` (§6.2/§6.6); and traps TR-17–TR-22 (§9).
+>
+> **Revision r3 (2026-08-18, owner ruling — sealed-shard join resistance).** A narrow named
+> revision applied while ZERO shards are sealed, so nothing re-keys and no recorded verdict
+> moves. The iteration-9 audit proved r2's §7.5 opacity is defeated in one hop: the served
+> `shard_id` was the `DatasetStore` dataset id, so `GET /research/datasets/{id}` (and the
+> `datasets` MCP tool, `get_endpoint`, and `micro_readiness`'s per-shard rows) returned the
+> sealed shard's symbol, window and event counts. r2 already REQUIRED an "opaque `shard_id`",
+> so that part was a compliance gap, not a spec gap — but r2 also MANDATED serving the
+> `checksum commitment`, which is itself an equally good join key against the public dataset
+> record. Resolving that tension is a genuine methodological change, hence this revision.
+> r3 replaces §7.5's identity rules (surrogate ids, salted pre-exposure commitment, explicit
+> refusal on the pre-existing dataset surfaces) and widens TR-2 from a field-whitelist sweep to
+> a join-resistance sweep. Owner ruling recorded 2026-08-18; the alternatives considered and
+> rejected were a separate sealed store path (strongest, largest build) and accepting the leak
+> with a documented caveat (cheapest, materially weaker vault).
+>
+> **Revision r4 (2026-08-18, owner ruling — corpus enumerators honour the seal).** Applied while
+> ZERO shards are sealed, so no recorded report or ledger row changes. The iteration-9 re-audit
+> proved r3's refusals are route-scoped and therefore bypassable: `edge_report._all_datasets`
+> and `pnl_scan._split_datasets` each enumerate the WHOLE store through their own
+> `DatasetStore.list()` and drive `BacktestJobManager` directly, so a corpus-wide report would
+> read a sealed shard's events and republish its id, raw checksum and outcome aggregates through
+> `GET /research/backtests` and the append-only PnL ledger. r4 adds §7.5 point 6: enumerators
+> EXCLUDE withheld shards and DISCLOSE the exclusion. This is a derivation, not a free choice —
+> goal.md's critical rail already says event data and outcome aggregates of a sealed shard are
+> "refused everywhere… fail-closed", and both call sites already carry the honesty convention
+> that "a partial report is a misleading report", which forbids the silent variant. Rejected:
+> aborting a whole sweep whenever any sealed shard exists (renders the edge report unusable the
+> moment the vault holds anything) and accepting the bypass (re-opens exactly what r3 closed).
 
 ---
 
@@ -462,16 +491,49 @@ root-family-level and single-shot**: a renamed or re-parameterized family comput
 root and can never treat the same shard as fresh, and a failed sealed verdict is a permanent
 root-family fact carried in every later export bundle (TR-12, TR-20).
 
-### 7.5 Sealed metadata minimization — OPAQUE pre-exposure (r2)
-While sealed, a shard serves only: an opaque `shard_id`, its `universe_id`, a coarse size
-bucket (order of magnitude), the checksum commitment, `sealed_at`, and the exposure state.
+### 7.5 Sealed metadata minimization — OPAQUE pre-exposure (r3)
+While sealed, a shard serves only: a surrogate `shard_id`, its `universe_id`, a coarse size
+bucket (order of magnitude), a **salted** commitment, `sealed_at`, and the exposure state.
 **Symbol and date range are NOT served pre-exposure** — they would let bar-level public
 outcomes (desk/playbook, served for every date) be looked up against sealed membership; both
 are revealed at ASSIGNMENT and recorded in the exposure ledger. Exact event counts, bytes, and
-any feature/outcome aggregate are withheld until exposure (TR-2 sweeps every registered route,
-closing the `get_endpoint` path structurally). Readiness serves sealed-tranche AGGREGATES only
-(shard count, total symbol-days, per-universe totals), never per-shard identity. Recorder run
-logs commit per-shard identity and counts by hash while sealed.
+any feature/outcome aggregate are withheld until exposure.
+
+**Join resistance is the actual requirement (r3).** Field-level minimization is not enough: a
+served value that merely *identifies* the shard on another surface leaks everything that
+surface serves. Therefore:
+
+1. **Surrogate identity.** The served `shard_id` is a vault-minted opaque token bearing no
+   derivable relation to the `DatasetStore` dataset id (not the id, not a hash of it, not a
+   prefix). The surrogate → dataset-id mapping lives only in the sealed-side ledger and is
+   revealed at assignment.
+2. **Salted commitment.** The pre-exposure commitment is `HMAC(vault_secret, content_checksum)`
+   — not the raw `content_checksum`, which is served publicly per dataset and would join
+   directly. The raw checksum is revealed at exposure, at which point the salted commitment can
+   be re-derived and verified against it, preserving auditability.
+3. **Refusal on the pre-existing surfaces.** `GET /research/datasets` / `/research/datasets/{id}`,
+   the `datasets` MCP tool, and any `get_endpoint` path resolving to them REFUSE a sealed
+   dataset id with a typed refusal until its exposure is recorded. The refusal states only that
+   the id is sealed — never symbol, window, counts, or universe.
+4. **Readiness serves sealed-tranche AGGREGATES only** (shard count, total symbol-days,
+   per-universe totals) — never a per-shard row, never a per-shard `exposure_state`.
+5. Recorder run logs commit per-shard identity and counts by hash while sealed.
+6. **Corpus enumerators honour the seal (r4).** A refusal wired only into a route is bypassed by
+   any module that enumerates the store itself. Therefore every corpus-wide enumerator —
+   `edge_report._all_datasets`, `pnl_scan._split_datasets`, the Scout's corpus manifest, the
+   snapshot builder and its compute manager, and any future sibling — EXCLUDES withheld shards
+   (state ≠ `exposed`) at its single `DatasetStore.list()` choke point, and **DISCLOSES the
+   exclusion**: a `withheld_excluded` count (never the ids) travels into the report body and
+   into any append-only row the run writes. Silent exclusion is forbidden — these call sites
+   already hold that "a partial report is a misleading report", and the era's denominator rail
+   forbids a corpus that shrinks without saying so. A run whose entire eligible corpus is
+   withheld reports that honestly rather than emitting an empty-but-shaped result.
+
+No pre-exposure field may equal, contain, or be derivable from any field the public surfaces
+serve for the same shard, and no exploratory statistic may be computed from one. TR-2 proves
+this by construction, not by whitelist review — and it exercises the operator compute acts
+(snapshot build, Scout run, edge report, PnL sweep) BEFORE sweeping, so it cannot pass merely
+because the rig computed nothing.
 
 ### 7.6 The starter tranche (this era's recording acceptance)
 Minimums (all must hold): ≥30 symbol-days; ≥8 distinct Card-5.2-panel symbols including `PG`,
@@ -527,7 +589,7 @@ No state ever moves backward except by a voiding event (§6.2), which is itself 
 | Trap | Asserts |
 |---|---|
 | TR-1 prefix/tail | Truncated-dataset snapshot rows byte-identical to the full run's prefix (3 cut points incl. i=1); appending one tail event changes no prior row |
-| TR-2 sealed sweep | Every registered route + MCP tool serves only §7.5 metadata (or refusal) for a sealed shard |
+| TR-2 sealed sweep (r3: join-resistance) | Every registered route + MCP tool serves only §7.5 metadata (or a typed refusal) for a sealed shard — AND the sweep is adversarial, not a whitelist review: seal a fixture shard, collect every value any surface serves for it pre-exposure, and assert none equals, contains, or derives the dataset id, raw `content_checksum`, symbol, window, or event counts. Explicitly includes `/research/datasets{,/{id}}`, the `datasets` MCP tool, `get_endpoint`, and `micro_readiness` (which must expose no per-shard row at all) |
 | TR-3 accessor fence | Origin-T accessor refuses reads > T with a typed error; corpus aggregates exclude > T exactly; import-ban: only `micro_accessor` opens snapshot/vault data paths |
 | TR-4 cherry-pick refusal | A recording batch ≠ its universe rule's computed set (net of disclosed failures) is refused |
 | TR-5 class mixing | Pooling `historical_exposed_diagnostic` with `historical_oos` rows in one statistic is refused; diagnostic folds contribute zero to graduation |

@@ -225,3 +225,35 @@ that nothing in `app/` currently calls `hash()` on these events, so the fix is d
 that claim by grep rather than assuming a fix is load-bearing.
 **Applies to:** any iteration adding an optional container field (`list`/`dict`/`set`) to a frozen
 dataclass in `apps/backend/app/providers/` or `app/research/`.
+
+## iter-9 — 2026-08-18T17:05:00Z
+
+**Verdict:** CONTINUE
+**Lesson:** Per-record minimization does not imply set-level minimization: every served field of a
+sealed shard can be opaque while the COMPLEMENT hands over the whole secret. `vault.py`'s §7.5
+whitelist is genuinely correct per shard (I sealed a throwaway and confirmed no symbol/date/raw
+id/raw checksum/exact count is served), yet closing the public `GET /research/datasets` listing
+under the universe's cartesian product and subtracting recovers sealed membership exactly — 5 of 5
+in the auditor's probe, WITH the B1 rule-withholding fix already in place. The tell is structural:
+any surface publishing an EXPECTED set (a universe rule, or a cartesian shape TR-4 forces the batch
+to fill) sitting beside a surface publishing the ACTUAL set is a subtraction oracle, and no amount
+of field-level opacity in the new module can close it.
+**Applies to:** any iteration adding a "hidden/held-out/sealed" state beside an existing public
+listing — before trusting a minimization sweep, ask what the complement reveals, and attack your own
+fix before writing it up.
+
+## iter-9 — 2026-08-18T17:06:00Z
+
+**Verdict:** CONTINUE
+**Lesson:** When an in-iteration fix round lands AFTER the browser evidence was captured (here: r4
+edits at 14:14–14:34 versus screenshots at 05:55–09:34), "browser layer is `unknown`" is the safe
+call but often not the true one. A.6 says evidence expires with CHANGE, not time — so the cheap
+decisive move is to re-derive the photographed values under the CURRENT code and compare. I ran
+`build_readiness` post-r4 against BOTH the rig fixture store and the operator's real store and got
+byte-identical values to the screenshot (1/2/1.75/0.0045 and 12/18/1173.49/3.0089), because r4's
+additions are all-zero while nothing is sealed and `distinct_datasets` moved from `len(records)` to
+`len(shards)` — identical when nothing is withheld. That turned a would-be `unknown` into a defended
+`passing` in minutes, without a browser re-run.
+**Applies to:** any iteration with fix rounds after the QA/browser lane — especially r-revision
+rounds whose changes are inert until some future state exists; also any journey whose module changed
+after its screenshot, where a lane row says DEFERRED-BUDGET.

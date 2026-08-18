@@ -471,6 +471,8 @@ def test_joinable_corpus_defaults_to_an_honest_zero_without_a_playbook_store(tmp
         "band_touch_count": {"status": "not_enumerated", "count": None},
         "by_setup_id": {},
         "playbook_integrity_errors": [],
+        # spec section 7.5 point 6 (r4): the enumerator's own disclosure of what it left out.
+        "withheld_excluded": 0,
     }
 
 
@@ -505,6 +507,8 @@ def test_joinable_corpus_matches_joinable_corpus_counts_directly(tmp_path):
         "band_touch_count": {"status": "not_enumerated", "count": None},
         "by_setup_id": {"opening_range_break": 1},
         "playbook_integrity_errors": [],
+        # spec section 7.5 point 6 (r4): the enumerator's own disclosure of what it left out.
+        "withheld_excluded": 0,
     }
 
 
@@ -558,6 +562,8 @@ def test_real_corpus_readiness_still_serves_an_honest_zero_joinable_corpus_witho
         "band_touch_count": {"status": "not_enumerated", "count": None},
         "by_setup_id": {},
         "playbook_integrity_errors": [],
+        # spec section 7.5 point 6 (r4): the enumerator's own disclosure of what it left out.
+        "withheld_excluded": 0,
     }
 
 

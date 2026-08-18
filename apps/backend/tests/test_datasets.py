@@ -602,6 +602,78 @@ def test_tc3_schema_basis_and_quote_size_unit_are_stamped_verbatim_when_supplied
         )
 
 
+# --- era "The Rapid Microscope" J-06 step 3 (spec section 2.6's own closing clause): the rule- ------
+# --- text + verification-note manifest fields -- TC-12, TC-13 (docs/phases/goal-rapid-microscope- --
+# --- iter-9.md). Two FURTHER optional, checksum-excluded siblings of schema_basis/quote_size_unit. -
+
+
+def test_tc12_the_rule_text_and_verification_note_are_stamped_verbatim_when_supplied(tmp_path):
+    """TC-12: ``record(..., quote_size_unit_rule_text=..., quote_size_unit_verification_note=...)``
+    stamps both into the manifest verbatim and they survive a store reload -- the exact
+    ``schema_basis``/``quote_size_unit`` precedent, extended to their two new siblings."""
+    store = DatasetStore(tmp_path / "datasets")
+    meta = store.record(
+        symbol="PG", source="test", source_kind="reference", source_id="",
+        split=SPLIT_TRAIN, window_start_utc="2026-06-09T17:00:00Z",
+        window_end_utc="2026-06-09T17:00:01Z", data_feed="sip", epoch_anchor=0.0,
+        events=[TradeEvent("PG", 0.0, 148.53, 100, Side.UNKNOWN)],
+        schema_basis="v2_preservation", quote_size_unit="shares",
+        quote_size_unit_rule_text="Alpaca CTA/UTP displayed quote sizes are SHARES for windows "
+        "on/after 2025-11-03, ROUND LOTS before.",
+        quote_size_unit_verification_note="verified by comparing session_date '2026-06-09' >= "
+        "ALPACA_QUOTE_SIZE_UNIT_EFFECTIVE ('2025-11-03') -> quote_size_unit='shares'",
+    )
+    assert meta["quote_size_unit_rule_text"].startswith("Alpaca CTA/UTP displayed quote sizes")
+    assert "ALPACA_QUOTE_SIZE_UNIT_EFFECTIVE" in meta["quote_size_unit_verification_note"]
+
+    reloaded = DatasetStore(tmp_path / "datasets").get(meta["id"])
+    assert reloaded["quote_size_unit_rule_text"] == meta["quote_size_unit_rule_text"]
+    assert reloaded["quote_size_unit_verification_note"] == meta["quote_size_unit_verification_note"]
+
+
+def test_tc12_the_two_new_fields_are_absent_when_not_supplied_never_a_null_placeholder(tmp_path):
+    """The ``observer=``-kwarg absent-key precedent, extended: a caller that omits the two new
+    kwargs (every pre-J-06-step-3 caller) gets a manifest with NEITHER key present at all -- never
+    an emitted ``"quote_size_unit_rule_text": null``."""
+    store = DatasetStore(tmp_path / "datasets")
+    meta = store.record(
+        symbol="PG", source="test", source_kind="reference", source_id="",
+        split=SPLIT_TRAIN, window_start_utc="2026-06-09T17:00:00Z",
+        window_end_utc="2026-06-09T17:00:01Z", data_feed="sip", epoch_anchor=0.0,
+        events=[TradeEvent("PG", 0.0, 148.53, 100, Side.UNKNOWN)],
+    )
+    assert "quote_size_unit_rule_text" not in meta
+    assert "quote_size_unit_verification_note" not in meta
+
+
+def test_tc13_the_content_checksum_is_byte_identical_with_and_without_the_two_new_fields_supplied(tmp_path):
+    """TC-13: the two new fields are manifest metadata, never tape content -- proven, not assumed,
+    by recording the SAME tape into two separate stores (avoiding the immutable-dataset re-tag
+    refusal) with and without them supplied, and comparing ``meta["checksum"]`` byte for byte (the
+    ``test_the_frozen_split_guard_still_refuses_one_tape_re_fetched_with_preservation_fields``
+    two-separate-stores technique, applied to this exclusion instead of the row-level one)."""
+    events = [
+        QuoteEvent("PG", 0.0, 148.49, 148.53, 700, 100),
+        TradeEvent("PG", 0.02, 148.53, 100, Side.UNKNOWN),
+    ]
+    common = dict(
+        symbol="PG", source="test", source_kind="reference", source_id="",
+        split=SPLIT_TRAIN, window_start_utc="2026-06-09T17:00:00Z",
+        window_end_utc="2026-06-09T17:00:01Z", data_feed="sip", epoch_anchor=0.0, events=events,
+    )
+
+    bare = DatasetStore(tmp_path / "datasets_bare").record(**common)
+    rich = DatasetStore(tmp_path / "datasets_rich").record(
+        **common,
+        schema_basis="v2_preservation", quote_size_unit="shares",
+        quote_size_unit_rule_text="Alpaca CTA/UTP displayed quote sizes are SHARES for windows "
+        "on/after 2025-11-03, ROUND LOTS before.",
+        quote_size_unit_verification_note="verified by comparing session_date '2026-06-09' >= "
+        "ALPACA_QUOTE_SIZE_UNIT_EFFECTIVE ('2025-11-03') -> quote_size_unit='shares'",
+    )
+    assert bare["checksum"] == rich["checksum"]
+
+
 def test_tc9_the_dated_rule_constant_lives_exactly_once_in_tick_recorder_never_duplicated():
     """TC-9 (iter-7) updated to its own anticipated iter-8 shape, not silently dropped:
     ``micro_features.QUOTE_SIZE_UNITS`` stays the SOLE unit-vocabulary tuple in the repo (this

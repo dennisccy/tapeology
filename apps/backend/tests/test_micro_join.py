@@ -31,6 +31,7 @@ from app.providers.base import QuoteEvent, Side, TradeEvent
 from app.research import desk_playbook as desk_playbook_module
 from app.research import desk_playbook_context as desk_playbook_context_module
 from app.research import micro_join
+from app.research import vault
 from app.research.datasets import DatasetStore
 from app.research.desk_playbook import PlaybookStore, playbook_parameters
 from app.research.desk_playbook_context import BandMapResolver
@@ -475,6 +476,8 @@ def test_joinable_corpus_counts_is_an_honest_zero_with_no_playbook_records(tmp_p
         "band_touch_count": {"status": micro_join.BAND_TOUCH_STATUS_NOT_ENUMERATED, "count": None},
         "by_setup_id": {},
         "playbook_integrity_errors": [],
+        # spec section 7.5 point 6 (r4): the enumerator's own disclosure of what it left out.
+        "withheld_excluded": 0,
     }
 
 
@@ -751,3 +754,76 @@ def test_shares_and_clock_horizon_rows_are_unchanged_by_the_index_iteration_rewr
     assert micro_join._shares_horizon_row(trade_rows, anchor_pos, 50_000) == _reference_shares_horizon_row(50_000)
     horizon_ts = trade_rows[anchor_pos]["anchor_at"] + 60
     assert micro_join._clock_horizon_row(trade_rows, anchor_pos, horizon_ts) == _reference_clock_horizon_row(horizon_ts)
+
+
+# --- spec section 7.5 point 6 (r4): the seal-aware enumerator + its disclosure -------------------
+# iter-9 audit finding B5: `micro_readiness` already excludes a withheld shard from
+# `totals.distinct_datasets`, but this counter enumerated the store itself and counted the SAME
+# shard's window as joinable evidence -- two numbers in one payload, one excluding sealed shards
+# and one including them.
+
+
+def _seal(dataset_store: DatasetStore, meta: dict, *, universe_id: str = "starter-tranche-v1") -> None:
+    """Seal one already-recorded dataset through the vault's OWN public lifecycle entry point
+    (never a hand-written ledger line), resolved from THIS store's own directory."""
+    vault.seal_shard(
+        vault.shard_ledger_for_dataset_dir(str(dataset_store.root)),
+        dataset_id=meta["id"],
+        universe_id=universe_id,
+        content_checksum=meta["checksum"],
+        event_count=meta["event_counts"]["total"],
+        vault_secret=b"micro-join-fixture-secret",
+    )
+
+
+def test_r4_a_withheld_shards_window_never_counts_as_joinable_evidence(tmp_path):
+    """A signal whose ONLY covering tick window belongs to a withheld Validation-Vault shard is
+    not joinable evidence -- and the count that dropped is DISCLOSED, never silently shrunk."""
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    sealed_meta = _plant_dataset(
+        dataset_store, symbol="ZJN",
+        window_start_utc="2026-06-09T13:00:00Z", window_end_utc="2026-06-09T13:01:00Z",
+    )
+    _plant_dataset(
+        dataset_store, symbol="PBL",
+        window_start_utc="2026-06-09T13:00:00Z", window_end_utc="2026-06-09T13:01:00Z",
+    )
+    playbook_store = PlaybookStore(tmp_path / "playbook")
+    _plant_playbook_signal(
+        playbook_store, session_date="2026-06-09", playbook_input_signature="sig-r4",
+        signals=[
+            {"symbol": "ZJN", "setup_id": "opening_range_break", "trigger_ts": "2026-06-09T13:00:30Z"},
+            {"symbol": "PBL", "setup_id": "jbe", "trigger_ts": "2026-06-09T13:00:30Z"},
+        ],
+    )
+
+    before = micro_join.joinable_corpus_counts(dataset_store, playbook_store)
+    assert before["total"] == 2
+    assert before["by_setup_id"] == {"opening_range_break": 1, "jbe": 1}
+    assert before["withheld_excluded"] == 0  # an empty vault withholds nothing
+
+    _seal(dataset_store, sealed_meta)
+    after = micro_join.joinable_corpus_counts(dataset_store, playbook_store)
+
+    assert after["total"] == 1  # only the PUBLIC sibling's signal remains joinable
+    assert after["by_setup_id"] == {"jbe": 1}
+    assert after["withheld_excluded"] == 1  # the shrink is stated, never silent
+    assert "ZJN" not in str(after) and sealed_meta["id"] not in str(after)  # a COUNT, never an id
+
+
+def test_r4_find_covering_dataset_refuses_to_hand_back_a_withheld_shard(tmp_path):
+    """``find_covering_dataset`` is the door onto a covering SNAPSHOT and therefore onto a shard's
+    rows: a withheld shard covering the instant is an honest ``None``, exactly as if no window
+    covered it -- never a read of held-out tape."""
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    meta = _plant_dataset(
+        dataset_store, symbol="ZJN",
+        window_start_utc="2026-06-09T13:00:00Z", window_end_utc="2026-06-09T13:01:00Z",
+    )
+    at_epoch = datetime(2026, 6, 9, 13, 0, 30, tzinfo=timezone.utc).timestamp()
+
+    found = micro_join.find_covering_dataset("ZJN", at_epoch, dataset_store)
+    assert found is not None and found["id"] == meta["id"]
+
+    _seal(dataset_store, meta)
+    assert micro_join.find_covering_dataset("ZJN", at_epoch, dataset_store) is None

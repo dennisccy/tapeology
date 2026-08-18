@@ -82,6 +82,7 @@ from .datasets import DatasetNotFound, DatasetStore, parse_utc_epoch
 from .micro_accessor import MicroAccessor
 from .micro_snapshots import (
     append_run_log,
+    exclude_withheld,
     load_snapshot_meta,
     resolve_micro_snapshots_dir,
     run_snapshot_build_and_record,
@@ -1053,6 +1054,7 @@ def register_and_screen_candidate(
     econ_floor_computed_at: str | None = None,
     family_median_spread_bps: float | None = None,
     rows_cache: dict[str, list[dict]] | None = None,
+    withheld_excluded: int = 0,
 ) -> dict:
     """The ONE production entry point: builds the frozen spec, enforces TR-9 (ordering) and the
     24-variant grid bound BEFORE any outcome is read or any ledger row is written, extracts
@@ -1155,6 +1157,11 @@ def register_and_screen_candidate(
         "notes": result["notes"],
         "screen_result": result["screen_result"],
         "superseded_by": None,
+        # Spec section 7.5 point 6 (r4): how many registered datasets this candidate's corpus
+        # manifest left out because their vault shards are withheld -- a count, never an id, and
+        # deliberately OUTSIDE ``spec_fields`` (which ``compute_spec_hash`` hashes), so disclosing
+        # it re-keys no ``spec_hash`` and no ``candidate_id``, and no already-recorded row moves.
+        "withheld_excluded": withheld_excluded,
     }
     return ledger.append_row(row_fields)
 
@@ -1190,7 +1197,21 @@ def default_fixture_grid(dataset_store: DatasetStore, *, grid_version: int = 1) 
     ``dataset_store`` currently holds -- reused unmodified by the manager, the CLI, and the test
     suite's manager/CLI-parity check (TC-11)."""
     records, _errors = dataset_store.list()
-    corpus_manifest = [{"dataset_id": r["id"], "checksum": r["checksum"]} for r in records]
+    # Spec section 7.4/7.5 (r3) + the era's *(critical)* anti-goal, iter-9 audit finding B1: a
+    # shard whose vault lifecycle has not reached ``exposed`` is excluded from the corpus
+    # manifest. Two distinct reasons, both fatal without this line: (1) the manifest is written
+    # VERBATIM into the append-only, hash-chained scout ledger and served by
+    # ``GET /research/desk/micro/scout``, so a sealed shard's ``dataset_id`` and RAW ``checksum``
+    # -- precisely the two join keys section 7.5 withholds until exposure -- would be published
+    # irreversibly; and (2) screening a sealed shard would READ its snapshot rows and fold its
+    # outcomes into an exploratory statistic, destroying the held-out property the whole vault
+    # exists to create. Empty (hence byte-identical) until the first shard is ever sealed.
+    # Spec section 7.5 point 6 (r4): the exclusion is DISCLOSED as a count on every row this grid
+    # writes (``register_and_screen_candidate``'s ``withheld_excluded``, carried OUTSIDE the frozen
+    # spec fields so no ``spec_hash``/``candidate_id`` re-keys) -- silent shrinking of a screened
+    # corpus is exactly what the era's denominator rail forbids.
+    kept, withheld_excluded = exclude_withheld(records, dataset_store)
+    corpus_manifest = [{"dataset_id": r["id"], "checksum": r["checksum"]} for r in kept]
     requests: list[dict] = []
     for feature_name, horizon_key in DEFAULT_GRID_FEATURES:
         for op, value in DEFAULT_GRID_THRESHOLDS:
@@ -1205,6 +1226,7 @@ def default_fixture_grid(dataset_store: DatasetStore, *, grid_version: int = 1) 
                     "fitting_rule": None,
                     "corpus_manifest": corpus_manifest,
                     "grid_version": grid_version,
+                    "withheld_excluded": withheld_excluded,
                 }
             )
     return requests

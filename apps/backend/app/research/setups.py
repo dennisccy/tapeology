@@ -137,6 +137,8 @@ from ..providers.adapters.base import RawBar
 from .bars import BarStore
 from .datasets import DatasetStore, parse_utc_epoch
 from .edge_report_cache import _config_content_hash
+# Spec section 7.5 point 6 (r4): the ONE withholding predicate, imported not re-implemented.
+from .micro_snapshots import exclude_withheld
 from .setups_scan_cache import SetupsScanCache, resolve_scan_cache_db_path, scan_cache_key
 from .tradability import RESISTANCE, SUPPORT, compute_tradability
 
@@ -516,6 +518,13 @@ def _matching_dataset(symbol: str, touch_ts: str, dataset_store: DatasetStore) -
     then ``id`` -- deterministic, never insertion-order happenstance."""
     touch_epoch = parse_utc_epoch(touch_ts)
     records, _errors = dataset_store.list()
+    # Spec section 7.5 point 6 (r4): this lookup's caller REPLAYS the matched dataset's raw events
+    # into a served drill-in timeline, so a withheld Validation-Vault shard is excluded here -- the
+    # drill-in then carries its existing, honest "no recorded dataset matches" empty timeline
+    # rather than a read of held-out tape (the era's *(critical)* anti-goal: a sealed shard's event
+    # data is refused everywhere until its recorded exposure). Byte-identical while nothing is
+    # sealed.
+    records, _withheld_excluded = exclude_withheld(records, dataset_store)
     candidates = [
         r for r in records
         if r["symbol"] == symbol

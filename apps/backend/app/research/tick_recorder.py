@@ -42,7 +42,12 @@ constant ``micro_features.py``'s own docstring reserves for this module) and
 ``quote_size_unit_for_session_date`` implement the frozen rule verbatim: Alpaca CTA/UTP displayed
 quote sizes are SHARES for sessions on/after ``2025-11-03``, ROUND LOTS before -- validated (by
 ``DatasetStore.record`` itself) against the single existing ``micro_features.QUOTE_SIZE_UNITS``
-tuple, never a second vocabulary.
+tuple, never a second vocabulary. J-06 step 3 closes section 2.6's own remaining clause ("the
+recorder records the rule text and the verification note beside the stamp"): ``_finalize_day``
+now also passes ``QUOTE_SIZE_UNIT_RULE_TEXT`` (the one frozen sentence, verbatim on every dataset)
+and ``quote_size_unit_verification_note(session_date)`` (a genuinely per-dataset note naming the
+actual comparison) to ``record_from_source`` -- two further optional, checksum-excluded manifest
+siblings of ``quote_size_unit`` (``datasets.py``'s own docstring covers the exclusion).
 
 **The split rule (spec section 7.3, Card 5.2 -- published, frozen, NOT this module's invention).**
 ``DatasetStore.record`` requires a split tag; ``recorder_split_for`` computes the EXISTING published
@@ -113,10 +118,12 @@ __all__ = [
     "RecorderPreservationCapabilityMissing",
     "ALPACA_QUOTE_SIZE_UNIT_EFFECTIVE",
     "RECORDER_SCHEMA_BASIS",
+    "QUOTE_SIZE_UNIT_RULE_TEXT",
     "RECORDER_PAGE_BUDGET_PER_MINUTE",
     "RECORDER_CHUNK_SECONDS",
     "verify_preservation_capability",
     "quote_size_unit_for_session_date",
+    "quote_size_unit_verification_note",
     "recorder_split_for",
     "plan_recorder_chunks",
     "RecorderCheckpointStore",
@@ -171,6 +178,15 @@ ALPACA_QUOTE_SIZE_UNIT_EFFECTIVE = "2025-11-03"
 # writes ships WITH the fields (TR-19 refuses otherwise), so there is exactly one basis value.
 RECORDER_SCHEMA_BASIS = "tick_recorder_v1_card_5_1_preservation_present"
 
+# J-06 step 3 (spec section 2.6's own closing clause): "the recorder records the rule text ... "
+# -- the FROZEN vendor-rule sentence verbatim, stamped beside every `quote_size_unit` this module
+# writes. Composed FROM `ALPACA_QUOTE_SIZE_UNIT_EFFECTIVE` (never a second, independently-typed
+# date literal) so the two constants can never drift apart.
+QUOTE_SIZE_UNIT_RULE_TEXT = (
+    "Alpaca CTA/UTP displayed quote sizes are SHARES for windows on/after "
+    f"{ALPACA_QUOTE_SIZE_UNIT_EFFECTIVE}, ROUND LOTS before."
+)
+
 
 def quote_size_unit_for_session_date(session_date: str) -> str:
     """Stamps ``quote_size_unit`` per the dated Alpaca CTA/UTP vendor rule (spec section 2.6):
@@ -182,6 +198,23 @@ def quote_size_unit_for_session_date(session_date: str) -> str:
     unit = "shares" if session_date >= ALPACA_QUOTE_SIZE_UNIT_EFFECTIVE else "round_lots"
     assert unit in QUOTE_SIZE_UNITS  # sanity only -- DatasetStore.record re-validates regardless
     return unit
+
+
+def quote_size_unit_verification_note(session_date: str) -> str:
+    """J-06 step 3 (spec section 2.6's own closing clause): "... and the verification note beside
+    the stamp" -- names the ACTUAL comparison (``session_date`` against
+    ``ALPACA_QUOTE_SIZE_UNIT_EFFECTIVE``) and constant that produced THIS dataset's specific
+    ``quote_size_unit`` stamp, so the note is genuinely per-dataset and auditable rather than one
+    frozen sentence repeated regardless of which side of the date a given recording fell on
+    (``QUOTE_SIZE_UNIT_RULE_TEXT`` above is that one frozen sentence; this is its per-call
+    companion)."""
+    comparison = ">=" if session_date >= ALPACA_QUOTE_SIZE_UNIT_EFFECTIVE else "<"
+    resolved_unit = quote_size_unit_for_session_date(session_date)
+    return (
+        f"verified by comparing this recording's session_date ({session_date!r}) {comparison} "
+        f"ALPACA_QUOTE_SIZE_UNIT_EFFECTIVE ({ALPACA_QUOTE_SIZE_UNIT_EFFECTIVE!r}) -> "
+        f"quote_size_unit={resolved_unit!r}"
+    )
 
 
 # --- spec section 7.3: the published sha256 split rule (Card 5.2, frozen, unchanged) --------------
@@ -376,7 +409,16 @@ def _existing_dataset_for_day(
     """Whether a dataset already covers this EXACT (symbol, day-window) -- the day-level
     short-circuit (TC-3): checked BEFORE any chunk of the day is even looked at, so a
     fully-recorded day costs zero ``DatasetStore.record`` calls, zero vendor calls, and zero
-    checkpoint reads."""
+    checkpoint reads.
+
+    **This enumeration deliberately does NOT apply the spec section 7.5 point 6 (r4) seal filter,
+    and must never be "fixed" to.** r4 makes corpus-wide enumerators exclude withheld shards
+    because they READ or REPUBLISH evidence; this one does neither -- it is the recorder's own
+    idempotency check, and its whole job is to answer "have I already written this day". Hiding a
+    sealed shard here would make the recorder re-fetch and re-record a day it already holds,
+    duplicating an immutable recording (and burning credentialed vendor calls) precisely for the
+    tranche the vault exists to protect. Nothing is served or measured from this answer: the caller
+    either skips the day or records it."""
     records, _errors = dataset_store.list()
     for meta in records:
         if (
@@ -439,6 +481,8 @@ def _finalize_day(
             historical_fetch=lambda: assembled,
             schema_basis=RECORDER_SCHEMA_BASIS,
             quote_size_unit=quote_size_unit_for_session_date(session_date),
+            quote_size_unit_rule_text=QUOTE_SIZE_UNIT_RULE_TEXT,
+            quote_size_unit_verification_note=quote_size_unit_verification_note(session_date),
         )
     except DatasetAlreadyRegistered as exc:
         return exc.existing_id, "unchanged"

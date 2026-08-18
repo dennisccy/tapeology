@@ -69,7 +69,8 @@ from .micro_accessor import (
     resolve_micro_exposure_registry_dir,
 )
 from .micro_readiness import WF_TEST_MIN_SESSIONS, WF_TRAIN_MIN_SESSIONS
-from .micro_snapshots import append_run_log
+from .micro_snapshots import append_run_log, exclude_withheld
+from . import vault
 from .walkforward_ledger import (
     ROW_KIND_FOLD_RESULT,
     ROW_KIND_FOLD_SPEC,
@@ -982,7 +983,9 @@ TICK_LEGACY_CORPUS_ID = "tick_legacy_symbol_days_v1"
 _ET_ZONE = ZoneInfo("America/New_York")
 
 
-def _tick_dataset_session_dates(dataset_store: DatasetStore) -> tuple[list[str], list[dict]]:
+def _tick_dataset_session_dates(
+    dataset_store: DatasetStore, *, excluded_dataset_ids: frozenset[str] = frozenset()
+) -> tuple[list[str], list[dict]]:
     """Every currently-registered tick dataset's own ET session date (spec section 0: "a session
     is an ET RTH trading date"), one entry per DISTINCT date -- the SAME ET-conversion technique
     ``micro_readiness.py``'s own ``_et_datetime`` and ``micro_accessor.py``'s own
@@ -999,10 +1002,40 @@ def _tick_dataset_session_dates(dataset_store: DatasetStore) -> tuple[list[str],
     bound it to ``_errors`` and dropped it), so a damaged tick recording is REPORTED rather than
     quietly excluded from the known-session-dates count. The healthy records' dates are computed
     exactly as before; a corrupt file simply contributes no date (its own session, if any, is
-    honestly absent from the count) while every other healthy shard is unaffected."""
+    honestly absent from the count) while every other healthy shard is unaffected.
+
+    ``excluded_dataset_ids`` (iter-9, additive and default-empty -- byte-identical for a caller
+    that passes nothing): any dataset whose own ``id`` is in this set contributes NO session date
+    at all. The two production callers deliberately pass DIFFERENT predicates, and the parameter is
+    named for what it does rather than for either one (T-2 vocabulary discipline):
+
+      * ``run_diagnostic_walkforward``'s r2 seed passes ``vault.currently_sealed_dataset_ids`` --
+        strictly ``sealed``, because ASSIGNMENT is itself the recorded act that makes a shard's
+        window legitimately seedable (closes the latent hole named in the iter-9 spec's
+        BACKGROUND);
+      * ``run_tick_family_fold_request``'s corpus INVENTORY passes the wider
+        ``micro_snapshots.exclude_withheld`` set (state != ``exposed``), because spec section 7.5
+        point 6 (r4) requires every corpus-wide enumerator to exclude withheld shards from what it
+        counts and hashes (iter-9 audit finding B4).
+
+    **The filter's real granularity, stated exactly (iter-9 audit finding B4).** This registry's
+    unit is the DATE, not the dataset: an entry says "this corpus's window ``2026-06-09`` has been
+    served", with no dataset id in it. So the filter's guarantee is precisely "a sealed dataset
+    contributes no date of its OWN", which equals "the sealed shard's date carries no entry" only
+    when that date is unique to sealed datasets. A date shared with an UNSEALED sibling still gets
+    seeded via that sibling's own contribution -- and in a realistic tranche (many symbols per
+    date) most dates will have such a sibling, so most sealed shards' dates WILL be seeded as
+    exposed. Do not read this filter as "a sealed shard's window is provably unexposed" in
+    general. That is acceptable only because these entries are scoped to
+    ``TICK_LEGACY_CORPUS_ID``, under which a sealed shard must never be evaluated at all (spec
+    section 7.7: the legacy corpus is permanently exploratory and disjoint from any sealed
+    tranche); the vault's OWN shard-lifecycle ledger, not this one, is the authority on whether a
+    sealed shard has been exposed."""
     records, errors = dataset_store.list()
     session_dates: set[str] = set()
     for meta in records:
+        if meta["id"] in excluded_dataset_ids:
+            continue
         parsed = datetime.fromisoformat(meta["window_start_utc"].replace("Z", "+00:00"))
         if parsed.tzinfo is None:
             parsed = parsed.replace(tzinfo=timezone.utc)
@@ -1046,14 +1079,38 @@ def run_tick_family_fold_request(ledger: WalkForwardLedger, config: Config) -> d
     recording is reported to this function's caller rather than quietly excluded from the
     known-session-dates count."""
     tick_dataset_store = DatasetStore(config.dataset_dir_resolved())
-    session_dates, errors = _tick_dataset_session_dates(tick_dataset_store)
+    # Spec section 7.5 point 6 (r4) + iter-9 audit finding B4: this inventory is a corpus-wide
+    # enumerator, so a withheld shard must not contribute its session date to `TICK_LEGACY_CORPUS_
+    # ID`'s floor count or to the `corpus_manifest_hash` registered in the fold ledger -- section
+    # 7.7 makes the legacy corpus permanently exploratory and disjoint from any sealed tranche, so
+    # a sealed shard silently inflating it is exactly the "code path that has never heard of
+    # sealing" this era set out to close. The count is DISCLOSED in the returned body below (never
+    # the ids). Wider than the r2 seed's `sealed`-only filter on purpose -- see
+    # `_tick_dataset_session_dates`' own docstring for why the two callers differ.
+    records, _list_errors = tick_dataset_store.list()
+    kept, withheld_excluded = exclude_withheld(records, tick_dataset_store)
+    excluded_ids = frozenset(r["id"] for r in records) - frozenset(k["id"] for k in kept)
+    session_dates, errors = _tick_dataset_session_dates(
+        tick_dataset_store, excluded_dataset_ids=excluded_ids
+    )
     corpus_manifest_hash = _sha256(_canonical(session_dates))
     floors = {
         "wf_fold_min_observations": WF_FOLD_MIN_OBSERVATIONS,
         "wf_fold_min_signal_sessions": WF_FOLD_MIN_SIGNAL_SESSIONS,
         "wf_fold_min_symbols": WF_FOLD_MIN_SYMBOLS,
     }
-    require_sufficient_sessions_for_folds(session_dates, DIAGNOSTIC_GEOMETRY)
+    try:
+        require_sufficient_sessions_for_folds(session_dates, DIAGNOSTIC_GEOMETRY)
+    except InsufficientSessionsForFoldsError as exc:
+        if not withheld_excluded:
+            raise  # byte-identical to the pre-r4 refusal whenever nothing was withheld
+        # Spec section 7.5 point 6 (r4): a below-floor caller only ever SEES this refusal, so the
+        # disclosure has to travel with it -- otherwise the shortfall it names would silently
+        # reflect a corpus this run quietly shrank. A count, never an id.
+        raise InsufficientSessionsForFoldsError(
+            f"{exc} (this count excludes {withheld_excluded} withheld Validation-Vault shard(s), "
+            "spec section 7.5 point 6)"
+        ) from exc
     # Reached only by a corpus that genuinely clears the floor -- registers exactly as the
     # pre-iter-8 ordering did for this same case (idempotent on repeat calls via
     # `register_fold_spec`'s own "identical geometry replays the existing row" contract).
@@ -1065,6 +1122,13 @@ def run_tick_family_fold_request(ledger: WalkForwardLedger, config: Config) -> d
         "corpus_id": TICK_LEGACY_CORPUS_ID,
         "session_count": len(session_dates),
         "integrity_errors": errors,
+        # Spec section 7.5 point 6 (r4): how many registered datasets this inventory excluded
+        # because their vault shards are withheld -- a count, never an id. Deliberately NOT
+        # stamped into `register_fold_spec`'s row: that row is idempotent on `geometry_hash`
+        # alone, so a per-RUN count stored there would be frozen at whatever the first
+        # above-floor run happened to see and silently replayed as fact forever. The honest home
+        # for a per-run number is this per-run body.
+        "withheld_excluded": withheld_excluded,
     }
 
 
@@ -1193,11 +1257,23 @@ def run_diagnostic_walkforward(
     # entry point -- never a GET route (era Non-Goal: "No scheduling").
     if not has_any_exposure_entries(exposure_registry, TICK_LEGACY_CORPUS_ID):
         tick_dataset_store = DatasetStore(config.dataset_dir_resolved())
+        # iter-9 (closes the known latent hole the iter-9 spec's BACKGROUND names): before this
+        # seed reaches `initialize_r2_exposure_registry`, exclude any dataset id `vault.py`
+        # currently reports `sealed` -- read via the SAME sibling-of-the-dataset-dir resolution
+        # every other TAPEOLOGY_MICRO_* store uses (`vault.resolve_vault_dir`), so a freshly
+        # sealed shard can never be marked "already exposed" by a code path that has never heard
+        # of sealing (T-2: `vault.py`'s OWN shard-lifecycle ledger is a DIFFERENT ledger from this
+        # WALKFORWARD exposure registry -- this is the one, deliberate bridge between them).
+        sealed_dataset_ids = vault.currently_sealed_dataset_ids(
+            vault.shard_ledger_for_dataset_dir(config.dataset_dir_resolved())
+        )
         # iter-8: `_tick_dataset_session_dates` now returns `(dates, errors)` -- this call site
         # only ever needed the dates (a corrupt file simply contributes no exposure-seed window,
         # exactly as it always contributed no session date), so the errors half is intentionally
         # unused here, unlike `run_tick_family_fold_request`'s own call site which SERVES them.
-        tick_session_dates, _tick_dataset_errors = _tick_dataset_session_dates(tick_dataset_store)
+        tick_session_dates, _tick_dataset_errors = _tick_dataset_session_dates(
+            tick_dataset_store, excluded_dataset_ids=sealed_dataset_ids
+        )
         initialize_r2_exposure_registry(exposure_registry, corpus_id=TICK_LEGACY_CORPUS_ID, windows=tick_session_dates)
 
     corpus_manifest_hash = _sha256(_canonical(session_dates))

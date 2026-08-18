@@ -4,111 +4,111 @@
       "id": "J-01",
       "name": "The era transition stands — the corpus truth on the record",
       "status": "passing",
-      "last_verified_iter": "goal-rapid-microscope-iter-8",
-      "last_passing_iter": "goal-rapid-microscope-iter-8",
+      "last_verified_iter": "goal-rapid-microscope-iter-9",
+      "last_passing_iter": "goal-rapid-microscope-iter-9",
       "first_seen_iter": "goal-rapid-microscope-iter-0",
-      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-8-evidence/J-01-verify.png",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-9-evidence/UT-03-result.png",
       "spec_hash": "1791ebcd14c10fa789e1048509f8f8af20a7696fe11a7de4bf946b446d4fbb52",
-      "note": "Deterministic replay PASS (UT-J-01) plus a full-page /desk capture of the Microscope Readiness section (UT-J-06-result.png). Evaluator additionally re-derived the served values directly against the operator's REAL store this iteration: totals 12 symbol-days / 18 datasets / 1173.49 RTH minutes / 3.0089 session-equivalents / referee tick-gate 150, integrity_errors [], all 18 shards exposure_state=exploratory + split_provenance=hand_assigned, all three pilot-study floors floor_unmet (60 required vs 11 available) — byte-identical to the iter-7 baseline. Standing owner ruling (unchanged): the store-scoped browser rig can only ever seed 2 PG fixture datasets, so the RENDERED corpus numbers are rig numbers (1 symbol-day / 2 datasets), never the real 12/18."
+      "note": "Deterministic replay PASS (UT-J-01, J-01-verify.png) plus the UT-03 element capture, which the evaluator OPENED and read: Corpus Totals 1 symbol-day / 2 datasets / 1.75 RTH minutes / 0.0045 session-equivalents / referee tick-gate 150, two PG 2026-06-09 shard rows with hand_assigned + exploratory, all three pilot-study floors floor_unmet (60 required vs 1 available), 'No integrity errors.', and the shard table's pre-existing 12 columns with NO column for the two new §2.6 manifest fields. CAUTION HONESTLY STATED: micro_readiness.py CHANGED at 14:18 in the r4 fix round, i.e. AFTER this capture (06:18), so A.6 evidence durability does NOT carry it — the evaluator therefore re-derived build_readiness under the CURRENT post-r4 code and got byte-identical values on BOTH stores: rig fixture store 1/2/1.75/0.0045 with 2 PG rows (exactly the screenshot), and the operator's real store 12 symbol-days / 18 datasets / 1173.49 RTH minutes / 3.0089 session-equivalents, integrity_errors [], all 18 shards exposure_state=exploratory + split_provenance=hand_assigned, all three floors unmet. The r4 addition sealed_tranche is an all-zero row (nothing sealed) and distinct_datasets changed from len(records) to len(shards), which is identical while nothing is withheld — verified, not assumed. Standing owner ruling (unchanged): the store-scoped rig can only ever seed 2 PG fixture datasets, so RENDERED corpus numbers are rig numbers, never the real 12/18."
     },
     "J-02": {
       "id": "J-02",
       "name": "The micro observer — one pass, prefix-honest, benchmarked",
       "status": "passing",
-      "last_verified_iter": "goal-rapid-microscope-iter-8",
-      "last_passing_iter": "goal-rapid-microscope-iter-8",
+      "last_verified_iter": "goal-rapid-microscope-iter-9",
+      "last_passing_iter": "goal-rapid-microscope-iter-9",
       "first_seen_iter": "goal-rapid-microscope-iter-0",
-      "last_evidence_path": "runs/goal-session-rapid-microscope/iter-8/eval.md",
+      "last_evidence_path": "runs/goal-session-rapid-microscope/iter-9/eval.md",
       "spec_hash": "01f4f43564cba7431118d4a504b9dbeb20f1a994fdb52be5ceded15529d8b27a",
-      "note": "Browser-lane row DEFERRED-BUDGET this iteration (no golden script; SPEED-15 trim rung 2) — NOT re-verified by the lane. Its modules (micro_observer.py, micro_snapshots.py, micro_features.py) are byte-untouched in this iteration's diff, so A.6 evidence durability carries the prior pass. Evaluator additionally re-derived the served value directly against the real store: list_snapshot_meta returns 18 identity-verified snapshots totalling 3,815,933 rows — byte-identical to the iter-4/iter-7 baseline, which also proves this iteration's providers/base.py change did not perturb snapshot identity."
+      "note": "Browser-lane row DEFERRED-BUDGET this iteration (UT-J-02; SPEED-15 trim rung 2) — NOT re-verified by the lane, so it keeps its prior recorded status. UNLIKE iteration 8, A.6 durability does NOT carry it either: micro_snapshots.py CHANGED this iteration (the r4 exclude_withheld filter + withheld_excluded disclosure). The evaluator therefore re-derived the artifacts personally under the current tree: 18 snapshot feature .jsonl files holding exactly 3,815,933 rows (36 files total, 18 .jsonl + 18 .json), byte-identical to the iter-4/iter-7/iter-8 baseline. micro_observer.py and micro_features.py are byte-untouched in this iteration's diff. Suite corroboration from the evaluator's own full run: test_micro_snapshots 34, test_micro_observer 31, test_micro_features 50, all green inside 3,166 tests / 0 failures."
     },
     "J-03": {
       "id": "J-03",
       "name": "Structure x flow — the join that never looks ahead",
       "status": "passing",
-      "last_verified_iter": "goal-rapid-microscope-iter-8",
-      "last_passing_iter": "goal-rapid-microscope-iter-8",
+      "last_verified_iter": "goal-rapid-microscope-iter-9",
+      "last_passing_iter": "goal-rapid-microscope-iter-9",
       "first_seen_iter": "goal-rapid-microscope-iter-0",
-      "last_evidence_path": "runs/goal-session-rapid-microscope/iter-8/eval.md",
+      "last_evidence_path": "runs/goal-session-rapid-microscope/iter-9/eval.md",
       "spec_hash": "a671f63835247f7fca66a41a2dc48ec4fe3e83fe0bda85d3703ef385cb20de83",
-      "note": "Browser-lane row DEFERRED-BUDGET this iteration — NOT re-verified by the lane. micro_join.py byte-untouched in this iteration's diff (A.6 durability). Evaluator re-derived the served value against the real store with the real PlaybookStore: joinable_corpus.total = 2, by_setup_id {range_trade: 2}, playbook_integrity_errors [], band_touch_count status not_enumerated — byte-identical to the iter-3/iter-7 baseline."
+      "note": "Browser-lane row DEFERRED-BUDGET this iteration — NOT re-verified by the lane. micro_join.py CHANGED this iteration (r4 exclude_withheld at both joinable_corpus_counts and find_covering_dataset), so A.6 durability does NOT cover it. The evaluator re-derived the served value against the operator's real store with the real PlaybookStore under the current code: joinable_corpus.total = 2, playbook_signal_count = 2, by_setup_id {range_trade: 2}, playbook_integrity_errors [], band_touch_count status not_enumerated — byte-identical to the iter-3/iter-7/iter-8 baseline. The one new key is withheld_excluded: 0, which is additive and honest (nothing is sealed). Suite corroboration: test_micro_join 37 green inside the evaluator's own 3,166-test run."
     },
     "J-04": {
       "id": "J-04",
       "name": "The Scout and the ledger — every trial on the record",
       "status": "passing",
-      "last_verified_iter": "goal-rapid-microscope-iter-8",
-      "last_passing_iter": "goal-rapid-microscope-iter-8",
+      "last_verified_iter": "goal-rapid-microscope-iter-9",
+      "last_passing_iter": "goal-rapid-microscope-iter-9",
       "first_seen_iter": "goal-rapid-microscope-iter-0",
-      "last_evidence_path": "runs/goal-session-rapid-microscope/iter-8/eval.md",
+      "last_evidence_path": "runs/goal-session-rapid-microscope/iter-9/eval.md",
       "spec_hash": "d188d138b6c84c4ff7302bf60f5da2f95b247b58a6cd7c42874d740801bc19d0",
-      "note": "Browser-lane row DEFERRED-BUDGET this iteration — NOT re-verified by the lane. scout.py/scout_ledger.py byte-untouched in this iteration's diff (A.6 durability). Evaluator re-ran the ledger's own tamper check against the real store: verify_chain() -> {ok: true, failed_at_row: null, reason: null}."
+      "note": "Browser-lane row DEFERRED-BUDGET this iteration — NOT re-verified by the lane. scout.py CHANGED this iteration (r4 exclude_withheld + a withheld_excluded field on every ledger row, placed OUTSIDE spec_fields so nothing re-keys). A.6 durability does NOT cover it. HONEST LIMIT ON THIS ROUND'S RE-DERIVATION: the evaluator could NOT re-run verify_chain() against a real scout ledger because none exists — scout_ledger.resolve_scout_ledger_dir(...) resolves to .data/micro_scout, which is absent on disk (the Scout has never been run as an operator act against the real store; every prior proof was a scoped/fixture run). This journey therefore rests this iteration on the evaluator's own full-suite run: test_scout 52 + test_scout_ledger 20, green inside 3,166 tests / 0 failures / 0 errors, plus the coherence auditor's traced confirmation that scout.py's only change is the shared exclude_withheld call and its disclosure. vault.py reuses scout_ledger.compute_family_root_id by object identity (asserted in test_vault.py), so the identity function is provably unforked."
     },
     "J-05": {
       "id": "J-05",
       "name": "The walk-forward engine — chronology, fences, and the diagnostic run",
       "status": "passing",
-      "last_verified_iter": "goal-rapid-microscope-iter-8",
-      "last_passing_iter": "goal-rapid-microscope-iter-8",
+      "last_verified_iter": "goal-rapid-microscope-iter-9",
+      "last_passing_iter": "goal-rapid-microscope-iter-9",
       "first_seen_iter": "goal-rapid-microscope-iter-0",
-      "last_evidence_path": "runs/goal-session-rapid-microscope/iter-8/eval.md",
+      "last_evidence_path": "runs/goal-session-rapid-microscope/iter-9/eval.md",
       "spec_hash": "1b84144912ebd9de2f4731f2209f6f7354ac8e563f633f14825644d2f838fa1e",
-      "note": "Browser-lane row DEFERRED-BUDGET, but walkforward.py CHANGED this iteration so A.6 durability does NOT cover it — the evaluator re-ran J-05's own acceptance clause directly: `python -m app.research.walkforward --family tick_legacy` against the operator's real 11-session corpus with a scoped ledger printed `11 < 105 -- refused (TR-15)` and exited 1; the scoped ledger directory held 0 files afterward (proving this iteration's register-after-floor-check reorder), and the real .data/micro_walkforward tree hashed identical before and after (f47ecc63ffc6c94a). The real ledger holds only the 6 playbook_setups_diagnostic_v1 rows — no stale tick fold-spec row was ever written."
+      "note": "Browser-lane row DEFERRED-BUDGET, and walkforward.py CHANGED this iteration (BOTH the r4 exclude_withheld corpus-inventory filter and the new vault.currently_sealed_dataset_ids r2-seed filter), so A.6 durability does NOT cover it. The evaluator re-ran J-05's own acceptance clause under the current post-r4 code: `python -m app.research.walkforward --family tick_legacy` against the operator's real corpus with a scoped throwaway ledger printed the literal `11 < 105 -- refused (TR-15): this corpus cannot produce WF_MIN_SUFFICIENT_FOLDS(3) folds under this geometry` and exited 1; the scoped ledger directory held 0 files afterward (register-after-floor-check still holds); and the operator's real .data/datasets hashed f7bbcf28d074d51a126e7cf5d4724ca9a8f2758a0453c6801331c88111e2c26c (18 files) identically before and after. The real walkforward ledger verify_chain() returns {ok: true, failed_at_row: null, reason: null} over 6 rows = 1 fold_spec + 5 fold_result, every fold_result labeled historical_exposed_diagnostic. Suite corroboration: test_walkforward 64 + test_walkforward_oracles 6 green."
     },
     "J-06": {
       "id": "J-06",
       "name": "The recorder and the Vault — new tape, sealed at birth",
       "status": "partial",
-      "last_verified_iter": "goal-rapid-microscope-iter-8",
+      "last_verified_iter": "goal-rapid-microscope-iter-9",
       "last_passing_iter": null,
       "first_seen_iter": "goal-rapid-microscope-iter-0",
-      "last_evidence_path": "docs/handoffs/goal-rapid-microscope-iter-8-dev.md",
-      "spec_hash": "68c9e0e14d8377c27f8fa65fdf25f4c5ad7c432d75abbd95d82ec5b25c6b26fc",
-      "note": "2 of 5 steps, and step 1 still not complete. Step 2 (tick_recorder.py) LANDED and is proven hermetically: chunk planner, four-outcome walker (reused/fetched/unchanged/failed), per-chunk checkpoint resume, TR-19 preservation-prerequisite refusal, dated quote_size_unit stamping, the spec 7.3 published split rule, bar pairing through the unchanged desk_deep_backfill, single-flight manager + CLI + the four registered REST routes (GET never computes; 409 idle cancel; 422 empty universe). Evaluator ran 177 tests over the new + frozen files green and checked every constant against docs/rapid-validation-spec.md verbatim (RECORDER_PAGE_BUDGET_PER_MINUTE 200 :88, 900s chunks :395, ALPACA_QUOTE_SIZE_UNIT_EFFECTIVE 2025-11-03 :100, split rule 7.3 :447) — no invented constant. ABSENT by filename: vault.py (step 3), the credentialed Tier-B tranche (step 4), the readiness refresh (step 5), TR-2/TR-4/TR-12/TR-20. NEW MINOR GAP: spec 2.6 requires 'the recorder records the rule text + the verification note beside the stamp' — _finalize_day stamps schema_basis + quote_size_unit only, and the run log carries counts only; nothing anywhere records the rule text or verification note. Harmless today (zero datasets recorded) but manifests are immutable, so it must close BEFORE step 4."
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-9-evidence/UT-01-result.png",
+      "spec_hash": "c517119586277751a3768500e6adcb93c3b7ff415650581080572cfdca8ed10d",
+      "note": "3 of 5 steps. STEP 3 (vault.py) GENUINELY LANDED and the evaluator proved its headline clause personally rather than reading it: sealing a throwaway shard under a throwaway secret and calling build_vault_state serves ONLY {shard_id: 'vshard-<opaque>', universe_id, size_bucket '~10^5', checksum_commitment (HMAC, not the raw checksum), sealed_at, exposure_state 'sealed'} — the raw dataset id, the raw content checksum, the symbol, the date and the exact event count are ALL absent from the payload, as is the secret; both ledger chains verify ok; and a second lifecycle transition for the same shard is refused with a typed ShardLifecycleOrderError (TR-12 keys on identity, not row count). The auditor's B1 fix is present and working: the universe row serves rule_hash + symbol_rule_size/date_rule_size + rule_disclosure 'committed', never the symbol_rule/date_rule lists. Traps TR-2/TR-4/TR-12/TR-20 are NEW this iteration — verified by diffing TR ids in tests/ against the iteration snapshot (pre-iter-9 had exactly 15 ids; these four are the only additions); test_vault.py 42 tests green in the evaluator's own suite run. UT-01 (screenshot opened) confirms OUT OF SCOPE held: no Validation Vault section, no desk-section-expand-vault element, Microscope Readiness is the last section on /desk. TWO CARRIED ITEMS CLOSED THIS ITERATION (both verified in code by the evaluator): the iter-6 exposure-registry sealed filter (walkforward.py:1267 passes vault.currently_sealed_dataset_ids as excluded_dataset_ids, skipped at :1037) and the iter-8 §2.6 rule-text + verification-note gap (tick_recorder.py:484-485 supplies both, checksum-excluded). STEPS 4 AND 5 ARE NOT DONE AND ARE NOW OWNER-BLOCKED: no tranche exists on disk, nothing is sealed, no vault ledger file exists anywhere under .data (verified), and the audit's CRITICAL B2 shows §7.3's headline guarantee is NOT achieved as built — closing the public dataset listing under the universe's cartesian product and subtracting recovers sealed membership exactly (5 of 5 in the auditor's probe, WITH the B1 fix in place), and nothing inside vault.py can fix it. B3 (GET /research/desk/micro/recorder/compute serves each chunk's symbol/date/raw dataset_id) is a third instance of the same class."
     },
     "J-07": {
       "id": "J-07",
       "name": "Graduation — provenance in, nothing laundered out",
       "status": "failing",
-      "last_verified_iter": "goal-rapid-microscope-iter-8",
+      "last_verified_iter": "goal-rapid-microscope-iter-9",
       "last_passing_iter": null,
       "first_seen_iter": "goal-rapid-microscope-iter-0",
       "last_evidence_path": "reports/phase-goal-rapid-microscope-iter-0-ui-test-results.md#UT-J-07",
       "spec_hash": "6bd325e2c1511b9d2745bdcd612a12d2142f32498a7aa85055d31209c9e46b28",
-      "note": "Unchanged. Evaluator confirmed app/research/micro_graduation.py does not exist on disk."
+      "note": "Unchanged. The evaluator confirmed by direct `ls` that neither app/research/micro_graduation.py nor tests/test_micro_graduation.py exists on disk. NOTE FOR THE NEXT DECOMPOSER: J-07 is entirely fixture-based (its acceptance is a fixture walk producing a validating referee_handoff_ready bundle) — it needs no real tape, no sealed shard, and NO owner ruling, so it is the next tractable target while J-06 steps 4-5 wait on B2."
     },
     "J-08": {
       "id": "J-08",
       "name": "The surface and MCP v6 — the funnel is visible",
       "status": "failing",
-      "last_verified_iter": "goal-rapid-microscope-iter-8",
+      "last_verified_iter": "goal-rapid-microscope-iter-9",
       "last_passing_iter": null,
       "first_seen_iter": "goal-rapid-microscope-iter-0",
-      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-8-evidence/UT-J-06-result.png",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-9-evidence/UT-02-result.png",
       "spec_hash": "037874a8933089ff99b53568d5aedac2843043741d83fa4958759ba898145572",
-      "note": "Unchanged. Evaluator confirmed EXPECTED_TOOLS still lists exactly 22 tool names (the v6/26 bump has not started) and no frontend file mentions a Scout Ledger / Walk-Forward / Validation Vault section; the iter-8 full-page /desk capture shows those three sections genuinely absent, which is correct for this iteration."
+      "note": "Unchanged, and correctly so. The evaluator extracted EXPECTED_TOOLS by AST: still exactly 22 names ending get_endpoint (the v6/26 bump has not started). UT-02 enumerated the /desk section testids and found exactly the 8 shipped ones with no scoutLedger/walkforward/vault; zero .tsx/.ts/.css files changed this iteration (git status). GET /research/desk/micro/vault now exists as a backend route with no UI consumer — that wiring is J-08's own scope."
     },
     "J-09": {
       "id": "J-09",
       "name": "The pilot studies — three predeclared questions, honest answers",
       "status": "failing",
-      "last_verified_iter": "goal-rapid-microscope-iter-8",
+      "last_verified_iter": "goal-rapid-microscope-iter-9",
       "last_passing_iter": null,
       "first_seen_iter": "goal-rapid-microscope-iter-0",
       "last_evidence_path": "reports/phase-goal-rapid-microscope-iter-0-ui-test-results.md#UT-J-09",
       "spec_hash": "7dd99ef032e14d2c86d69962f917efb8840d2496fa07765e9488264ecbd8a58a",
-      "note": "Unchanged. The three study ids exist only as floor-table rows in micro_readiness.py:101; no predeclared study spec is ledgered anywhere."
+      "note": "Unchanged. The three study ids still exist only as floor-table rows — the evaluator read them straight off the live readiness payload (range_wall_failed_aggression, delta_divergence_level_tests, capitulation_exhaustion, each floor_unmet at 60 required vs 11 available on the real corpus). No predeclared study spec is ledgered anywhere."
     },
     "J-10": {
       "id": "J-10",
       "name": "The kept product stands — traps armed, sentinel green",
       "status": "partial",
-      "last_verified_iter": "goal-rapid-microscope-iter-8",
+      "last_verified_iter": "goal-rapid-microscope-iter-9",
       "last_passing_iter": null,
       "first_seen_iter": "goal-rapid-microscope-iter-0",
-      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-8-evidence/J-10-verify.png",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-9-evidence/UT-05-result.png",
       "spec_hash": "471d5b5b05f81c2922457651075a07f2c6ae428df8055f0ecd7a9f841b432814",
-      "note": "Sentinel half GREEN for the third run in a row (J-10-verify.png shows the Referee Registry/Adjudications/Runs sections rendering with honest empty states; UT-J-06-result.png shows every shipped /desk section plus Microscope Readiness rendering below them). Frozen-foundation half re-proved by the evaluator personally: Config().config_fingerprint() prints 08e471b10130e1e2, all six referee_*.py sha256 hashes identical to the iteration-0 listing, app/engine/ and the frozen guard tests byte-unmodified, store-scope guard CLEAN (11275 files, byte-size and mtime unchanged). Trap half still incomplete: TR-19 landed this iteration; TR-2/TR-3/TR-4/TR-12/TR-17/TR-20/TR-22 are still absent by name from tests/ (about 15 of 22). The deterministic-rerun check (J-10 step 2) has not been run this era."
+      "note": "Sentinel half GREEN for the fourth run in a row, and the evaluator OPENED the images rather than reading the rows: UT-04-result.png shows the cockpit watching SIM-BUYER with Tape State 'Buyer Control' at confidence 0.924, a live 10s chart, and populated quote/features/recent-trades/observations/event-log panels; UT-05-result.png shows /structure loading its full Tradable Map with the pinned AAPL 2026-06-22 17:00 ET first resistance row reading exactly 300.11-302.2 · Class A · score 171 · round number, over a real candle chart with band overlays; UT-03-result.png shows every shipped /desk section rendering. Frozen-foundation half re-proved BY THE EVALUATOR PERSONALLY: Config().config_fingerprint() prints 08e471b10130e1e2; all six referee_*.py sha256 hashes compared line by line against the iteration-0 listing and identical; EXPECTED_TOOLS still the 22-tuple by AST; the operator's real .data/datasets hashes f7bbcf28d074d51a126e7cf5d4724ca9a8f2758a0453c6801331c88111e2c26c across 18 files, newest mtime 2026-07-15, unchanged before and after every command the evaluator ran. Full backend suite re-run by the evaluator at 16:32 — AFTER every source edit in the tree — giving 3,166 collected / 3,158 passed / 8 skipped / 0 failures / 0 errors, which supersedes the QA report's stale 3,130. TRAP HALF still incomplete but genuinely advanced: 19 of 22 TR ids now present in tests/ (pre-iter-9 had 15; TR-2/TR-4/TR-12/TR-20 are this iteration's exact additions, verified by diffing against the iteration snapshot). STILL ABSENT BY NAME: TR-3 (accessor fence), TR-17 (future-event availability), TR-22 (exposure registry). The deterministic-rerun check (J-10 step 2) has still not been run this era."
     }
   },
   "anti_goal_violations": [
@@ -130,7 +130,7 @@
       "iter": "goal-rapid-microscope-iter-2",
       "anti_goal": "No lookahead — every value computed as-of T uses only events/bars fully completed at T. (critical)",
       "severity": "minor",
-      "evidence": "audit B5 — apps/backend/app/research/micro_observer.py:636/:657 (locked by tests/test_micro_observer.py:291): a price-change-terminated quote_depletion stamps observed_through at the last same-price quote, one quote before the terminating event. OPEN — awaiting an OWNER RULING (correct the stamp, or record it as the intended definition); re-confirmed untouched in iteration 8 (micro_observer.py is byte-unmodified in this iteration's diff).",
+      "evidence": "audit B5 — apps/backend/app/research/micro_observer.py:636/:657 (locked by tests/test_micro_observer.py:291): a price-change-terminated quote_depletion stamps observed_through at the last same-price quote, one quote before the terminating event. OPEN — awaiting an OWNER RULING (correct the stamp, or record it as the intended definition). The iteration-9 evaluator re-confirmed micro_observer.py is byte-untouched in this iteration's diff, so the item is unchanged and still owner-owed since iteration 2.",
       "resolved": false
     },
     {
@@ -179,44 +179,65 @@
       "iter": "goal-rapid-microscope-iter-5",
       "anti_goal": "Trap T-7 · Insufficient is an answer. Floors never loosen; a below-floor fold serves `insufficient` with its arithmetic; the tick family's refusal at today's corpus is a FEATURE and is pinned by TR-15.",
       "severity": "minor",
-      "evidence": "RESOLVED IN ITERATION 6 and FULLY DISCHARGED IN ITERATION 7 (a genuine operator CLI entry point returns the typed `11 < 105` refusal). Re-verified by the iteration-8 evaluator: still prints `11 < 105 -- refused (TR-15)`, exit code 1.",
+      "evidence": "RESOLVED IN ITERATION 6 and FULLY DISCHARGED IN ITERATION 7 (a genuine operator CLI entry point returns the typed `11 < 105` refusal). Re-verified by the iteration-9 evaluator under the post-r4 code: still prints `11 < 105 -- refused (TR-15)`, exit code 1, scoped ledger left empty.",
       "resolved": true
     },
     {
       "iter": "goal-rapid-microscope-iter-6",
       "anti_goal": "The 12 pre-existing tick symbol-days are permanently exploratory - never sealed, never `historical_oos`, never relabeled. (critical)",
       "severity": "minor",
-      "evidence": "CLOSED IN ITERATION 8. Audit B2 (iter-6): _tick_dataset_session_dates dropped DatasetStore.list()'s _errors channel, so a damaged tick recording was silently excluded from the known-session-dates count. Iteration 8 makes it return (session_dates, errors) and surfaces them through run_tick_family_fold_request's `integrity_errors` key — the SAME key micro_readiness.build_readiness already serves, never a second convention. Covered by TC-14 in tests/test_walkforward.py; the evaluator ran that file green (61 tests).",
+      "evidence": "CLOSED IN ITERATION 8. Audit B2 (iter-6): _tick_dataset_session_dates dropped DatasetStore.list()'s _errors channel, so a damaged tick recording was silently excluded from the known-session-dates count. Iteration 8 makes it return (session_dates, errors) and surfaces them through run_tick_family_fold_request's `integrity_errors` key. Re-confirmed green in the iteration-9 evaluator's own suite run (test_walkforward 64).",
       "resolved": true
     },
     {
       "iter": "goal-rapid-microscope-iter-6",
       "anti_goal": "No exploratory read of a sealed shard / the 12 pre-existing tick symbol-days are permanently exploratory. (critical)",
       "severity": "minor",
-      "evidence": "OPEN and LATENT UNTIL J-06 step 3 — recorded as a binding vault.py prerequisite. Audit B1 (iter-6): the exposure-registry seed marks every dataset DatasetStore.list() returns as exposed, with no sealed filter. It becomes a CRITICAL breach the moment vault.py creates genuinely sealed shards, which is the very next planned step.",
-      "resolved": false
+      "evidence": "CLOSED IN ITERATION 9, and verified in code by the evaluator rather than read off the handoff. Audit B1 (iter-6) was that the exposure-registry seed marked every dataset DatasetStore.list() returns as exposed, with no sealed filter. walkforward.py:1267 now computes vault.currently_sealed_dataset_ids(...) and passes it as excluded_dataset_ids into _tick_dataset_session_dates (:1275), which skips those ids at :1037, before the list ever reaches initialize_r2_exposure_registry. Pinned by TC-10/TC-11 in tests/test_walkforward.py.",
+      "resolved": true
     },
     {
       "iter": "goal-rapid-microscope-iter-7",
       "anti_goal": "Immutable data — registered datasets and bar series are append-only, checksummed, never re-tagged, never deleted, never content-perturbed. Splits are frozen at registration. (critical)",
       "severity": "critical",
-      "evidence": "INTRODUCED AND FIXED INSIDE ITERATION 7 — the fourth time this session that ONLY the independent auditor caught an integrity fault review and QA both passed. Audit B1: the Card-5.1 preservation keys silently changed a dataset's identity computation, so the same tape could have been filed twice under two labels. Re-broken and re-proved fixed by the iteration-7 evaluator; re-confirmed in iteration 8 (all 18 legacy datasets still load with verifying checksums and all 18 snapshots still identity-verify).",
+      "evidence": "INTRODUCED AND FIXED INSIDE ITERATION 7 — the fourth time this session that ONLY the independent auditor caught an integrity fault review and QA both passed. Audit B1: the Card-5.1 preservation keys silently changed a dataset's identity computation, so the same tape could have been filed twice under two labels. Re-broken and re-proved fixed by the iteration-7 evaluator; re-confirmed in iterations 8 and 9 (the operator's real store hashes identical, 18 files, newest mtime 2026-07-15).",
       "resolved": true
     },
     {
       "iter": "goal-rapid-microscope-iter-7",
       "anti_goal": "No fold geometry change after fold 1 without a recorded voiding event that clears every survivor state of that corpus-era. (critical)",
       "severity": "minor",
-      "evidence": "CLOSED IN ITERATION 8. Audit B2 (iter-7): run_tick_family_fold_request called register_fold_spec BEFORE the floor check, freezing DIAGNOSTIC_GEOMETRY and today's below-floor manifest hash for a request that never ran. Iteration 8 reorders the floor check first; the evaluator re-ran the CLI against the real corpus and the scoped ledger held 0 files afterward, and the real .data/micro_walkforward ledger contains only the 6 playbook rows (no stale tick fold-spec row was ever written to it).",
+      "evidence": "CLOSED IN ITERATION 8. Audit B2 (iter-7): run_tick_family_fold_request called register_fold_spec BEFORE the floor check, freezing DIAGNOSTIC_GEOMETRY and today's below-floor manifest hash for a request that never ran. Iteration 8 reorders the floor check first; the iteration-9 evaluator re-ran the CLI under the post-r4 code and the scoped ledger held 0 files afterward.",
       "resolved": true
     },
     {
       "iter": "goal-rapid-microscope-iter-8",
-      "anti_goal": "Rapid-validation spec §2.6: `quote_size_unit` is stamped from the dated vendor rule — \"the recorder records the rule text + the verification note beside the stamp\"; every LEGACY dataset stays `unverified` until a recorded, auditable verification act says otherwise, never a silent relabel. (feeds the critical 'No cross-unit liquidity arithmetic' rail)",
+      "anti_goal": "Rapid-validation spec §2.6: `quote_size_unit` is stamped from the dated vendor rule — \"the recorder records the rule text + the verification note beside the stamp\". (feeds the critical 'No cross-unit liquidity arithmetic' rail)",
       "severity": "minor",
-      "evidence": "OPEN, NOT YET MATERIALIZED. apps/backend/app/research/tick_recorder.py:429-442 (_finalize_day) stamps schema_basis + quote_size_unit and nothing else; _run_log_entry (:580-601) carries counts only. Nothing anywhere records the rule text or the verification note the spec asks for, so a future reader of a recorded manifest cannot audit the basis of a 'shares' stamp. Harmless today because zero datasets have been recorded by the recorder (step 4 is a later operator-attended act), but dataset manifests are immutable — this MUST close before J-06 step 4 records real tape, or the gap becomes permanent for every shard recorded.",
+      "evidence": "CLOSED IN ITERATION 9, verified in code by the evaluator. tick_recorder.py:484-485 now passes quote_size_unit_rule_text=QUOTE_SIZE_UNIT_RULE_TEXT (the frozen §2.6 sentence) and a per-dataset quote_size_unit_verification_note(session_date) at its record_from_source call, alongside the existing schema_basis/quote_size_unit stamps. Both are stamped into meta only when supplied and are excluded from _content_checksum (which hashes only {symbol, data_feed, epoch_anchor, events}), so the exclusion is structural, not merely tested — pinned by the TC-13 byte-identical-checksum counter-test.",
+      "resolved": true
+    },
+    {
+      "iter": "goal-rapid-microscope-iter-9",
+      "anti_goal": "No exploratory read of a sealed shard. Event data and outcome aggregates of a `sealed` shard are refused everywhere (routes, MCP, accessor, readiness) until its recorded exposure; the refusal is typed, tested, and FAIL-CLOSED. (critical)",
+      "severity": "minor",
+      "evidence": "OPEN, LATENT, OWNER-OWED (audit B4 / reviewer MINOR at vault.py:547-568). The withholding predicates read HashChainedLedger.all_rows(), which parses but never verifies, so truncating vault_shard_ledger.jsonl silently UN-withholds every sealed shard across eleven consumers — the opposite of fail-closed, which the anti-goal's own wording demands. The asymmetry is sharp: micro_chain_ledger.verify_chain() DOES detect the truncation (reason 'tail_truncated') and build_vault_state already surfaces that verdict on GET /vault, so the alarm rings on one page while every refusal quietly opens. Scored MINOR only because it is unreachable today — the iteration-9 evaluator confirmed by find that NO vault ledger file exists anywhere under .data, seal_shard/assign_shard/expose_shard have ZERO production call sites in app/ (all grep hits are docstrings, __all__ entries and definitions), and both stores report withheld_dataset_ids = 0. It becomes CRITICAL the moment J-06 step 4 seals a real shard. Fail-closed changes availability semantics on published routes (a corrupted vault would 5xx the dataset list, the edge report and the desk screen), so it is an owner call, not an agent call.",
+      "resolved": false
+    },
+    {
+      "iter": "goal-rapid-microscope-iter-9",
+      "anti_goal": "Rapid-validation spec §7.3 (pointed at by J-06 step 3's own acceptance via revisions r3/r4): \"sealed membership cannot be inferred from public information before exposure\".",
+      "severity": "minor",
+      "evidence": "OPEN, LATENT, OWNER-OWED — the audit's CRITICAL B2, found by the auditor attacking its OWN B1 fix. A universe is a symbol list x a date list and TR-4 forces the recorded batch to be that complete set, so closing the public `GET /research/datasets` listing under cartesian product and subtracting recovers the sealed set with no vault involvement at all — 5 of 5 exactly, in a realistic 4x5 probe sealed by the real §7.3 HMAC rule, WITH the B1 fix in place. Nothing inside vault.py can close it; the leak is a property of a pre-existing published route meeting a cartesian universe. A third instance of the same class is B3: GET /research/desk/micro/recorder/compute returns manager.snapshot()['progress'] verbatim, whose per-chunk outcomes carry symbol, date and the raw dataset_id. Scored MINOR *today* strictly because nothing is sealed and no real tape exists, so no recorded artifact is damaged and no anti-goal condition is currently breached — the evaluator verified the READ side genuinely holds (no sealed shard's events or aggregates are producible anywhere; withheld_dataset_ids = 0 on both stores; no vault ledger on disk). It is a HARD GATE on J-06 step 4 and needs the third owner ruling of this family before any real tape is sealed.",
+      "resolved": false
+    },
+    {
+      "iter": "goal-rapid-microscope-iter-9",
+      "anti_goal": "Frozen foundations — every `referee_*` module is byte-identical this era (SHA-256 listing recorded at iteration 0 and re-checked). (critical) — in collision with spec r4's \"every corpus-wide enumerator EXCLUDES withheld shards\".",
+      "severity": "minor",
+      "evidence": "OPEN, LATENT, OWNER-OWED (audit B5 / dev NEW-2 / reviewer MINOR at referee_evidence.py:333). referee_evidence.strategy_trade_readiness enumerates dataset_store.list() with no seal filter and serves dataset_count, per_split_counts and tick_gate_met/tick_gate_statement off it, so once a shard is sealed a research gate could report its floor met on the strength of evidence no analysis is permitted to read. Fixing it edits one of the six frozen-hash referee_*.py files, which is a standing DoD pin for this whole era — a genuine r4-versus-freeze collision that an agent must not resolve alone. The iteration-9 evaluator independently confirmed the freeze currently HOLDS: all six referee_*.py sha256 hashes are identical to the iteration-0 listing. Inert today (nothing sealed); take it to the same owner sitting as B2 and B4 before J-06 step 4.",
       "resolved": false
     }
   ],
-  "updated_at": "2026-08-18T04:20:00Z"
+  "updated_at": "2026-08-18T17:05:00Z"
 }
