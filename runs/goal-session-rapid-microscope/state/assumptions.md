@@ -472,3 +472,38 @@ same situation is NOT durability-covered — `walkforward.py` changed — so I r
 acceptance command rather than relying on the deferred row.
 **Reversible:** yes — the next iteration's replay scripts (a named passenger item) will restore
 lane-level verification for all four.
+
+## iter-9 — goal-decomposer
+
+**Ambiguity:** goal.md's J-06 step 3 bullet and the Product Shape Data Contract commit `vault.py`
+to serving `GET /research/desk/micro/vault`, but neither says whether an operator-facing CLI/route
+for universe REGISTRATION must ship in the SAME iteration as the module. The iter-8 decomposer's
+own precedent for `tick_recorder.py` built CLI+manager+routes together, reasoning a concrete
+future consumer was already named.
+**We chose:** ship the read-only `GET .../vault` route now (same precedent — cheap, and TR-2's
+route sweep needs a real route to test against) but NOT a universe-registration CLI. Grounds:
+unlike `tick_recorder.py`'s case, no operator act in this iteration or the immediately-next one
+calls universe registration standalone — it only becomes operator-facing when J-06 step 4 (the
+credentialed tranche) runs, and that step is deliberately deferred by the operator's own ruling
+to protect this round's budget. Building an unused CLI now would be exactly the "invent a code
+path this iteration's diff cannot exercise" T-1 violation.
+**Reversible:** yes — step 4's iteration adds the CLI/manager wiring calling the SAME library
+functions this iteration ships; nothing here needs to move or be redone.
+
+## iter-9 — goal-decomposer (second)
+
+**Ambiguity:** the iter-8 evaluator named a latent hole ("the exposure-registry seed marks every
+listed dataset exposed with no sealed filter") without prescribing the fix's shape — spec §6.7
+defines the WALKFORWARD exposure registry and its r2 seed, but was written before `vault.py` (the
+only future source of "sealed" as a concept) existed, so it does not say how the two modules
+should interact.
+**We chose:** `TICK_LEGACY_CORPUS_ID`'s seeding (the `_tick_dataset_session_dates` caller in
+`walkforward.py`) excludes any dataset id `vault.py` currently reports `sealed` from the windows
+passed to `initialize_r2_exposure_registry` — a sealed shard is invisible to the legacy corpus's
+r2 seed until it is assigned/exposed through the vault's OWN lifecycle, which is the only place
+its exposure gets recorded. Grounds: this is the minimal change that restores the intended
+invariant (a sealed shard has never been served) without inventing a second exposure concept or a
+new corpus_id no goal text names.
+**Reversible:** yes — the filter is a pure exclusion at seed time, still guarded by the existing
+`has_any_exposure_entries` once-only rule; a later-exposed shard simply stops being excluded on
+the next seed pass, with no prior row to undo.
