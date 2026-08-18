@@ -406,3 +406,27 @@ journey-history note and `iteration-state.md` both state the fraction explicitly
 that step only in part") and list what is absent by filename: `tick_recorder.py`, `vault.py`,
 TR-2/4/12/20 tests, the tranche, any sealed shard.
 **Reversible:** yes
+
+## iter-8 — goal-decomposer
+
+**Ambiguity:** goal.md J-06 step 2 says "Implement `tick_recorder.py` (chunked `iter_historical_chunks`
+fetch, tick throttle, per-chunk checkpoints, resume/idempotency, single-flight manager + CLI,
+per-chunk `failed` outcomes) writing through `DatasetStore.record`..." — naming "manager + CLI" but
+not a REST route, while the SAME goal.md's own Product Shape Data Contract table names the
+recorder's serving endpoint as `POST/GET/POST-cancel /research/desk/micro/recorder/compute`,
+`GET .../recorder/runs`. Iter-7 set a different precedent for an analogous case (the walkforward
+tick-family request): CLI-only, route explicitly deferred until a UI/MCP consumer needs it, because
+no journey named an operator-facing control for it yet.
+**We chose:** build the REST routes this iteration, alongside the CLI and manager — not deferred.
+Grounds: (1) goal.md's own Product Shape table, not just blueprint.md's transcription of it, already
+commits to this exact endpoint shape as `tick_recorder.py`'s canonical serving surface (Data Contract
+rows are single-source-of-truth commitments, not suggestions); (2) `desk_deep_backfill.py` — the
+goal's own named precedent to copy for this exact feature ("credentialed chunked CLI job,
+resumable") — ships its manager, CLI, and route together in one build, not staggered; (3) unlike the
+walkforward tick-family case, a concrete future consumer IS already named (blueprint.md's
+Information Architecture: J-06's canonical home is `/desk` → Validation Vault, which J-08 will wire
+to this exact route family) — so building it now is not "a second, currently-unused code path" the
+way the deferred walkforward route would have been.
+**Reversible:** yes — the route is inert this iteration (no UI button calls it yet, and no MCP tool
+ever will, per the Product Shape's 4-tool v6 delta naming only readiness/scout/walkforward/vault), so
+nothing about this iteration's wiring needs to move when J-08 lands the button.
