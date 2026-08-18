@@ -63,22 +63,44 @@ def split_window(start, end, chunk_seconds: float) -> list[tuple]:
 
 @dataclass(frozen=True)
 class RawTrade:
-    """A vendor-neutral executed trade: UTC epoch seconds, price, size."""
+    """A vendor-neutral executed trade: UTC epoch seconds, price, size.
+
+    The four trailing fields are the Card-5.1 data-preservation prerequisite (era "The Rapid
+    Microscope" J-06 step 1, ``docs/rapid-validation-spec.md`` section 7.1 r2) — OPTIONAL,
+    default-``None`` immutable vendor identifiers populated ONLY when the concrete adapter's SDK
+    response actually carries them: ``conditions`` (the trade condition codes), ``exchange`` (the
+    venue the trade occurred on), ``tape``, and ``trade_id`` (the vendor's own trade id — named
+    ``trade_id`` rather than ``id`` to avoid shadowing the builtin). Absent-key backward
+    compatible: every existing construction call site (none of which pass these) is unaffected,
+    and the frozen engine never reads them (they exist for research consumers only)."""
 
     epoch: float
     price: float
     size: int
+    conditions: list[str] | None = None
+    exchange: str | None = None
+    tape: str | None = None
+    trade_id: int | None = None
 
 
 @dataclass(frozen=True)
 class RawQuote:
-    """A vendor-neutral top-of-book quote: UTC epoch seconds, bid/ask and their sizes."""
+    """A vendor-neutral top-of-book quote: UTC epoch seconds, bid/ask and their sizes.
+
+    The four trailing fields are the SAME Card-5.1 preservation prerequisite ``RawTrade`` carries
+    (see its docstring), quote-shaped: ``conditions`` (the quote condition codes), ``tape``, and
+    the bid/ask venue equivalents ``bid_exchange``/``ask_exchange`` — optional, default-``None``,
+    populated only when the adapter's SDK response provides them."""
 
     epoch: float
     bid: float
     ask: float
     bid_size: int
     ask_size: int
+    conditions: list[str] | None = None
+    tape: str | None = None
+    bid_exchange: str | None = None
+    ask_exchange: str | None = None
 
 
 @dataclass(frozen=True)

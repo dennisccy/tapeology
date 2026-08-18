@@ -60,6 +60,7 @@ from ..providers.base import Event, QuoteEvent, Side, TradeEvent
 from ..providers.historical import HistoricalProvider
 from .dataset_index import DatasetIndex
 from .feed_basis import data_feed_for_scenario
+from .micro_features import QUOTE_SIZE_UNITS
 
 # The frozen split vocabulary (assigned at registration, immutable forever after).
 SPLIT_TRAIN = "train"
@@ -86,6 +87,14 @@ VALID_SOURCE_KINDS = frozenset({SOURCE_REFERENCE, SOURCE_HISTORICAL})
 # Stored event-row type tags (one explicit copy each).
 _ROW_TRADE = "trade"
 _ROW_QUOTE = "quote"
+
+# The Card-5.1 preservation keys (era "The Rapid Microscope" J-06 step 1) a stored row may carry:
+# immutable VENDOR IDENTIFIERS describing prints the tape already contains (which venue printed
+# it, under which condition codes, the vendor's own id), never tape content of their own. They are
+# therefore EXCLUDED from the content checksum — see ``_tape_identity_rows``.
+_PRESERVATION_ROW_KEYS = frozenset(
+    {"conditions", "exchange", "tape", "trade_id", "bid_exchange", "ask_exchange"}
+)
 
 
 class DatasetNotFound(Exception):
@@ -150,16 +159,34 @@ def _iso_utc(epoch: float) -> str:
 
 def _event_to_row(event: Event) -> dict:
     """One provider-neutral stored row per engine event (TradeEvent/QuoteEvent fields only —
-    never a vendor payload). The dataset-level ``symbol`` owns the ticker; rows do not repeat it."""
+    never a vendor payload). The dataset-level ``symbol`` owns the ticker; rows do not repeat it.
+
+    era "The Rapid Microscope" J-06 step 1 (spec section 7.1 r2): the Card-5.1 preservation
+    fields (``conditions``/``exchange``/``tape``/``trade_id`` on a trade row;
+    ``conditions``/``tape``/``bid_exchange``/``ask_exchange`` on a quote row) are emitted
+    PRESENT-ONLY — a key is added ONLY when the source event carries a non-``None`` value. An
+    event built with every new field ``None`` (every call site before J-06 steps 2-5 land the
+    recorder) serializes to the EXACT SAME row shape as before this change — never an emitted
+    ``"conditions": null`` for a field that used to be absent entirely (the ``observer=``-kwarg
+    absent-key precedent, applied to stored rows)."""
     if isinstance(event, TradeEvent):
-        return {
+        row = {
             "type": _ROW_TRADE,
             "ts": event.timestamp,
             "price": event.price,
             "size": event.size,
             "side": event.side.value,
         }
-    return {
+        if event.conditions is not None:
+            row["conditions"] = list(event.conditions)
+        if event.exchange is not None:
+            row["exchange"] = event.exchange
+        if event.tape is not None:
+            row["tape"] = event.tape
+        if event.trade_id is not None:
+            row["trade_id"] = event.trade_id
+        return row
+    row = {
         "type": _ROW_QUOTE,
         "ts": event.timestamp,
         "bid": event.bid,
@@ -167,23 +194,78 @@ def _event_to_row(event: Event) -> dict:
         "bid_size": event.bid_size,
         "ask_size": event.ask_size,
     }
+    if event.conditions is not None:
+        row["conditions"] = list(event.conditions)
+    if event.tape is not None:
+        row["tape"] = event.tape
+    if event.bid_exchange is not None:
+        row["bid_exchange"] = event.bid_exchange
+    if event.ask_exchange is not None:
+        row["ask_exchange"] = event.ask_exchange
+    return row
 
 
 def _row_to_event(symbol: str, row: dict) -> Event:
+    """The exact inverse of ``_event_to_row``. ``row.get(...)`` (never ``row[...]``) on every
+    Card-5.1 preservation field: a legacy row that predates this change simply lacks the key, so
+    every one of the four fields defaults cleanly to ``None`` — the narrow risk surface the
+    iteration-6 evaluator flagged as this era's most dangerous change so far. Round-trips exactly
+    for a row that DOES carry them (TC-2)."""
     if row["type"] == _ROW_TRADE:
-        return TradeEvent(symbol, row["ts"], row["price"], row["size"], Side(row["side"]))
+        return TradeEvent(
+            symbol, row["ts"], row["price"], row["size"], Side(row["side"]),
+            conditions=row.get("conditions"),
+            exchange=row.get("exchange"),
+            tape=row.get("tape"),
+            trade_id=row.get("trade_id"),
+        )
     if row["type"] == _ROW_QUOTE:
-        return QuoteEvent(symbol, row["ts"], row["bid"], row["ask"], row["bid_size"], row["ask_size"])
+        return QuoteEvent(
+            symbol, row["ts"], row["bid"], row["ask"], row["bid_size"], row["ask_size"],
+            conditions=row.get("conditions"),
+            tape=row.get("tape"),
+            bid_exchange=row.get("bid_exchange"),
+            ask_exchange=row.get("ask_exchange"),
+        )
     raise DatasetIntegrityError(f"unknown stored event type {row.get('type')!r}")
+
+
+def _tape_identity_rows(rows: list[dict]) -> list[dict]:
+    """The TAPE-ONLY projection every content checksum hashes: each stored row MINUS the Card-5.1
+    preservation keys.
+
+    Why this exists (iter-7 audit finding B1): those keys are vendor identifiers describing the
+    SAME prints, so including them in the content checksum made one tape hash to two different
+    identities depending only on when it was fetched — and ``record``'s duplicate scan (the ONLY
+    enforcement of "the split tag is frozen at registration", this module's own docstring)
+    compares exactly that checksum. A window recorded BEFORE the preservation fields existed could
+    then be re-fetched afterwards and registered a SECOND time under a DIFFERENT split, silently
+    putting one tape in both ``train`` and ``holdout``. Hashing the tape-only projection restores
+    "same tape ⇒ same identity" for both the write side and the on-load verify side.
+
+    Byte-compatible with every dataset already on disk: a legacy row carries none of these keys,
+    so the projection is the identity function for it and its stored checksum still verifies
+    verbatim (proven against all 18 real on-disk datasets / 9,145,900 rows). Tamper detection of
+    the preservation values themselves is unaffected — ``_load`` verifies the WHOLE record against
+    ``file_checksum`` (which covers every row key) BEFORE it ever reaches this projection."""
+    if not any(_PRESERVATION_ROW_KEYS & row.keys() for row in rows):
+        return rows  # the legacy shape: no copy, no allocation, byte-identical behaviour
+    return [{k: v for k, v in row.items() if k not in _PRESERVATION_ROW_KEYS} for row in rows]
 
 
 def _content_checksum(symbol: str, data_feed: str, epoch_anchor: float | None, rows: list[dict]) -> str:
     """The dataset's CONTENT identity: a sha256 over the tape itself (symbol + feed + anchor +
-    the ordered event rows). Registration-time duplicate detection and the on-load verification
-    both recompute exactly this."""
+    the ordered event rows, projected to tape-only by ``_tape_identity_rows``).
+    Registration-time duplicate detection and the on-load verification both recompute exactly
+    this."""
     return _sha256(
         _canonical(
-            {"symbol": symbol, "data_feed": data_feed, "epoch_anchor": epoch_anchor, "events": rows}
+            {
+                "symbol": symbol,
+                "data_feed": data_feed,
+                "epoch_anchor": epoch_anchor,
+                "events": _tape_identity_rows(rows),
+            }
         )
     )
 
@@ -414,12 +496,34 @@ class DatasetStore:
         data_feed: str,
         epoch_anchor: float | None,
         events: list[Event],
+        schema_basis: str | None = None,
+        quote_size_unit: str | None = None,
     ) -> dict:
         """Persist ONE new dataset (record + register in a single explicit action). The split tag
         is assigned HERE and frozen: content already registered under any split raises the
-        409-style ``DatasetAlreadyRegistered`` (there is no update/re-tag/delete path at all)."""
+        409-style ``DatasetAlreadyRegistered`` (there is no update/re-tag/delete path at all).
+
+        ``schema_basis``/``quote_size_unit`` (era "The Rapid Microscope" J-06 step 1, spec
+        section 2.6) are OPTIONAL, additive manifest fields — stamped into ``meta`` only when a
+        caller supplies them (the ``observer=``-kwarg precedent: every existing call site, none
+        of which pass these, leaves the manifest shape byte-unchanged, TC-3). Neither is part of
+        the CONTENT checksum (``_content_checksum`` hashes ``symbol``/``data_feed``/
+        ``epoch_anchor``/``events``, the last projected to tape-only by ``_tape_identity_rows``)
+        — they are manifest metadata, not tape content. Nor are the Card-5.1 preservation ROW
+        fields, for the same reason and by the same projection: one tape has ONE identity
+        regardless of which vendor identifiers happened to be preserved alongside it, so the
+        duplicate scan below still refuses a re-tag (iter-7 audit finding B1). A
+        supplied ``quote_size_unit`` is validated against the EXISTING
+        ``micro_features.QUOTE_SIZE_UNITS`` tuple (the sole unit vocabulary in the repo — this
+        module defines no second one) and rejected explicitly, never silently accepted, exactly
+        like the ``split`` check immediately below."""
         if split not in VALID_SPLITS:
             raise ValueError(f"unknown split {split!r} — expected one of {sorted(VALID_SPLITS)}")
+        if quote_size_unit is not None and quote_size_unit not in QUOTE_SIZE_UNITS:
+            raise ValueError(
+                f"unknown quote_size_unit {quote_size_unit!r} — expected one of "
+                f"{sorted(QUOTE_SIZE_UNITS)} (micro_features.QUOTE_SIZE_UNITS, spec section 2.6)"
+            )
         if not events:
             raise EmptyWindowError("no events in the requested window — nothing was recorded")
         rows = [_event_to_row(event) for event in events]
@@ -450,6 +554,10 @@ class DatasetStore:
             "epoch_anchor": epoch_anchor,
             "created_utc": _iso_utc(datetime.now(timezone.utc).timestamp()),
         }
+        if schema_basis is not None:
+            meta["schema_basis"] = schema_basis
+        if quote_size_unit is not None:
+            meta["quote_size_unit"] = quote_size_unit
         record = {"meta": meta, "events": rows}
         payload = {"file_checksum": _sha256(_canonical(record)), "record": record}
         self._root.mkdir(parents=True, exist_ok=True)
@@ -518,8 +626,14 @@ def record_from_source(
     end: str | None = None,
     config: Config,
     historical_fetch: Callable[[], HistoricalWindow] | None = None,
+    schema_basis: str | None = None,
+    quote_size_unit: str | None = None,
 ) -> dict:
     """Record + register ONE dataset from a historical source (the explicit research action).
+
+    ``schema_basis``/``quote_size_unit`` (era "The Rapid Microscope" J-06 step 1) pass straight
+    through to ``DatasetStore.record`` — see that method's own docstring; omitted by every
+    existing caller (none pass these yet), so the manifest shape is byte-unchanged for them.
 
     ``reference`` loads the committed keyless PG SIP fixture (optionally sliced to
     ``[start, end)``); ``historical`` calls the injected ``historical_fetch`` built on the
@@ -561,6 +675,8 @@ def record_from_source(
         data_feed=data_feed_for_scenario(scenario, config),
         epoch_anchor=provider.epoch_anchor,
         events=events,
+        schema_basis=schema_basis,
+        quote_size_unit=quote_size_unit,
     )
 
 

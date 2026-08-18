@@ -166,6 +166,32 @@ def _to_iso_utc(value) -> str | None:
     return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+def _venue_str(value) -> str | None:
+    """Coerce a vendor venue/exchange value to a plain vendor-neutral string (Card-5.1
+    preservation, era "The Rapid Microscope" J-06 step 1). The SDK's ``Trade``/``Quote`` models
+    type ``exchange``/``bid_exchange``/``ask_exchange`` as ``Optional[Union[Exchange, str]]`` —
+    ``Exchange`` is a ``str, Enum`` mixin whose bare ``str()`` yields ``"Exchange.Q"`` (the member
+    repr, NOT the letter), so this reads ``.value`` when present (an ``Exchange`` member) and
+    falls back to the value itself (already a plain str, or ``None``). No vendor type ever leaks
+    past this seam."""
+    if value is None:
+        return None
+    return getattr(value, "value", value)
+
+
+def _conditions_list(value) -> list[str] | None:
+    """Coerce a vendor conditions value to a plain ``list[str]`` (Card-5.1 preservation). The
+    SDK types ``conditions`` as ``Optional[Union[List[str], str]]`` — a lone code sometimes
+    arrives as a bare string rather than a one-element list; this normalizes both shapes so every
+    ``RawTrade``/``RawQuote.conditions`` is uniform. ``None`` passes through (never an empty list
+    standing in for "absent")."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return [value]
+    return list(value)
+
+
 @contextmanager
 def _mapped_vendor_timeout(detail: str = "market data provider timed out"):
     """Map the vendor SDK's HTTP timeout to the NEUTRAL ``VendorTimeout`` (J-28).
@@ -366,7 +392,13 @@ class AlpacaAdapter:
             trades_resp, quotes_resp = t_future.result(), q_future.result()
 
         trades = [
-            RawTrade(t.timestamp.timestamp(), float(t.price), int(t.size))
+            RawTrade(
+                t.timestamp.timestamp(), float(t.price), int(t.size),
+                conditions=_conditions_list(getattr(t, "conditions", None)),
+                exchange=_venue_str(getattr(t, "exchange", None)),
+                tape=getattr(t, "tape", None),
+                trade_id=getattr(t, "id", None),
+            )
             for t in trades_resp.data.get(symbol, [])
         ]
         quotes = [
@@ -376,6 +408,10 @@ class AlpacaAdapter:
                 float(q.ask_price),
                 int(q.bid_size),
                 int(q.ask_size),
+                conditions=_conditions_list(getattr(q, "conditions", None)),
+                tape=getattr(q, "tape", None),
+                bid_exchange=_venue_str(getattr(q, "bid_exchange", None)),
+                ask_exchange=_venue_str(getattr(q, "ask_exchange", None)),
             )
             for q in quotes_resp.data.get(symbol, [])
         ]
@@ -472,7 +508,13 @@ class AlpacaAdapter:
 
         for trades_resp, quotes_resp in sub_results:
             trades.extend(
-                RawTrade(t.timestamp.timestamp(), float(t.price), int(t.size))
+                RawTrade(
+                    t.timestamp.timestamp(), float(t.price), int(t.size),
+                    conditions=_conditions_list(getattr(t, "conditions", None)),
+                    exchange=_venue_str(getattr(t, "exchange", None)),
+                    tape=getattr(t, "tape", None),
+                    trade_id=getattr(t, "id", None),
+                )
                 for t in trades_resp.data.get(symbol, [])
             )
             quotes.extend(
@@ -482,6 +524,10 @@ class AlpacaAdapter:
                     float(q.ask_price),
                     int(q.bid_size),
                     int(q.ask_size),
+                    conditions=_conditions_list(getattr(q, "conditions", None)),
+                    tape=getattr(q, "tape", None),
+                    bid_exchange=_venue_str(getattr(q, "bid_exchange", None)),
+                    ask_exchange=_venue_str(getattr(q, "ask_exchange", None)),
                 )
                 for q in quotes_resp.data.get(symbol, [])
             )
@@ -677,7 +723,19 @@ class AlpacaAdapter:
         )
 
         async def _on_trade(t) -> None:
-            await queue.put(RawTrade(t.timestamp.timestamp(), float(t.price), int(t.size)))
+            # Same Card-5.1 preservation fields as the historical fetch (trivial to populate here
+            # too, since the SDK's live callback objects carry the identical attribute shape) —
+            # never persisted (the live path is never recorded to a dataset), so this is purely
+            # for consistency, not new plumbing (no new import, no new store write).
+            await queue.put(
+                RawTrade(
+                    t.timestamp.timestamp(), float(t.price), int(t.size),
+                    conditions=_conditions_list(getattr(t, "conditions", None)),
+                    exchange=_venue_str(getattr(t, "exchange", None)),
+                    tape=getattr(t, "tape", None),
+                    trade_id=getattr(t, "id", None),
+                )
+            )
 
         async def _on_quote(q) -> None:
             await queue.put(
@@ -687,6 +745,10 @@ class AlpacaAdapter:
                     float(q.ask_price),
                     int(q.bid_size),
                     int(q.ask_size),
+                    conditions=_conditions_list(getattr(q, "conditions", None)),
+                    tape=getattr(q, "tape", None),
+                    bid_exchange=_venue_str(getattr(q, "bid_exchange", None)),
+                    ask_exchange=_venue_str(getattr(q, "ask_exchange", None)),
                 )
             )
 

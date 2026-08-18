@@ -305,3 +305,51 @@ recordings exist; ask a framework-maintenance session to fix the tool that turns
 into a "pass"; and get the two owner answers still waiting (the one-quote-early timing stamp, and
 whether the readiness photograph must show the real 12-day corpus when the test rig can only show a
 two-day one).
+
+## Iteration 7 — goal-rapid-microscope-iter-7
+
+**Date:** 2026-08-18T01:30:00Z
+**Verdict:** CONTINUE
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: J-05 "The walk-forward engine" (partial → passing; its last open clause is now met
+  by a real command an operator can run)
+- Newly failing: none
+- Regressed: none
+- Changed: J-06 "The recorder and the Vault" failing → partial (the first of its five steps landed,
+  and that step is itself only half of what the goal names)
+- Unchanged: J-01, J-02, J-03, J-04 passing — all four RE-CHECKED by me against the owner's real
+  data, not carried; J-07, J-08, J-09 failing (their files are still not on disk — I looked for
+  each one); J-10 partial, its whole-product safety walk green for the second run in a row
+- Anti-goal violations: one critical fault was introduced AND fixed inside this run (the new
+  storage fields quietly changed how a recording's identity is calculated, so the same tape could
+  have been filed twice under two different labels — I broke it again myself and confirmed the fix
+  holds). One NEW minor item is open (the new command writes a permanent shape record before it
+  checks the size floor, which pins today's numbers forever). Three older minor items stay open,
+  one of them still waiting on the owner.
+
+**Reasoning:** I did not take any handoff on trust. I re-ran the new command myself against the
+owner's real recordings and it printed exactly the sentence the goal asks for — "11 < 105" — and
+stopped with an error code, while leaving the owner's real records untouched (I hashed the folder
+before and after: identical). I then re-broke the dangerous fault the independent checker found:
+saving the same tape a second time, now carrying the new extra details, under a different label is
+correctly refused, and only one copy stays on file. All 18 real recordings still open with their
+fingerprints matching, and none of them gained a single new field. The frozen parts are frozen: the
+settings fingerprint prints 08e471b10130e1e2 and all six judge files hash exactly as they did at
+the era's start. I ran the whole test suite myself: 3,045 pass, 8 skipped, 0 failures. On screen,
+the browser check finally ran properly — eight real photographs, and I opened three of them: the
+Cockpit shows a live moving chart and a real reading, the Structure page loads its full map, and the
+Desk page shows every kept panel plus the corpus-truth panel with real numbers and honest
+"floor not met" rows. One evidence fault, not a product fault: two of the reports name photographs
+that are not on disk any more; the eight that matter do exist.
+
+**Next-step recommendation:** Build the tape recorder (the second step of J-06 "The recorder and the
+Vault") on its own, under the full pipeline with the independent checker — that checker is the only
+step in this session that has ever caught this class of fault, and it caught another one this run.
+Along with it, fix three small things that only start to hurt once new tape is recorded: the new
+command should check the size floor before it writes its permanent shape record; a recording that
+carries the new extra details must not break when the program tries to use it as a lookup key; and a
+damaged recording must be reported instead of quietly skipped. Please also decide two things that
+have been waiting for you: whether a timing stamp that is one quote too early should be corrected,
+and whether the corpus-truth photograph must show your real 12-day corpus when the test rig can only
+ever show a two-day one.

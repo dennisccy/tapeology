@@ -68,10 +68,16 @@ class HistoricalProvider:
             ts = epoch - t0  # logical seconds, monotonic non-decreasing
             if kind == _QUOTE_ORDER:
                 yield QuoteEvent(
-                    self.ticker, ts, record.bid, record.ask, record.bid_size, record.ask_size
+                    self.ticker, ts, record.bid, record.ask, record.bid_size, record.ask_size,
+                    conditions=record.conditions, tape=record.tape,
+                    bid_exchange=record.bid_exchange, ask_exchange=record.ask_exchange,
                 )
             else:
-                yield TradeEvent(self.ticker, ts, record.price, record.size, Side.UNKNOWN)
+                yield TradeEvent(
+                    self.ticker, ts, record.price, record.size, Side.UNKNOWN,
+                    conditions=record.conditions, exchange=record.exchange,
+                    tape=record.tape, trade_id=record.trade_id,
+                )
 
 
 class ProgressiveHistoricalProvider:
@@ -132,7 +138,13 @@ class ProgressiveHistoricalProvider:
             ts = epoch - t0  # logical seconds, monotonic non-decreasing across the whole window
             if kind == _QUOTE_ORDER:
                 yield QuoteEvent(
-                    self.ticker, ts, record.bid, record.ask, record.bid_size, record.ask_size
+                    self.ticker, ts, record.bid, record.ask, record.bid_size, record.ask_size,
+                    conditions=record.conditions, tape=record.tape,
+                    bid_exchange=record.bid_exchange, ask_exchange=record.ask_exchange,
                 )
             else:
-                yield TradeEvent(self.ticker, ts, record.price, record.size, Side.UNKNOWN)
+                yield TradeEvent(
+                    self.ticker, ts, record.price, record.size, Side.UNKNOWN,
+                    conditions=record.conditions, exchange=record.exchange,
+                    tape=record.tape, trade_id=record.trade_id,
+                )

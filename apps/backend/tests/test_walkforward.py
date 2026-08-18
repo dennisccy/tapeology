@@ -1016,6 +1016,68 @@ def test_the_cli_with_no_flag_does_nothing(monkeypatch):
     assert wf.main() == 0
 
 
+# === iter-7 TC-6/TC-8: the tick-family fold request reaches a genuine production entry point ========
+# TC-7 (the SAME CLI path against the operator's real 11-distinct-date `.data/datasets` corpus) is a
+# manual, by-hand run -- see the dev handoff for its pasted output, per goal.md J-05's own wording
+# ("the developer runs by hand ... the evaluator independently re-runs this same command").
+
+
+def test_tc6_the_family_flag_prints_the_typed_refusal_naming_the_real_shortfall(tmp_path, monkeypatch, capsys):
+    """``python -m app.research.walkforward --family tick_legacy`` -- goal.md J-05's remaining
+    acceptance clause ("the tick-family fold request returns the typed floor-refusal naming
+    `11 < 105`") reached through a genuine production entry point, never a synthetic-date unit
+    test alone (unlike ``test_tc20_...`` below, which is left unmodified -- TC-8). Seeds 11
+    distinct-session-date tick fixture datasets under ``TAPEOLOGY_DATASET_DIR`` (the SAME
+    distinct-session-date count the real corpus and TC-20's own synthetic fixture both use) via
+    a real ``DatasetStore``, then runs the new CLI flag end to end against this hermetic store."""
+    import sys
+
+    tick_dir = tmp_path / "datasets"
+    tick_store = DatasetStore(str(tick_dir))
+    for day in range(1, 12):  # 11 distinct ET session dates -> 11 < 105
+        _plant_tick_dataset(
+            tick_store, symbol="AAPL",
+            window_start_utc=f"2026-06-{day:02d}T13:30:00Z",
+            window_end_utc=f"2026-06-{day:02d}T20:00:00Z",
+            price=100.00 + day,
+        )
+
+    monkeypatch.setenv("TAPEOLOGY_DATASET_DIR", str(tick_dir))
+    monkeypatch.setenv("TAPEOLOGY_DESK_UNIVERSE_DIR", str(tmp_path / "universe"))
+    monkeypatch.setenv("TAPEOLOGY_BAR_DIR", str(tmp_path / "bars"))
+    monkeypatch.setenv("TAPEOLOGY_MICRO_WALKFORWARD_DIR", str(tmp_path / "wf"))
+    monkeypatch.setenv("TAPEOLOGY_MICRO_EXPOSURE_REGISTRY_DIR", str(tmp_path / "exposure"))
+    monkeypatch.setattr(sys, "argv", ["walkforward.py", "--family", "tick_legacy"])
+
+    exit_code = wf.main()
+    assert exit_code != 0
+
+    captured = capsys.readouterr()
+    assert captured.err == ""  # never an unhandled traceback
+    assert "11 < 105" in captured.out
+    assert "TR-15" in captured.out
+
+    ledger = wl.WalkForwardLedger(str(tmp_path / "wf"))
+    assert ledger.rows_of_kind(wl.ROW_KIND_FOLD_RESULT) == []
+    # The fold spec IS registered (`register_fold_spec` fires before
+    # `require_sufficient_sessions_for_folds`, mirroring the diagnostic path's own ordering) --
+    # provenance even for a below-floor corpus, this iteration's own developer-call.
+    fold_spec = wl.latest_fold_spec(ledger, wf.TICK_LEGACY_CORPUS_ID)
+    assert fold_spec is not None
+    assert fold_spec["geometry"] == wf.DIAGNOSTIC_GEOMETRY
+
+
+def test_tc6_an_unknown_family_value_is_refused_by_argparse_itself(monkeypatch, capsys):
+    """A defensive edge: an unrecognised ``--family`` value never silently no-ops -- argparse's
+    own ``choices`` refusal fires before any store is touched."""
+    import sys
+
+    monkeypatch.setattr(sys, "argv", ["walkforward.py", "--family", "not-a-real-family"])
+    with pytest.raises(SystemExit) as exc_info:
+        wf.main()
+    assert exc_info.value.code != 0
+
+
 # === route wiring: the 3 walkforward routes actually work end to end (micro_routes.py) ===============
 
 

@@ -365,3 +365,44 @@ the shared single-flight `POST /walkforward/compute` route is deferred until a r
 needs it, avoiding a second, currently-unused code path through the same manager.
 **Reversible:** yes — the route can gain the same optional `family` parameter later, calling the
 identical underlying function this iteration adds; nothing about the CLI wiring needs to move.
+
+## iter-7 — goal-evaluator
+
+**Ambiguity:** `docs/goal.md` J-05's Acceptance names "the tick-family fold request returns the
+typed floor-refusal naming `11 < 105`" without saying which caller must carry the request. The
+iteration-6 evaluator scored J-05 `partial` on the stricter reading that the acceptance "requires a
+production path that can actually point the fold engine at the tick corpus"; this iteration shipped
+that path as a CLI flag only (`python -m app.research.walkforward --family tick_legacy`), with
+`POST /walkforward/compute`'s family parameter explicitly deferred (decomposer assumption ledger,
+iter-7 second entry). The goal never says whether a CLI-only entry point discharges the clause or
+whether a route is required.
+**We chose:** CLI-only discharges it — scored J-05 `passing`. Grounds I established myself, not
+read off a report: I re-ran the command against the operator's REAL `.data/datasets` with a scoped
+ledger and got the literal string `11 < 105 -- refused (TR-15)` on stdout with exit code 1, over
+the real 11-distinct-ET-session corpus rather than a synthetic date list; `run_tick_family_fold_request`
+reuses the EXISTING `_tick_dataset_session_dates` and the already-wired
+`require_sufficient_sessions_for_folds` (no second inventory, no second floor); and the operator's
+real `.data/micro_walkforward` was byte-identical before and after (`ea04c19b0a36d6ca`), so the path
+is read-only over the store it inspects. The CLI is the module's own documented "operator's REAL
+run" entry point and the same shape `--diagnostic` already uses, so this is the era's established
+operator surface, not a test harness. TC-20's synthetic unit test is left byte-unmodified beside it,
+so the new path is additive, never a replacement.
+**Reversible:** yes — the route can gain the same optional `family` parameter later, calling the
+identical function; nothing about the CLI wiring needs to move.
+
+## iter-7 — goal-evaluator (second)
+
+**Ambiguity:** J-06 has five steps and this iteration delivered step 1 — and even step 1 only in
+part, since `docs/goal.md`'s step-1 sentence also names "the §2.6 `schema_basis` + `quote_size_unit`
+stamping from the dated vendor rule", which the decomposer explicitly deferred to `tick_recorder.py`
+(audit B4). My instructions define `partial` as "only some assertion steps passed" without saying
+whether ~1/5 of a journey qualifies, or whether a journey this early should stay `failing`.
+**We chose:** `partial`. One of J-06's own acceptance clauses is now genuinely met and I proved it
+myself (every legacy dataset and committed fixture loads byte-identically with checksums verifying,
+engine equivalence and golden trace byte-unmodified — 18 records, 0 errors, zero new keys), so
+`failing` would understate real, verified, high-risk progress. `partial` blocks GOAL_ACHIEVED
+exactly as `failing` does, so no gate is loosened. To stop `partial` reading as "nearly done", the
+journey-history note and `iteration-state.md` both state the fraction explicitly ("1 of 5 steps, and
+that step only in part") and list what is absent by filename: `tick_recorder.py`, `vault.py`,
+TR-2/4/12/20 tests, the tranche, any sealed shard.
+**Reversible:** yes

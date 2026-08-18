@@ -152,6 +152,7 @@ __all__ = [
     "TICK_LEGACY_CORPUS_ID",
     "playbook_observations",
     "run_diagnostic_walkforward",
+    "run_tick_family_fold_request",
     "main",
 ]
 
@@ -1001,6 +1002,50 @@ def _tick_dataset_session_dates(dataset_store: DatasetStore) -> list[str]:
     return sorted(session_dates)
 
 
+def run_tick_family_fold_request(ledger: WalkForwardLedger, config: Config) -> dict:
+    """The tick-family fold request (goal.md J-05, iter-7) — the genuine production entry point
+    goal.md's own acceptance clause names: "the tick-family fold request returns the typed
+    floor-refusal naming `11 < 105`". Before this function, the ONE production fold-building call
+    site (``run_diagnostic_walkforward``) was hardcoded to the playbook corpus, so that sentence
+    was proven only by a synthetic-date unit test, never by a genuine caller against the real
+    tick corpus (iter-6 evaluator's own finding).
+
+    Resolves the REAL legacy tick corpus's session dates via the EXISTING
+    ``_tick_dataset_session_dates`` helper (no second inventory mechanism) against a fresh
+    ``DatasetStore`` pointed at ``config.dataset_dir_resolved()``, registers
+    ``DIAGNOSTIC_GEOMETRY`` for ``TICK_LEGACY_CORPUS_ID`` (mirroring
+    ``run_diagnostic_walkforward``'s own register-then-check ordering immediately above its
+    ``build_folds`` call, so the frozen geometry is committed to the ledger even for a
+    below-floor corpus — idempotent on repeat calls via ``register_fold_spec``'s own "identical
+    geometry replays the existing row" contract), then calls the ALREADY-WIRED
+    ``require_sufficient_sessions_for_folds`` (TR-15).
+
+    At today's real corpus (11 distinct ET session dates, far under the 105-session
+    ``WF_MIN_SUFFICIENT_FOLDS`` floor) this ALWAYS raises ``InsufficientSessionsForFoldsError``
+    naming the exact shortfall — the typed refusal IS this function's whole acceptance surface
+    (T-7 "insufficient is an answer"), never a bug to work around. Evaluating actual folds over
+    the tick corpus (a tick-level "observations" reader, evidence-class classification,
+    ``evaluate_mode_b_fold``) is J-06/J-09 scope — the corpus cannot clear this floor until the
+    recorder (J-06) grows it, so that machinery is deliberately NOT built here (T-1: never invent
+    a code path this iteration's diff cannot exercise or verify)."""
+    tick_dataset_store = DatasetStore(config.dataset_dir_resolved())
+    session_dates = _tick_dataset_session_dates(tick_dataset_store)
+    corpus_manifest_hash = _sha256(_canonical(session_dates))
+    floors = {
+        "wf_fold_min_observations": WF_FOLD_MIN_OBSERVATIONS,
+        "wf_fold_min_signal_sessions": WF_FOLD_MIN_SIGNAL_SESSIONS,
+        "wf_fold_min_symbols": WF_FOLD_MIN_SYMBOLS,
+    }
+    register_fold_spec(
+        ledger, corpus_id=TICK_LEGACY_CORPUS_ID, corpus_manifest_hash=corpus_manifest_hash,
+        geometry=DIAGNOSTIC_GEOMETRY, floors=floors,
+    )
+    require_sufficient_sessions_for_folds(session_dates, DIAGNOSTIC_GEOMETRY)
+    # Unreachable at today's 11-session corpus (the line above always raises first); kept minimal
+    # (no `build_folds`/fold-evaluation call) rather than a speculative branch nothing can test.
+    return {"corpus_id": TICK_LEGACY_CORPUS_ID, "session_count": len(session_dates)}
+
+
 def playbook_observations(
     playbook_store, *, setup_ids: tuple[str, ...], horizon_label: str, default_signature: str, exclude_session_dates: tuple[str, ...] = ()
 ) -> list[dict]:
@@ -1198,12 +1243,27 @@ def main() -> int:
     """``python -m app.research.walkforward --diagnostic`` -- runs the diagnostic acceptance run
     against the operator's REAL playbook/universe/bar stores, synchronously, in-process (the
     ``scout``/``micro_snapshots`` CLI-warmer precedent), persisting through the SAME ledger
-    ``GET /research/desk/micro/walkforward`` serves."""
+    ``GET /research/desk/micro/walkforward`` serves.
+
+    ``--family tick_legacy`` (iter-7, goal.md J-05) is a SEPARATE mode: requests a fold build for
+    the real legacy tick corpus via ``run_tick_family_fold_request`` instead of the diagnostic
+    playbook run -- today this always prints the typed below-floor refusal (e.g. "11 < 105"),
+    since the tick corpus does not yet clear ``WF_MIN_SUFFICIENT_FOLDS``. Route-level wiring
+    (``POST /walkforward/compute``'s own family parameter) is deferred -- CLI-only this
+    iteration, since no UI/MCP consumer needs it yet."""
     parser = argparse.ArgumentParser(
         description="Walk-forward CLI warmer -- run the diagnostic acceptance run over the real "
         "155-session playbook corpus, persisting through the SAME ledger the walkforward routes serve."
     )
     parser.add_argument("--diagnostic", action="store_true", help="run the diagnostic acceptance run (the only mode this iteration).")
+    parser.add_argument(
+        "--family",
+        choices=["tick_legacy"],
+        default=None,
+        help="request a fold build for a named corpus family instead of --diagnostic. "
+        "'tick_legacy' resolves the real legacy tick corpus's session dates and requests its "
+        "fold build (today this always prints the typed below-floor refusal).",
+    )
     args = parser.parse_args()
 
     config = CONFIG
@@ -1213,8 +1273,23 @@ def main() -> int:
     universe_store = UniverseStore(config.desk_universe_dir_resolved())
     bar_store = BarStore(config.bar_dir_resolved())
 
+    if args.family is not None:
+        try:
+            result = run_tick_family_fold_request(ledger, config)
+        except InsufficientSessionsForFoldsError as exc:
+            # TC-6/TC-7: the SAME typed-refusal print+exit shape as --diagnostic's own handling
+            # below -- never a second, divergent error path.
+            print(f"tick-family fold request refused ({args.family}): {exc}")
+            return 1
+        print(
+            f"tick-family fold request complete ({args.family}): {result['session_count']} "
+            f"session(s) clear the WF_MIN_SUFFICIENT_FOLDS floor for corpus "
+            f"'{result['corpus_id']}'."
+        )
+        return 0
+
     if not args.diagnostic:
-        print("nothing to do -- pass --diagnostic to run the acceptance run.")
+        print("nothing to do -- pass --diagnostic or --family tick_legacy.")
         return 0
 
     try:

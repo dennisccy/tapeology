@@ -29,6 +29,12 @@ class TradeEvent:
     engine re-derives the authoritative aggressor side from the quote in effect at
     ``timestamp`` via the aggressor classifier. ``timestamp`` is a logical second offset
     — never wall-clock — so the engine stays deterministic.
+
+    The four trailing fields mirror ``RawTrade``'s own Card-5.1 preservation fields (era "The
+    Rapid Microscope" J-06 step 1, spec section 7.1 r2) — optional, default-``None``, threaded
+    straight through from the historical provider's ``RawTrade`` when present. The engine ignores
+    them entirely (``FEATURE_NAMES`` and the classifier read only ``price``/``size``/``side``);
+    they exist for research consumers (the dataset store's stored rows) only.
     """
 
     ticker: str
@@ -36,11 +42,19 @@ class TradeEvent:
     price: float
     size: int
     side: Side = Side.UNKNOWN
+    conditions: list[str] | None = None
+    exchange: str | None = None
+    tape: str | None = None
+    trade_id: int | None = None
 
 
 @dataclass(frozen=True)
 class QuoteEvent:
-    """Top-of-book quote (best bid / best ask and their sizes)."""
+    """Top-of-book quote (best bid / best ask and their sizes).
+
+    The four trailing fields mirror ``RawQuote``'s own Card-5.1 preservation fields (see
+    ``TradeEvent``'s docstring) — optional, default-``None``, engine-ignored, research-only.
+    """
 
     ticker: str
     timestamp: float
@@ -48,6 +62,10 @@ class QuoteEvent:
     ask: float
     bid_size: int
     ask_size: int
+    conditions: list[str] | None = None
+    tape: str | None = None
+    bid_exchange: str | None = None
+    ask_exchange: str | None = None
 
 
 # Reserved for a later iteration (Level 2). Declared so the union/interface can grow

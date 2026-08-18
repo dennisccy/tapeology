@@ -182,3 +182,19 @@ produce (`qa_playbook_iter7_fixture_scoped_backend.sh` seeds 2 PG fixtures; UT-0
 that reads as a product FAIL but is an expectation defect.
 **Applies to:** any iteration closing an "unwired guard / zero call sites" gap; any iteration whose
 browser acceptance names concrete corpus values while using the store-scoped rig
+
+## iter-7 — 2026-08-18T01:30:00Z
+
+**Verdict:** CONTINUE
+**Lesson:** A field addition can be perfectly additive for READERS and still destroy an identity
+guarantee for WRITERS. `datasets.py`'s Card-5.1 preservation keys were optional, absent-key
+default-`None`, and provably byte-identical on load for all 18 real datasets — yet they silently
+entered `_content_checksum`, the sole enforcement of "the split tag is frozen at registration", so
+one tape re-fetched through the now-populating Alpaca adapter would hash to a second identity and
+register again under a different split (train + holdout contamination). Review and QA both passed
+it; only the independent auditor caught it. The fix is a tape-only projection (`_tape_identity_rows`)
+applied symmetrically on the write side and the on-load verify side.
+**Applies to:** any iteration adding a field to a record type whose bytes feed a checksum, content
+hash, dedupe key, or identity tuple — `datasets.py`, `micro_snapshots.py`, any `*_ledger.py`. Ask
+explicitly: "does this new key change what the identity function sees?", and if the new data is
+metadata ABOUT the payload rather than payload, project it out of the identity before hashing.

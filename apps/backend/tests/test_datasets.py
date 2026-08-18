@@ -27,6 +27,7 @@ Locked disciplines (each an anti-goal or a J-02 acceptance clause):
 
 from __future__ import annotations
 
+import ast
 import json
 import os
 import time
@@ -38,6 +39,7 @@ import pytest
 from app.config import CONFIG, Config
 from app.engine.tape_engine import TapeEngine
 from app.providers.adapters.base import HistoricalWindow
+from app.providers.base import QuoteEvent, Side, TradeEvent
 from app.providers.historical import HistoricalProvider
 from app.research.datasets import (
     SPLIT_HOLDOUT,
@@ -453,3 +455,177 @@ def test_dataset_dir_env_override_wins(monkeypatch):
     monkeypatch.delenv("TAPEOLOGY_DATASET_DIR")
     default = CONFIG.dataset_dir_resolved()
     assert default.endswith(str(Path(".data") / "datasets"))
+
+
+# --- era "The Rapid Microscope" J-06 step 1 (spec section 7.1/2.6 r2): the Card-5.1 data- -------
+# --- preservation prerequisite -- TC-1, TC-2, TC-3, TC-9 (docs/phases/goal-rapid-microscope- -----
+# --- iter-7.md). This is the era's most dangerous change so far (iteration-6 evaluator's own -----
+# --- words): it mutates the shared event/row schema every dataset-reading journey depends on. ---
+
+
+def test_tc1_an_event_with_every_new_field_absent_serializes_to_the_pre_change_row_shape(tmp_path):
+    """TC-1 (backward compatibility, the narrow risk surface): an event built the way EVERY call
+    site built one before this iteration (every Card-5.1 field left at its default ``None``)
+    must serialize to the EXACT same row shape legacy data already has on disk -- no
+    ``conditions``/``exchange``/``tape``/``trade_id`` key on a trade row, no
+    ``conditions``/``tape``/``bid_exchange``/``ask_exchange`` key on a quote row, and no
+    ``schema_basis``/``quote_size_unit`` key in the manifest -- ever appearing for an absent
+    value. Reloading must reconstruct byte-identical events (the ``_row_to_event`` half of the
+    same round trip the 18 real on-disk datasets exercise)."""
+    store = DatasetStore(tmp_path / "datasets")
+    events = [
+        QuoteEvent("PG", 0.0, 148.49, 148.53, 700, 100),
+        TradeEvent("PG", 0.02, 148.53, 100, Side.UNKNOWN),
+    ]
+    meta = store.record(
+        symbol="PG", source="test", source_kind="reference", source_id="",
+        split=SPLIT_TRAIN, window_start_utc="2026-06-09T17:00:00Z",
+        window_end_utc="2026-06-09T17:00:01Z", data_feed="sip", epoch_anchor=0.0, events=events,
+    )
+    assert "schema_basis" not in meta
+    assert "quote_size_unit" not in meta
+
+    on_disk = json.loads((tmp_path / "datasets" / f"{meta['id']}.json").read_text())
+    rows = on_disk["record"]["events"]
+    trade_row = next(r for r in rows if r["type"] == "trade")
+    quote_row = next(r for r in rows if r["type"] == "quote")
+    for key in ("conditions", "exchange", "tape", "trade_id"):
+        assert key not in trade_row, f"trade row unexpectedly carries {key!r} for an absent value"
+    for key in ("conditions", "tape", "bid_exchange", "ask_exchange"):
+        assert key not in quote_row, f"quote row unexpectedly carries {key!r} for an absent value"
+
+    assert store.load_events(meta["id"]) == events
+
+
+def test_tc2_preservation_fields_round_trip_exactly_through_record_and_load_events(tmp_path):
+    """TC-2: a freshly constructed TradeEvent/QuoteEvent carrying real preservation values
+    round-trips through ``record()`` -> ``load_events()`` with every field equal to the
+    original."""
+    store = DatasetStore(tmp_path / "datasets")
+    trade = TradeEvent(
+        "PG", 0.02, 148.53, 100, Side.UNKNOWN,
+        conditions=["@", "I"], exchange="Q", tape="C", trade_id=123456789,
+    )
+    quote = QuoteEvent(
+        "PG", 0.0, 148.49, 148.53, 700, 100,
+        conditions=["R"], tape="C", bid_exchange="P", ask_exchange="Q",
+    )
+    meta = store.record(
+        symbol="PG", source="test", source_kind="reference", source_id="",
+        split=SPLIT_TRAIN, window_start_utc="2026-06-09T17:00:00Z",
+        window_end_utc="2026-06-09T17:00:01Z", data_feed="sip", epoch_anchor=0.0,
+        events=[quote, trade],
+    )
+    reloaded = store.load_events(meta["id"])
+    reloaded_trade = next(e for e in reloaded if isinstance(e, TradeEvent))
+    reloaded_quote = next(e for e in reloaded if isinstance(e, QuoteEvent))
+    assert reloaded_trade == trade
+    assert reloaded_quote == quote
+
+
+def test_the_frozen_split_guard_still_refuses_one_tape_re_fetched_with_preservation_fields(tmp_path):
+    """iter-7 audit finding B1 (regression guard). This module's own docstring makes ONE promise
+    the whole split discipline rests on: "re-recording the same tape under a different split (the
+    re-tag attempt) ... raises the 409-style ``DatasetAlreadyRegistered``". That guard is enforced
+    SOLELY by comparing ``_content_checksum``, so the Card-5.1 preservation fields must never
+    enter it: otherwise a window recorded BEFORE those fields existed (all 18 real on-disk tick
+    datasets) could be re-fetched through the now-populating Alpaca adapter and registered a
+    SECOND time under a DIFFERENT split — one tape in both ``train`` and ``holdout``, which is
+    train/holdout contamination, not a duplicate.
+
+    The two event lists below are the SAME tape: identical timestamps, prices, sizes and sides;
+    the second merely preserves the immutable vendor identifiers Alpaca always returned."""
+    store = DatasetStore(tmp_path / "datasets")
+    common = dict(
+        symbol="AAPL", source="alpaca", source_kind="historical", source_id="AAPL",
+        window_start_utc="2026-06-22T17:00:00Z", window_end_utc="2026-06-22T17:10:00Z",
+        data_feed="sip", epoch_anchor=1000.0,
+    )
+    legacy = [
+        QuoteEvent("AAPL", 0.0, 100.0, 100.1, 5, 7),
+        TradeEvent("AAPL", 0.5, 100.05, 300, Side.BUY),
+    ]
+    preserved = [
+        QuoteEvent("AAPL", 0.0, 100.0, 100.1, 5, 7,
+                   conditions=["R"], tape="C", bid_exchange="P", ask_exchange="Q"),
+        TradeEvent("AAPL", 0.5, 100.05, 300, Side.BUY,
+                   conditions=["@", "I"], exchange="Q", tape="C", trade_id=987654321),
+    ]
+
+    first = store.record(split=SPLIT_TRAIN, events=legacy, **common)
+    with pytest.raises(DatasetAlreadyRegistered) as exc_info:
+        store.record(split=SPLIT_HOLDOUT, events=preserved, **common)
+    assert first["id"] in str(exc_info.value)
+    assert SPLIT_TRAIN in str(exc_info.value)
+    metas, errors = store.list()
+    assert errors == []
+    assert [m["split"] for m in metas] == [SPLIT_TRAIN], "one tape must never hold two split tags"
+
+    # ...and the reverse order refuses too: the tape's identity does not depend on which shape
+    # happened to be recorded first.
+    other = DatasetStore(tmp_path / "datasets2")
+    rich = other.record(split=SPLIT_HOLDOUT, events=preserved, **common)
+    with pytest.raises(DatasetAlreadyRegistered):
+        other.record(split=SPLIT_TRAIN, events=legacy, **common)
+    # The preservation values themselves still survive the round trip untouched — the checksum
+    # ignores them, the STORED ROWS keep them verbatim (TC-2's contract, re-asserted here so a
+    # future "just strip them everywhere" shortcut cannot pass this test).
+    assert other.load_events(rich["id"]) == preserved
+
+
+def test_tc3_schema_basis_and_quote_size_unit_are_stamped_verbatim_when_supplied(tmp_path):
+    """TC-3: ``record(..., schema_basis=..., quote_size_unit=...)`` stamps both into the manifest
+    verbatim and they survive a store reload; an unrecognised ``quote_size_unit`` (outside
+    ``micro_features.QUOTE_SIZE_UNITS``) is rejected explicitly, never silently accepted."""
+    store = DatasetStore(tmp_path / "datasets")
+    meta = store.record(
+        symbol="PG", source="test", source_kind="reference", source_id="",
+        split=SPLIT_TRAIN, window_start_utc="2026-06-09T17:00:00Z",
+        window_end_utc="2026-06-09T17:00:01Z", data_feed="sip", epoch_anchor=0.0,
+        events=[TradeEvent("PG", 0.0, 148.53, 100, Side.UNKNOWN)],
+        schema_basis="v2_preservation", quote_size_unit="shares",
+    )
+    assert meta["schema_basis"] == "v2_preservation"
+    assert meta["quote_size_unit"] == "shares"
+
+    reloaded = DatasetStore(tmp_path / "datasets").get(meta["id"])
+    assert reloaded["schema_basis"] == "v2_preservation"
+    assert reloaded["quote_size_unit"] == "shares"
+
+    with pytest.raises(ValueError):
+        store.record(
+            symbol="PG", source="test2", source_kind="reference", source_id="",
+            split=SPLIT_TRAIN, window_start_utc="2026-06-09T17:01:00Z",
+            window_end_utc="2026-06-09T17:01:01Z", data_feed="sip", epoch_anchor=0.0,
+            events=[TradeEvent("PG", 0.0, 149.0, 50, Side.UNKNOWN)],
+            quote_size_unit="not-a-real-unit",
+        )
+
+
+def test_tc9_no_second_quote_size_unit_vocabulary_or_early_dated_rule_constant_exists():
+    """TC-9: ``micro_features.QUOTE_SIZE_UNITS`` stays the SOLE unit-vocabulary tuple in the repo
+    (this iteration validates against it, never defines a second copy), and
+    ``ALPACA_QUOTE_SIZE_UNIT_EFFECTIVE`` -- the dated-vendor-rule constant the assumption ledger's
+    iter-7 entry explicitly reserves for a future ``tick_recorder.py`` -- is not yet defined
+    anywhere. This iteration ships storage CAPABILITY only (a caller-supplied
+    ``schema_basis``/``quote_size_unit``), never the date-to-unit DECISION rule."""
+    app_dir = Path(__file__).resolve().parents[1] / "app"
+    offending_effective: list[str] = []
+    offending_second_tuple: list[str] = []
+    py_files = sorted(p for p in app_dir.rglob("*.py") if "__pycache__" not in p.parts)
+    assert len(py_files) > 50, f"only {len(py_files)} app modules scanned -- has the tree moved?"
+    for path in py_files:
+        tree = ast.parse(path.read_text(), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Assign):
+                targets = [t.id for t in node.targets if isinstance(t, ast.Name)]
+            elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+                targets = [node.target.id]
+            else:
+                continue
+            if "ALPACA_QUOTE_SIZE_UNIT_EFFECTIVE" in targets:
+                offending_effective.append(str(path.relative_to(app_dir)))
+            if "QUOTE_SIZE_UNITS" in targets and path.name != "micro_features.py":
+                offending_second_tuple.append(str(path.relative_to(app_dir)))
+    assert offending_effective == [], f"ALPACA_QUOTE_SIZE_UNIT_EFFECTIVE defined early: {offending_effective}"
+    assert offending_second_tuple == [], f"a second QUOTE_SIZE_UNITS assignment exists: {offending_second_tuple}"
