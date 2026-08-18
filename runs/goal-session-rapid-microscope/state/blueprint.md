@@ -59,6 +59,16 @@ recompute or re-fetch it from anywhere else. **New rows this era** (transcribed 
 | Recorder job + tranche progress/runs | new `app/research/tick_recorder.py` | `POST/GET/POST-cancel /research/desk/micro/recorder/compute`, `GET .../recorder/runs` |
 | Graduation states + export bundles | new `app/research/micro_graduation.py` | `GET /research/desk/micro/graduation` |
 
+**Disclosure sub-fields** (registered iter-10 — housekeeping only, no new owner, no new endpoint;
+these three were already shipped by iter-9's r4 fix round and flagged WARN by iter-9's coherence
+audit as "served across roughly nine endpoints but not yet rows in this table"):
+
+| Sub-field | Type/shape | Owner (already-registered parent module) | Served by (existing endpoints) |
+|---|---|---|---|
+| `withheld_excluded` | `int >= 0` — a count only, never the withheld ids | each already-registered parent module (`scout.py`, `walkforward.py`, `micro_join.py`, `edge_report.py`, `edge_report_cache.py`, `pnl_scan.py`, `desk_screen.py`, `micro_snapshots.py`), all via the ONE shared predicate `vault.withheld_dataset_ids()` → `micro_snapshots.exclude_withheld()` | the GET/compute routes of the module in the same row |
+| `sealed_withheld` | `int >= 0` | `datasets.py` (already-registered owner of the datasets listing) | `GET /research/datasets` |
+| `sealed_tranche` | object aggregate (shard count, total symbol-days, per-universe totals — never a per-shard row, never a per-shard `exposure_state`) | `micro_readiness.py` (already-registered owner) | `GET /research/desk/micro/readiness` |
+
 **Unchanged owners** (this era reads them verbatim, never recomputes, never re-serves from a
 second endpoint): datasets/replay → `datasets.py` (`DatasetStore.replay`; gains one additive
 default-`None` `observer=` kwarg only, counter-tested byte-identical when absent); engine
@@ -78,3 +88,10 @@ from its one endpoint, read verbatim by UI/MCP/reports.
      pattern iter-2's coherence audit approved for J-02's snapshot endpoints — the wiring iteration
      (J-08) is already named in the Information Architecture table above, so this is not an orphan
      feature. No nav-skeleton change this iteration; no reapproval file written. -->
+
+<!-- iter-10 note: the "Disclosure sub-fields" table above is pure documentation catch-up (closing
+     iter-9 coherence.md's WARN) — all three fields were already shipped by iter-9's r4 fix round;
+     nothing about their code changed this iteration. No nav-skeleton change; no reapproval file
+     written. J-07's own row in the main Data Contract table above (Graduation states + export
+     bundles) was already registered at era baseline and is unchanged by this note — iter-10 builds
+     that already-reserved owner verbatim. -->

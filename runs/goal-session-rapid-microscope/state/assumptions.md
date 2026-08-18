@@ -622,3 +622,25 @@ owner-independent work (J-07) for questions only the owner can answer.
 sealed under a guarantee that is demonstrably false and the recorded manifests are immutable. That
 is precisely why the gate is written into the journey note, the anti-goal ledger, the recommendation
 and `iteration-state.md`'s "Do not redo" block rather than any single one of them.
+
+## iter-10 — goal-decomposer
+
+**Ambiguity:** goal.md's J-07 acceptance criteria (spec §8, the fixture-pipeline proof) never
+mentions a live REST route — only the Product Shape's Data Contract table and `micro_routes.py`'s
+own forward-reference docstring ("The era's own Data Contract table names ONE more micro route
+landing in a later iteration (graduation) under this SAME `/research/desk/micro` prefix") name
+`GET /research/desk/micro/graduation` as graduation's eventual owner, without saying whether the
+route ships in the SAME iteration as the module or waits for J-08 to wire it in.
+**We chose:** ship the read-only `GET /research/desk/micro/graduation` route this iteration,
+alongside `micro_graduation.py` — the exact precedent iter-9's decomposer set for `vault.py`
+("ship the read-only GET .../vault route now ... cheap, and TR-2's route sweep needs a real route
+to test against"). Grounds: the route is a thin, already-reserved, already-owned serving surface
+(no new Data-Contract row to register); it costs nothing extra and lets TR-2's join-resistance
+sweep exercise a real registered route the moment graduation ever touches sealed-shard provenance;
+and it matches this era's established pattern of registering read surfaces ahead of their UI
+wiring (`blueprint.md`'s own iter-3 footnote documents the identical accepted pattern for J-02's
+snapshot endpoints, and `micro_routes.py`'s header comment literally calls out this exact route as
+the next one due).
+**Reversible:** yes — the route is inert this iteration (no button calls it; the real graduation
+ledger on disk is genuinely empty, since no operator has ever run graduation), and J-08 wires it
+into the `/desk` UI later with zero changes needed to the route itself.
