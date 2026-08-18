@@ -721,3 +721,35 @@ for a defect in the SPEC, not in the delivery.
 rules, the invented reading is written into a permanent, hash-chained export bundle. That is why
 the item is written into the anti-goal ledger, the recommendation, and `iteration-state.md`'s "Do
 not redo" block rather than any one of them.
+
+## iter-11 — goal-decomposer
+
+**Ambiguity:** r5 (`docs/rapid-validation-spec.md` §7.5 point 7) requires that "a shard's identity
+becomes public ONLY when that shard is actually exposed for exploratory use or assigned to a
+candidate family," but no section of the spec names a mechanism, CLI, route, or operator act for
+the FIRST of those two paths — "exposed for exploratory use" has no defined trigger anywhere,
+unlike the family-bound `assigned → exposed` path, which §7.4 fully specifies. Code inspection
+confirms the gap is real, not merely unread: `seal_shard`/`assign_shard`/`expose_shard` have ZERO
+production call sites in `app/` (only docstrings/definitions), so today's recorder
+(`tick_recorder._finalize_day`) never registers ANY finalized shard into the vault ledger at all —
+meaning the pool-membership hole r5 must close is not "opacity serving is wrong for tracked
+shards" but "most future pool members would never be tracked in the first place."
+**We chose:** close the hole STRUCTURALLY at the withhold predicate rather than PROCEDURALLY at
+the recorder. The new single choke point treats a dataset as withheld if (a) it has a vault
+shard-ledger row short of `exposed` (today's r3/r4 behaviour, unchanged), OR (b) its (symbol,
+date) matches a registered universe's `expected_recording_pairs()` AND its own `created_utc` is
+at or after that universe's `registered_at` — regardless of whether any ledger row exists for it.
+Because that check is driven by the REGISTERED RULE, not by which bookkeeping call happened to
+run, it is safe-by-construction the instant `register_universe` executes: a real recording under
+r5's rule stays opaque even with zero additional recorder-to-vault wiring, so this iteration ships
+the fix WITHOUT building "exposed for exploratory use" itself — that mechanism is left OUT OF
+SCOPE and named as an open design question for whichever iteration next scopes J-06 step 4 in
+detail, rather than invented here (T-1: ambiguous procedure ⇒ drop, never improvise). The
+`created_utc >= registered_at` guard is required so a universe registered LATER can never
+retroactively withhold a dataset (e.g. one of the 12 permanently-exploratory legacy symbol-days)
+that merely happens to share a (symbol, date) with its rule — protecting that *(critical)* rail
+from an unintended interaction with the new predicate.
+**Reversible:** yes — the predicate is additive and the real store has zero registered universes
+today, so nothing about it is exercised (let alone re-keyed) against real data; a later iteration
+building the exploratory-release mechanism only ADDS a new way for a pool member to leave this
+withheld set, never changes today's rule.

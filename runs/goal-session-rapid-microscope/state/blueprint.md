@@ -69,6 +69,17 @@ audit as "served across roughly nine endpoints but not yet rows in this table"):
 | `sealed_withheld` | `int >= 0` | `datasets.py` (already-registered owner of the datasets listing) | `GET /research/datasets` |
 | `sealed_tranche` | object aggregate (shard count, total symbol-days, per-universe totals — never a per-shard row, never a per-shard `exposure_state`) | `micro_readiness.py` (already-registered owner) | `GET /research/desk/micro/readiness` |
 
+**Recorder-progress aggregate sub-fields** (registered iter-11 — r5 closure, sub-fields of the
+ALREADY-registered "Recorder job + tranche progress/runs" row, no new owner, no new endpoint):
+
+| Sub-field | Type/shape | Owner (already-registered parent module) | Served by (existing endpoint) |
+|---|---|---|---|
+| `progress.chunks_total` / `progress.chunks_done` | `int >= 0` each | `tick_recorder.py` (`TickRecorderComputeManager`) | `GET /research/desk/micro/recorder/compute` |
+| `progress.chunks_fetched` / `progress.chunks_reused` / `progress.chunks_unchanged` / `progress.chunks_failed` | `int >= 0` each — per-outcome-type counts, never a per-chunk row | `tick_recorder.py` (`TickRecorderComputeManager`) | `GET /research/desk/micro/recorder/compute` |
+| `progress.trades_total` / `progress.quotes_total` | `int >= 0` each — aggregate event counts, never per-chunk | `tick_recorder.py` (`TickRecorderComputeManager`) | `GET /research/desk/micro/recorder/compute` |
+| `progress.percent_complete` | `float, 0.0–100.0` | `tick_recorder.py` (`TickRecorderComputeManager`) | `GET /research/desk/micro/recorder/compute` |
+| `progress.elapsed_seconds` | `float >= 0` | `tick_recorder.py` (`TickRecorderComputeManager`) | `GET /research/desk/micro/recorder/compute` |
+
 **Unchanged owners** (this era reads them verbatim, never recomputes, never re-serves from a
 second endpoint): datasets/replay → `datasets.py` (`DatasetStore.replay`; gains one additive
 default-`None` `observer=` kwarg only, counter-tested byte-identical when absent); engine
@@ -95,3 +106,23 @@ from its one endpoint, read verbatim by UI/MCP/reports.
      written. J-07's own row in the main Data Contract table above (Graduation states + export
      bundles) was already registered at era baseline and is unchanged by this note — iter-10 builds
      that already-reserved owner verbatim. -->
+
+<!-- iter-11 note (r5 closure): `sealed_tranche`'s KEEPS its already-registered name and shape
+     (shard_count / symbol_days / by_universe — still never a per-shard row) — this note documents
+     that its SEMANTICS broaden, not that its shape changes. Before this iteration, a dataset only
+     counted toward `sealed_tranche` if it already carried an explicit vault shard-ledger row
+     (`sealed`/`assigned`). Per the r5 owner ruling (`docs/rapid-validation-spec.md` §7.5 point 7 —
+     "a newly recorded tranche is ONE OPAQUE RESEARCH POOL... no served id... may separate an
+     unexposed exploratory shard from an unexposed sealed one"), a dataset now ALSO counts if its
+     (symbol, date) matches a registered vault universe's expected recording set and it was
+     recorded at-or-after that universe's registration — whether or not any shard-ledger row exists
+     for it yet. This closes the structural gap where a pool member the recorder never explicitly
+     sealed would otherwise be listed with full identity the moment it was recorded (zero
+     `seal_shard`/`assign_shard`/`expose_shard` production call sites exist even after this
+     iteration — see `runs/goal-session-rapid-microscope/state/assumptions.md`'s iter-11 entry for
+     the full reasoning and the deliberately-deferred "exposed for exploratory use" mechanism this
+     does NOT build). The new predicate is the SAME single choke point (`vault.py`, consumed via
+     `micro_snapshots.exclude_withheld()`/`withheld_dataset_ids_for_store()` and directly by
+     `micro_readiness.build_readiness()`) — no second implementation anywhere. Zero behavioural
+     change against the real store, which has zero registered vault universes today. No
+     nav-skeleton change; no reapproval file written. -->
