@@ -257,3 +257,33 @@ additions are all-zero while nothing is sealed and `distinct_datasets` moved fro
 **Applies to:** any iteration with fix rounds after the QA/browser lane — especially r-revision
 rounds whose changes are inert until some future state exists; also any journey whose module changed
 after its screenshot, where a lane row says DEFERRED-BUDGET.
+
+## iter-10 — 2026-08-18T22:15:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** The era's own T-1 rule ("ambiguous ⇒ DROP + owner ruling, never improvise") lost to
+test-first pressure: spec §8 names a sealed-shard pass/fail verdict and a "proposed confirmation
+boundary" without defining either, and because TC-2/TC-3/TC-6 could not pass without them, the
+developer invented both (a caller-supplied `passed: bool` on
+`micro_graduation.record_sealed_evaluation`, and "latest already-consumed evidence timestamp").
+Both were disclosed and are unreachable today, but the pattern is the danger: whenever a
+test-first contract encodes a spec gap as a TC scenario, the TC itself becomes the pressure that
+converts "stop and ask" into "invent and disclose". A TC that cannot be satisfied without
+inventing a rule is a signal to drop the TC, not to invent the rule.
+**Applies to:** any iteration whose iter spec writes TC scenarios over an underspecified section
+of `docs/rapid-validation-spec.md` — especially J-06 step 4/5, J-08, and any future sealed-shard
+evaluator that wires a real verdict in front of `record_sealed_evaluation`.
+
+## iter-10 (second) — 2026-08-18T22:15:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** `micro_graduation.py` turns out to be r5-compatible by construction, and the reason is
+worth keeping: it records a `dataset_id` only after `vault.build_vault_state` already reports that
+shard `exposed` and bound to that exact `family_root_id` (evaluator re-proved this by claiming a
+verdict against a still-sealed shard and being refused). Any surface that publishes identities
+ONLY as a downstream consequence of a recorded exposure event cannot leak pool membership — the
+opposite of the enumerate-then-filter shape that produced the cartesian-subtraction leak in
+`GET /research/datasets`. Prefer "publish what the exposure ledger already released" over "list
+everything, then subtract the withheld".
+**Applies to:** any iteration adding a surface that touches vault-eligible shards — the r5
+implementation itself, J-08's four `/desk` sections, and the four new MCP proxies.

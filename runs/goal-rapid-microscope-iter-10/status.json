@@ -1,0 +1,29 @@
+{
+  "phase": "goal-rapid-microscope-iter-10",
+  "status": "in_progress",
+  "current_step": "dev_complete",
+  "updated_at": "2026-08-18T17:23:53.551327Z",
+  "started_at": "2026-08-18T17:23:53.551327Z",
+  "cli": "claude",
+  "blockers": [],
+  "changed_files": [
+    "apps/backend/app/research/micro_graduation.py",
+    "apps/backend/app/research/micro_routes.py",
+    "apps/backend/tests/test_micro_graduation.py",
+    "docs/research-directions.md",
+    "docs/handoffs/goal-rapid-microscope-iter-10-dev.md"
+  ],
+  "tests_run": true,
+  "browser_checks_run": false,
+  "next_action": "reviewer",
+  "dev_summary": {
+    "new_module": "apps/backend/app/research/micro_graduation.py -- the four graduation states, GraduationLedger (built on micro_chain_ledger.HashChainedLedger), identity-keyed idempotent transitions, the provenance-complete export bundle",
+    "new_route": "GET /research/desk/micro/graduation (micro_routes.py) -- honest empty state on the real, currently-empty ledger",
+    "new_tests": 19,
+    "suite": "3185 collected / 3177 passed / 8 skipped / 0 failed",
+    "fingerprint": "08e471b10130e1e2 (unchanged, confirmed via direct python -c call)",
+    "referee_hashes": "all six referee_*.py SHA-256 hashes byte-identical to the iteration-0/iter-8 baseline listing, reconfirmed via sha256sum",
+    "mcp_surface": "untouched -- still 22 tools (test_mcp_server.py passed unmodified)",
+    "docs_amendment": "docs/research-directions.md: the Era-15 evidence line was already mostly present (era-open Amendment 2026-08-16 blockquote); added a short dated follow-up note beside it closing the loop to micro_graduation.py, instead of a duplicate paragraph (documentation-only, no code) -- see dev handoff Known Issues"
+  }
+}

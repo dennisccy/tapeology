@@ -52,6 +52,26 @@
 > that "a partial report is a misleading report", which forbids the silent variant. Rejected:
 > aborting a whole sweep whenever any sealed shard exists (renders the edge report unusable the
 > moment the vault holds anything) and accepting the bypass (re-opens exactly what r3 closed).
+>
+> **Revision r5 (2026-08-18, owner ruling — the opaque research pool).** The FINAL
+> pre-implementation clarification of the vault surface: applied while ZERO shards are sealed and
+> ZERO tranches recorded, so it **re-keys nothing** — no spec id, parameter hash, ledger row, or
+> recorded verdict moves, and it changes no statistical rule, constant, grid, fold geometry, or
+> gate. It is recorded as a named revision only because this file's own rule makes ANY change to
+> it a named revision, never because recorded meaning changed. The iteration-9 audit proved that
+> r3+r4 still leave the partition reconstructible by SUBTRACTION: §7.2 requires the symbol rule
+> and date rule to be registered before any fetch, so the operator already knows the universe;
+> serving a complete identity-labelled list of the exploratory (non-sealed) side then reveals the
+> withheld set as its complement. Hiding the axes from readiness does not erase that prior
+> knowledge, so the r5 closure is structural rather than cosmetic: **a newly recorded tranche is
+> ONE OPAQUE RESEARCH POOL until individual shards are actually exposed or assigned** (§7.5
+> points 4, 7, 8; §7.1 recorder progress). The HMAC is reframed accordingly — an internal
+> deterministic, auditable assignment mechanism, NOT a public global partition whose complement
+> can be reconstructed. TR-2 is widened from join resistance to a deterministic inference trap.
+> Explicitly rejected by the owner: accepting the residual with a disclosed caveat, and breaking
+> the cartesian shape with recording-cost decoys. Where the shipped architecture requires every
+> non-sealed shard to become individually visible at record time, the ARCHITECTURE changes. The
+> one-way exposure history and the single-shot `family_root_id` rules are preserved unchanged.
 
 ---
 
@@ -431,6 +451,20 @@ symbol-days so band context joins. Recording failure modes (vendor timeout, part
 credential absence) are per-chunk `failed` outcomes with detail — never a raise, never a
 fabricated row.
 
+**Recorder progress is AGGREGATE-ONLY while the pool is unexposed (r5).** `GET
+/research/desk/micro/recorder/compute` — and every other progress surface, UI or MCP — serves
+only non-identifying aggregates: chunks completed / total, successful / failed / pending counts,
+aggregate retry and failure counts, total bytes, total trades and quotes, percent complete, and
+deterministic elapsed/throughput diagnostics. It MUST NOT serve symbol, date, dataset id, shard
+id, per-shard byte or event counts, or any other per-chunk identity-bearing metadata, because
+watching a live recording would otherwise reveal pool membership before assignment. The detailed
+per-chunk identities remain in the INTERNAL recorder ledger for recovery, idempotency and audit;
+recovery and debugging read that persisted state, never an identity-bearing public response.
+Once a shard is legitimately exposed, its identity appears through the normal exposure surfaces.
+**There is no operator-only bypass** — using one would itself be a human exposure event that
+destroys the tranche's blindness, and it is unnecessary for ordinary monitoring. TR-2's
+inference trap (§7.5) covers the recorder progress path explicitly.
+
 **The Card-5.1 data-preservation prerequisite (r2) — a HARD gate before any bulk recording.**
 Before the recorder may record ANY universe (starter tranche included), the event schema ships
 the preservation fields: optional `conditions: list[str]` and `exchange: str` on
@@ -515,8 +549,13 @@ surface serves. Therefore:
    the `datasets` MCP tool, and any `get_endpoint` path resolving to them REFUSE a sealed
    dataset id with a typed refusal until its exposure is recorded. The refusal states only that
    the id is sealed — never symbol, window, counts, or universe.
-4. **Readiness serves sealed-tranche AGGREGATES only** (shard count, total symbol-days,
-   per-universe totals) — never a per-shard row, never a per-shard `exposure_state`.
+4. **Readiness serves tranche AGGREGATES only, on BOTH sides (r5).** While ANY member of a
+   recorded pool remains unexposed, readiness serves counts and coarse per-universe totals and
+   NOTHING per-shard — not for the sealed side and **not for the exploratory side either**. A
+   complete identity-labelled list of the non-sealed side is forbidden precisely because its
+   complement against the registered universe (§7.2, known to the operator by construction)
+   reveals the withheld set. No served artifact may present a complete identity-labelled
+   partition of "exploratory" versus "sealed".
 5. Recorder run logs commit per-shard identity and counts by hash while sealed.
 6. **Corpus enumerators honour the seal (r4).** A refusal wired only into a route is bypassed by
    any module that enumerates the store itself. Therefore every corpus-wide enumerator —
@@ -528,10 +567,29 @@ surface serves. Therefore:
    already hold that "a partial report is a misleading report", and the era's denominator rail
    forbids a corpus that shrinks without saying so. A run whose entire eligible corpus is
    withheld reports that honestly rather than emitting an empty-but-shaped result.
+7. **The opaque research pool (r5).** A newly recorded tranche is ONE POOL. Membership in it is
+   public (the operator registered the universe); **position within it is not**. A shard's
+   identity becomes public ONLY when that shard is actually exposed for exploratory use or
+   assigned to a candidate family — at which moment it leaves the pool through the normal
+   exposure surfaces governed by the exposure ledger. Unused pool members stay opaque and
+   **indistinguishable from one another**: no served id, ordering, index, timestamp, size, state
+   label, or per-shard statistic may separate an unexposed exploratory shard from an unexposed
+   sealed one. The internal vault and exposure ledgers retain exact identities and HMAC
+   decisions for audit; no API, UI, or MCP surface may serve enough of them to reconstruct the
+   hidden partition. If an implementation requires every non-sealed shard to become individually
+   visible immediately after recording, the IMPLEMENTATION changes — decoy recordings and
+   accepted residual leakage are both rejected.
+8. **The HMAC's role, restated (r5).** `HMAC(vault_secret, …)` is an INTERNAL deterministic and
+   auditable assignment mechanism. It is not, and must never be served as, a public global
+   partition — a partition whose complement is computable is not a vault.
 
 No pre-exposure field may equal, contain, or be derivable from any field the public surfaces
-serve for the same shard, and no exploratory statistic may be computed from one. TR-2 proves
-this by construction, not by whitelist review — and it exercises the operator compute acts
+serve for the same shard, and no exploratory statistic may be computed from one. **The
+governing test is a deterministic inference trap (r5), not a field whitelist: given the
+registered universe (§7.2) plus EVERY public artifact the system serves — readiness, recorder
+progress, datasets, backtests, PnL ledger, Scout, walk-forward, graduation, MCP, UI — an
+attacker must not be able to determine the identity of ANY still-unexposed vault-eligible shard
+with certainty.** TR-2 proves this by construction — and it exercises the operator compute acts
 (snapshot build, Scout run, edge report, PnL sweep) BEFORE sweeping, so it cannot pass merely
 because the rig computed nothing.
 
@@ -589,7 +647,7 @@ No state ever moves backward except by a voiding event (§6.2), which is itself 
 | Trap | Asserts |
 |---|---|
 | TR-1 prefix/tail | Truncated-dataset snapshot rows byte-identical to the full run's prefix (3 cut points incl. i=1); appending one tail event changes no prior row |
-| TR-2 sealed sweep (r3: join-resistance) | Every registered route + MCP tool serves only §7.5 metadata (or a typed refusal) for a sealed shard — AND the sweep is adversarial, not a whitelist review: seal a fixture shard, collect every value any surface serves for it pre-exposure, and assert none equals, contains, or derives the dataset id, raw `content_checksum`, symbol, window, or event counts. Explicitly includes `/research/datasets{,/{id}}`, the `datasets` MCP tool, `get_endpoint`, and `micro_readiness` (which must expose no per-shard row at all) |
+| TR-2 sealed sweep (r3: join-resistance; r5: inference trap) | Every registered route + MCP tool serves only §7.5 metadata (or a typed refusal) for a sealed shard — AND the sweep is adversarial, not a whitelist review: seal a fixture shard, collect every value any surface serves for it pre-exposure, and assert none equals, contains, or derives the dataset id, raw `content_checksum`, symbol, window, or event counts. Explicitly includes `/research/datasets{,/{id}}`, the `datasets` MCP tool, `get_endpoint`, `micro_readiness` (no per-shard row at all, EITHER side) and the recorder progress path. **r5 inference trap** — the decisive assertion: record a fixture pool under a registered universe (§7.2) whose symbol rule and date rule the trap KNOWS, expose a proper subset, then assert that the union of every public artifact (readiness, recorder progress, datasets, backtests, PnL ledger, Scout, walk-forward, graduation, MCP, UI) plus that known universe leaves ≥2 candidate identities for every still-unexposed vault-eligible shard — i.e. no unexposed shard is identifiable with certainty, and no complete identity-labelled exploratory/sealed partition is derivable by subtraction |
 | TR-3 accessor fence | Origin-T accessor refuses reads > T with a typed error; corpus aggregates exclude > T exactly; import-ban: only `micro_accessor` opens snapshot/vault data paths |
 | TR-4 cherry-pick refusal | A recording batch ≠ its universe rule's computed set (net of disclosed failures) is refused |
 | TR-5 class mixing | Pooling `historical_exposed_diagnostic` with `historical_oos` rows in one statistic is refused; diagnostic folds contribute zero to graduation |
@@ -640,3 +698,21 @@ discipline, MCP contract, replay-script static sweep.
    diagnostic, decide admissibility.
 6. Nothing in this era emits `live_confirmatory` evidence; the Referee remains the only source
    of confirmatory claims, unchanged.
+7. **`referee_evidence.strategy_trade_readiness` is seal-unaware — a deliberate, disclosed
+   compatibility limitation of this era (r5 owner ruling).** It counts dataset FILES through its
+   own enumeration and may therefore include withheld, unexposed Rapid-Microscope shards. The
+   era's byte-freeze rail on `referee_*.py` is PRESERVED: the file is not edited, and
+   `DatasetStore` is NOT intercepted to change frozen Referee behaviour indirectly (that would
+   breach the freeze's behavioural meaning even with identical bytes). Instead, wherever that
+   metric is served, it carries the caveat verbatim: *"Legacy Referee readiness metric —
+   seal-unaware in the Rapid Microscope era. It may include withheld/unexposed Rapid-Microscope
+   shards and must not be used as the canonical Rapid-Microscope readiness count."* The new
+   seal-aware `micro_readiness` surface is the CANONICAL owner of every Rapid-Microscope
+   corpus/readiness decision. Enforced: the stale count awards ZERO gate or graduation credit; no
+   Scout, walk-forward, vault, graduation, or readiness-floor decision may consume it; no UI, API,
+   or MCP surface may present it as equivalent to the seal-aware count, and where both appear
+   their differing semantics are labelled explicitly; a guard/source-scan proves Rapid-Microscope
+   gates read only the seal-aware owner. The actual Referee fix is deferred to a future named
+   Referee revision. **Escalation condition:** if audit finds `strategy_trade_readiness` is
+   consumed by a live promotion or certificate decision rather than being a readiness/reporting
+   value, STOP and escalate — that case requires a named Referee revision, not disclosure.

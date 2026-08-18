@@ -472,3 +472,65 @@ waiting since round 2. One process note worth keeping: your ruling to split the 
 rounds rather than raise the clock budget WORKED — this round ran the full pipeline, the checker
 ran three times, and it caught a real fault that everything else had passed. Keep scoping one step
 per round.
+
+## Iteration 10 — goal-rapid-microscope-iter-10
+
+**Date:** 2026-08-18T22:15:00Z
+**Verdict:** ESCALATE
+**Depth dispatched:** lean (the spec chose lean deliberately and said so; the browser lane and the
+review lane both genuinely ran, but there was no independent checker this round)
+**Journey deltas:**
+- Newly passing: J-07 "Graduation — provenance in, nothing laundered out" (failing → passing)
+- Newly failing: none
+- Regressed: none
+- Changed content (status unchanged): J-06 "The recorder and the Vault" partial — its goal text was
+  REWRITTEN by your r5 ruling this round, so I re-scored it against the new words rather than
+  carrying the old score; still 3 of 5 steps, and the new words add unbuilt work to step 3.
+  J-10 "The kept product stands" partial — sentinel green for the fifth run in a row; the trap half
+  is unchanged at 19 of 22.
+- Unchanged: J-01, J-02, J-03, J-04, J-05 passing — all five re-checked on screen this round by the
+  replay lane (no journey was cut for time), and none of their own files was touched;
+  J-08, J-09 failing (out of scope this round; I confirmed both on disk myself)
+- Anti-goal violations: no critical ones, introduced or open. One NEW minor item is open: the
+  written spec leaves two things undefined and the coder filled both gaps himself instead of
+  stopping to ask you — which the project's own rules say he must not do. Two older minor items
+  MOVED FORWARD because of your r5 ruling: the "you can work out the hidden set by subtraction"
+  problem and the "one frozen judge file counts hidden recordings" problem are both DECIDED now;
+  neither is BUILT yet. Two older minor items still need you: whether a damaged vault record should
+  make everything refuse, and the timing stamp that is one quote too early (waiting since round 2).
+
+**Reasoning:** I took nothing on trust. Instead of reading the coder's test file, I wrote my own
+and ran the whole journey myself against a throwaway store: a candidate really does climb all four
+steps, and the paperwork it produces at the end really does carry everything — the two trials of
+its family including the one that was KILLED, all three passing folds with their honesty labels,
+the one recording it was tested against, and the sentence saying a judge cannot register this kind
+of claim yet. I then tried to break it four ways and it refused all four: a twin whose evidence is
+only the practice kind never moved off the first step; a second, different verdict on the same
+recording was refused outright; a verdict claimed against a recording that was still sealed and
+never opened was refused; and after I marked the whole data era void, three otherwise perfect
+results no longer counted. I opened the pictures rather than reading the rows: the Desk page shows
+every kept panel plus the corpus panel with its honest "today, none", the Structure-side panel
+loads, and the new address returns exactly "No candidates ledgered." — and I checked on disk that
+this emptiness is real, not staged, because the folder it would write to does not exist yet. I ran
+the whole test suite myself after every file edit in the tree: 3,185 tests, 3,177 passed, 8
+skipped, 0 failures — the same number the coder and the reviewer got. The frozen parts are frozen:
+the settings fingerprint prints 08e471b10130e1e2 and all six judge files hash exactly as they did
+at the era's start. The one real gap is not in the code: the written spec never says who decides
+whether a sealed recording's test was passed or failed, and never says how to compute one of the
+dates the final paperwork must carry. The coder invented both, wrote it down plainly, and the
+reviewer agreed both are genuine holes in the spec — but the project's own rule is to stop and ask
+you, not to invent. Nothing an operator can click reaches either invention today, so nothing is
+harmed yet; the moment real recordings flow through, both become permanent.
+
+**Next-step recommendation:** Build your r5 decision next — the "one opaque pool" change — under
+the full pipeline WITH the independent checker, and scope it to one step only, exactly as your
+own smaller-rounds ruling has been working. Concretely: the corpus page must stop listing
+recordings one by one on EITHER side while any member of a batch is still unopened; the recording
+progress view must show only totals, never a name or a date; and the trap that proves it must be
+rewritten so it tries to work out the hidden set and fails. That checker is the only step in this
+session that has ever caught this class of fault, and it is the step that found this very problem
+by attacking its own earlier fix. Do NOT let the next round record real tape: your ruling settles
+the design, but none of it is built yet, and one question of the same family is still open — should
+a damaged vault record make everything refuse (safe) or make everything open (what happens today)?
+Please also settle two smaller things when convenient: who decides a sealed recording's pass or
+fail verdict, and the timing stamp that is one quote too early, waiting since round 2.

@@ -644,3 +644,80 @@ the next one due).
 **Reversible:** yes — the route is inert this iteration (no button calls it; the real graduation
 ledger on disk is genuinely empty, since no operator has ever run graduation), and J-08 wires it
 into the `/desk` UI later with zero changes needed to the route itself.
+
+## 2026-08-18 — OWNER RULING (3) → spec revision r5 "the opaque research pool"
+
+Escalated after the iter-9 audit; answered by the owner directly. All three are recorded in
+`docs/rapid-validation-spec.md` r5. r5 re-keys NOTHING (zero shards sealed, zero tranches
+recorded, no ledger row or verdict moves) and changes no statistical rule, constant, grid, fold
+geometry, or gate; it is a named revision only because this spec's own rule makes any change to
+it one.
+
+1. **Cartesian-subtraction membership leak — CLOSED STRUCTURALLY.** Rejected: accepting the
+   residual with a caveat, and decoy recordings. Rejected as insufficient: merely hiding the
+   tranche axes from readiness, because §7.2 already requires the symbol rule and date rule to be
+   registered before fetch — the operator knows the universe by construction, so a complete
+   identity-labelled list of the EXPLORATORY side reveals the withheld set as its complement.
+   Ruling: a newly recorded tranche is ONE OPAQUE RESEARCH POOL. Aggregates only on BOTH sides
+   while any member is unexposed; a shard's identity becomes public only when it is actually
+   exposed or assigned; unused pool members stay mutually indistinguishable; internal ledgers keep
+   exact identities and HMAC decisions for audit but no served surface may reconstruct the
+   partition. The HMAC is an internal assignment mechanism, never a public partition. If the
+   implementation requires every non-sealed shard to be individually visible at record time, the
+   ARCHITECTURE changes. One-way exposure history and single-shot `family_root_id` preserved.
+   Governing test = a deterministic inference trap (TR-2, widened): given the registered universe
+   plus every public artifact, no still-unexposed vault-eligible shard is identifiable with
+   certainty.
+2. **Recorder progress — AGGREGATE ONLY.** `GET /research/desk/micro/recorder/compute` (and every
+   other progress surface) serves chunks done/total, success/fail/pending, retry and failure
+   counts, bytes, trade/quote totals, percent, and deterministic throughput diagnostics — never
+   symbol, date, dataset id, shard id, or per-shard byte/event counts. Identities stay in the
+   INTERNAL recorder ledger for recovery/idempotency/audit. **No operator-only bypass** (using one
+   would itself be a human exposure event destroying blindness). TR-2 covers this path.
+3. **`referee_evidence.strategy_trade_readiness` — KEEP THE FREEZE, DISCLOSE.** Do not edit
+   `referee_evidence.py`; also do NOT intercept `DatasetStore` to change frozen Referee behaviour
+   indirectly (that breaches the freeze's behavioural meaning even with identical bytes — option 3
+   explicitly rejected). Serve the verbatim caveat beside the metric; `micro_readiness` is the
+   canonical seal-aware owner; the stale count gets ZERO gate/graduation credit and no
+   Scout/walk-forward/vault/graduation/floor decision may consume it; label the differing
+   semantics wherever both appear; add a guard/source-scan proving the gates read only the
+   seal-aware owner. Referee fix deferred to a future named Referee revision. **Escalate instead
+   of accepting** if audit finds the metric feeds a live promotion or certificate decision.
+
+## iter-10 — goal-evaluator
+
+**Ambiguity:** `docs/goal.md`'s J-07 has no browser acceptance clause (the era header calls J-07
+"keyless/automated", with browser reveals landing in J-08), yet the era's own T-10 rail says "no
+screenshot ⇒ `unknown`, never `passing`" and my methodology's rubber-stamp counterexample says
+unit tests are never journey evidence. Nothing states which governs a journey whose acceptance is
+*defined* as a fixture walk.
+**We chose:** score J-07 `passing` on (a) my OWN end-to-end four-state walk plus four adversarial
+refusal probes, run outside the developer's test file against a throwaway store, (b) the 19-test
+`test_micro_graduation.py` green inside my own 3,185-test full-suite run, and (c) the one
+screenshot its single servable surface can produce (`UT-J-07-result.png`, the honest empty state of
+`GET /research/desk/micro/graduation`, cross-checked against the genuine absence of a
+`.data/micro_graduation` directory). Grounds: T-10 binds *browser acceptances*, and J-07 declares
+none; the counterexample's danger (a routing typo 404s the page while unit tests pass) is exactly
+what the screenshot rules out here; and my own walk, not the dev's tests, is the load-bearing
+evidence.
+**Reversible:** yes — J-08 renders graduation state on `/desk`, so the journey gets a true
+element-captured browser acceptance one iteration later, and a failure there would re-open J-07.
+
+## iter-10 — goal-evaluator (second)
+
+**Ambiguity:** whether the developer's two disclosed spec-§8 improvisations (caller-supplied sealed
+verdict; invented confirmation-boundary formula) block J-07's acceptance. `docs/goal.md`'s J-07
+acceptance names four clauses and neither invention appears in any of them; but the era's
+Constraints say an ambiguous spec procedure must be DROPPED and surfaced for an owner ruling,
+"never improvise", and both improvisations sit inside the module J-07 delivers.
+**We chose:** J-07 `passing` (all four acceptance clauses independently verified by me), with the
+improvisation recorded as a NEW OPEN MINOR anti-goal-ledger item and named as an owner decision
+owed before J-06 step 4 — rather than scoring J-07 `partial`. Grounds I established myself: no
+operator-facing route reaches `record_sealed_evaluation` (the only new route is a read-only GET),
+zero sealed shards and zero graduation rows exist on disk, and the reviewer independently confirmed
+both are genuine spec gaps rather than shortcuts. Scoring `partial` would have punished the journey
+for a defect in the SPEC, not in the delivery.
+**Reversible:** no in one direction — if a real sealed evaluation is ever recorded before the owner
+rules, the invented reading is written into a permanent, hash-chained export bundle. That is why
+the item is written into the anti-goal ledger, the recommendation, and `iteration-state.md`'s "Do
+not redo" block rather than any one of them.

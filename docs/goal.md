@@ -564,10 +564,14 @@ operator-attended act inside the era.
        the published sha256 split beside the HMAC seal assignment
        (`TAPEOLOGY_VAULT_SECRET_FILE`, commitment recorded), one-way
        `sealed → assigned → exposed` exposure ledger keyed on the computed `family_root_id`,
-       **opaque pre-exposure metadata (spec §7.5 r3: surrogate shard id, salted commitment,
+       **opaque pre-exposure metadata (spec §7.5 r3–r5: surrogate shard id, salted commitment,
        no symbol/date until assignment, sealed dataset ids refused on the dataset + MCP
-       surfaces — aggregates only on readiness)**, TR-2 join-resistance sweep, TR-4
-       cherry-pick refusal, TR-12 single-shot exposure, TR-20 root-lineage refusal.
+       surfaces, corpus enumerators excluding withheld shards with a disclosed
+       `withheld_excluded` count, and the r5 opaque-pool rule — aggregates only on readiness
+       for BOTH sides, no complete per-shard list of either while any member is unexposed;
+       aggregate-only recorder progress with no operator bypass)**, TR-2 join-resistance +
+       inference sweep, TR-4 cherry-pick refusal, TR-12 single-shot exposure, TR-20
+       root-lineage refusal.
     4. Operator act, inside the era: resolve Tier-B by the spec §7.2 mandatory order (screen
        by the frozen Card-5.2 criteria → record criteria hash, as-of, provenance, full output,
        resolved list → freeze the list → `symbol_rule` → register the universe → commitment +
@@ -576,16 +580,18 @@ operator-attended act inside the era.
        trades+quotes to the spec §7.6 minimums (≥30 symbol-days, ≥8 panel symbols incl. PG +
        ≥3 Tier-B + ≥1 ETF, ≥10 dates over ≥6 weeks, the concentration caps, ≥60%
        full-session), with a restart mid-run proving resume.
-    5. Refresh readiness: the new shards appear with completeness reporting (including
-       `quote_size_unit` and preservation-field presence); sealed members show opaque
-       aggregates only.
+    5. Refresh readiness: the new tranche appears as ONE pool with aggregate completeness
+       reporting (including `quote_size_unit` and preservation-field presence); while any
+       member is unexposed, neither side is listed per-shard.
   - Acceptance: TR-2/4/12/19/20 pass; every legacy dataset and committed fixture loads
     byte-identically with checksums verifying and the engine equivalence/golden-trace tests
     byte-unmodified; the tranche exists on disk meeting every §7.6 minimum (readiness serves
     the arithmetic) with every new shard carrying `schema_basis`, preservation fields, and a
     stamped `quote_size_unit`; at least the HMAC-assigned subset of tranche shards is `sealed`
     with zero exploratory reads recorded before sealing and no symbol/date served
-    pre-exposure; the recorder run ledger shows the mid-run restart resuming without duplicate
+    pre-exposure; the TR-2 inference trap passes against the tranche's own registered universe
+    (no unexposed shard identifiable with certainty from any served artifact, either side);
+    the recorder run ledger shows the mid-run restart resuming without duplicate
     registration; the legacy 12 symbol-days remain `exploratory`; the readiness gate line
     still reads the ~150-symbol-day research gate as unmet.
 
@@ -732,6 +738,15 @@ no confirmatory output without a verified oracle attestation; no annualized metr
 - **Sealed exposure is family-level and single-shot — never a second draw.** No more than one
   evaluation per (family, shard) exists, ever; a failed sealed verdict is permanent and
   travels in every later export bundle; no perturbed re-submission resets it. *(critical)*
+- **A recorded tranche is one opaque research pool until its shards are exposed.** No served
+  surface — readiness, recorder progress, datasets, backtests, PnL ledger, Scout, walk-forward,
+  graduation, MCP, UI — may present a complete identity-labelled partition of "exploratory"
+  versus "sealed", nor a complete per-shard list of EITHER side while any pool member is
+  unexposed; the registered universe is public by construction, so a complete list of one side
+  identifies the other by subtraction. Unexposed pool members stay mutually indistinguishable;
+  identity becomes public only at real exposure or assignment. The governing test is the TR-2
+  inference trap: given the registered universe plus every public artifact, no still-unexposed
+  vault-eligible shard is identifiable with certainty. *(critical — spec r5)*
 - **Evidence classes never mix.** No `historical_exposed_diagnostic` output feeds a gate, a
   graduation transition, a certificate, a promotion, or a pooled statistic with
   `historical_oos` rows; nothing in this era emits `live_confirmatory`. *(critical)*

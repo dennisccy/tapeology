@@ -1,28 +1,40 @@
 # Iteration State — rapid-microscope
 
-**After iteration:** 9 · **Date:** 2026-08-18 · **Verdict:** CONTINUE
+**After iteration:** 10 · **Date:** 2026-08-18 · **Verdict:** ESCALATE
 
 ## Journeys
 
-5 passing (J-01..J-05) · 2 partial (J-06 step 3 of 5 done; J-10 traps 19/22, sentinel green) · 3 failing (J-07 J-08 J-09) — 10 total
+6 passing (J-01 J-02 J-03 J-04 J-05 J-07) · 2 partial (J-06 3-of-5 steps, J-10 traps 19/22) · 2 failing (J-08 J-09) — 10 total
 
 ## Active blockers
 
-- **HUMAN (owner ruling #3, blocks J-06 steps 4-5 — do NOT record/seal real tape):** sealed membership is still recoverable by closing `GET /research/datasets` under the universe's cartesian product and subtracting (audit B2, 5 of 5 recovered WITH the B1 fix in place). Nothing inside `apps/backend/app/research/vault.py` can close it. Options: withhold the whole tranche's symbol/date until fully exposed · add decoy symbol-days · accept in writing that hiding protects DATA not MEMBERSHIP.
-- **HUMAN (same sitting):** (a) audit B4 — withholding predicates read `all_rows()` without `verify_chain()`, so a truncated `vault_shard_ledger.jsonl` fails OPEN across 11 consumers (`vault.py:568`); (b) audit B5 — `referee_evidence.py:333` counts withheld shards, a genuine r4-vs-frozen-hash collision; (c) carried since iter-2 — the one-quote-early depletion stamp (`micro_observer.py:636/:657`).
-- **DEV (do after blocker 1 sets direction):** audit B3 — `GET /research/desk/micro/recorder/compute` serves each chunk's symbol/date/raw `dataset_id` (`micro_routes.py:475`).
-- All of the above are INERT today: no vault ledger exists under `.data`, `seal_shard` has zero production callers, `withheld_dataset_ids` empty on both stores.
+- **r5 is RULED but UNBUILT (dev-owned, next round):** one opaque pool — readiness must stop
+  serving a per-shard list on EITHER side while any pool member is unexposed; recorder progress
+  aggregate-only (no symbol/date/id, no operator bypass); TR-2 widened to a deterministic
+  inference trap. `docs/rapid-validation-spec.md` §7.5 pts 4/7/8 + §7.1. HARD GATE on J-06 step 4
+  — no real tape recorded or sealed until this is built and TR-2 passes.
+- **Owner-owed, 3 open:** (1) does a corrupted vault ledger fail closed or open? (`vault.py`
+  withholding predicates read `all_rows()`, which never verifies); (2) who computes a sealed
+  shard's pass/fail verdict? (`micro_graduation.record_sealed_evaluation` believes its caller);
+  (3) the one-quote-early depletion stamp (`micro_observer.py:636/:657`, open since iter-2).
+- **Owner-owed, operator act:** J-06 step 4's credentialed Alpaca tranche (after r5 lands).
 
 ## Last 2 verdicts
 
-- iter 9: CONTINUE — vault step 3 genuinely landed (opaque pre-exposure serving + TR-2/4/12/20 proven by the evaluator directly); suite 3,166/0 failures re-run after every edit; but §7.3's headline guarantee is not achieved as built, so J-06 stops at step 3.
-- iter 8: ESCALATE — recorder step 2 landed, but the engine demoted full→lean on budget so the auditor never ran on a high-risk diff.
+- iter 10: ESCALATE — J-07 delivered and evaluator-proven, but spec §8 left two rules undefined
+  and the developer invented both; next work is the vault's core promise, which needs the auditor.
+- iter 9: CONTINUE — vault step 3 landed; its headline promise was NOT achieved (sealed membership
+  recoverable by cartesian subtraction), which the r5 ruling has since settled by design.
 
 ## Do not redo
 
-- **J-06 steps 1-3 are DONE**: Card-5.1 preservation fields, `tick_recorder.py`, and `vault.py` (universe registration, HMAC seal, one-way `sealed→assigned→exposed`, surrogate ids, salted commitment). Traps TR-2/4/12/20 green (`tests/test_vault.py`, 42 tests).
-- **Spec revisions r3 and r4 are SETTLED owner rulings** (`docs/rapid-validation-spec.md` §7.5; rationale in `state/assumptions.md`). Do not re-litigate; a change is a further named revision.
-- **CLOSED, verified in code by the evaluator:** the iter-6 exposure-registry sealed filter (`walkforward.py:1267` passes `vault.currently_sealed_dataset_ids`) and the iter-8 §2.6 rule-text + verification-note gap (`tick_recorder.py:484-485`, checksum-excluded).
-- **Frozen foundations re-verified iter-9:** fingerprint `08e471b10130e1e2`; six `referee_*.py` hashes match iteration 0; `EXPECTED_TOOLS` still 22; real `.data/datasets` = `f7bbcf28…`, 18 files.
-- **Golden replay scripts now exist** for J-01..J-06 and J-10 at `runs/goal-session-rapid-microscope/journey-scripts/` — J-02..J-05 no longer need an LLM lane, so stop letting them be trimmed first.
-- **Next target is J-07 (`micro_graduation.py`, absent on disk)** — fixture-only, needs no owner ruling, next in dependency order. Not J-06 step 4.
+- **J-07 is DONE and verified** — `micro_graduation.py` + `GET /research/desk/micro/graduation` +
+  19 tests; evaluator ran the four-state walk and four adversarial refusals itself.
+- **No graduation MCP tool or `/desk` section here** — J-08's scope (v6, 26 tools); MCP stays 22.
+- **No edit to `walkforward.py`/`vault.py`/`scout_ledger.py` row shapes** — graduation reads them
+  through existing public functions only, and that is correct.
+- **Frozen checks re-proved at iter-10:** fingerprint `08e471b10130e1e2`; all six `referee_*.py`
+  hashes identical to iteration 0. Re-check, never "fix".
+- **Suite baseline 3,185 collected / 3,177 passed / 8 skipped / 0 failed** (evaluator's own run) —
+  never quote 3,166 or 3,130.
+- **Genuinely missing (safe to plan):** traps TR-3/TR-17/TR-22 by name; J-10 step 2's byte-identical re-run, never run this era.

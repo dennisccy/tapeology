@@ -1748,6 +1748,15 @@ so in the purchase decision: a dead L1 imbalance LOWERS the depth prior).
 > `historical_oos`-class evidence there, which both raises the depth prior and becomes 15.3's
 > named comparison baseline. Those families dying at the Scout LOWERS the prior, exactly as
 > Card 9.3's kill note already says. Diagnostic-class results count for neither direction.)*
+>
+> *(Follow-up 2026-08-18, "The Rapid Microscope" J-07 step 3, documentation-only — no code, no
+> threshold, no purchase decision: the mechanism the amendment above promised now exists.
+> `micro_graduation.py` (`docs/rapid-validation-spec.md` §8) implements the literal
+> `walkforward_survivor`/`sealed_survivor` states this amendment names as the Depth-purchase
+> evidence; either verdict for an L1 liquidity-family candidate — including a diagnostic-class
+> `no survivor` at the Scout, which counts for neither direction per the amendment above and this
+> era's own §10 disclosed L1-only-measurement limits — reads directly off that ledger when a
+> future Era-15 kickoff needs it, rather than requiring re-derivation.)*
 
 ---
 
