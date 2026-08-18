@@ -24,8 +24,10 @@ over."""
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 
 from ..config import CONFIG
+from .bar_index import BarIndex
 from .bars import BarStore
 from .datasets import DatasetStore
 from .desk_playbook import PlaybookStore
@@ -39,9 +41,15 @@ from .micro_snapshots import (
     read_run_log,
     resolve_micro_snapshots_dir,
 )
-from .routes import get_bar_store, get_dataset_store
+from .routes import get_bar_index, get_bar_store, get_dataset_store, get_registry, get_study_market_adapter
 from .scout import ScoutComputeManager, list_scout_families
 from .scout_ledger import ScoutLedger, resolve_scout_ledger_dir
+from .tick_recorder import (
+    RecorderCheckpointStore,
+    TickRecorderComputeManager,
+    resolve_tick_recorder_checkpoint_dir,
+    resolve_tick_recorder_log_dir,
+)
 from . import walkforward as wf
 from .walkforward_ledger import WalkForwardLedger
 
@@ -369,3 +377,119 @@ def cancel_walkforward_compute(manager: "wf.WalkForwardComputeManager" = Depends
 def get_walkforward_runs(ledger_dir: str = Depends(get_walkforward_ledger_dir)) -> dict:
     """The durable run history, newest first -- never 404 on zero runs (an honest empty list)."""
     return {"runs": read_run_log(ledger_dir)}
+
+
+# --- J-06 step 2: the tick recorder (tick_recorder.py) --------------------------------------------
+
+
+def get_tick_recorder_checkpoint_dir() -> str:
+    """The recorder's per-chunk checkpoint cache directory -- ``TAPEOLOGY_MICRO_RECORDER_
+    CHECKPOINT_DIR`` if set, else a SIBLING of the config-owned dataset directory
+    (``tick_recorder.resolve_tick_recorder_checkpoint_dir`` -- see that function's own
+    docstring)."""
+    return resolve_tick_recorder_checkpoint_dir(CONFIG.dataset_dir_resolved())
+
+
+def get_tick_recorder_checkpoint_store() -> RecorderCheckpointStore:
+    """A FastAPI dependency so a test overrides it outright or points it at a temp path via the
+    env var -- the ``get_micro_snapshots_dir``-style pattern, one level up (the STORE itself,
+    since the checkpoint cache has no other public accessor)."""
+    return RecorderCheckpointStore(get_tick_recorder_checkpoint_dir())
+
+
+def get_tick_recorder_log_dir() -> str:
+    """The recorder's run-log directory -- ``TAPEOLOGY_MICRO_RECORDER_LOG_DIR`` if set, else a
+    SIBLING of the config-owned dataset directory (``tick_recorder.resolve_tick_recorder_log_dir``
+    -- see that function's own docstring). The run log persists through the SAME
+    ``micro_snapshots.append_run_log``/``read_run_log`` the scout/walk-forward sections above
+    already reuse (no second run-log implementation)."""
+    return resolve_tick_recorder_log_dir(CONFIG.dataset_dir_resolved())
+
+
+# The single in-flight (or last-terminal) recording job for THIS process -- the same
+# module-singleton-behind-a-Depends-accessor precedent as the snapshot/scout/walk-forward managers
+# above.
+_tick_recorder_compute_manager = TickRecorderComputeManager()
+
+
+def get_tick_recorder_compute_manager() -> TickRecorderComputeManager:
+    """A FastAPI dependency so a test overrides it outright with a fresh, isolated manager (the
+    ``get_walkforward_compute_manager`` precedent) -- never reaches into the module-level
+    singleton directly."""
+    return _tick_recorder_compute_manager
+
+
+class TickRecorderComputeRequest(BaseModel):
+    """Body for ``POST /research/desk/micro/recorder/compute``. Both fields are REQUIRED -- this
+    endpoint never defaults to an implicit universe, because exactly which symbols/dates to record
+    is what an operator is deciding (the ``DeepBackfillComputeRequest`` precedent)."""
+
+    symbols: list[str]
+    dates: list[str]
+
+
+@router.post("/recorder/compute")
+def trigger_tick_recorder_compute(
+    body: TickRecorderComputeRequest,
+    dataset_store: DatasetStore = Depends(get_dataset_store),
+    checkpoint_store: RecorderCheckpointStore = Depends(get_tick_recorder_checkpoint_store),
+    adapter=Depends(get_study_market_adapter),
+    bar_store: BarStore = Depends(get_bar_store),
+    bar_index: BarIndex = Depends(get_bar_index),
+    registry=Depends(get_registry),
+    run_log_dir: str = Depends(get_tick_recorder_log_dir),
+    manager: TickRecorderComputeManager = Depends(get_tick_recorder_compute_manager),
+) -> dict:
+    """Start a NEW tick recording over ``body.symbols`` x ``body.dates`` -- chunked, throttled,
+    resumable (``tick_recorder.run_tick_recording``, TR-19 first), writing through the unchanged
+    ``DatasetStore.record`` and pairing a 1m/5m bar backfill for every symbol-day actually
+    recorded -- or, if one is already running, return it UNCHANGED (``started: False``,
+    single-flight, never a second job). Refuses -- 422, before starting anything -- when
+    ``symbols`` or ``dates`` is empty (the ``trigger_desk_deep_backfill_compute`` precedent: a
+    recording's scope is exactly what an operator is deciding, never an implicit default)."""
+    if not body.symbols or not body.dates:
+        raise HTTPException(
+            status_code=422,
+            detail="both symbols and dates are required and must be non-empty -- an operator "
+            "names exactly which symbol-days to record, never an implicit universe",
+        )
+    return manager.trigger(
+        dataset_store, checkpoint_store, adapter, bar_store, bar_index, registry, CONFIG, run_log_dir,
+        symbols=body.symbols, dates=body.dates,
+    )
+
+
+@router.get("/recorder/compute")
+def get_tick_recorder_compute(
+    manager: TickRecorderComputeManager = Depends(get_tick_recorder_compute_manager),
+) -> dict:
+    """The current (or last-terminal) recording job's progress -- never 404 (the idle default
+    before any job has ever run this process)."""
+    snap = manager.snapshot()
+    return {
+        "state": snap["state"],
+        "progress": snap["progress"],
+        "started_utc": snap["started_utc"],
+        "finished_utc": snap["finished_utc"],
+        "error": snap["error"],
+    }
+
+
+@router.post("/recorder/compute/cancel")
+def cancel_tick_recorder_compute(
+    manager: TickRecorderComputeManager = Depends(get_tick_recorder_compute_manager),
+) -> dict:
+    """Signal cooperative cancellation for the in-flight recording -- a 409 for an idle manager
+    (the snapshot/scout/walk-forward-compute-cancel routes' own precedent), else
+    ``{"state": "cancelled"}`` acknowledging the REQUEST (the worker itself settles once the
+    in-flight chunk finishes)."""
+    if manager.snapshot()["state"] != "running":
+        raise HTTPException(status_code=409, detail="no tick recording is currently running")
+    manager.cancel()
+    return {"state": "cancelled"}
+
+
+@router.get("/recorder/runs")
+def get_tick_recorder_runs(run_log_dir: str = Depends(get_tick_recorder_log_dir)) -> dict:
+    """The durable run history, newest first -- never 404 on zero runs (an honest empty list)."""
+    return {"runs": read_run_log(run_log_dir)}

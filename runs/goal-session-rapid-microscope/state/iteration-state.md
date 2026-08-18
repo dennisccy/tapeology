@@ -1,40 +1,30 @@
 # Iteration State — rapid-microscope
 
-**After iteration:** 7 · **Date:** 2026-08-18 · **Verdict:** CONTINUE
+**After iteration:** 8 · **Date:** 2026-08-18 · **Verdict:** ESCALATE
 
 ## Journeys
 
-5 passing (J-01 J-02 J-03 J-04 J-05) · 2 partial (J-06 J-10) · 3 failing (J-07 J-08 J-09) — 10 total
+5 passing (J-01 J-02 J-03 J-04 J-05) · 2 partial (J-06 = 2 of 5 steps; J-10 sentinel green, traps ~15/22) · 3 failing (J-07 J-08 J-09) — 10 total
 
 ## Active blockers
 
-- **J-06 steps 2-5 (dev):** `app/research/tick_recorder.py` + `vault.py` absent; no tranche, no sealed shard, no universe registration.
-  Step 1 shipped storage capability only — the §2.6 dated vendor rule (`ALPACA_QUOTE_SIZE_UNIT_EFFECTIVE`) stays deferred, so nothing stamps a unit today.
-- **J-10 trap half (dev):** TR-2/4/12/19/20/22 have no dedicated test; TR-2/4/12/20 are vault-owned.
-- **Three dev minors, all due before the corpus grows:** `walkforward.py:1039` registers the tick fold spec BEFORE the floor check at `:1043`
-  (freezes `DIAGNOSTIC_GEOMETRY` + today's 11-date manifest hash); frozen dataclasses + `conditions: list` ⇒ `hash(event)` raises on preserved
-  tape (`providers/base.py:25`/`:52`); `_tick_dataset_session_dates` (`walkforward.py:995`) drops `DatasetStore.list()`'s `_errors` channel.
-- **Two owner rulings (human):** the depletion `available_at` stamp one quote early (`micro_observer.py:636`/`:657`); and must J-01's readiness
-  photo show the real 12-symbol-day corpus when the store-scoped rig can only seed 2 PG fixtures?
-- **Harness (human, outside goal mode):** `merge_ui_test_results.py:64` reads a bold `**FAIL**` as no verdict; this run's replay/QA lanes cited
-  ten screenshots that are not on disk.
+- NEXT ITERATION MUST RUN FULL (auditor present). The depth line alone does not bind: iter-7 recommended full and the arbiter demoted iter-8 to lean (`budget-breach`), so no auditor ran on a diff that changed event-dataclass identity — the exact surface where the auditor caught a critical fault in 4 of the last 4 full runs. Owner: engine/human — raise the wall-clock budget or split the vault work into two narrower iterations.
+- dev: `vault.py` (J-06 step 3) absent. Its known latent hole must be fixed WITH it — the exposure-registry seed marks every listed dataset exposed with no sealed filter (becomes critical the moment sealed shards exist).
+- dev: spec §2.6's "the recorder records the rule text + the verification note beside the stamp" is implemented nowhere (`tick_recorder.py:429-442` stamps only; `_run_log_entry` counts only). Must close BEFORE J-06 step 4 — manifests are immutable.
+- dev: J-02/J-03/J-04/J-05 have no golden replay script, so they were the first thing cut (`DEFERRED-BUDGET`) this iteration. Write one per journey.
+- human (carried, 2 rulings): the `micro_observer.py:636/:657` depletion stamp is one quote early — correct it or ratify it; and must J-01's readiness photo show the real 12-symbol-day corpus when the store-scoped rig can only ever seed 2 PG fixtures?
+- human (carried): J-06 step 4 — the credentialed Alpaca starter tranche — is an operator-attended act, not a dev task.
 
 ## Last 2 verdicts
 
-- iter 7: CONTINUE — J-05 finished (the `11 < 105` refusal now comes from a real CLI, re-run by the evaluator against the real store);
-  J-06 step 1 landed; one critical checksum fault introduced and fixed in-run.
-- iter 6: ESCALATE — J-05's tick-family clause was still test-only; the browser lane's real FAIL parsed as a pass by the merge script.
+- iter 8: ESCALATE — J-06 step 2 (`tick_recorder.py`) landed and is genuinely proven (evaluator re-ran 3,092 pass / 8 skip / 0 fail, checked every constant against the spec verbatim, re-ran the `11 < 105` refusal against the real store), nothing regressed, no critical anti-goal open — but the auditor was skipped and 4 of 6 required re-checks were deferred, both for budget.
+- iter 7: CONTINUE — J-05 reached passing via a real operator CLI path; J-06 step 1 (storage capability) landed, moving J-06 failing → partial.
 
 ## Do not redo
 
-- **J-05 is complete** — `run_tick_family_fold_request` (`walkforward.py:1005`) + CLI `--family tick_legacy`; evaluator re-ran it against the
-  real store → `11 < 105`, exit 1. Do not rebuild.
-- **Card-5.1 preservation fields landed + proven** in `providers/adapters/base.py`, `providers/base.py`, `providers/historical.py`,
-  `providers/adapters/alpaca.py`, `research/datasets.py`; the split-freeze checksum fix (`_tape_identity_rows`, `datasets.py:233-254`) is done and
-  guarded by `test_datasets.py::test_the_frozen_split_guard_still_refuses_one_tape_re_fetched_with_preservation_fields`.
-- **No second unit vocabulary** — `micro_features.QUOTE_SIZE_UNITS` is the only one (AST guard test). Do not touch `micro_features.py` /
-  `micro_observer.py`: it forces a whole-corpus snapshot rebuild.
-- **Frozen foundations re-verified at iter 7** — fingerprint `08e471b10130e1e2`, six `referee_*.py` SHA-256 identical to iteration 0,
-  suite 3045 pass / 8 skip / 0 fail. Do not re-derive the baseline.
-- **J-01..J-04 served values re-derived live at iter 7** (readiness 12/18/3.0089; 18 snapshots / 3,815,933 rows; joinable 2 `{range_trade: 2}`;
-  scout chain ok). Do not re-verify without a cause.
+- J-06 step 2 IS DONE: `tick_recorder.py` (planner, 4-outcome walker, checkpoint resume, TR-19, dated `quote_size_unit` stamping, §7.3 split rule, bar pairing via unchanged `desk_deep_backfill`, single-flight manager + CLI + the four `/research/desk/micro/recorder/*` routes). Do not rebuild or re-route it.
+- CLOSED, proven on the running program: the fold-ledger ordering fix (floor check before `register_fold_spec` — refused request writes 0 rows) and the corrupt-tick-file fix (`_tick_dataset_session_dates` surfaces `integrity_errors`). Do not re-open.
+- `providers/base.py` hash-safety (`conditions` with `hash=False`) is done and byte-safe — `app/` calls `hash()` on these events nowhere; engine output and the golden trace are unaffected.
+- The `test_datasets.py` TC-9 guard rename is settled and STRICTER (constant must live at exactly `research/tick_recorder.py`, nowhere else). Do not revert it.
+- Frozen foundations re-proved at iter-8: fingerprint `08e471b10130e1e2`, all six `referee_*.py` hashes identical to iteration 0, `app/engine/` untouched, MCP still exactly 22 tools, store-scope guard CLEAN. Re-check, never re-derive.
+- OUT OF SCOPE until J-08: any `/desk` UI section or MCP tool for the recorder. `Frontend Present: yes` stays declared only to keep the browser regression lane running.

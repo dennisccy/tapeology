@@ -602,15 +602,16 @@ def test_tc3_schema_basis_and_quote_size_unit_are_stamped_verbatim_when_supplied
         )
 
 
-def test_tc9_no_second_quote_size_unit_vocabulary_or_early_dated_rule_constant_exists():
-    """TC-9: ``micro_features.QUOTE_SIZE_UNITS`` stays the SOLE unit-vocabulary tuple in the repo
-    (this iteration validates against it, never defines a second copy), and
-    ``ALPACA_QUOTE_SIZE_UNIT_EFFECTIVE`` -- the dated-vendor-rule constant the assumption ledger's
-    iter-7 entry explicitly reserves for a future ``tick_recorder.py`` -- is not yet defined
-    anywhere. This iteration ships storage CAPABILITY only (a caller-supplied
-    ``schema_basis``/``quote_size_unit``), never the date-to-unit DECISION rule."""
+def test_tc9_the_dated_rule_constant_lives_exactly_once_in_tick_recorder_never_duplicated():
+    """TC-9 (iter-7) updated to its own anticipated iter-8 shape, not silently dropped:
+    ``micro_features.QUOTE_SIZE_UNITS`` stays the SOLE unit-vocabulary tuple in the repo (this
+    module validates against it, never defines a second copy). ``ALPACA_QUOTE_SIZE_UNIT_
+    EFFECTIVE`` -- the dated-vendor-rule constant the assumption ledger's iter-7 entry explicitly
+    reserved for a future ``tick_recorder.py`` -- now lives EXACTLY there (iter-8, J-06 step 2,
+    closing that reservation) and NOWHERE else; a second, independently-valued copy anywhere
+    (including a second one inside ``tick_recorder.py`` itself) still fails this test."""
     app_dir = Path(__file__).resolve().parents[1] / "app"
-    offending_effective: list[str] = []
+    effective_locations: list[str] = []
     offending_second_tuple: list[str] = []
     py_files = sorted(p for p in app_dir.rglob("*.py") if "__pycache__" not in p.parts)
     assert len(py_files) > 50, f"only {len(py_files)} app modules scanned -- has the tree moved?"
@@ -624,8 +625,11 @@ def test_tc9_no_second_quote_size_unit_vocabulary_or_early_dated_rule_constant_e
             else:
                 continue
             if "ALPACA_QUOTE_SIZE_UNIT_EFFECTIVE" in targets:
-                offending_effective.append(str(path.relative_to(app_dir)))
+                effective_locations.append(str(path.relative_to(app_dir)))
             if "QUOTE_SIZE_UNITS" in targets and path.name != "micro_features.py":
                 offending_second_tuple.append(str(path.relative_to(app_dir)))
-    assert offending_effective == [], f"ALPACA_QUOTE_SIZE_UNIT_EFFECTIVE defined early: {offending_effective}"
+    assert effective_locations == ["research/tick_recorder.py"], (
+        "ALPACA_QUOTE_SIZE_UNIT_EFFECTIVE must be defined exactly once, in tick_recorder.py "
+        f"(the module micro_features.py's own docstring reserves it for): found at {effective_locations}"
+    )
     assert offending_second_tuple == [], f"a second QUOTE_SIZE_UNITS assignment exists: {offending_second_tuple}"

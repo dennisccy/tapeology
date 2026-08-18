@@ -353,3 +353,61 @@ damaged recording must be reported instead of quietly skipped. Please also decid
 have been waiting for you: whether a timing stamp that is one quote too early should be corrected,
 and whether the corpus-truth photograph must show your real 12-day corpus when the test rig can only
 ever show a two-day one.
+
+## Iteration 8 — goal-rapid-microscope-iter-8
+
+**Date:** 2026-08-18T04:20:00Z
+**Verdict:** ESCALATE
+**Depth dispatched:** lean (the spec asked for full; the engine demoted it — telemetry reason
+`budget-breach`, so the independent checker step never ran, exactly as in iteration 3)
+**Journey deltas:**
+- Newly passing: none
+- Newly failing: none
+- Regressed: none
+- Changed content (status unchanged): J-06 "The recorder and the Vault" partial — its second of
+  five steps landed and is proven; J-10 "The kept product stands" partial — one more trap armed
+  (TR-19), sentinel green for the third run in a row
+- Unchanged: J-01 passing (re-checked on screen and against your real data); J-02, J-03, J-04
+  passing — their on-screen re-checks were CUT FOR TIME ("deferred", not tested, so they keep
+  their status), but I re-read each one's served number against your real data myself; J-05
+  passing — its code changed this round, so I re-ran its own acceptance command myself;
+  J-07, J-08, J-09 failing (their files are still not on disk — I looked for each one)
+- Anti-goal violations: no critical ones, introduced or open. Two older minor items are now
+  CLOSED and I proved both on the running program (a below-floor request no longer freezes a
+  permanent shape record; a damaged recording is reported instead of quietly dropped). One NEW
+  minor item is open: the recorder does not write down the vendor rule text or the verification
+  note beside the unit stamp the way the written spec asks — harmless today because no tape has
+  been recorded, but permanent once it is. Two older minor items stay open, one waiting on you.
+
+**Reasoning:** I did not take any report on trust. I ran the whole test suite myself: 3,092 pass,
+8 skipped, 0 failures — the same number the reviewer got independently, and 47 more tests than
+last round. I checked every number in the new recorder against the written spec line by line
+(the 200-per-minute pace, the 900-second pieces, the 2025-11-03 vendor cutover, the published
+split rule) — all verbatim, nothing invented. I re-ran the walk-forward command against your real
+recordings with a throwaway record folder: it printed "11 < 105 -- refused (TR-15)", stopped with
+an error code, left the throwaway folder completely empty (proving the fix), and your real folder
+hashed identical before and after. I re-read your real store myself: 12 symbol-days, 18
+recordings, 3.0089 sessions, no integrity errors, every shard still marked exploratory; 18
+feature files still holding exactly 3,815,933 rows; the trial ledger's tamper check clean. The
+frozen parts are frozen — the settings fingerprint prints 08e471b10130e1e2, all six judge files
+hash exactly as at the era's start, the engine folder and every frozen guard test are untouched,
+and an automatic guard confirms the run wrote nothing into your real data (11,275 files, unchanged
+size and timestamp). On screen, two journeys replayed green and a full-page photograph shows every
+kept panel plus the corpus-truth panel, with the three new sections correctly absent. The one real
+failure is not in the product: the round was cut short twice for time — the independent checker
+never ran, and four of the six journeys that had to be re-checked on screen were skipped. That
+checker is the only step in this session that has ever caught a dishonesty fault, and this round's
+change touched the very same kind of code where it caught one four rounds in a row.
+
+**Next-step recommendation:** Build the sealed-evidence vault (step 3 of J-06 "The recorder and
+the Vault") next, under the full pipeline with the independent checker. It is where a recording
+gets sealed before anyone may look at it, and there is already a known hole waiting exactly there:
+the register of what has been seen still marks everything as seen, with no filter for sealed
+items — harmless today, serious the moment the vault exists. Carry four passengers: make the
+recorder write down the vendor rule text and verification note beside the unit stamp before any
+real tape is recorded; re-check the four journeys skipped this round and give each a replay script
+so they stop being first to be cut; clear the two small test-hygiene notes the review raised; and
+please answer the two decisions still waiting on you. One choice is yours about the machine
+itself: rounds now run two to four times over their time budget and the machine responds by
+cutting the checker and the on-screen re-checks — either raise the budget for the next round or
+split the vault work into two smaller rounds, but do not let it run short-handed again.

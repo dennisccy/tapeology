@@ -329,6 +329,22 @@ def test_alpaca_sdk_import_confined_to_one_module():
     assert hits == ["providers/adapters/alpaca.py"]
 
 
+def test_tick_recorder_names_no_credential_and_imports_no_vendor_sdk():
+    # iter-8, J-06 step 2 (TC-15): tick_recorder.py mirrors desk_deep_backfill.py's own
+    # confinement -- it resolves its adapter through the EXISTING routes.get_study_market_adapter
+    # seam and passes real requests through the vendor-neutral MarketDataAdapter interface only,
+    # never naming a credential env var or importing the SDK directly. The two broad rglob scans
+    # above already sweep this file (it lives under app/research/); this pins the specific module
+    # explicitly rather than relying on it being incidentally caught by a repo-wide sweep.
+    source = (APP_DIR / "research" / "tick_recorder.py").read_text()
+    for banned in ("ALPACA_API_KEY", "ALPACA_API_SECRET", "from alpaca", "import alpaca"):
+        assert banned not in source, (
+            f"tick_recorder.py names {banned!r} -- credentials and the SDK are confined to "
+            "providers/adapters/alpaca.py, and this module only ever passes real requests "
+            "through the vendor-neutral MarketDataAdapter interface"
+        )
+
+
 def test_live_sdk_symbols_confined_to_one_module():
     # The live socket class name appears in EXACTLY one module: the live wiring (LiveProvider,
     # the async feeder, the live POST branch) is vendor-neutral; only the adapter names the SDK.

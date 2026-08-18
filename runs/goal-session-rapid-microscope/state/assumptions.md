@@ -430,3 +430,45 @@ way the deferred walkforward route would have been.
 **Reversible:** yes — the route is inert this iteration (no UI button calls it yet, and no MCP tool
 ever will, per the Product Shape's 4-tool v6 delta naming only readiness/scout/walkforward/vault), so
 nothing about this iteration's wiring needs to move when J-08 lands the button.
+
+## iter-8 — goal-evaluator
+
+**Ambiguity:** my methodology's decision tree fires ESCALATE when "this lean iteration surfaced
+cross-cutting ambiguity/complexity", but it does not say whether the engine's own budget-driven
+DEMOTION of a spec that declared `Depth: full` (with an explicit `Full trigger` naming the
+independent auditor, and the iter-7 evaluator's binding "must not be shortened for time") counts
+as such a trigger — nor whether skipping 4 of 6 required-still-passing re-checks (DEFERRED-BUDGET)
+does. Read narrowly, this was a clean, progressing iteration and CONTINUE would be correct.
+**We chose:** ESCALATE. Grounds I established myself, not read off a report: the diff changed
+`providers/base.py`'s event-dataclass identity semantics, which is the exact surface where the
+independent auditor caught a critical, in-run-fixed honesty fault in 4 of the last 4 full
+iterations (journey-history violations iter-4 B2/B3, iter-5 B1/B3, iter-7 B1); this run had NO
+auditor (engine.log: "spec asked FULL but the deterministic ladder demotes it to LEAN (reason:
+budget-breach)"); I found a real spec-conformance gap the lean lanes missed (spec §2.6's "records
+the rule text + the verification note beside the stamp" is implemented nowhere); and the NEXT step
+(`vault.py`) is where an already-recorded latent hole — the exposure registry marking every
+dataset exposed with no sealed filter — turns critical. I also verified that the depth line alone
+cannot deliver full depth: iter-7 recommended `full` and was demoted, whereas ESCALATE grants it
+("FULL pass granted (reason: prior-verdict-ESCALATE)"). So ESCALATE is both merited and the only
+lever. I did NOT treat the skipped checks as a regression or a stall — nothing regressed, and
+every unblock path is dev-owned.
+**Reversible:** yes — a later iteration can return to CONTINUE/lean once the vault lands and the
+wall-clock budget stops forcing trims.
+
+## iter-8 — goal-evaluator (second)
+
+**Ambiguity:** the methodology says a `DEFERRED-BUDGET` row means the journey "was NOT tested" and
+keeps its prior recorded status. It does not say what `last_verified_iter` should read when the
+LANE deferred a journey but the EVALUATOR independently re-derived that journey's served value
+against the operator's real store in the same iteration (J-02's 18 snapshots / 3,815,933 rows,
+J-03's `joinable_corpus.total` 2, J-04's `verify_chain() -> ok`).
+**We chose:** record `last_verified_iter: goal-rapid-microscope-iter-8` for those journeys, with
+the deferral stated verbatim in each journey's note and in the eval table's status cell
+("passing (browser row DEFERRED-BUDGET)"), so no reader can mistake an endpoint-level
+re-derivation for an on-screen re-check. The distinction matters because these three journeys'
+modules are byte-untouched in this iteration's diff, so A.6 evidence durability already carries
+their prior pass on its own; my re-derivation is corroboration, not the sole basis. For J-05 the
+same situation is NOT durability-covered — `walkforward.py` changed — so I re-ran its own
+acceptance command rather than relying on the deferred row.
+**Reversible:** yes — the next iteration's replay scripts (a named passenger item) will restore
+lane-level verification for all four.

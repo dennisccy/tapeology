@@ -198,3 +198,30 @@ applied symmetrically on the write side and the on-load verify side.
 hash, dedupe key, or identity tuple — `datasets.py`, `micro_snapshots.py`, any `*_ledger.py`. Ask
 explicitly: "does this new key change what the identity function sees?", and if the new data is
 metadata ABOUT the payload rather than payload, project it out of the identity before hashing.
+
+## iter-8 — 2026-08-18T04:20:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** An evaluator's `Depth Recommendation: full` does NOT bind the engine — iteration 7
+recommended full, and the deterministic depth arbiter demoted iteration 8 to lean anyway
+(telemetry `iter_dispatch depth=lean`; engine.log "spec asked FULL but the deterministic ladder
+demotes it to LEAN (reason: budget-breach)"). Only a `CONTINUE`→`ESCALATE` verdict change grants
+a full pass (engine.log line 1074: "FULL pass granted (reason: prior-verdict-ESCALATE)"). So when
+an iteration genuinely needs the independent auditor, the depth line is not enough — the verdict
+must carry it, and the reason must be stated on its own merits.
+**Applies to:** any iteration whose spec declares a `Full trigger` and whose prior iteration ran
+over the wall-clock budget — i.e. every remaining iteration of this era.
+
+## iter-8 — 2026-08-18T04:20:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** Adding an optional `list` field to a `frozen=True` dataclass silently destroys its
+hashability, and the breakage is invisible until the first writer actually populates the field —
+iter-7 added `conditions: list[str] | None` to `TradeEvent`/`QuoteEvent` and every test stayed
+green because nothing populated it; iter-8's recorder was the first caller that would have.
+`field(default=None, hash=False)` fixes it while leaving `__eq__` untouched (a hash coarser than
+equality is legal). Worth checking BEFORE the first populating writer lands, not after. Note also
+that nothing in `app/` currently calls `hash()` on these events, so the fix is defensive — verify
+that claim by grep rather than assuming a fix is load-bearing.
+**Applies to:** any iteration adding an optional container field (`list`/`dict`/`set`) to a frozen
+dataclass in `apps/backend/app/providers/` or `app/research/`.

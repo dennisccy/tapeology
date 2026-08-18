@@ -8,7 +8,7 @@ iteration (Level 2 book); the interface does not preclude adding it.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import AsyncIterator, Iterable, Protocol, Union, runtime_checkable
 
@@ -35,6 +35,15 @@ class TradeEvent:
     straight through from the historical provider's ``RawTrade`` when present. The engine ignores
     them entirely (``FEATURE_NAMES`` and the classifier read only ``price``/``size``/``side``);
     they exist for research consumers (the dataset store's stored rows) only.
+
+    ``conditions`` is projected OUT of the auto-generated ``__hash__`` (era iter-8, closing
+    iter-7 audit finding B5): a frozen dataclass with a ``list`` field raises
+    ``TypeError: unhashable type: 'list'`` the instant that field is populated with a real value
+    — untested until this iteration's recorder became the first caller to actually populate it.
+    ``field(hash=False)`` excludes ONLY ``conditions`` from the hash computation while leaving it
+    in ``__eq__`` unchanged (a hash coarser than equality is legal Python semantics: the hash
+    contract requires only that equal objects hash equal, never the converse) — every other
+    field's role, the engine's byte output, and the golden trace are untouched.
     """
 
     ticker: str
@@ -42,7 +51,7 @@ class TradeEvent:
     price: float
     size: int
     side: Side = Side.UNKNOWN
-    conditions: list[str] | None = None
+    conditions: list[str] | None = field(default=None, hash=False)
     exchange: str | None = None
     tape: str | None = None
     trade_id: int | None = None
@@ -54,6 +63,9 @@ class QuoteEvent:
 
     The four trailing fields mirror ``RawQuote``'s own Card-5.1 preservation fields (see
     ``TradeEvent``'s docstring) — optional, default-``None``, engine-ignored, research-only.
+
+    ``conditions`` is projected out of the auto-generated ``__hash__`` the same way and for the
+    same reason as ``TradeEvent.conditions`` — see that class's docstring.
     """
 
     ticker: str
@@ -62,7 +74,7 @@ class QuoteEvent:
     ask: float
     bid_size: int
     ask_size: int
-    conditions: list[str] | None = None
+    conditions: list[str] | None = field(default=None, hash=False)
     tape: str | None = None
     bid_exchange: str | None = None
     ask_exchange: str | None = None

@@ -982,7 +982,7 @@ TICK_LEGACY_CORPUS_ID = "tick_legacy_symbol_days_v1"
 _ET_ZONE = ZoneInfo("America/New_York")
 
 
-def _tick_dataset_session_dates(dataset_store: DatasetStore) -> list[str]:
+def _tick_dataset_session_dates(dataset_store: DatasetStore) -> tuple[list[str], list[dict]]:
     """Every currently-registered tick dataset's own ET session date (spec section 0: "a session
     is an ET RTH trading date"), one entry per DISTINCT date -- the SAME ET-conversion technique
     ``micro_readiness.py``'s own ``_et_datetime`` and ``micro_accessor.py``'s own
@@ -991,15 +991,23 @@ def _tick_dataset_session_dates(dataset_store: DatasetStore) -> list[str]:
     off ``DatasetStore.list()``'s own already-checksum-verified metadata -- no second inventory
     mechanism, no hardcoded date list (iter-6 plan). Cheap: ``list()`` is metadata-only (no event
     replay), the identical cost ``micro_readiness.py``'s own per-shard ``session_date`` derivation
-    already pays."""
-    records, _errors = dataset_store.list()
+    already pays.
+
+    Returns ``(session_dates, errors)`` (iter-8, closing a gap the iter-8 spec named directly):
+    ``DatasetStore.list()``'s own ``errors`` half — one entry per file that failed its integrity
+    check — is now surfaced to the caller instead of silently discarded (the pre-iteration-8 body
+    bound it to ``_errors`` and dropped it), so a damaged tick recording is REPORTED rather than
+    quietly excluded from the known-session-dates count. The healthy records' dates are computed
+    exactly as before; a corrupt file simply contributes no date (its own session, if any, is
+    honestly absent from the count) while every other healthy shard is unaffected."""
+    records, errors = dataset_store.list()
     session_dates: set[str] = set()
     for meta in records:
         parsed = datetime.fromisoformat(meta["window_start_utc"].replace("Z", "+00:00"))
         if parsed.tzinfo is None:
             parsed = parsed.replace(tzinfo=timezone.utc)
         session_dates.add(parsed.astimezone(_ET_ZONE).date().isoformat())
-    return sorted(session_dates)
+    return sorted(session_dates), errors
 
 
 def run_tick_family_fold_request(ledger: WalkForwardLedger, config: Config) -> dict:
@@ -1012,13 +1020,16 @@ def run_tick_family_fold_request(ledger: WalkForwardLedger, config: Config) -> d
 
     Resolves the REAL legacy tick corpus's session dates via the EXISTING
     ``_tick_dataset_session_dates`` helper (no second inventory mechanism) against a fresh
-    ``DatasetStore`` pointed at ``config.dataset_dir_resolved()``, registers
-    ``DIAGNOSTIC_GEOMETRY`` for ``TICK_LEGACY_CORPUS_ID`` (mirroring
-    ``run_diagnostic_walkforward``'s own register-then-check ordering immediately above its
-    ``build_folds`` call, so the frozen geometry is committed to the ledger even for a
-    below-floor corpus — idempotent on repeat calls via ``register_fold_spec``'s own "identical
-    geometry replays the existing row" contract), then calls the ALREADY-WIRED
-    ``require_sufficient_sessions_for_folds`` (TR-15).
+    ``DatasetStore`` pointed at ``config.dataset_dir_resolved()``, then calls the ALREADY-WIRED
+    ``require_sufficient_sessions_for_folds`` (TR-15) — BEFORE ``register_fold_spec`` (iter-8,
+    closing iter-7 audit finding B2). The pre-iter-8 ordering registered the frozen geometry even
+    for a request that never actually ran, which permanently pinned ``DIAGNOSTIC_GEOMETRY`` and a
+    ``corpus_manifest_hash`` of TODAY'S below-floor corpus as ``TICK_LEGACY_CORPUS_ID``'s ONE
+    fold spec (``register_fold_spec``'s own idempotency keys ONLY on ``geometry_hash``, not the
+    manifest hash, so a later, genuinely sufficient corpus would silently replay that stale row
+    forever). Reordered so a below-floor request writes NOTHING to the fold ledger — a request
+    that never ran leaves no trace — while a genuinely sufficient corpus still registers exactly
+    as before (TC-13).
 
     At today's real corpus (11 distinct ET session dates, far under the 105-session
     ``WF_MIN_SUFFICIENT_FOLDS`` floor) this ALWAYS raises ``InsufficientSessionsForFoldsError``
@@ -1027,23 +1038,34 @@ def run_tick_family_fold_request(ledger: WalkForwardLedger, config: Config) -> d
     the tick corpus (a tick-level "observations" reader, evidence-class classification,
     ``evaluate_mode_b_fold``) is J-06/J-09 scope — the corpus cannot clear this floor until the
     recorder (J-06) grows it, so that machinery is deliberately NOT built here (T-1: never invent
-    a code path this iteration's diff cannot exercise or verify)."""
+    a code path this iteration's diff cannot exercise or verify).
+
+    The returned dict's ``integrity_errors`` (iter-8, TC-14) is ``_tick_dataset_session_dates``'s
+    own ``errors`` half, surfaced verbatim — the SAME key ``micro_readiness.py``'s
+    ``build_readiness`` already serves (no second error-reporting convention), so a damaged tick
+    recording is reported to this function's caller rather than quietly excluded from the
+    known-session-dates count."""
     tick_dataset_store = DatasetStore(config.dataset_dir_resolved())
-    session_dates = _tick_dataset_session_dates(tick_dataset_store)
+    session_dates, errors = _tick_dataset_session_dates(tick_dataset_store)
     corpus_manifest_hash = _sha256(_canonical(session_dates))
     floors = {
         "wf_fold_min_observations": WF_FOLD_MIN_OBSERVATIONS,
         "wf_fold_min_signal_sessions": WF_FOLD_MIN_SIGNAL_SESSIONS,
         "wf_fold_min_symbols": WF_FOLD_MIN_SYMBOLS,
     }
+    require_sufficient_sessions_for_folds(session_dates, DIAGNOSTIC_GEOMETRY)
+    # Reached only by a corpus that genuinely clears the floor -- registers exactly as the
+    # pre-iter-8 ordering did for this same case (idempotent on repeat calls via
+    # `register_fold_spec`'s own "identical geometry replays the existing row" contract).
     register_fold_spec(
         ledger, corpus_id=TICK_LEGACY_CORPUS_ID, corpus_manifest_hash=corpus_manifest_hash,
         geometry=DIAGNOSTIC_GEOMETRY, floors=floors,
     )
-    require_sufficient_sessions_for_folds(session_dates, DIAGNOSTIC_GEOMETRY)
-    # Unreachable at today's 11-session corpus (the line above always raises first); kept minimal
-    # (no `build_folds`/fold-evaluation call) rather than a speculative branch nothing can test.
-    return {"corpus_id": TICK_LEGACY_CORPUS_ID, "session_count": len(session_dates)}
+    return {
+        "corpus_id": TICK_LEGACY_CORPUS_ID,
+        "session_count": len(session_dates),
+        "integrity_errors": errors,
+    }
 
 
 def playbook_observations(
@@ -1171,7 +1193,11 @@ def run_diagnostic_walkforward(
     # entry point -- never a GET route (era Non-Goal: "No scheduling").
     if not has_any_exposure_entries(exposure_registry, TICK_LEGACY_CORPUS_ID):
         tick_dataset_store = DatasetStore(config.dataset_dir_resolved())
-        tick_session_dates = _tick_dataset_session_dates(tick_dataset_store)
+        # iter-8: `_tick_dataset_session_dates` now returns `(dates, errors)` -- this call site
+        # only ever needed the dates (a corrupt file simply contributes no exposure-seed window,
+        # exactly as it always contributed no session date), so the errors half is intentionally
+        # unused here, unlike `run_tick_family_fold_request`'s own call site which SERVES them.
+        tick_session_dates, _tick_dataset_errors = _tick_dataset_session_dates(tick_dataset_store)
         initialize_r2_exposure_registry(exposure_registry, corpus_id=TICK_LEGACY_CORPUS_ID, windows=tick_session_dates)
 
     corpus_manifest_hash = _sha256(_canonical(session_dates))

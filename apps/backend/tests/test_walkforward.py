@@ -1059,12 +1059,104 @@ def test_tc6_the_family_flag_prints_the_typed_refusal_naming_the_real_shortfall(
 
     ledger = wl.WalkForwardLedger(str(tmp_path / "wf"))
     assert ledger.rows_of_kind(wl.ROW_KIND_FOLD_RESULT) == []
-    # The fold spec IS registered (`register_fold_spec` fires before
-    # `require_sufficient_sessions_for_folds`, mirroring the diagnostic path's own ordering) --
-    # provenance even for a below-floor corpus, this iteration's own developer-call.
+    # iter-8 (closing iter-7 audit finding B2): `require_sufficient_sessions_for_folds` now runs
+    # BEFORE `register_fold_spec`, so a below-floor request writes NOTHING to the fold ledger --
+    # no fold spec, no fold result. A request that never actually ran must leave zero trace,
+    # never a frozen geometry + a manifest hash the corpus can outgrow but the ledger can't
+    # update (TC-13).
     fold_spec = wl.latest_fold_spec(ledger, wf.TICK_LEGACY_CORPUS_ID)
-    assert fold_spec is not None
-    assert fold_spec["geometry"] == wf.DIAGNOSTIC_GEOMETRY
+    assert fold_spec is None
+
+
+def test_tc13_a_below_floor_tick_family_request_leaves_the_ledger_completely_unchanged(tmp_path):
+    """iter-8 TC-13, called directly (not through the CLI): ``run_tick_family_fold_request``
+    against the real 11-session corpus raises BEFORE ``register_fold_spec`` runs, so the ledger
+    holds ZERO new rows for ``TICK_LEGACY_CORPUS_ID`` afterward -- not just zero fold results (the
+    pre-fix behaviour already had that), but zero fold SPEC too."""
+    tick_store = DatasetStore(str(tmp_path / "datasets"))
+    for day in range(1, 12):  # 11 distinct ET session dates -> 11 < 105
+        _plant_tick_dataset(
+            tick_store, symbol="AAPL",
+            window_start_utc=f"2026-06-{day:02d}T13:30:00Z",
+            window_end_utc=f"2026-06-{day:02d}T20:00:00Z",
+            price=100.00 + day,
+        )
+    ledger = wl.WalkForwardLedger(str(tmp_path / "wf"))
+    config = _FakeConfig(dataset_dir=str(tmp_path / "datasets"))
+
+    with pytest.raises(wf.InsufficientSessionsForFoldsError, match=r"11 < 105"):
+        wf.run_tick_family_fold_request(ledger, config)
+
+    assert wl.latest_fold_spec(ledger, wf.TICK_LEGACY_CORPUS_ID) is None
+    assert ledger.rows_of_kind(wl.ROW_KIND_FOLD_RESULT) == []
+    assert ledger.rows_of_kind(wl.ROW_KIND_FOLD_SPEC) == []
+
+
+def _corrupt_json_file(path) -> None:
+    import json as _json
+
+    data = _json.loads(path.read_text())
+    data["record"]["meta"]["split"] = "not-a-real-split-value"  # breaks the whole-record checksum
+    path.write_text(_json.dumps(data))
+
+
+def test_tc14_a_corrupt_tick_dataset_is_surfaced_via_integrity_errors_never_silently_excluded(tmp_path):
+    """iter-8 TC-14: ``_tick_dataset_session_dates`` no longer discards ``DatasetStore.list()``'s
+    ``_errors`` half -- its caller (``run_tick_family_fold_request``) surfaces a damaged tick
+    recording through the SAME ``integrity_errors`` shape ``micro_readiness.py`` already uses
+    (no second error-reporting convention), while the healthy recordings' session dates are still
+    counted correctly (a floor call still sees 11 sessions, not 10 -- the corrupt file's dates are
+    excluded from the COUNT, but never silently invisible from the RESPONSE)."""
+    tick_dir = tmp_path / "datasets"
+    tick_store = DatasetStore(str(tick_dir))
+    good_meta = []
+    for day in range(1, 12):
+        meta = _plant_tick_dataset(
+            tick_store, symbol="AAPL",
+            window_start_utc=f"2026-06-{day:02d}T13:30:00Z",
+            window_end_utc=f"2026-06-{day:02d}T20:00:00Z",
+            price=100.00 + day,
+        )
+        good_meta.append(meta)
+
+    # Corrupt exactly one of the 11 healthy files -- its own session date is EXCLUDED from the
+    # returned dates (the file cannot be trusted), but every other healthy file's date survives.
+    corrupt_path = tick_dir / f"{good_meta[0]['id']}.json"
+    _corrupt_json_file(corrupt_path)
+
+    session_dates, errors = wf._tick_dataset_session_dates(tick_store)
+    assert len(errors) == 1
+    assert errors[0]["file"] == f"{good_meta[0]['id']}.json"
+    assert session_dates == sorted(f"2026-06-{day:02d}" for day in range(2, 12))  # 10 healthy dates
+
+    # The below-floor refusal still fires off the (now 10-session) healthy count -- the corrupt
+    # file's date is honestly excluded from the ARITHMETIC, never silently invisible from the
+    # response (proven separately below).
+    ledger = wl.WalkForwardLedger(str(tmp_path / "wf"))
+    config = _FakeConfig(dataset_dir=str(tick_dir))
+    with pytest.raises(wf.InsufficientSessionsForFoldsError, match=r"10 < 105"):
+        wf.run_tick_family_fold_request(ledger, config)
+
+
+def test_tc14_run_tick_family_fold_request_surfaces_integrity_errors_on_its_success_return(tmp_path, monkeypatch):
+    """The wiring half of TC-14, isolated with a monkeypatch so it stays fast and hermetic rather
+    than planting a real 105+-session corpus: ``run_tick_family_fold_request``'s SUCCESS return
+    dict carries whatever ``_tick_dataset_session_dates`` reports as ``integrity_errors`` --
+    the SAME key ``micro_readiness.py``'s ``build_readiness`` already serves (no second
+    error-reporting convention), never silently dropped on the floor-CLEARING path either."""
+    fake_errors = [{"file": "corrupt-shard.json", "error": "checksum mismatch"}]
+    # 110 distinct labels clear the WF_MIN_SUFFICIENT_FOLDS floor (105) under DIAGNOSTIC_GEOMETRY;
+    # never parsed as real calendar dates by the function under test, only counted and hashed.
+    fake_dates = [f"session-{i:04d}" for i in range(110)]
+    monkeypatch.setattr(wf, "_tick_dataset_session_dates", lambda store: (fake_dates, fake_errors))
+
+    ledger = wl.WalkForwardLedger(str(tmp_path / "wf"))
+    config = _FakeConfig(dataset_dir=str(tmp_path / "unused-datasets"))
+
+    result = wf.run_tick_family_fold_request(ledger, config)
+
+    assert result["integrity_errors"] == fake_errors
+    assert result["session_count"] == len(fake_dates)
 
 
 def test_tc6_an_unknown_family_value_is_refused_by_argparse_itself(monkeypatch, capsys):
