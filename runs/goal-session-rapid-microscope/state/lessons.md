@@ -287,3 +287,37 @@ opposite of the enumerate-then-filter shape that produced the cartesian-subtract
 everything, then subtract the withheld".
 **Applies to:** any iteration adding a surface that touches vault-eligible shards — the r5
 implementation itself, J-08's four `/desk` sections, and the four new MCP proxies.
+
+## iter-11 — 2026-08-19T09:10:00Z
+
+**Verdict:** CONTINUE
+**Lesson:** Widening ONE side of a paired mechanism re-opens the very leak it closes, through the
+twin you left narrow. This iteration broadened *withholding* to universe-RULE membership
+(`vault.unresolved_pool_universe_by_dataset_id`) but left the *reveal* gate
+(`vault._fully_exposed_universe_ids`, `vault.py:926-938`) ledger-row-only — so once every
+ledger-tracked shard is exposed, `GET /research/desk/micro/vault` publishes the complete
+`symbol_rule`/`date_rule` while untracked pool members are still hidden, restoring the exact
+two-GET subtraction attack iteration 9 closed. Same shape in two other places in the same diff: a
+new vault predicate added without r6 §7.8's `verify_chain()` rule that now governs vault
+predicates, and a field mandated as an "aggregate" that stops being one at n=1. Whenever a diff
+broadens a predicate, grep for every OTHER predicate keyed on the same concept and widen or
+consciously defer each by name.
+**Applies to:** any iteration touching `vault.py`, `micro_readiness.py`, `micro_snapshots.py` or a
+withhold/reveal/exposure predicate — the r7 nonced-commitment build, J-06 steps 4-5, and J-08's
+four `/desk` sections plus its four MCP proxies.
+
+## iter-11 (second) — 2026-08-19T09:10:00Z
+
+**Verdict:** CONTINUE
+**Lesson:** A mid-session owner ruling can land in the working tree and still be described as "an
+open owner question" by the phase spec built against it — and that stale sentence propagates
+unchallenged through decomposer, developer, reviewer and QA. Here r6 §7.8 (corrupted vault ledger
+⇒ fail closed) was ruled 2026-08-18 and written into `docs/rapid-validation-spec.md` in the same
+tree, while `docs/phases/goal-rapid-microscope-iter-11.md`'s OUT OF SCOPE still listed it among
+"the two remaining owner questions"; only the independent auditor caught the contradiction, and the
+consequence was a new predicate shipped without the fail-closed rule that already governed it.
+Read the spec's own revision header for rulings dated AFTER the prior iteration before trusting any
+carried "still open" list. Cheap companion check: `md5sum` the whole evidence directory — this run
+had three PASS rows citing byte-identical blank images and a fourth citing the wrong panel.
+**Applies to:** every iteration whose spec carries an "open owner questions" or "deferred, awaiting
+ruling" list, and every evaluation that reads a browser-QA evidence directory.

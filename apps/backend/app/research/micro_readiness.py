@@ -303,19 +303,29 @@ def build_readiness(
     ``joinable_corpus`` zero rather than an error, since "no playbook evidence was even checked"
     is a true statement in that case, never a fabricated one.
 
-    **Sealed-tranche AGGREGATES only (iter-9, spec section 7.5 point 4, r3).** A dataset whose
-    Validation-Vault shard has not yet reached ``exposed`` gets NO per-shard row and NO per-shard
-    ``exposure_state`` here -- its row would carry the symbol, session date and exact trade/quote
-    counts section 7.5 withholds, and the iter-9 audit's finding B1 demonstrated this table doing
-    exactly that. Such a shard is counted instead in ``sealed_tranche`` (shard count, distinct
+    **Sealed-tranche AGGREGATES only (iter-9, spec section 7.5 point 4, r3; widened iteration 11,
+    point 7, r5).** A dataset that is part of an UNRESOLVED registered-universe pool gets NO
+    per-shard row and NO per-shard ``exposure_state`` here -- its row would carry the symbol,
+    session date and exact trade/quote counts section 7.5 withholds, and the iter-9 audit's
+    finding B1 demonstrated this table doing exactly that for a ledger-tracked sealed shard.
+    Iteration 11 widens WHICH datasets that covers: membership is no longer only "carries an
+    explicit vault shard-ledger row" but "is caught by ``vault.
+    unresolved_pool_universe_by_dataset_id``" (that function's own docstring has the full
+    reasoning) -- because a repo-wide grep at authoring finds zero production call sites of
+    ``seal_shard``, so a real recording finalized under a registered universe would otherwise
+    carry NO ledger row at all and be fully identifiable here, the exact leak point 7 exists to
+    close. Such a shard is counted instead in ``sealed_tranche`` (shard count, distinct
     symbol-days, per-universe totals -- section 7.5's own enumerated aggregate list) and is
-    excluded from ``totals``/``study_floors``, since sealed evidence is by construction not
-    available to any study. The exclusion also means this fold never LOADS a sealed shard's
-    events, so the ``fallback_frac`` walk below can never become an exploratory read of sealed
-    tape (the era's *(critical)* anti-goal). The vault is read through the SAME
-    ``vault.shard_ledger_for_dataset_dir(dataset_dir)`` resolution every other consumer uses --
-    one vault location, never a second. With nothing sealed, ``sealed_tranche`` is an all-zero
-    row and every other value in this payload is byte-identical to its pre-iter-9 self.
+    excluded from ``totals``/``study_floors``, since withheld evidence is by construction not
+    available to any study. The exclusion also means this fold never LOADS a withheld shard's
+    events, so the ``fallback_frac`` walk below can never become an exploratory read of withheld
+    tape (the era's *(critical)* anti-goal) -- the withhold check still runs BEFORE
+    ``store.load_events`` below, exactly as before (TC-10). The vault is read through the SAME
+    ``vault.shard_ledger_for_dataset_dir(dataset_dir)``/``vault.universe_ledger_for_dataset_dir(
+    dataset_dir)`` resolution every other consumer uses -- one vault location, never a second.
+    With nothing sealed and no universe registered, ``sealed_tranche`` is an all-zero row and
+    every other value in this payload is byte-identical to its pre-iter-9 self (proven inert
+    against the real corpus, which has zero registered universes today).
 
     Membership is the VAULT's answer, never re-derived here; the arithmetic over it is this
     module's own, exactly as it already is for ``totals`` (the ``joinable_corpus`` precedent, where
@@ -325,8 +335,28 @@ def build_readiness(
     what evidence exists on this disk."""
     records, errors = store.list()
     root = Path(dataset_dir)
-    withheld_universe_by_id = vault.withheld_universe_by_dataset_id(
-        vault.shard_ledger_for_dataset_dir(dataset_dir)
+    # Pure metadata arithmetic (no event replay -- `window_start_utc` is already-verified
+    # manifest data from `store.list()` above): computed for EVERY record, including ones that
+    # turn out withheld, because the iteration-11 pool predicate needs each record's own
+    # (symbol, session_date, created_utc) to test against a registered universe's rule (spec
+    # section 7.5 point 7, r5). This does not touch `store.load_events` -- the load-order guard
+    # (TC-10) is about EVENT reads, which stay confined to the kept branch below exactly as
+    # before.
+    start_et_by_id: dict[str, datetime] = {
+        meta["id"]: _et_datetime(meta["window_start_utc"]) for meta in records
+    }
+    withheld_universe_by_id = vault.unresolved_pool_universe_by_dataset_id(
+        vault.shard_ledger_for_dataset_dir(dataset_dir),
+        vault.universe_ledger_for_dataset_dir(dataset_dir),
+        [
+            (
+                meta["id"],
+                meta["symbol"],
+                start_et_by_id[meta["id"]].date().isoformat(),
+                meta.get("created_utc", ""),
+            )
+            for meta in records
+        ],
     )
 
     shards: list[dict] = []
@@ -340,11 +370,11 @@ def build_readiness(
 
     for meta in records:
         if meta["id"] in withheld_universe_by_id:
-            # Section 7.5 point 4: aggregates only. Computed from the store's own metadata
+            # Section 7.5 point 4/7: aggregates only. Computed from the store's own metadata
             # SERVER-side and never served per shard -- the payload below carries counts, never a
             # symbol, a date, or an id.
             universe_id = withheld_universe_by_id[meta["id"]]
-            symbol_day = (meta["symbol"], _et_datetime(meta["window_start_utc"]).date().isoformat())
+            symbol_day = (meta["symbol"], start_et_by_id[meta["id"]].date().isoformat())
             sealed_shard_count += 1
             sealed_symbol_days.add(symbol_day)
             sealed_shard_count_by_universe[universe_id] = (
@@ -353,7 +383,7 @@ def build_readiness(
             sealed_symbol_days_by_universe.setdefault(universe_id, set()).add(symbol_day)
             continue
 
-        start_et = _et_datetime(meta["window_start_utc"])
+        start_et = start_et_by_id[meta["id"]]
         end_et = _et_datetime(meta["window_end_utc"])
         session_date = start_et.date()
         session_date_str = session_date.isoformat()

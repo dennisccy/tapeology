@@ -1,40 +1,40 @@
 # Iteration State — rapid-microscope
 
-**After iteration:** 10 · **Date:** 2026-08-18 · **Verdict:** ESCALATE
+**After iteration:** 11 · **Date:** 2026-08-19 · **Verdict:** CONTINUE
 
 ## Journeys
 
-6 passing (J-01 J-02 J-03 J-04 J-05 J-07) · 2 partial (J-06 3-of-5 steps, J-10 traps 19/22) · 2 failing (J-08 J-09) — 10 total
+6 passing (J-01..J-05, J-07 — J-07 CARRIED `DEFERRED-BUDGET`, not re-run) · 2 partial (J-06 3-of-5
+steps, J-10 traps 20-of-28 + sentinel green) · 2 failing (J-08, J-09 — never targeted) — 10 total
 
 ## Active blockers
 
-- **r5 is RULED but UNBUILT (dev-owned, next round):** one opaque pool — readiness must stop
-  serving a per-shard list on EITHER side while any pool member is unexposed; recorder progress
-  aggregate-only (no symbol/date/id, no operator bypass); TR-2 widened to a deterministic
-  inference trap. `docs/rapid-validation-spec.md` §7.5 pts 4/7/8 + §7.1. HARD GATE on J-06 step 4
-  — no real tape recorded or sealed until this is built and TR-2 passes.
-- **Owner-owed, 3 open:** (1) does a corrupted vault ledger fail closed or open? (`vault.py`
-  withholding predicates read `all_rows()`, which never verifies); (2) who computes a sealed
-  shard's pass/fail verdict? (`micro_graduation.record_sealed_evaluation` believes its caller);
-  (3) the one-quote-early depletion stamp (`micro_observer.py:636/:657`, open since iter-2).
-- **Owner-owed, operator act:** J-06 step 4's credentialed Alpaca tranche (after r5 lands).
+- **Nothing is owner-owed — a first this session.** r6 (08-18) settled the sealed-verdict owner,
+  lineage boundary, corrupted-ledger fail-closed, depletion revealing quote; r7 (08-19) the nonced
+  commitment + coarse volume buckets. All 6 open anti-goal items are DESIGNED-BUT-UNBUILT, 0 critical.
+- **Hard gate (dev):** J-06 step 4 (credentialed tranche) waits on all four of r6 §7.8 verify_chain,
+  r7 nonced commitment, r7 coarse buckets, symbol/date normalization.
+- **Dev cleanups:** iter-11's phase spec OUT OF SCOPE still calls the corrupted-ledger question "an
+  open owner question" (ruled a day earlier — do not inherit); and `state/golden-gaps` (`J-07`) was
+  deleted with no `J-07.json` golden written, silently dropping J-07's regression cover.
 
 ## Last 2 verdicts
 
-- iter 10: ESCALATE — J-07 delivered and evaluator-proven, but spec §8 left two rules undefined
-  and the developer invented both; next work is the vault's core promise, which needs the auditor.
-- iter 9: CONTINUE — vault step 3 landed; its headline promise was NOT achieved (sealed membership
-  recoverable by cartesian subtraction), which the r5 ruling has since settled by design.
+- iter 11: CONTINUE — the r5 opaque-pool fix is BUILT and survived attack (auditor drove the real
+  `run_tick_recording` path; evaluator re-verified real-store inertness); suite 3192/3184/8/0, 0 regressions.
+- iter 10: ESCALATE — J-07 newly passing, but r5's design was wholly unbuilt and the developer
+  improvised two undefined spec procedures instead of stopping.
 
 ## Do not redo
 
-- **J-07 is DONE and verified** — `micro_graduation.py` + `GET /research/desk/micro/graduation` +
-  19 tests; evaluator ran the four-state walk and four adversarial refusals itself.
-- **No graduation MCP tool or `/desk` section here** — J-08's scope (v6, 26 tools); MCP stays 22.
-- **No edit to `walkforward.py`/`vault.py`/`scout_ledger.py` row shapes** — graduation reads them
-  through existing public functions only, and that is correct.
-- **Frozen checks re-proved at iter-10:** fingerprint `08e471b10130e1e2`; all six `referee_*.py`
-  hashes identical to iteration 0. Re-check, never "fix".
-- **Suite baseline 3,185 collected / 3,177 passed / 8 skipped / 0 failed** (evaluator's own run) —
-  never quote 3,166 or 3,130.
-- **Genuinely missing (safe to plan):** traps TR-3/TR-17/TR-22 by name; J-10 step 2's byte-identical re-run, never run this era.
+- **Withhold predicate DONE + sole choke point** — `vault.unresolved_pool_universe_by_dataset_id`, read
+  by `micro_snapshots.exclude_withheld`/`withheld_dataset_ids_for_store` (8 enumerators inherit it),
+  `micro_readiness.build_readiness`, `routes.py:get_withheld_dataset_ids`. Never add a second one; the
+  beyond-plan `routes.py` delegation is load-bearing — keep it.
+- **Recorder progress DONE (aggregate-only)** — `tick_recorder._progress_view`'s 10-field whitelist on
+  GET + POST echo, no bypass (TC-7). Never re-add `progress.outcomes`; only exactness is open.
+- **TR-2 DONE as a real inference trap** — `test_vault.py` TC-8/TC-9 + the pre-fix counter-test; only
+  widen its forbidden substrings to symbol + session date (audit T1).
+- **Frozen rails re-verified at iter 11** — fingerprint `08e471b10130e1e2`, six `referee_*.py` = iter 0,
+  MCP 22-tuple, 0 `.tsx`/`.ts` diffs, real `.data` untouched (18 datasets, no `micro_vault` dir).
+- **Evidence re-takes are PASSENGER work** — UT-04 wrong panel, UT-09 blank; both carry `evidence_makeup: true`.

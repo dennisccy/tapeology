@@ -1,0 +1,250 @@
+{
+  "journeys": {
+    "J-01": {
+      "id": "J-01",
+      "name": "The era transition stands — the corpus truth on the record",
+      "status": "passing",
+      "last_verified_iter": "goal-rapid-microscope-iter-10",
+      "last_passing_iter": "goal-rapid-microscope-iter-10",
+      "first_seen_iter": "goal-rapid-microscope-iter-0",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-10-evidence/J-01-verify.png",
+      "spec_hash": "1791ebcd14c10fa789e1048509f8f8af20a7696fe11a7de4bf946b446d4fbb52",
+      "note": "Deterministic replay PASS (UT-J-01), and the evaluator OPENED J-01-verify.png rather than reading the row: /desk renders every shipped section (Backscan, Back-scan runs, Playbook Evidence, Referee Registry/Adjudications/Runs) with the MICROSCOPE READINESS section below them carrying its honest copy '...which predeclared pilot-study floor it clears — today, none.' A.6 evidence durability additionally carries this journey cleanly: micro_readiness.py is byte-untouched this iteration (git status shows the ONLY modified backend file is micro_routes.py, plus two new untracked graduation files), so no re-derivation was owed and none was performed."
+    },
+    "J-02": {
+      "id": "J-02",
+      "name": "The micro observer — one pass, prefix-honest, benchmarked",
+      "status": "passing",
+      "last_verified_iter": "goal-rapid-microscope-iter-10",
+      "last_passing_iter": "goal-rapid-microscope-iter-10",
+      "first_seen_iter": "goal-rapid-microscope-iter-0",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-10-evidence/J-02-verify.png",
+      "spec_hash": "01f4f43564cba7431118d4a504b9dbeb20f1a994fdb52be5ceded15529d8b27a",
+      "note": "Deterministic replay PASS (UT-J-02) — the lane genuinely ran this iteration (unlike iters 8/9, where this row was DEFERRED-BUDGET). A.6 durability also covers it outright: micro_observer.py, micro_features.py and micro_snapshots.py are all byte-untouched in this iteration's diff (verified via git status, not the handoff), so the iter-9 re-derivation of 18 snapshot feature files at exactly 3,815,933 rows stands unchanged. Suite corroboration from the evaluator's OWN full run: 3,185 collected / 3,177 passed / 8 skipped / 0 failures / 0 errors."
+    },
+    "J-03": {
+      "id": "J-03",
+      "name": "Structure x flow — the join that never looks ahead",
+      "status": "passing",
+      "last_verified_iter": "goal-rapid-microscope-iter-10",
+      "last_passing_iter": "goal-rapid-microscope-iter-10",
+      "first_seen_iter": "goal-rapid-microscope-iter-0",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-10-evidence/J-03-verify.png",
+      "spec_hash": "a671f63835247f7fca66a41a2dc48ec4fe3e83fe0bda85d3703ef385cb20de83",
+      "note": "Deterministic replay PASS (UT-J-03), lane genuinely run this iteration. micro_join.py is byte-untouched in this diff (git status), so A.6 durability carries iter-9's own re-derivation forward unchanged: joinable_corpus.total = 2, by_setup_id {range_trade: 2}, zero playbook integrity errors, withheld_excluded 0. test_micro_join green inside the evaluator's own 3,185-test run."
+    },
+    "J-04": {
+      "id": "J-04",
+      "name": "The Scout and the ledger — every trial on the record",
+      "status": "passing",
+      "last_verified_iter": "goal-rapid-microscope-iter-10",
+      "last_passing_iter": "goal-rapid-microscope-iter-10",
+      "first_seen_iter": "goal-rapid-microscope-iter-0",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-10-evidence/J-04-verify.png",
+      "spec_hash": "d188d138b6c84c4ff7302bf60f5da2f95b247b58a6cd7c42874d740801bc19d0",
+      "note": "Deterministic replay PASS (UT-J-04). scout.py and scout_ledger.py are byte-untouched this iteration (git status), so A.6 durability carries iter-9's verification. The evaluator additionally exercised scout_ledger from OUTSIDE its own test suite while walking J-07: ScoutLedger.append_row + distinct_variant_count over a hand-built family returned union-N = 2 across two sibling family_ids with one 'survive' and one 'killed_null' row, i.e. the kill was counted, never dropped. STANDING HONEST LIMIT (unchanged from iter-9): no real scout ledger exists on disk (.data/micro_scout is still absent — the Scout has never been run as an operator act), so verify_chain() has never been exercised against real operator data."
+    },
+    "J-05": {
+      "id": "J-05",
+      "name": "The walk-forward engine — chronology, fences, and the diagnostic run",
+      "status": "passing",
+      "last_verified_iter": "goal-rapid-microscope-iter-10",
+      "last_passing_iter": "goal-rapid-microscope-iter-10",
+      "first_seen_iter": "goal-rapid-microscope-iter-0",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-10-evidence/J-05-verify.png",
+      "spec_hash": "1b84144912ebd9de2f4731f2209f6f7354ac8e563f633f14825644d2f838fa1e",
+      "note": "Deterministic replay PASS (UT-J-05); the evaluator OPENED J-05-verify.png — /desk renders its honest 'Desk screen not computed yet.' empty state over the store-scoped rig, no error page. walkforward.py/walkforward_ledger.py are byte-untouched this iteration (git status), so A.6 durability carries iter-9's own CLI re-run ('11 < 105 -- refused (TR-15)', exit 1, scoped ledger left empty). The evaluator additionally re-exercised two of walkforward's own contracts from outside its suite while attacking J-07: sequence_verdict returned a genuine WF_SURVIVOR_RULE_V1 survivor on three hand-built historical_oos/rule_process folds, and — after record_voiding_event on that corpus — is_corpus_era_voided flipped to True and the same folds no longer satisfied the rule."
+    },
+    "J-06": {
+      "id": "J-06",
+      "name": "The recorder and the Vault — new tape, sealed at birth",
+      "status": "partial",
+      "last_verified_iter": "goal-rapid-microscope-iter-10",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-rapid-microscope-iter-0",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-10-evidence/J-06-verify.png",
+      "spec_hash": "436653d6b7824775afe28e19de9266a60c63c3a69f3b9eda09d9dddfb0cfaae1",
+      "note": "GOAL TEXT CHANGED THIS ITERATION and the status was RE-SCORED against the CURRENT text, not carried: the owner's r5 ruling rewrote J-06 step 3's opaque-metadata clause, rewrote step 5 into the ONE-POOL aggregate rule, and added the TR-2 inference-trap clause to the acceptance — so spec_hash moves c517119586... -> 436653d6b7.... No journeys-changed.md drift note fired because the journey was `partial`, not `passing`; the re-scoring was done anyway. Still 3 of 5 steps. Steps 1-3 (preservation fields, recorder, vault.py) are unchanged and were proven in iters 7/8/9. STEPS 4 AND 5 REMAIN NOT DONE, re-verified on disk by the evaluator this iteration: apps/backend/.data contains NO micro_vault, NO micro_scout and NO micro_graduation directory, so zero tranches are recorded and zero shards are sealed anywhere. Under the CURRENT (r5) text step 3 also gains new unbuilt work: the one-opaque-pool rule, aggregate-only recorder progress with no operator bypass, and the widened TR-2 inference trap. Deterministic replay PASS (UT-J-06) confirms nothing regressed. WHAT CHANGED FOR THE BETTER: the two CRITICALs that hard-gated step 4 (cartesian-subtraction membership leak; recorder-progress per-chunk identity leak) now have OWNER RULINGS (spec r5) — the design is decided, so the blocker is no longer 'waiting on the owner' but 'not yet implemented'. The evaluator additionally checked the NEW graduation surface against r5's own inference-trap list, which names `graduation` explicitly: micro_graduation.record_sealed_evaluation refuses outright unless vault.build_vault_state already reports the shard `exposed` and bound to that exact family (evaluator re-proved this on a still-sealed fixture shard), so GET /research/desk/micro/graduation can only ever publish an ALREADY-EXPOSED shard's identity — r5-compatible by construction."
+    },
+    "J-07": {
+      "id": "J-07",
+      "name": "Graduation — provenance in, nothing laundered out",
+      "status": "passing",
+      "last_verified_iter": "goal-rapid-microscope-iter-10",
+      "last_passing_iter": "goal-rapid-microscope-iter-10",
+      "first_seen_iter": "goal-rapid-microscope-iter-0",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-10-evidence/UT-J-07-result.png",
+      "spec_hash": "6bd325e2c1511b9d2745bdcd612a12d2142f32498a7aa85055d31209c9e46b28",
+      "note": "NEWLY PASSING. The evaluator did NOT take the handoff, the review or the 19-test file on trust — it RAN ITS OWN four-state walk against a throwaway store, outside the dev's test file, and read the artifacts back. Result: exploratory -> walkforward_survivor (rule_name WF_SURVIVOR_RULE_V1) -> sealed_survivor -> referee_handoff_ready, with a bundle that VALIDATES and carries frozen spec_hash, family_root_id lineage, union_n_variants_tried = 2 including the `killed_null` trial (the kill IS in the bundle), 3 folds every one labeled historical_oos + rule_process, the one exposed shard, a non-null proposed confirmation boundary, sibling family ids ['fam-a','fam-b'], and the Referee-registration disclaimer byte-exact; an unrelated family's trial did NOT leak in; the graduation chain verified ok. THREE ADVERSARIAL PROBES THE EVALUATOR RAN ITSELF, all refused correctly: a diagnostic-only twin (3 perfect folds, class historical_exposed_diagnostic) stayed `exploratory` with no ledger row; a second, DIFFERENT sealed verdict for the same (family, shard) was refused with the row count unchanged at 1 (single-shot, never a second draw); and a verdict claimed against a still-SEALED, never-exposed shard was refused. Voiding semantics genuinely bite: after record_voiding_event on the corpus, three otherwise-perfect folds no longer advanced. Acceptance clause 4 re-proved independently: all six referee_*.py sha256 hashes are byte-identical to the iteration-0 listing in docs/handoffs/goal-rapid-microscope-iter-0-dev.md (compared one by one). Browser evidence: UT-J-07-result.png OPENED — GET /research/desk/micro/graduation on the real, genuinely empty ledger returns exactly {\"families\":[],\"message\":\"No candidates ledgered.\",\"chain_verification\":{\"ok\":true,...}}, and .data has no micro_graduation directory at all, so that empty state is honest rather than staged. NO GOLDEN REPLAY SCRIPT for J-07 by design (demo_runner.normalize_url() rewrites localhost onto the frontend base and no Next.js proxy exists for /research/*), a documented skip, not a gap. TWO DISCLOSED SPEC-§8 GAPS RIDE ALONG (recorded as an open minor item): the sealed pass/fail verdict is caller-supplied rather than computed, and the 'proposed confirmation boundary' formula was invented. Both are unreachable from any operator-facing route today and neither weakens an acceptance clause, but both are permanent once real evidence flows."
+    },
+    "J-08": {
+      "id": "J-08",
+      "name": "The surface and MCP v6 — the funnel is visible",
+      "status": "failing",
+      "last_verified_iter": "goal-rapid-microscope-iter-10",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-rapid-microscope-iter-0",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-9-evidence/UT-02-result.png",
+      "spec_hash": "037874a8933089ff99b53568d5aedac2843043741d83fa4958759ba898145572",
+      "note": "Unchanged, and correctly so — J-08 was explicitly OUT OF SCOPE this iteration. Re-verified by the evaluator: EXPECTED_TOOLS in tests/test_mcp_server.py still holds exactly 22 names (the v6 26-tuple bump has not started), and git status shows ZERO frontend files changed this iteration. GET /research/desk/micro/graduation now joins GET /research/desk/micro/vault as a backend route with no UI consumer — both are J-08's own wiring scope, and blueprint.md's IA already sanctions the pattern."
+    },
+    "J-09": {
+      "id": "J-09",
+      "name": "The pilot studies — three predeclared questions, honest answers",
+      "status": "failing",
+      "last_verified_iter": "goal-rapid-microscope-iter-10",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-rapid-microscope-iter-0",
+      "last_evidence_path": "reports/phase-goal-rapid-microscope-iter-0-ui-test-results.md#UT-J-09",
+      "spec_hash": "7dd99ef032e14d2c86d69962f917efb8840d2496fa07765e9488264ecbd8a58a",
+      "note": "Unchanged; out of scope this iteration. The three study ids still exist only as readiness floor-table rows. Re-confirmed on disk: .data/micro_scout does not exist, so no predeclared study spec is ledgered anywhere and no study has ever been screened as an operator act."
+    },
+    "J-10": {
+      "id": "J-10",
+      "name": "The kept product stands — traps armed, sentinel green",
+      "status": "partial",
+      "last_verified_iter": "goal-rapid-microscope-iter-10",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-rapid-microscope-iter-0",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-10-evidence/J-10-verify.png",
+      "spec_hash": "471d5b5b05f81c2922457651075a07f2c6ae428df8055f0ecd7a9f841b432814",
+      "note": "Sentinel half GREEN for the fifth run in a row; the evaluator OPENED J-10-verify.png and it shows /desk rendering the referee family end to end — the tick-corpus gate line ('2 tick dataset(s) are registered today, 148 short of the gate' on the store-scoped rig), the completed-bar caveat paragraph, 'No integrity errors.', REFEREE ADJUDICATIONS with its full non-advice disclaimer and 'No hypotheses registered.', and REFEREE RUNS. Frozen-foundation half re-proved BY THE EVALUATOR PERSONALLY, not read off the handoff: Config().config_fingerprint() prints 08e471b10130e1e2; all six referee_*.py sha256 hashes compared one by one against the iteration-0 listing and identical; EXPECTED_TOOLS still 22; git status clean of any engine, frontend or referee change. FULL SUITE RE-RUN BY THE EVALUATOR AFTER every edit in the tree: 3,185 collected / 3,177 passed / 8 skipped / 0 failures / 0 errors in 573s, +19 over iter-9's 3,166/3,158/8 and far above the era-open 2,691 baseline — matching the dev's and reviewer's figures exactly. TRAP HALF STILL 19 of 22, unchanged: the evaluator enumerated TR ids in tests/ and TR-3 (accessor fence), TR-17 (future-event availability) and TR-22 (exposure registry) are still absent by name — this iteration's spec deliberately deferred all three to a dedicated hardening round. Under r5, TR-2 also now needs WIDENING (join-resistance -> deterministic inference trap) even though a TR-2 of the older shape exists. J-10 step 2's deterministic-rerun check has STILL not been run this era."
+    }
+  },
+  "anti_goal_violations": [
+    {
+      "iter": "goal-rapid-microscope-iter-2",
+      "anti_goal": "No cross-unit liquidity arithmetic. No feature, screen, or study relates trade shares to displayed quote sizes unless the dataset's `quote_size_unit` is verified (spec §2.6); unverified or mixed units are a typed refusal. (critical)",
+      "severity": "critical",
+      "evidence": "apps/backend/app/research/micro_observer.py:613 (pre-fix) served quote_depletion's share-denominated magnitude ungated; caught by the reviewer (review round 1 FAIL), fixed at the one emission site and re-proved by a whole-corpus sweep in iteration 2.",
+      "resolved": true
+    },
+    {
+      "iter": "goal-rapid-microscope-iter-2",
+      "anti_goal": "No value is served before it exists. Every feature carries `anchor_at`/`observed_through`/`available_at`; a deferred construct is `unavailable` until its observations exist (TR-17). (critical)",
+      "severity": "critical",
+      "evidence": "audit B1 — micro_observer.py finalize() published a quote_depletion window the session cut short as a COMPLETED observation (unavailable: False), 36 such rows across the shipped 18-dataset corpus. Fixed and re-proved by a whole-corpus sweep inside iteration 2.",
+      "resolved": true
+    },
+    {
+      "iter": "goal-rapid-microscope-iter-2",
+      "anti_goal": "No lookahead — every value computed as-of T uses only events/bars fully completed at T. (critical)",
+      "severity": "minor",
+      "evidence": "audit B5 — apps/backend/app/research/micro_observer.py:636/:657 (locked by tests/test_micro_observer.py:291): a price-change-terminated quote_depletion stamps observed_through at the last same-price quote, one quote before the terminating event. OPEN — awaiting an OWNER RULING (correct the stamp, or record it as the intended definition). The iteration-10 evaluator re-confirmed via git status that micro_observer.py is byte-untouched in this iteration's diff, so the item is unchanged and still owner-owed since iteration 2 — now the OLDEST open decision in the session.",
+      "resolved": false
+    },
+    {
+      "iter": "goal-rapid-microscope-iter-4",
+      "anti_goal": "The denominator never shrinks. Every evaluated variant lands in the hash-chained ledger with a closed-vocabulary decision; kills are never deleted; the union-N across grid versions is served beside every family. (critical)",
+      "severity": "critical",
+      "evidence": "INTRODUCED AND FIXED INSIDE ITERATION 4, found by the independent auditor after review and QA both passed the code: (B2) scout_ledger.py's chain walk could not detect TAIL truncation; (B3) variants_tried counted rows, not distinct candidates. Both re-broken and re-proved fixed by the iteration-4 evaluator on live code.",
+      "resolved": true
+    },
+    {
+      "iter": "goal-rapid-microscope-iter-4",
+      "anti_goal": "No threshold, grid, formula, embargo, or fold parameter is chosen or revised from validation, sealed, or holdout outcomes. (critical)",
+      "severity": "critical",
+      "evidence": "INTRODUCED AND FIXED INSIDE ITERATION 4. Audit B4: scout.py's _block_length_for_horizon returned a 20-event block for EVERY shares and clock horizon, narrowing the null on a permanently-ledgered path. Closed by refusing those horizon families outright.",
+      "resolved": true
+    },
+    {
+      "iter": "goal-rapid-microscope-iter-5",
+      "anti_goal": "The denominator never shrinks ... kills are never deleted; the union-N across grid versions is served beside every family. (critical)",
+      "severity": "critical",
+      "evidence": "INTRODUCED AND FIXED INSIDE ITERATION 5 (audit B1: walkforward_ledger.py appended a new physical fold_result row on every call, turning an honest '2 < 3 sufficient folds' refusal into a computed verdict on re-run). Re-proved fixed by the iteration-5 evaluator on live code.",
+      "resolved": true
+    },
+    {
+      "iter": "goal-rapid-microscope-iter-5",
+      "anti_goal": "No threshold, grid, formula, embargo, or fold parameter is chosen or revised from validation, sealed, or holdout outcomes. Fitting rules are data functionals frozen before reveal. (critical)",
+      "severity": "critical",
+      "evidence": "INTRODUCED AND FIXED INSIDE ITERATION 5 (audit B3: run_diagnostic_walkforward read the corpus's outcomes before calling register_mode_b_spec, and the registration never reached disk). Fixed by hoisting the registration ahead of every outcome read.",
+      "resolved": true
+    },
+    {
+      "iter": "goal-rapid-microscope-iter-5",
+      "anti_goal": "The accessor is the only data door. No module but `micro_accessor.py` opens snapshot or vault event data; origin fences fail closed; import-ban and source-scan guards enforce it. (critical)",
+      "severity": "critical",
+      "evidence": "INTRODUCED AND FIXED INSIDE ITERATION 5 (audit T1: the TR-3 guard globbed app/research/*.py only and inspected only Import nodes). Fixed by widening the scan to all modules under app/. Re-confirmed in iteration 10: the new micro_graduation.py imports no micro_accessor and opens no event data at all (its own AST guard test asserts this, and the evaluator read its import list directly — hashlib/json/os/datetime/pathlib plus sibling research modules).",
+      "resolved": true
+    },
+    {
+      "iter": "goal-rapid-microscope-iter-5",
+      "anti_goal": "The 12 pre-existing tick symbol-days are permanently exploratory — never sealed, never `historical_oos`, never relabeled. (critical)",
+      "severity": "minor",
+      "evidence": "RESOLVED IN ITERATION 6 (the §6.7 exposure registry now seeds a distinct TICK_LEGACY_CORPUS_ID corpus resolved dynamically from the same DatasetStore listing micro_readiness.py reads).",
+      "resolved": true
+    },
+    {
+      "iter": "goal-rapid-microscope-iter-5",
+      "anti_goal": "Trap T-7 · Insufficient is an answer. Floors never loosen; a below-floor fold serves `insufficient` with its arithmetic; the tick family's refusal at today's corpus is a FEATURE and is pinned by TR-15.",
+      "severity": "minor",
+      "evidence": "RESOLVED IN ITERATION 6 and FULLY DISCHARGED IN ITERATION 7 (a genuine operator CLI entry point returns the typed `11 < 105` refusal). Re-verified under post-r4 code in iteration 9; walkforward.py is byte-untouched in iteration 10, so it stands.",
+      "resolved": true
+    },
+    {
+      "iter": "goal-rapid-microscope-iter-6",
+      "anti_goal": "The 12 pre-existing tick symbol-days are permanently exploratory - never sealed, never `historical_oos`, never relabeled. (critical)",
+      "severity": "minor",
+      "evidence": "CLOSED IN ITERATION 8. Audit B2 (iter-6): _tick_dataset_session_dates dropped DatasetStore.list()'s _errors channel, so a damaged tick recording was silently excluded from the known-session-dates count. Iteration 8 makes it return (session_dates, errors) and surfaces them through run_tick_family_fold_request's `integrity_errors` key.",
+      "resolved": true
+    },
+    {
+      "iter": "goal-rapid-microscope-iter-6",
+      "anti_goal": "No exploratory read of a sealed shard / the 12 pre-existing tick symbol-days are permanently exploratory. (critical)",
+      "severity": "minor",
+      "evidence": "CLOSED IN ITERATION 9, verified in code by that evaluator. walkforward.py:1267 computes vault.currently_sealed_dataset_ids(...) and passes it as excluded_dataset_ids into _tick_dataset_session_dates before the list ever reaches initialize_r2_exposure_registry. Pinned by TC-10/TC-11 in tests/test_walkforward.py; walkforward.py is byte-untouched in iteration 10.",
+      "resolved": true
+    },
+    {
+      "iter": "goal-rapid-microscope-iter-7",
+      "anti_goal": "Immutable data — registered datasets and bar series are append-only, checksummed, never re-tagged, never deleted, never content-perturbed. Splits are frozen at registration. (critical)",
+      "severity": "critical",
+      "evidence": "INTRODUCED AND FIXED INSIDE ITERATION 7 — the fourth time this session that ONLY the independent auditor caught an integrity fault review and QA both passed. Audit B1: the Card-5.1 preservation keys silently changed a dataset's identity computation. Re-broken and re-proved fixed by the iteration-7 evaluator; re-confirmed in iterations 8 and 9. Iteration 10 touched no store code at all (git status).",
+      "resolved": true
+    },
+    {
+      "iter": "goal-rapid-microscope-iter-7",
+      "anti_goal": "No fold geometry change after fold 1 without a recorded voiding event that clears every survivor state of that corpus-era. (critical)",
+      "severity": "minor",
+      "evidence": "CLOSED IN ITERATION 8 (the floor check now precedes register_fold_spec). Iteration 10 added an independent corroboration: the evaluator recorded a voiding event on a fixture corpus and confirmed that three otherwise-perfect historical_oos folds then failed to advance a candidate to walkforward_survivor — the voiding gate genuinely bites at the graduation boundary too.",
+      "resolved": true
+    },
+    {
+      "iter": "goal-rapid-microscope-iter-8",
+      "anti_goal": "Rapid-validation spec §2.6: `quote_size_unit` is stamped from the dated vendor rule — \"the recorder records the rule text + the verification note beside the stamp\". (feeds the critical 'No cross-unit liquidity arithmetic' rail)",
+      "severity": "minor",
+      "evidence": "CLOSED IN ITERATION 9, verified in code by that evaluator. tick_recorder.py:484-485 supplies quote_size_unit_rule_text and a per-dataset verification note, both excluded from _content_checksum; pinned by the TC-13 byte-identical-checksum counter-test. tick_recorder.py is byte-untouched in iteration 10.",
+      "resolved": true
+    },
+    {
+      "iter": "goal-rapid-microscope-iter-9",
+      "anti_goal": "No exploratory read of a sealed shard. Event data and outcome aggregates of a `sealed` shard are refused everywhere (routes, MCP, accessor, readiness) until its recorded exposure; the refusal is typed, tested, and FAIL-CLOSED. (critical)",
+      "severity": "minor",
+      "evidence": "OPEN, LATENT, AND THE LAST STILL-UNRULED ITEM OF ITS FAMILY (audit B4 / reviewer MINOR at vault.py:547-568). The withholding predicates read HashChainedLedger.all_rows(), which parses but never verifies, so truncating vault_shard_ledger.jsonl silently UN-withholds every sealed shard across eleven consumers — the opposite of the fail-closed the anti-goal's own wording demands. The iteration-10 evaluator grepped docs/rapid-validation-spec.md and confirmed the owner's r5 ruling covers the OTHER two items of this family (cartesian leak, recorder progress) plus referee_evidence, but says NOTHING about a corrupted vault ledger — so B4 alone is still owner-owed. Scored MINOR only because it is unreachable today: no micro_vault directory exists under .data (re-verified this iteration by ls), so no vault ledger file exists to corrupt. It becomes CRITICAL the moment J-06 step 4 seals a real shard.",
+      "resolved": false
+    },
+    {
+      "iter": "goal-rapid-microscope-iter-9",
+      "anti_goal": "A recorded tranche is one opaque research pool until its shards are exposed ... no complete per-shard list of EITHER side while any pool member is unexposed. (critical — spec r5)",
+      "severity": "minor",
+      "evidence": "OWNER RULING LANDED 2026-08-18 (spec revision r5, 'the opaque research pool') — the DESIGN is now settled, so this is no longer owner-blocked; it is UNIMPLEMENTED. The audit's CRITICAL B2 was that closing the public GET /research/datasets listing under the registered universe's cartesian product and subtracting recovers the sealed set exactly (5 of 5 in the auditor's probe). The owner rejected both a documented caveat and decoy recordings and ruled the closure STRUCTURAL: one opaque pool, aggregates on BOTH sides, identity public only at real exposure/assignment, aggregate-only recorder progress with no operator bypass (closing sibling item B3), and TR-2 widened to a deterministic inference trap. NONE of that is built yet — nothing in this iteration's diff touches vault.py, micro_readiness.py, tick_recorder.py or datasets.py (git status). Still scored MINOR today strictly because nothing is sealed and no tranche exists on disk, so no anti-goal condition is currently breached. HARD GATE: J-06 step 4 must not record or seal real tape until r5 is implemented and the widened TR-2 passes.",
+      "resolved": false
+    },
+    {
+      "iter": "goal-rapid-microscope-iter-9",
+      "anti_goal": "Frozen foundations — every `referee_*` module is byte-identical this era (SHA-256 listing recorded at iteration 0 and re-checked). (critical) — in collision with spec r4's \"every corpus-wide enumerator EXCLUDES withheld shards\".",
+      "severity": "minor",
+      "evidence": "OWNER RULING LANDED 2026-08-18 (spec r5 point 7): KEEP THE FREEZE, DISCLOSE. referee_evidence.strategy_trade_readiness stays seal-unaware and unedited; DatasetStore must NOT be intercepted to change frozen Referee behaviour indirectly; the verbatim caveat is served beside the metric; micro_readiness is the canonical seal-aware owner; the stale count gets zero gate/graduation credit; a guard/source-scan must prove it. NONE of that disclosure/guard work is built yet. The iteration-10 evaluator independently re-confirmed the freeze itself HOLDS: all six referee_*.py sha256 hashes are identical to the iteration-0 listing. Escalation condition to watch (owner's own words): if the metric is ever found feeding a live promotion or certificate decision, stop and escalate rather than disclose.",
+      "resolved": false
+    },
+    {
+      "iter": "goal-rapid-microscope-iter-10",
+      "anti_goal": "Constraints — \"The spec is canonical. Ambiguous or unimplementable => DROP the procedure from the iteration, record the drop, surface for an owner ruling — never improvise.\" (feeds the critical 'Sealed exposure is family-level and single-shot' and 'Evidence classes never mix' rails)",
+      "severity": "minor",
+      "evidence": "NEW AND OPEN. Spec §8 leaves two things undefined and the developer improvised BOTH rather than dropping them for an owner ruling — disclosed openly in the handoff and independently confirmed as genuine spec gaps by the reviewer, which is why this is minor rather than critical. (1) The sealed-shard pass/fail verdict is CALLER-SUPPLIED: micro_graduation.record_sealed_evaluation takes `passed: bool` and only verifies real vault exposure before recording it, because no machinery to compute such a verdict exists anywhere in the codebase. The single most consequential act in the whole funnel therefore has no owner module. (2) The 'proposed confirmation boundary' bundle field has NO formula in the spec; it was derived as the latest timestamp on already-ledgered evidence rows. Inert today — the evaluator confirmed no operator-facing route reaches record_sealed_evaluation (the only new route is a read-only GET), zero sealed shards exist and zero graduation rows exist on disk — but both readings become permanent the moment real evidence flows into an export bundle. Needs an owner ruling before J-06 step 4, alongside the still-unruled B4.",
+      "resolved": false
+    }
+  ],
+  "updated_at": "2026-08-18T22:15:00Z"
+}

@@ -105,7 +105,28 @@ it nor anything reversible to it into the row it appends. A missing or unreadabl
 **Storage -- no new ``Config`` field.** ``resolve_vault_dir`` mirrors ``scout_ledger.
 resolve_scout_ledger_dir`` exactly: ``TAPEOLOGY_MICRO_VAULT_DIR`` if set, else a ``micro_vault``
 SIBLING of the caller's own already-resolved dataset directory (the ``TAPEOLOGY_MICRO_*`` family,
-goal.md Constraints)."""
+goal.md Constraints).
+
+**Iteration 11 -- the opaque research pool, closed structurally (spec section 7.5 point 7, r5).**
+Parts 1-4 above close every JOIN a served field could open; point 7 closes something field-level
+minimization cannot reach at all: "no served surface may present a complete identity-labelled
+list of EITHER side while any pool member is unexposed", because the registered universe is
+public BY CONSTRUCTION (section 7.2), so a complete list of the non-withheld side identifies the
+withheld side by subtraction. The gap this closes is concrete, not hypothetical: a repo-wide grep
+at authoring finds ZERO production call sites of ``seal_shard``/``assign_shard``/``expose_shard``
+-- nothing today wires a real recording to this module's ledger the moment it finalizes. So the
+narrower, ledger-row-only ``withheld_universe_by_dataset_id`` above is not wrong, merely
+insufficient: the instant a real recording finalizes under a registered universe, it would be
+fully identifiable in ``GET /research/datasets`` and in ``micro_readiness``'s per-shard ``shards``
+list with zero code path standing in the way. ``unresolved_pool_universe_by_dataset_id`` below
+closes this STRUCTURALLY rather than procedurally -- a universe-RULE-driven predicate, safe the
+INSTANT ``register_universe`` runs, needing no additional recorder-to-vault wiring (see that
+function's own docstring for the full reasoning, including the ``created_utc >= registered_at``
+guard that keeps a later-registered universe from retroactively withholding a pre-existing
+dataset). It is the ONE new choke point ``micro_snapshots.exclude_withheld``/
+``withheld_dataset_ids_for_store`` (hence its 8 existing corpus-wide enumerator consumers) and
+``micro_readiness.build_readiness`` both read -- never a second, divergent implementation of "is
+this dataset withheld"."""
 
 from __future__ import annotations
 
@@ -134,6 +155,7 @@ __all__ = [
     "SealedShardWithheldError",
     "resolve_vault_dir",
     "shard_ledger_for_dataset_dir",
+    "universe_ledger_for_dataset_dir",
     "VaultUniverseLedger",
     "VaultShardLedger",
     "compute_rule_hash",
@@ -153,6 +175,8 @@ __all__ = [
     "currently_sealed_dataset_ids",
     "withheld_dataset_ids",
     "withheld_universe_by_dataset_id",
+    "unresolved_pool_universe_by_dataset_id",
+    "unresolved_pool_dataset_ids",
     "build_vault_state",
     "compute_family_root_id",
     "RULE_DISCLOSURE_COMMITTED",
@@ -317,6 +341,16 @@ def shard_ledger_for_dataset_dir(dataset_dir_resolved: str) -> "VaultShardLedger
     dependency, ``micro_readiness.build_readiness``, ``walkforward.py``'s r2-seed sealed filter),
     so there can never be two vault locations answering "which shards are sealed" differently."""
     return VaultShardLedger(resolve_vault_dir(dataset_dir_resolved))
+
+
+def universe_ledger_for_dataset_dir(dataset_dir_resolved: str) -> "VaultUniverseLedger":
+    """The universe-registration ledger for a caller that knows only its dataset directory -- the
+    ``shard_ledger_for_dataset_dir`` pattern verbatim, for the OTHER ledger (module docstring:
+    "two separate ``HashChainedLedger`` instances"). Iteration 11's own
+    ``unresolved_pool_universe_by_dataset_id`` is the one caller that needs BOTH resolvers
+    together, so there can never be two vault locations answering "which universes are
+    registered" differently."""
+    return VaultUniverseLedger(resolve_vault_dir(dataset_dir_resolved))
 
 
 # === the two ledgers (module docstring: "once per ledger") =========================================
@@ -736,6 +770,125 @@ def withheld_dataset_ids(ledger: VaultShardLedger) -> frozenset[str]:
     """``withheld_universe_by_dataset_id``'s key set -- the membership test ``routes.py`` and
     ``micro_readiness.py`` use (never a second scan of the ledger with its own drifting rule)."""
     return frozenset(withheld_universe_by_dataset_id(ledger))
+
+
+# === iteration 11: the opaque-pool predicate (spec section 7.5 point 7, r5) =========================
+#
+# Module docstring's own "Iteration 11" paragraph has the full motivation. Short version: the two
+# functions above answer "does this dataset already carry an explicit vault shard-ledger row short
+# of exposed" -- correct, but not the whole question, because nothing in this codebase's
+# PRODUCTION code path ever calls seal_shard/assign_shard/expose_shard today (verified by grep at
+# authoring). The functions below answer the actual question -- "is this dataset part of an
+# unresolved registered-universe pool" -- by ALSO reading the registered universe RULE itself,
+# which is safe the instant a universe is registered, independent of whether anything ever seals
+# its members explicitly.
+
+
+def _latest_universes(universe_ledger: VaultUniverseLedger) -> list[dict]:
+    """Every currently-registered universe's own latest row (``find_universe``'s "most recent row
+    per ``universe_id``" semantics, applied across EVERY ``universe_id`` at once rather than one
+    named universe) -- the one ledger scan ``_universe_pair_index`` below needs."""
+    latest: dict[str, dict] = {}
+    for row in universe_ledger.all_rows():
+        latest[row["universe_id"]] = row
+    return list(latest.values())
+
+
+def _universe_pair_index(universe_ledger: VaultUniverseLedger) -> dict[tuple[str, str], list[dict]]:
+    """Every registered universe's own ``expected_recording_pairs()``, indexed by each
+    ``(symbol, date)`` pair it covers -- built ONCE per call so a wide ``symbol_rule x date_rule``
+    product is walked once per universe, never once per caller record (``unresolved_pool_
+    universe_by_dataset_id`` below does an O(1) dict lookup per record against this index)."""
+    index: dict[tuple[str, str], list[dict]] = {}
+    for universe in _latest_universes(universe_ledger):
+        for pair in expected_recording_pairs(universe):
+            index.setdefault(pair, []).append(universe)
+    return index
+
+
+def unresolved_pool_universe_by_dataset_id(
+    shard_ledger: VaultShardLedger,
+    universe_ledger: VaultUniverseLedger,
+    records: list[tuple[str, str, str, str]],
+) -> dict[str, str]:
+    """The SINGLE shared "is this dataset part of an unresolved registered-universe pool"
+    predicate (spec section 7.5 point 7, r5 -- module docstring's "Iteration 11" paragraph has the
+    full motivation), mapped to the responsible ``universe_id``. Consumed via
+    ``micro_snapshots.exclude_withheld``/``withheld_dataset_ids_for_store`` (hence its 8 existing
+    corpus-wide enumerator consumers) and directly by ``micro_readiness.build_readiness`` -- never
+    a second, divergent implementation of "is this withheld" anywhere in this codebase.
+
+    A dataset id is caught by the UNION of two independent tests, never a tie-breaker between
+    them:
+
+    (a) today's ledger-row check (``withheld_universe_by_dataset_id`` above, byte-UNCHANGED): the
+        dataset already carries an explicit vault shard-ledger row whose latest state is short of
+        ``exposed``.
+    (b) NEW -- a universe-RULE membership check, but ONLY for a dataset that carries NO vault
+        shard-ledger row AT ALL (any state -- see the ``ledger_tracked_ids`` guard below): the
+        dataset's own ``(symbol, session_date)`` matches some registered universe's
+        ``expected_recording_pairs()``, AND the dataset's own ``created_utc`` is at or after THAT
+        universe's ``registered_at``.
+
+    **The ``ledger_tracked_ids`` guard is load-bearing, not an optimization.** A universe's rule
+    (``symbol_rule``/``date_rule``) never changes after a shard reaches ``exposed`` -- so without
+    this guard, test (b) would keep matching a shard's (symbol, session_date) FOREVER, silently
+    re-withholding a shard the operator legitimately exposed through the normal
+    ``assign_shard``/``expose_shard`` path (caught by this function's own TC-3/TC-10 tests during
+    development: an exposed shard has no row in (a)'s result set, since (a) only lists rows SHORT
+    of exposed, so a naive "not already withheld by (a)" check alone let (b) re-catch it). The
+    fix: test (b) only ever applies to a dataset the shard ledger has NEVER recorded a row for --
+    once ANY row exists (sealed, assigned, OR exposed), the ledger's own answer is authoritative
+    and test (b) never overrides it in either direction.
+
+    ``created_utc >= registered_at`` is the guard that stops a universe registered LATER from
+    retroactively withholding a dataset that already existed when it was registered -- including
+    one of the 12 permanently-exploratory legacy symbol-days that happens to share a (symbol,
+    date) with a brand-new rule (goal.md's own critical anti-goal: "The 12 pre-existing tick
+    symbol-days are permanently exploratory -- never sealed ... never relabeled"). A dataset
+    recorded before a universe existed cannot possibly be one of THAT universe's own recording
+    outputs, so it is never a candidate for (b) regardless of a coincidental (symbol, date) match.
+    Both timestamps are ``datetime.isoformat(timespec="microseconds")`` strings (``datasets.
+    _iso_utc``/this module's own ``_iso_utc_now``) -- fixed-width and lexicographically
+    comparable, so the plain string comparison is exact, never an approximation.
+
+    Store-agnostic (module docstring: this module never imports ``DatasetStore``): ``records`` is
+    the caller's own ``(dataset_id, symbol, session_date, created_utc)`` 4-tuples -- every caller
+    already walks its own store and already holds these four already-verified manifest fields per
+    record, so no event read is ever implied by calling this function.
+
+    When a dataset id is caught by BOTH tests, or matches (b) against more than one universe, the
+    returned ``universe_id`` prefers (a)'s ledger-recorded answer (the authoritative, already-
+    assigned truth) and otherwise the first (b) match found -- every caller uses this only for
+    AGGREGATE per-universe counting (``micro_readiness.py``'s ``sealed_tranche.by_universe``),
+    never as a per-shard identity, so which universe wins a rare double-match is not itself an
+    identity leak."""
+    result: dict[str, str] = dict(withheld_universe_by_dataset_id(shard_ledger))
+    pair_index = _universe_pair_index(universe_ledger)
+    if pair_index:
+        # Every dataset id the ledger has EVER recorded a row for, in ANY state -- including
+        # `exposed`, which `withheld_universe_by_dataset_id` (hence `result` above) deliberately
+        # excludes. Needed so test (b) below never re-catches a shard the operator legitimately
+        # exposed (see this function's own docstring).
+        ledger_tracked_ids = frozenset(_latest_rows_by_dataset_id(shard_ledger))
+        for dataset_id, symbol, session_date, created_utc in records:
+            if dataset_id in result or dataset_id in ledger_tracked_ids:
+                continue
+            for universe in pair_index.get((symbol, session_date), ()):
+                if created_utc >= universe["registered_at"]:
+                    result[dataset_id] = universe["universe_id"]
+                    break
+    return result
+
+
+def unresolved_pool_dataset_ids(
+    shard_ledger: VaultShardLedger,
+    universe_ledger: VaultUniverseLedger,
+    records: list[tuple[str, str, str, str]],
+) -> frozenset[str]:
+    """``unresolved_pool_universe_by_dataset_id``'s key set -- the ``withheld_dataset_ids`` shape,
+    widened to the same universe-rule membership test (spec section 7.5 point 7, r5)."""
+    return frozenset(unresolved_pool_universe_by_dataset_id(shard_ledger, universe_ledger, records))
 
 
 # === GET /research/desk/micro/vault (served verbatim, no second computation in the route) ==========

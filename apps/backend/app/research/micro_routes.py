@@ -483,7 +483,18 @@ def get_tick_recorder_compute(
     manager: TickRecorderComputeManager = Depends(get_tick_recorder_compute_manager),
 ) -> dict:
     """The current (or last-terminal) recording job's progress -- never 404 (the idle default
-    before any job has ever run this process)."""
+    before any job has ever run this process).
+
+    Aggregate-only, at every point during a run (spec section 7.1, r5, era iteration 11):
+    ``progress`` never carries a symbol, a date, a dataset id, or any other per-chunk field --
+    ``chunks_total``/``chunks_done``/``chunks_fetched``/``chunks_reused``/``chunks_unchanged``/
+    ``chunks_failed``/``trades_total``/``quotes_total``/``percent_complete``/``elapsed_seconds``
+    only. ``manager.snapshot()`` already projects it that way
+    (``tick_recorder._copy_recorder_snapshot``/``_progress_view``, an explicit whitelist), so this
+    route forwards it VERBATIM -- no second computation, and deliberately no operator-only bypass
+    parameter, header, or role claim on this route (r5: using one would itself be a human exposure
+    event that destroys the tranche's blindness). TR-2's widened inference trap
+    (``test_vault.py``) sweeps this exact path."""
     snap = manager.snapshot()
     return {
         "state": snap["state"],

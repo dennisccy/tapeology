@@ -79,6 +79,7 @@ from .strategies import strategies_projection
 from .feed_basis import data_feed_for_scenario
 from .store import JournalStore
 from .taxonomy import taxonomy_payload
+from . import micro_snapshots
 from . import vault
 
 router = APIRouter(prefix="/research", tags=["research"])
@@ -391,18 +392,30 @@ def record_dataset(
     return {"dataset": meta}
 
 
-def get_withheld_dataset_ids() -> frozenset[str]:
-    """The dataset ids whose Validation-Vault shard has not yet reached ``exposed``
-    (``vault.withheld_dataset_ids`` — spec §7.5 point 3, r3). A FastAPI dependency resolved through
-    the SAME `TAPEOLOGY_MICRO_VAULT_DIR`-or-sibling-of-the-dataset-dir path every other vault
-    consumer uses (`vault.shard_ledger_for_dataset_dir`), so there is exactly one answer to "which
-    shards are sealed" in the process, and tests can override it outright.
+def get_withheld_dataset_ids(store: DatasetStore = Depends(get_dataset_store)) -> frozenset[str]:
+    """Every dataset id that is part of an unresolved registered-universe pool — spec §7.5 point 3
+    (r3, the ledger-tracked case) and point 7 (r5, era iteration 11: the universe-RULE-tracked
+    case too — see ``vault.unresolved_pool_universe_by_dataset_id``'s own docstring for the full
+    reasoning). Delegated entirely to ``micro_snapshots.withheld_dataset_ids_for_store`` — THE one
+    choke point every other corpus-wide consumer already shares — never a second, locally
+    reimplemented predicate for this listing/detail/backtest-creation surface specifically.
+
+    **Iteration 11 closes a real gap here, not a hypothetical one.** This is the era's own
+    ``GET /research/datasets`` — the SAME surface docs/phases/goal-rapid-microscope-iter-11.md's
+    own BACKGROUND section names explicitly: "The instant a real recording under a registered
+    universe finalizes a dataset, it becomes fully identifiable in `GET /research/datasets` and
+    in readiness's `shards` list". Before this iteration, this dependency called
+    ``vault.withheld_dataset_ids`` directly (the ledger-row-only predicate) — a real recording
+    finalized under a registered universe but never explicitly sealed would have been fully
+    identifiable right here, on the single most public dataset-listing surface in the product.
+
+    A FastAPI dependency (resolved through the SAME ``get_dataset_store`` dependency
+    ``list_datasets``/``get_dataset`` themselves already use, so there is exactly one store
+    resolution path) so tests can override it outright.
 
     Empty — and therefore a provable no-op for every existing behaviour — until the first shard is
-    ever sealed."""
-    return vault.withheld_dataset_ids(
-        vault.shard_ledger_for_dataset_dir(CONFIG.dataset_dir_resolved())
-    )
+    ever sealed OR the first universe is ever registered."""
+    return micro_snapshots.withheld_dataset_ids_for_store(store)
 
 
 @router.get("/datasets")

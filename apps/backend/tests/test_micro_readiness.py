@@ -42,6 +42,7 @@ from app.research.micro_join import joinable_corpus_counts
 from app.research.micro_routes import get_micro_readiness_cache
 from app.research.referee_evidence import REFEREE_TICK_GATE_SYMBOL_DAYS
 from app.research.routes import get_dataset_store
+from app.research import vault
 
 _ET = ZoneInfo("America/New_York")
 
@@ -586,3 +587,201 @@ def test_tc15_real_corpus_readiness_also_serves_the_typed_band_touch_count(real_
     assert not isinstance(band_touch, int)
     assert band_touch["status"] == "not_enumerated"
     assert band_touch["count"] is None
+
+
+# === Iteration 11 (docs/phases/goal-rapid-microscope-iter-11.md, spec section 7.5 point 7, r5):
+# the opaque-pool predicate widens WHICH datasets `build_readiness` withholds -- TC-1/TC-3/TC-4/
+# TC-10. `_plant_pool_dataset` below is a DEDICATED fixture builder, never `_plant_dataset` above
+# (whose fixed `_events(symbol)` shape collides across dates for the SAME symbol on
+# `DatasetAlreadyRegistered`) -- it mirrors `test_vault.py`'s own per-(symbol, date) content-nonce
+# precedent instead.
+# =====================================================================================================
+
+_POOL_FIXTURE_SECRET = b"a-micro-readiness-fixture-vault-secret"
+
+
+def _plant_pool_dataset(store: DatasetStore, *, symbol: str, session_date: str, nonce: float) -> dict:
+    """One dataset for (symbol, session_date), content-distinct via `nonce` in its one trade's
+    price -- so multiple dates for the SAME symbol never collide on `DatasetAlreadyRegistered`."""
+    events = [
+        QuoteEvent(symbol, 0.0, 99.99, 100.02, 100, 100),
+        TradeEvent(symbol, 0.1, 100.0 + nonce, 10, Side.BUY),
+    ]
+    return store.record(
+        symbol=symbol, source="fixture", source_kind="fixture", source_id=f"{symbol}-fixture",
+        split="train", window_start_utc=f"{session_date}T13:30:00Z",
+        window_end_utc=f"{session_date}T20:00:00Z", data_feed="sip", epoch_anchor=0.0, events=events,
+    )
+
+
+def _pool_fixture(tmp_path):
+    """Registers ONE universe U (``symbol_rule=["ZPQA", "ZPQB"]``, ``date_rule=["2026-06-01",
+    "2026-06-02"]``, 4 expected pairs) and records all 4 corresponding datasets AFTER U's
+    ``registered_at`` (real sequential execution -- register first, record after -- gives this
+    ordering for free, exactly as a real recorder run would). Returns ``(store, dataset_dir,
+    shard_ledger, universe_ledger, metas)`` where ``metas`` maps ``(symbol, date) -> meta``; NONE
+    of the 4 carries any vault shard-ledger row yet -- callers seal/assign/expose as their own
+    scenario requires."""
+    dataset_dir = tmp_path / "datasets"
+    vault_dir = tmp_path / "micro_vault"
+    store = DatasetStore(dataset_dir)
+    universe_ledger = vault.VaultUniverseLedger(str(vault_dir))
+    symbols, dates = ["ZPQA", "ZPQB"], ["2026-06-01", "2026-06-02"]
+    vault.register_universe(
+        universe_ledger, universe_id="pool-u1", symbol_rule=symbols, date_rule=dates,
+        vault_secret_commitment=vault.commit_vault_secret(_POOL_FIXTURE_SECRET),
+    )
+    metas = {}
+    for s_index, symbol in enumerate(symbols):
+        for d_index, session_date in enumerate(dates):
+            metas[(symbol, session_date)] = _plant_pool_dataset(
+                store, symbol=symbol, session_date=session_date, nonce=s_index * 10 + d_index,
+            )
+    shard_ledger = vault.VaultShardLedger(str(vault_dir))
+    return store, str(dataset_dir), shard_ledger, universe_ledger, metas
+
+
+def test_tc1_a_registered_pool_with_mixed_ledger_tracked_and_untracked_members_withholds_all_four(
+    tmp_path,
+):
+    """TC-1 (phase spec): a registered universe's 4 expected pairs, 2 carrying an explicit
+    ``sealed`` ledger row and the other 2 carrying NONE at all -- ``build_readiness`` withholds
+    ALL FOUR per-shard, and ``sealed_tranche`` reports ``shard_count: 4``. This is the exact
+    iteration-11 gap made concrete: pre-fix, the 2 untracked members would have appeared in
+    ``shards`` with full identity, since the old predicate only ever checked for a ledger row."""
+    store, dataset_dir, shard_ledger, _universe_ledger, metas = _pool_fixture(tmp_path)
+
+    # 2 of 4 members get an explicit sealed ledger row; the other 2 get NONE.
+    for pair in [("ZPQA", "2026-06-01"), ("ZPQB", "2026-06-02")]:
+        meta = metas[pair]
+        vault.seal_shard(
+            shard_ledger, dataset_id=meta["id"], universe_id="pool-u1",
+            content_checksum=meta["checksum"], event_count=meta["event_counts"]["total"],
+            vault_secret=_POOL_FIXTURE_SECRET,
+        )
+
+    cache = MicroReadinessCache(str(tmp_path / "cache.db"))
+    result = build_readiness(store, cache, dataset_dir=dataset_dir)
+
+    assert result["shards"] == []  # none of the 4 -- ledger-tracked OR untracked -- appears
+    assert result["sealed_tranche"]["shard_count"] == 4
+    assert result["sealed_tranche"]["symbol_days"] == 4
+    assert result["sealed_tranche"]["by_universe"] == {"pool-u1": {"shard_count": 4, "symbol_days": 4}}
+    assert result["totals"]["distinct_datasets"] == 0
+
+
+def test_tc3_exposing_one_pool_member_reveals_only_that_one_row(tmp_path):
+    """TC-3 (phase spec): one pool member is assigned + exposed via the EXISTING family-bound
+    path; the remaining 3 unresolved pairs still contribute zero per-shard rows and only the
+    aggregate count, now ``shard_count: 3``."""
+    store, dataset_dir, shard_ledger, _universe_ledger, metas = _pool_fixture(tmp_path)
+    exposed_pair = ("ZPQA", "2026-06-01")
+    exposed_meta = metas[exposed_pair]
+    family_root = vault.compute_family_root_id("impact_efficiency_trend", "band_wall_touch", "trades_20")
+    vault.seal_shard(
+        shard_ledger, dataset_id=exposed_meta["id"], universe_id="pool-u1",
+        content_checksum=exposed_meta["checksum"], event_count=exposed_meta["event_counts"]["total"],
+        vault_secret=_POOL_FIXTURE_SECRET,
+    )
+    vault.assign_shard(
+        shard_ledger, dataset_id=exposed_meta["id"], family_root_id=family_root,
+        symbol=exposed_pair[0], session_date=exposed_pair[1],
+    )
+    vault.expose_shard(shard_ledger, dataset_id=exposed_meta["id"], family_root_id=family_root)
+
+    cache = MicroReadinessCache(str(tmp_path / "cache.db"))
+    result = build_readiness(store, cache, dataset_dir=dataset_dir)
+
+    assert [s["dataset_id"] for s in result["shards"]] == [exposed_meta["id"]]
+    assert result["shards"][0]["symbol"] == exposed_pair[0]
+    assert result["shards"][0]["session_date"] == exposed_pair[1]
+    assert result["sealed_tranche"]["shard_count"] == 3
+    assert result["sealed_tranche"]["by_universe"] == {"pool-u1": {"shard_count": 3, "symbol_days": 3}}
+
+
+def test_tc4_a_dataset_recorded_before_a_later_universes_registration_is_never_withheld(tmp_path):
+    """TC-4 (phase spec): a dataset recorded BEFORE a universe's registration is never
+    retroactively withheld by that universe's rule, even when it shares a (symbol, date) with it
+    -- protects the 12 permanently-exploratory legacy symbol-days from a later universe naming the
+    same panel by coincidence."""
+    dataset_dir = tmp_path / "datasets"
+    vault_dir = tmp_path / "micro_vault"
+    store = DatasetStore(dataset_dir)
+
+    # the dataset exists FIRST -- a "legacy" symbol-day, in real chronological order.
+    pre_existing = _plant_pool_dataset(store, symbol="ZPQC", session_date="2026-06-03", nonce=1.0)
+
+    # a LATER universe happens to name the exact same (symbol, date) in its rule.
+    universe_ledger = vault.VaultUniverseLedger(str(vault_dir))
+    vault.register_universe(
+        universe_ledger, universe_id="pool-u2", symbol_rule=["ZPQC"], date_rule=["2026-06-03"],
+        vault_secret_commitment=vault.commit_vault_secret(_POOL_FIXTURE_SECRET),
+    )
+
+    cache = MicroReadinessCache(str(tmp_path / "cache.db"))
+    result = build_readiness(store, cache, dataset_dir=str(dataset_dir))
+
+    assert [s["dataset_id"] for s in result["shards"]] == [pre_existing["id"]]
+    assert result["sealed_tranche"] == {"shard_count": 0, "symbol_days": 0, "by_universe": {}}
+
+    # the vault predicate directly, at the boundary -- the same claim, as the module's own unit.
+    shard_ledger = vault.VaultShardLedger(str(vault_dir))
+    membership = vault.unresolved_pool_universe_by_dataset_id(
+        shard_ledger, universe_ledger,
+        [(pre_existing["id"], "ZPQC", "2026-06-03", pre_existing["created_utc"])],
+    )
+    assert membership == {}
+
+
+def test_tc10_the_withhold_check_never_loads_events_for_a_pool_member_before_its_exposure(
+    tmp_path, monkeypatch
+):
+    """TC-10 (phase spec): ``store.load_events`` is never called for a still-withheld shard's
+    dataset id during ``build_readiness``'s ``fallback_frac`` walk -- proven DIRECTLY via a spy,
+    never inferred from the served shape alone. Exercises BOTH withheld shapes at once (one
+    member carries an explicit ``sealed`` ledger row, two carry none at all) alongside a FOURTH,
+    genuinely exposed member -- so the spy has something legitimate to prove it still fires
+    correctly; a trap that would also pass with ``load_events`` disabled entirely proves
+    nothing."""
+    store, dataset_dir, shard_ledger, _universe_ledger, metas = _pool_fixture(tmp_path)
+
+    sealed_pair = ("ZPQA", "2026-06-01")
+    exposed_pair = ("ZPQB", "2026-06-02")
+    untracked_pairs = [("ZPQA", "2026-06-02"), ("ZPQB", "2026-06-01")]
+
+    sealed_meta = metas[sealed_pair]
+    vault.seal_shard(
+        shard_ledger, dataset_id=sealed_meta["id"], universe_id="pool-u1",
+        content_checksum=sealed_meta["checksum"], event_count=sealed_meta["event_counts"]["total"],
+        vault_secret=_POOL_FIXTURE_SECRET,
+    )
+    exposed_meta = metas[exposed_pair]
+    family_root = vault.compute_family_root_id("impact_efficiency_trend", "band_wall_touch", "trades_20")
+    vault.seal_shard(
+        shard_ledger, dataset_id=exposed_meta["id"], universe_id="pool-u1",
+        content_checksum=exposed_meta["checksum"], event_count=exposed_meta["event_counts"]["total"],
+        vault_secret=_POOL_FIXTURE_SECRET,
+    )
+    vault.assign_shard(
+        shard_ledger, dataset_id=exposed_meta["id"], family_root_id=family_root,
+        symbol=exposed_pair[0], session_date=exposed_pair[1],
+    )
+    vault.expose_shard(shard_ledger, dataset_id=exposed_meta["id"], family_root_id=family_root)
+
+    original_load_events = store.load_events
+    seen_ids: list[str] = []
+
+    def _spy_load_events(dataset_id):
+        seen_ids.append(dataset_id)
+        return original_load_events(dataset_id)
+
+    monkeypatch.setattr(store, "load_events", _spy_load_events)
+
+    cache = MicroReadinessCache(str(tmp_path / "cache.db"))
+    result = build_readiness(store, cache, dataset_dir=dataset_dir)
+
+    assert [s["dataset_id"] for s in result["shards"]] == [exposed_meta["id"]]
+    assert result["sealed_tranche"]["shard_count"] == 3  # 1 sealed + 2 untracked
+    withheld_ids = {sealed_meta["id"], *(metas[p]["id"] for p in untracked_pairs)}
+    assert seen_ids == [exposed_meta["id"]]  # ONLY the exposed shard's events were ever read
+    assert not (set(seen_ids) & withheld_ids)

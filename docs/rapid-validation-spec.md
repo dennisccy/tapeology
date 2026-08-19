@@ -72,6 +72,43 @@
 > the cartesian shape with recording-cost decoys. Where the shipped architecture requires every
 > non-sealed shard to become individually visible at record time, the ARCHITECTURE changes. The
 > one-way exposure history and the single-shot `family_root_id` rules are preserved unchanged.
+>
+> **Revision r6 (2026-08-18, owner rulings — the sealed verdict has an owner).** Four rulings from
+> the iteration-10 escalation, applied while ZERO shards are sealed and ZERO sealed evaluations
+> exist, so nothing re-keys and no recorded verdict moves. (1) **§8.1 `SEALED_PASS_RULE_V1`** — the
+> single-shot sealed verdict gets ONE scientific owner (`micro_sealed_evaluation.py`), which
+> recomputes outcomes from canonical machinery and derives the verdict from already-frozen
+> quantities; `record_sealed_evaluation` may no longer accept a caller-asserted `passed: bool`. This
+> revision exists because the owner's ruling explicitly forbade implementing the evaluator against
+> an undefined pass rule ("stop at the methodology boundary and add the smallest pre-implementation
+> named clarification defining it… do not let the developer choose thresholds"). **It introduces NO
+> new numeric constant** — every floor it applies is one §1 already pins or the family already
+> pre-registered. (2) **§8.2 the confirmation-boundary derivation** — lineage-wide, not
+> survivor-row-wide, with the Referee registration boundary kept as an independent no-backdating
+> floor. (3) **§7.8 vault-ledger corruption** — fail closed on any `verify_chain()` failure, with
+> recovery only through evidence-backed reconstruction; operator attestation is audit metadata,
+> never proof of missing history; unknown exposure history may NEVER be read as "never exposed".
+> (4) **§2.2/§3 `quote_depletion` availability** — the "one quote early" stamp on price-change-
+> terminated runs is corrected to the REVEALING quote. Ruling 4 is recorded here as a note only: it
+> is an implementation bug against r2's existing availability law, not a methodology change, and the
+> owner directed that no revision be created solely for it.
+>
+> **Revision r7 (2026-08-19, owner rulings — nonced commitment + coarse pre-release volumes).** Two
+> rulings from the iteration-11 audit, applied while ZERO shards are sealed and ZERO tranches
+> recorded, so nothing re-keys. Both TIGHTEN r5 after the audit reproduced the subtraction attack
+> through a second door. (1) **§7.2/§7.5 nonced rule commitment** — the owner REJECTED serving a bare
+> deterministic `sha256` of the rule, because `symbol_rule`/`date_rule` are low-entropy and
+> dictionary-enumerable, so a plain hash is not a hiding commitment: pre-release the vault serves
+> ONLY `rule_commitment = sha256(nonce ‖ canonical_rule)` with a high-entropy nonce held privately,
+> and the rule contents + nonce are revealed only on **whole-ORIGINAL-pool release** — never on
+> "all ledger-tracked shards exposed". (2) **§7.1/§7.5 coarse pre-release volumes** — the owner
+> resolved the §7.1-vs-§7.5 contradiction the audit found (a one-symbol-day run made
+> `trades_total`/`quotes_total` a withheld shard's EXACT counts) in favour of §7.5's stronger
+> confidentiality contract: **§7.1 no longer mandates exact totals**; event and byte volumes are
+> predeclared coarse BUCKETS pre-release and exact only after whole-pool release, and the bucket
+> scheme must be differencing-resistant. Rejected in both cases: accepting the residual leak.
+> A third audit finding (B3, the missing `verify_chain()` call) needed no ruling — r6 §7.8 already
+> settled it; the iteration-11 phase spec's claim that it is "an open owner question" is STALE.
 
 ---
 
@@ -141,7 +178,7 @@
 | `REFILL_M_QUOTES` | `20` | `refill_consistent` observation window: same-side quote updates after the execution; `available_at` = the M-th update; session-end first ⇒ `unavailable` |
 | `RESPONSE_K_TRADES` | `20` | Response-asymmetry window: trades after the print; `available_at` = the K-th trade |
 | `BURST_BASELINE_TRAILING_WINDOWS` | `20` | Burst baseline = median of this many prior non-overlapping same-length windows in the SAME session prefix; fewer than `5` ⇒ burst undefined (counted) |
-| `DEPLETION_WINDOW_QUOTES` | `20` | Quote-depletion observation bound: consecutive same-side quote updates at an unchanged price; ends at a price change or the bound; `available_at` = window end |
+| `DEPLETION_WINDOW_QUOTES` | `20` | Quote-depletion observation bound: consecutive same-side quote updates at an unchanged price; ends at a price change or the bound; `available_at` = the REVEALING quote (r6, §3) — the bound-hitting quote, or the price-CHANGING quote for a price-change termination |
 | `IMPACT_FLATNESS_SCALE_BPS` | `5.0` | The frozen flatness scale: `flatness = clamp(1 − |Δmid_bps| / 5.0, 0, 1)`; `failed_aggression_score = dominant_side_volume_share × flatness` per feature window |
 | `DIVERGENCE_TRAILING_SECONDS` | `120.0` | Divergence-at-level price/volume window: TRAILING `[τ − 120s, τ]`, as-of the touch — supersedes Card 9.1's symmetric "window around the touch"; `available_at` = τ |
 | `DIVERGENCE_DELTA_VOLUME_FRACTION` | `0.25` | Card 9.1's δ fraction, frozen HERE as a module constant (never a Config field): `δ = 0.25 × median trailing-120s volume` over the session-prefix baseline windows |
@@ -264,7 +301,11 @@ and `unknown_frac`. Any aggressor-derived quantity is served beside those two fr
   `quote_size_unit`); quote depletion = the drawdown of same-side displayed size across
   consecutive quote updates at an unchanged price, observed over at most
   `DEPLETION_WINDOW_QUOTES` updates (ends at a price change or the bound; a DEFERRED
-  construct, `available_at` = window end); replenishment (`refill_consistent`: displayed size
+  construct whose `available_at` is the **REVEALING** quote, not the last measured one —
+  **measurement end ≠ knowledge time** (r6): a bound-terminated run is revealed by the
+  bound-hitting quote, so `available_at` is that quote; a price-change-terminated run is only
+  revealed by the price-CHANGING quote, so `available_at` is THAT quote — which is excluded from
+  the depletion measurement itself, exactly as its own conditioning data would be); replenishment (`refill_consistent`: displayed size
   restored at the same price within the next `REFILL_M_QUOTES` same-side quote updates after
   executions against it — a DEFERRED construct, `available_at` = the M-th update or
   `unavailable`; **the ONLY permitted label** — "iceberg", "institutional", "spoof" and any
@@ -451,11 +492,11 @@ symbol-days so band context joins. Recording failure modes (vendor timeout, part
 credential absence) are per-chunk `failed` outcomes with detail — never a raise, never a
 fabricated row.
 
-**Recorder progress is AGGREGATE-ONLY while the pool is unexposed (r5).** `GET
-/research/desk/micro/recorder/compute` — and every other progress surface, UI or MCP — serves
-only non-identifying aggregates: chunks completed / total, successful / failed / pending counts,
-aggregate retry and failure counts, total bytes, total trades and quotes, percent complete, and
-deterministic elapsed/throughput diagnostics. It MUST NOT serve symbol, date, dataset id, shard
+**Recorder progress is AGGREGATE-ONLY while the pool is unexposed (r5), and its VOLUMES are COARSE
+(r7).** `GET /research/desk/micro/recorder/compute` — and every other progress surface, UI or MCP —
+serves only non-identifying aggregates: chunks completed / total, successful / failed / pending
+counts, aggregate retry and failure counts, percent complete, and deterministic elapsed/throughput
+diagnostics (throughput as a bucket/range). It MUST NOT serve symbol, date, dataset id, shard
 id, per-shard byte or event counts, or any other per-chunk identity-bearing metadata, because
 watching a live recording would otherwise reveal pool membership before assignment. The detailed
 per-chunk identities remain in the INTERNAL recorder ledger for recovery, idempotency and audit;
@@ -464,6 +505,28 @@ Once a shard is legitimately exposed, its identity appears through the normal ex
 **There is no operator-only bypass** — using one would itself be a human exposure event that
 destroys the tranche's blindness, and it is unnecessary for ordinary monitoring. TR-2's
 inference trap (§7.5) covers the recorder progress path explicitly.
+
+**Event and byte VOLUMES are coarse buckets pre-release (r7) — §7.1 no longer mandates exact
+totals.** The iteration-11 audit proved the contradiction: on a one-symbol-day run the "aggregate"
+`trades_total` IS that withheld shard's exact count. §7.5's no-exact-count rule is the stronger
+confidentiality contract and wins. While ANY member of the ORIGINAL registered pool is unexposed,
+every recorder / readiness / API / UI / MCP surface serves trades recorded, quotes recorded, and
+bytes recorded ONLY as **predeclared coarse buckets** — a deterministic order-of-magnitude or
+broad powers-of-two scheme, carrying the bucket LABEL/RANGE rather than a rounded number
+(`trades_total_bucket: "1M–10M"`, never `trades_total: 3842117`).
+
+The scheme must be **differencing-resistant**: never a per-shard count while that shard is
+withheld; never an exact delta between successive progress snapshots; never finer buckets as the
+pool shrinks; and no series of responses taken before and after individual exposures may
+algebraically reconstruct a withheld member's exact count. Exact volumes may be served only after
+**whole-pool release** (§7.2's original-pool definition). Non-sensitive operational counters —
+chunks completed/total, success/fail/pending, percent complete, retry count, throughput range —
+stay exact, provided none carries shard identity or permits reconstruction.
+
+**Traps (r7).** A one-symbol-day run while withheld ⇒ no exact trade/quote count appears anywhere ·
+a multi-shard pool ⇒ coarse aggregate buckets only · exposing one shard and re-querying ⇒ the
+remaining withheld counts cannot be solved exactly from the before/after pair · the final pool
+member released ⇒ exact totals may be served · no API/UI/MCP path leaks exact counts earlier.
 
 **The Card-5.1 data-preservation prerequisite (r2) — a HARD gate before any bulk recording.**
 Before the recorder may record ANY universe (starter tranche included), the event schema ships
@@ -483,9 +546,33 @@ store is immutable, so preservation precedes volume.
 ### 7.2 Pre-registered recording universes
 A recording batch is legal only under a UNIVERSE registered before any fetch: `{universe_id,
 symbol_rule (the explicit panel list), date_rule (an explicit date range or rule), registered_at,
-rule_hash}` — appended to the vault ledger first. The recorded batch must be the rule's complete
-output net of disclosed vendor failures; a verifier recomputes the expected set and refuses
+rule_commitment}` — appended to the vault ledger first. The recorded batch must be the rule's
+complete output net of disclosed vendor failures; a verifier recomputes the expected set and refuses
 cherry-picked batches (TR-4).
+
+**The rule commitment is NONCED, and the rule stays hidden until whole-pool release (r7).** A bare
+`sha256` of the rule is NOT a hiding commitment — `symbol_rule` and `date_rule` are low-entropy and
+dictionary-enumerable, so a third party could verify guesses against the published digest. At
+registration, therefore: canonicalize the COMPLETE `symbol_rule` + `date_rule`; generate a
+high-entropy random **commitment nonce**; compute
+`rule_commitment = sha256(nonce ‖ canonical_rule)`; persist the nonce PRIVATELY with the immutable
+universe registration; serve ONLY `rule_commitment`. The nonce is never served pre-release.
+
+**"Whole-pool release" is the release of every member of the ORIGINAL registered pool** — including
+members the shard ledger never individually tracked. Disclosure is NEVER gated merely on "all
+ledger-tracked shards exposed" (the iteration-11 audit reproduced a two-GET subtraction attack
+against exactly that weaker gate). Only after whole-pool release may any surface reveal the
+canonical `symbol_rule`, the canonical `date_rule`, and the nonce — at which point an auditor
+recomputes `rule_commitment` and proves the rule never changed after registration. Every API, UI and
+MCP surface is bound by this: none may serve enough rule-axis information to reconstruct the
+withheld set before whole-pool release. The operator who registered the universe already knows the
+rule; **that is not the threat model** — the protection is for third parties and blind evaluators.
+
+**Traps (r7).** One ledger-tracked shard exposed while untracked pool members remain withheld ⇒
+rule contents hidden · ALL tracked shards exposed but one untracked pool member withheld ⇒ still
+hidden · after the final pool member is released ⇒ rule + nonce reveal and recompute EXACTLY to the
+original commitment · a plausible-rule dictionary attack against the served commitment cannot
+verify guesses without the nonce · no other surface serves the symbol or date axes pre-release.
 
 **The Tier-B resolution order (preflight correction 2026-08-16 — a contract clarification, not
 a methodology change).** Card 5.2's Tier-B mid-cap names are PROVISIONAL; its screening
@@ -614,6 +701,37 @@ same-session bar features, computed on exploratory data) is REPORTED beside seal
 it is a diagnostic only, **never a gate, never tunable, and never an authority**; independence is
 decided by the deterministic provenance/exposure rules above alone.
 
+### 7.8 Vault-ledger integrity — fail closed, recover only on evidence (r6)
+
+**The invariant: unknown exposure history may NEVER be interpreted as "never exposed."** A
+truncated tail that silently makes shards look fresh is the worst failure this system can have.
+
+Every vault/exposure predicate calls `verify_chain()` FIRST. Any verification failure raises a
+typed refusal and halts ALL vault work — no sealing, no assignment, no exposure check, no sealed
+evaluation, no graduation — until a lawful recovery completes. There is no warn-and-continue path,
+and operator attestation alone can NEVER certify missing history; the attestation is audit
+metadata, not evidence.
+
+**Lawful recovery** (the only way back) must, in order: halt vault/sealed work · record the
+corruption event separately and immutably · preserve the corrupt ledger BYTE-FOR-BYTE for forensics
+· identify the last verified chain row · reconstruct the missing suffix from trusted immutable
+sources (durable recorder/vault operation artifacts, immutable §8.1 evaluation artifacts,
+append-only graduation/export records, or a backup whose hash was committed BEFORE the corruption)
+· verify the reconstruction is internally consistent and that every exposure, assignment and
+evaluation event is accounted for · write a NEW ledger epoch/recovery record citing the corrupt
+ledger hash, last verified row + hash, reconstruction sources + hashes, recovered suffix hash,
+operator identity and time, and an explicit recovery reason. Only then may predicates resume.
+
+**If the missing suffix cannot be PROVEN complete, recovery must not truncate to the last verified
+row.** Every shard whose freshness could be affected is conservatively marked `exposure_unknown`
+and is permanently ineligible for sealed-OOS use — or the whole tranche halts.
+
+**Traps.** Truncating the tail ⇒ all exposure predicates fail closed · mutating an interior row ⇒
+fail closed · replacing the ledger with a last-known-good prefix ⇒ still fail closed when a later
+committed checkpoint proves history should exist · a successful hash-pinned reconstruction restores
+the EXACT prior exposure state · an unverifiable recovery can never make an affected shard fresh
+again.
+
 ---
 
 ## 8. Graduation (`micro_graduation.py`)
@@ -639,6 +757,81 @@ States, strictly ordered; every transition is an append-only ledger event with f
    byte-untouched this era either way.
 
 No state ever moves backward except by a voiding event (§6.2), which is itself permanent history.
+
+### 8.1 The sealed verdict has one owner — `SEALED_PASS_RULE_V1` (r6)
+
+**The ledger owns history; the evaluator owns the answer.** A caller-supplied `passed: bool` is
+inadmissible for a single-shot permanent verdict. Sealed evaluation has exactly ONE scientific
+owner module, `micro_sealed_evaluation.py`; `micro_graduation.py` and `vault.py` remain
+persistence and transition machinery and neither accepts nor invents the scientific answer.
+
+**The evaluator's mandatory sequence** (any step failing ⇒ typed refusal, never a verdict):
+1. require an ASSIGNED sealed shard and a candidate spec frozen BEFORE that assignment;
+2. load the candidate's canonical registered spec and verify its `spec_hash`, `family_root_id`,
+   outcome basis, sidedness, economic floor, and the sample/breadth floors below;
+3. obtain the shard ONLY through the sanctioned accessor/exposure path (§6.1, §7.4);
+4. RECOMPUTE the sealed outcomes from the canonical snapshot/outcome machinery — a
+   caller-computed effect value is never authoritative;
+5. derive the verdict deterministically from `SEALED_PASS_RULE_V1`;
+6. persist an immutable **evaluation artifact** (below);
+7. pass ONLY that artifact's id + hash to the graduation transition.
+
+**`SEALED_PASS_RULE_V1` (frozen; introduces no new constant).** A (root family, shard) evaluation
+`passes` iff ALL of:
+1. the shard's recomputed observations meet the per-fold sufficiency floors already pinned in §1 —
+   `WF_FOLD_MIN_OBSERVATIONS` observations, `WF_FOLD_MIN_SIGNAL_SESSIONS` signal-bearing sessions,
+   and `WF_FOLD_MIN_SYMBOLS` symbols whenever the family claims breadth; below any floor the
+   verdict is `insufficient`, which is neither a pass nor a fail and consumes the single shot
+   ONLY if the shard was exposed (an exposure is irreversible either way);
+2. the session-clustered effect lies in the family's REGISTERED direction (§5.1 sidedness);
+3. its magnitude ≥ the family's own pre-registered economic floor (§5.5) — the same floor the
+   walk-forward applied, not a new one;
+4. the evaluation rule id/version/hash recorded at assignment is byte-identical to the one applied
+   (a rule changed after assignment fails CLOSED);
+5. the shard's evidence class is `historical_oos` and its process label `rule_process` (§6.7/§6.8).
+Anything less is a FAIL, and a fail is permanent for the root family (§7.4). There is no
+discretionary override and no partial credit.
+
+**The evaluation artifact** (immutable, hash-addressed, sufficient to reproduce the verdict):
+candidate + spec identity and hashes · `family_root_id` · shard identity and checksum AFTER lawful
+assignment · evidence class · process label · outcome basis · n / sessions / symbol breadth ·
+effect and economic-floor inputs · registered direction · rule id/version/hash · the deterministic
+verdict · the closed-vocabulary failure reason when not a pass.
+
+**Traps (all deterministic).** A caller-asserted boolean is impossible/refused · mutating ANY
+evaluation input changes the artifact hash and invalidates the transition · an unregistered rule,
+or one changed after assignment, fails closed · re-running the evaluator over identical inputs
+yields a byte-identical artifact and verdict · a second sealed evaluation for the same
+(`family_root_id`, shard) is refused · a failed verdict travels in every later export bundle.
+
+### 8.2 The proposed confirmation boundary — lineage-wide (r6)
+
+Survivor rows are NOT the basis; the LINEAGE is. Define:
+
+- **`lineage_data_frontier`** = `max(observed_through)` across every evidence item ever touched by
+  the computed `family_root_id` lineage — surviving candidates, killed and superseded siblings,
+  walk-forward folds of ANY verdict, diagnostic and `operator_process` folds, assigned/exposed
+  sealed shards including failed and `insufficient` evaluations, and any other outcome-bearing read
+  in the exposure registry (§6.7). `observed_through` is used, never anchor/event time, so a
+  deferred construct cannot backdate the frontier.
+- **`evidence_safe_boundary`** = `lineage_data_frontier` + the applicable dependency embargo (§6.3),
+  applied in its registered session/market semantics — never as an ad-hoc wall-clock delta.
+- **`proposed_confirmation_boundary`** = the first eligible market/session boundary STRICTLY after
+  `max(evidence_safe_boundary, handoff_created_at)`.
+
+At actual Referee registration the immutable `confirmation_start_boundary` must be no earlier than
+BOTH the bundle's proposed boundary and the Referee's own registration-time boundary:
+`final = next_eligible(max(proposed_confirmation_boundary, referee_registration_boundary))`.
+**Backdating is never permitted.**
+
+The bundle persists the whole derivation: `lineage_data_frontier`, the evidence ids contributing to
+the max, `frontier_observed_through`, the embargo rule id and value, `evidence_safe_boundary`,
+`handoff_created_at`, and `proposed_confirmation_boundary`.
+
+**Traps.** A killed sibling of the same `family_root_id` with a LATER `observed_through` than the
+survivor must push the proposed boundary past it — proving lineage knowledge cannot be laundered
+through candidate selection. A deferred feature with `anchor_at < observed_through` must move the
+boundary by its `observed_through`.
 
 ---
 
@@ -668,6 +861,12 @@ No state ever moves backward except by a voiding event (§6.2), which is itself 
 | TR-20 root lineage | A re-registered family with the same (feature family, context kind, outcome family) triple COMPUTES the same `family_root_id` (the rename attack is refused at the sealed door); a genuinely different triple computes a different root |
 | TR-21 process label | A sequence containing a logged operator selection after any fold reveal is `operator_process` and is refused at `walkforward_survivor`; a pre-reveal registered shortlist keeps `rule_process` |
 | TR-22 exposure registry | A spec registered after a logged serving of its validation window is auto-classed `historical_exposed_diagnostic`; the registry's r2 initialization marks every playbook-corpus and legacy-tick window exposed |
+| TR-23 sealed-verdict ownership (r6 §8.1) | A caller-asserted `passed` boolean is impossible/refused · mutating any evaluation input changes the artifact hash and invalidates the transition · a rule unregistered, or changed after assignment, fails closed · re-running the evaluator on identical inputs yields a byte-identical artifact and verdict · a second sealed evaluation for the same (`family_root_id`, shard) is refused · a failed verdict travels in every later export bundle |
+| TR-24 lineage boundary (r6 §8.2) | A KILLED sibling of the same `family_root_id` with a later `observed_through` than the survivor pushes `proposed_confirmation_boundary` past it (lineage knowledge cannot be laundered through candidate selection) · a deferred feature with `anchor_at < observed_through` moves the boundary by its `observed_through` · the final Referee boundary is never earlier than either the proposed or the registration boundary |
+| TR-25 vault-ledger integrity (r6 §7.8) | Tail truncation ⇒ every exposure predicate fails closed · interior-row mutation ⇒ fails closed · a last-known-good prefix still fails closed when a committed checkpoint proves later history existed · a hash-pinned reconstruction restores the exact prior exposure state · an unverifiable recovery never makes an affected shard fresh again (`exposure_unknown`, permanently sealed-OOS-ineligible) |
+| TR-27 nonced rule commitment (r7 §7.2) | One ledger-tracked shard exposed while untracked pool members remain withheld ⇒ rule contents hidden · ALL tracked shards exposed but one untracked ORIGINAL-pool member still withheld ⇒ still hidden · after the final pool member is released ⇒ `symbol_rule` + `date_rule` + nonce reveal and recompute EXACTLY to the registered `rule_commitment` · a plausible-rule dictionary attack against the served commitment cannot verify guesses without the nonce · no other API/UI/MCP surface serves the symbol or date axes pre-release |
+| TR-28 coarse pre-release volumes (r7 §7.1) | A one-symbol-day run while withheld ⇒ no exact trade/quote/byte count appears on ANY surface · a multi-shard pool ⇒ coarse bucket labels only, never rounded numbers · expose one shard and re-query ⇒ the remaining withheld counts cannot be solved exactly from the before/after response pair (differencing resistance) · buckets never narrow as the pool shrinks · the final ORIGINAL-pool member released ⇒ exact totals may be served |
+| TR-26 depletion revealing quote (r6 §3) | Price-change termination: `available_at` equals the first CHANGED-price quote, not the last same-price one · bound termination: `available_at` equals the bound-hitting quote · truncating immediately BEFORE the revealing quote makes the depletion value non-existent/unavailable, and including it makes the value appear deterministically |
 
 Plus the standing suite: engine golden trace + observer equivalence + frozen-default profile,
 fingerprint pin `08e471b10130e1e2`, referee modules byte-untouched, no-execution scan, copy

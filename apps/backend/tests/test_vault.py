@@ -1234,3 +1234,211 @@ def test_b7_seal_shard_refuses_an_empty_vault_secret(tmp_path):
     )
     assert row["exposure_state"] == "sealed"
     assert len(ledger.all_rows()) == 1
+
+
+# === Iteration 11 (docs/phases/goal-rapid-microscope-iter-11.md, DEFINITION OF DONE): TR-2
+# rewritten into spec section 9's deterministic inference-trap shape -- TC-8/TC-9. The r5
+# governing test, verbatim: "given the registered universe (section 7.2) plus EVERY public
+# artifact the system serves ... no still-unexposed vault-eligible shard is identifiable with
+# certainty." Builds on the SAME rig every TR-2 test above shares
+# (`_combined_fixture_store`/`_scope_everything_to`/`_sweepable_get_paths`/`_scalars`/
+# `_poll_compute`), widened to a REGISTERED universe with FOUR pool members in THREE distinct
+# provenance shapes -- exactly this iteration's own gap: a legitimately EXPOSED member, a
+# ledger-tracked SEALED member (the ONLY case the pre-iteration-11 predicate ever recognized), and
+# TWO UNTRACKED members (zero vault ledger row at all -- what a real recorder run produces TODAY,
+# since nothing wires ``tick_recorder.py`` to ``vault.py`` yet; a repo-wide grep at authoring finds
+# zero production call sites of ``seal_shard``/``assign_shard``/``expose_shard``).
+# =====================================================================================================
+
+
+def _record_pool_dataset(store: DatasetStore, *, symbol: str, session_date: str, nonce: int) -> dict:
+    """One dataset for (symbol, session_date), in NO real panel/universe and globally distinctive
+    via ``nonce`` -- the ``_record_distinctive_dataset`` recipe above, generalized to many
+    (symbol, date) pairs instead of one, at a comparable size (135+ trades/quotes) to the sibling
+    already proven to survive Snapshot/Scout/edge-report/PnL compute acts
+    (``test_tr2_holds_after_the_operator_runs_every_micro_compute_act``/``test_tr2_holds_after_
+    the_corpus_wide_report_acts`` above)."""
+    trades_n, quotes_n = 137 + nonce, 241 + nonce
+    events: list = [QuoteEvent(symbol, float(i), 99.99, 100.02, 100, 100) for i in range(quotes_n)]
+    events += [TradeEvent(symbol, float(i) + 0.5, 100.03 + nonce, 10, Side.BUY) for i in range(trades_n)]
+    return store.record(
+        symbol=symbol, source="historical", source_kind="historical", source_id=symbol,
+        split="train", window_start_utc=f"{session_date}T13:31:07Z",
+        window_end_utc=f"{session_date}T19:57:41Z", data_feed="sip", epoch_anchor=0.0, events=events,
+    )
+
+
+def test_tc8_tc9_r5_inference_trap_a_registered_pool_with_mixed_provenance_leaves_ge2_candidates(
+    tmp_path, monkeypatch
+):
+    """TC-8 + TC-9 (phase spec; spec section 9's TR-2 row): the deterministic r5 inference trap,
+    run against a fixture pool in mixed ledger-tracked/untracked provenance, with the operator
+    compute acts run FIRST so the trap "cannot pass merely because the rig computed nothing."
+
+    TC-8's main assertion: for every still-unexposed member, at least 2 candidate (symbol, date)
+    identities remain consistent with everything served, and no complete identity-labelled
+    exploratory/sealed partition is derivable.
+
+    TC-9's counter-test: the PRE-fix subtraction attack (list ``GET /research/datasets``'s served
+    ids, compute the universe's full expected set, subtract) -- run here directly against the OLD,
+    still-exported ``vault.withheld_universe_by_dataset_id`` predicate (byte-unchanged; iteration
+    11 never edits it, only adds a second, wider predicate alongside it) -- WOULD have isolated
+    the sealed-but-untracked dataset's identity uniquely, proving TC-8's fixed-code assertion
+    above is not vacuous."""
+    _scope_everything_to(tmp_path, monkeypatch)
+    store = _combined_fixture_store(tmp_path)  # the 2 real PG fixtures -- proven compute-safe
+
+    symbols, dates = ["ZQXPOOL1", "ZQXPOOL2"], ["2031-06-01", "2031-06-02"]
+    expected_pairs = frozenset((s, d) for s in symbols for d in dates)
+
+    # the universe is registered BEFORE any of its 4 pairs is recorded (spec section 7.2's own
+    # mandated order, and TC-4's own `created_utc >= registered_at` guard: recording BEFORE
+    # registration would make every pair a pre-existing dataset the universe-rule check must
+    # never withhold -- the exact TC-4 scenario, deliberately NOT this test's scenario).
+    vault_dir = str(tmp_path / "micro_vault")
+    universe_ledger = vault.VaultUniverseLedger(vault_dir)
+    vault.register_universe(
+        universe_ledger, universe_id="pool-tr2", symbol_rule=symbols, date_rule=dates,
+        vault_secret_commitment=vault.commit_vault_secret(_FIXTURE_SECRET),
+    )
+    shard_ledger = vault.VaultShardLedger(vault_dir)
+
+    metas: dict[tuple[str, str], dict] = {}
+    for s_index, symbol in enumerate(symbols):
+        for d_index, session_date in enumerate(dates):
+            metas[(symbol, session_date)] = _record_pool_dataset(
+                store, symbol=symbol, session_date=session_date, nonce=s_index * 10 + d_index,
+            )
+
+    exposed_pair = ("ZQXPOOL1", "2031-06-01")
+    sealed_only_pair = ("ZQXPOOL1", "2031-06-02")
+    untracked_pairs = [("ZQXPOOL2", "2031-06-01"), ("ZQXPOOL2", "2031-06-02")]
+    unresolved_pairs = frozenset(expected_pairs - {exposed_pair})
+    assert len(unresolved_pairs) >= 2  # the TC-8 threshold this fixture must clear by construction
+
+    exposed_meta = metas[exposed_pair]
+    family_root = vault.compute_family_root_id("impact_efficiency_trend", "band_wall_touch", "trades_20")
+    vault.seal_shard(
+        shard_ledger, dataset_id=exposed_meta["id"], universe_id="pool-tr2",
+        content_checksum=exposed_meta["checksum"], event_count=exposed_meta["event_counts"]["total"],
+        vault_secret=_FIXTURE_SECRET,
+    )
+    vault.assign_shard(
+        shard_ledger, dataset_id=exposed_meta["id"], family_root_id=family_root,
+        symbol=exposed_pair[0], session_date=exposed_pair[1],
+    )
+    vault.expose_shard(shard_ledger, dataset_id=exposed_meta["id"], family_root_id=family_root)
+
+    sealed_meta = metas[sealed_only_pair]
+    vault.seal_shard(
+        shard_ledger, dataset_id=sealed_meta["id"], universe_id="pool-tr2",
+        content_checksum=sealed_meta["checksum"], event_count=sealed_meta["event_counts"]["total"],
+        vault_secret=_FIXTURE_SECRET,
+    )
+    # the 2 untracked pairs get NO vault call at all -- today's actual recorder gap.
+
+    from app.config import CONFIG
+    from app.mcp import _STATIC_PATHS
+    from app.research import edge_report, pnl_scan
+    from app.research.referee_registry import CertificateStore
+    from app.research.store import JournalStore
+
+    with TestClient(app) as client:
+        # --- the operator compute acts, RUN FIRST (spec section 9: "cannot pass merely because
+        # the rig computed nothing") -----------------------------------------------------------
+        assert client.post("/research/desk/micro/snapshots/compute").json()["state"] == "running"
+        assert _poll_compute(client, "/research/desk/micro/snapshots/compute")["state"] == "done"
+        assert client.post("/research/desk/micro/scout/compute").json()["state"] == "running"
+        assert _poll_compute(client, "/research/desk/micro/scout/compute")["state"] == "done"
+
+        built = {m["dataset_id"] for m in client.get("/research/desk/micro/snapshots").json()["snapshots"]}
+        assert exposed_meta["id"] in built
+        assert sealed_meta["id"] not in built
+        assert all(metas[p]["id"] not in built for p in untracked_pairs)
+
+        journal = JournalStore(CONFIG.journal_db_path_resolved(), CONFIG)
+        try:
+            report = edge_report.run_edge_report(journal, store, CONFIG)
+            sweep = pnl_scan.run_sweep(
+                journal, store, CONFIG, certificate_store=CertificateStore(tmp_path / "referee_registry"),
+            )
+        finally:
+            journal.close()
+
+        # the counter-test half: the compute acts really did measure something (never vacuous) --
+        # the 2 PG siblings and the legitimately exposed pool dataset, never the 3 unresolved ones.
+        measured = {r["dataset_id"] for r in report["train"]["datasets"] + report["holdout"]["datasets"]}
+        assert exposed_meta["id"] in measured
+        assert sealed_meta["id"] not in measured
+        assert all(metas[p]["id"] not in measured for p in untracked_pairs)
+        assert report["withheld_excluded"] == 3
+        assert sweep["withheld_excluded"] == 3
+
+        # --- NOW sweep every registered route + the recorder-progress path + the `datasets` MCP
+        # tool (structurally proven to coincide with the REST sweep by
+        # test_tr2_the_mcp_surface_is_closed_structurally_not_route_by_route above) -------------
+        swept: dict[str, object] = {}
+        for path in _sweepable_get_paths():
+            url = path.replace("{dataset_id}", exposed_meta["id"])
+            if "{" in url:
+                continue
+            response = client.get(url)
+            try:
+                swept[path] = response.json()
+            except ValueError:
+                swept[path] = response.text
+        assert len(swept) >= 50, f"the sweep only reached {len(swept)} routes"
+        assert "/research/desk/micro/recorder/compute" in swept  # TC-6's own path, in this sweep too
+        assert _STATIC_PATHS["datasets"] in swept  # the `datasets` MCP tool's exact proxied path
+
+        served_text = json.dumps(swept, sort_keys=True, default=str)
+
+        # --- TC-8's main assertion: no still-unexposed member's identity is derivable ----------
+        # the positive reconstruction: subtract what IS served from what the KNOWN universe rule
+        # expects -- this is exactly the attack r5 exists to defeat, EXECUTED, not merely asserted
+        # absent.
+        datasets_body = swept["/research/datasets"]
+        served_identified_pairs = {
+            (row["symbol"], _et_session_date(row["window_start_utc"])) for row in datasets_body["datasets"]
+        }
+        assert served_identified_pairs & expected_pairs == {exposed_pair}
+        remaining_candidates = expected_pairs - served_identified_pairs
+        assert remaining_candidates == unresolved_pairs
+        assert len(remaining_candidates) == 3  # >= 2 -- no unique identity isolated for ANY of them
+
+        # readiness's OWN listing must agree byte-for-byte with the same reconstruction -- two
+        # surfaces answering "which pairs are identified" can never diverge.
+        readiness = swept["/research/desk/micro/readiness"]
+        readiness_identified_pairs = {
+            (row["symbol"], row["session_date"])
+            for row in readiness["shards"]
+            if (row["symbol"], row["session_date"]) in expected_pairs
+        }
+        assert readiness_identified_pairs == {exposed_pair}
+        assert readiness["sealed_tranche"]["shard_count"] == 3
+        assert readiness["sealed_tranche"]["by_universe"] == {
+            "pool-tr2": {"shard_count": 3, "symbol_days": 3}
+        }
+
+        # no unresolved member's dataset id or raw checksum appears ANYWHERE in the swept union --
+        # the join-resistance claim, applied to every unresolved member. Both are long, globally
+        # unique hex strings (never a plain small integer -- see `_scope_everything_to`'s own
+        # comment on why THIS file avoids asserting small scalars are absent: a coincidental
+        # collision with an unrelated route's own real count is a false positive, not a leak).
+        for pair in unresolved_pairs:
+            meta = metas[pair]
+            assert meta["id"] not in served_text, f"{pair}'s dataset id leaked"
+            assert meta["checksum"] not in served_text, f"{pair}'s raw checksum leaked"
+
+        # --- TC-9's counter-test: the PRE-fix predicate WOULD have isolated a unique identity --
+        pre_fix_withheld_ids = set(vault.withheld_universe_by_dataset_id(shard_ledger))
+        assert pre_fix_withheld_ids == {sealed_meta["id"]}  # the ONLY case the old predicate saw
+        pre_fix_served_pairs = {
+            pair for pair, meta in metas.items() if meta["id"] not in pre_fix_withheld_ids
+        }
+        pre_fix_remaining = expected_pairs - pre_fix_served_pairs
+        assert pre_fix_remaining == {sealed_only_pair}, (
+            "the pre-fix subtraction attack should isolate exactly the ledger-tracked-but-"
+            "unexposed dataset's (symbol, date) uniquely -- proving TC-8's fixed-code assertion "
+            "above is not vacuous"
+        )

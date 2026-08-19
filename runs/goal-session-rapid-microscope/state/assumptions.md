@@ -753,3 +753,122 @@ from an unintended interaction with the new predicate.
 today, so nothing about it is exercised (let alone re-keyed) against real data; a later iteration
 building the exploratory-release mechanism only ADDS a new way for a pool member to leave this
 withheld set, never changes today's rule.
+
+## 2026-08-18 — OWNER RULINGS (4) → spec revision r6 "the sealed verdict has an owner"
+
+Escalated by the iter-10 evaluator (ESCALATE); answered by the owner directly. Recorded in
+`docs/rapid-validation-spec.md` r6 (§8.1, §8.2, §7.8, §3 + §1 depletion row, TR-23…TR-26) and in
+`docs/goal.md` (trap range TR-1…TR-22 → TR-1…TR-26 in Success Criteria and J-10 step 1). r6 applies
+while ZERO shards are sealed and ZERO sealed evaluations exist, so nothing re-keys.
+
+1. **Sealed verdict — A NAMED EVALUATOR COMPUTES IT.** `record_sealed_evaluation(..., passed: bool)`
+   is inadmissible. New owner module `micro_sealed_evaluation.py` (persistence stays with
+   graduation/vault, which neither accept nor invent the answer). Mandatory sequence: require an
+   ASSIGNED shard + spec frozen BEFORE assignment → verify `spec_hash`/`family_root_id`/outcome
+   basis/sidedness/economic floor/sample+breadth floors → obtain the shard only through the
+   sanctioned accessor → RECOMPUTE outcomes from canonical machinery (never trust caller-computed
+   effects) → derive deterministically → persist an immutable hash-addressed evaluation artifact →
+   pass only its id+hash to the transition. **The owner explicitly forbade implementing against an
+   undefined pass rule**, so `SEALED_PASS_RULE_V1` is defined in §8.1 FIRST — and it introduces NO
+   new numeric constant: it reuses the §1 per-fold sufficiency floors
+   (`WF_FOLD_MIN_OBSERVATIONS` / `WF_FOLD_MIN_SIGNAL_SESSIONS` / `WF_FOLD_MIN_SYMBOLS`), the
+   family's OWN pre-registered §5.5 economic floor, its registered direction, rule-hash identity
+   (changed-after-assignment fails closed), and `historical_oos` + `rule_process`. `insufficient`
+   is neither pass nor fail. Traps → TR-23.
+2. **Confirmation boundary — LINEAGE-WIDE + no backdating.** `lineage_data_frontier` =
+   `max(observed_through)` over EVERY evidence item the `family_root_id` lineage ever touched
+   (survivors, killed/superseded siblings, folds of any verdict, diagnostic/operator_process folds,
+   assigned/exposed shards incl. failed and insufficient evaluations, any registry-logged
+   outcome-bearing read) — `observed_through`, never anchor time, so deferred constructs cannot
+   backdate it. `evidence_safe_boundary` = frontier + the registered embargo in session/market
+   semantics (not a wall-clock delta). `proposed_confirmation_boundary` = first eligible boundary
+   STRICTLY after `max(evidence_safe_boundary, handoff_created_at)`. At registration:
+   `final = next_eligible(max(proposed, referee_registration_boundary))` — the Referee's own
+   boundary stays an independent floor and backdating is never permitted. The full derivation is
+   persisted in the bundle. The dev's "latest timestamp on surviving evidence rows" is REJECTED.
+   Traps → TR-24 (incl. the killed-sibling case proving lineage can't be laundered by selection).
+3. **Vault-ledger corruption — FAIL CLOSED, evidence-backed recovery only** (owner's custom option,
+   not the offered 1/2/3). `verify_chain()` runs first in every predicate; any failure halts ALL
+   vault work with a typed refusal; no warn-and-continue. Recovery requires: halt → immutable
+   corruption record → preserve the corrupt ledger byte-for-byte → identify last verified row →
+   reconstruct the suffix from trusted immutable sources (recorder/vault artifacts, §8.1 evaluation
+   artifacts, append-only graduation/export records, a pre-corruption hash-committed backup) →
+   verify completeness → write a NEW epoch/recovery record citing every hash + operator identity +
+   reason. **Operator attestation is audit metadata, NEVER proof of missing history.** If the suffix
+   cannot be proven complete, do NOT truncate to the last verified row: affected shards become
+   `exposure_unknown`, permanently sealed-OOS-ineligible, or the tranche halts. Governing
+   invariant: **unknown exposure history may never be read as "never exposed."** Traps → TR-25.
+4. **`quote_depletion` availability — STAMP AT THE REVEALING QUOTE.** Ruled an implementation bug
+   against r2's existing availability law, NOT a methodology change; the owner directed that no
+   revision be created solely for it (r6 records it as a note + trap only). The depletion statistic
+   still uses only the same-price quotes of the run; the price-CHANGING quote is excluded from the
+   measurement but IS the event that reveals termination, so `observed_through`/`available_at`
+   become that quote. Bound-terminated runs keep today's behaviour (the bound-hitting quote both
+   completes and reveals). Never retro-attach to the prior same-price row — emit the deferred
+   construct at the revealing row while keeping the original run anchor/provenance. Rebuild any
+   snapshot whose `feature_source_hash` includes the buggy implementation; do NOT reuse stale
+   snapshots. Old J-04 depletion-conditioned exclusions stay excluded (no retroactive
+   reinterpretation); depletion candidates return only under a NEW `grid_version` with the corrected
+   source hash. **No prior candidate verdict needs rewriting or voiding** — J-04 deliberately
+   excluded every depletion-conditioned candidate while the bug was open, so nothing was measured
+   off the optimistic stamp. Traps → TR-26. Owner's summary: *measurement end ≠ knowledge time*.
+
+## 2026-08-19 — OWNER RULINGS (2) → spec revision r7 "nonced commitment + coarse volumes"
+
+Escalated from the iteration-11 independent audit (PASS_WITH_GAPS, findings B1/B2); answered by the
+owner directly. Recorded in `docs/rapid-validation-spec.md` r7 (§7.2, §7.1, TR-27/TR-28) and in
+`docs/goal.md` (trap range TR-1…TR-26 → TR-1…TR-28). Applied while ZERO shards are sealed and ZERO
+tranches recorded, so nothing re-keys. Both rulings TIGHTEN r5 — the audit reproduced the
+subtraction attack through a second door.
+
+1. **B1 rule reveal — NONCED COMMITMENT, hidden until WHOLE-ORIGINAL-POOL release** (owner's custom
+   option; my "serve `rule_hash` until full release" recommendation was accepted as directionally
+   right but REJECTED as written). Reason: `symbol_rule`/`date_rule` are low-entropy and
+   dictionary-enumerable, so a bare deterministic hash is **not a hiding commitment** — a third
+   party can verify guesses against it. At registration: canonicalize the complete rule → generate a
+   high-entropy nonce → `rule_commitment = sha256(nonce ‖ canonical_rule)` → persist the nonce
+   PRIVATELY with the immutable registration → serve only the commitment. Reveal rule + nonce ONLY
+   after every member of the ORIGINAL registered pool is released — explicitly NOT on "all
+   ledger-tracked shards exposed", which is the weaker gate the audit defeated with two GETs
+   (`vault._fully_exposed_universe_ids`, `vault.py:926-938`). Every API/UI/MCP surface is bound.
+   **The operator who registered the universe already knows the rule; that is not the threat model
+   — the protection is for third parties and blind evaluators.** Residual leak NOT accepted.
+   Traps → TR-27 (incl. the dictionary-attack case).
+2. **B2 progress volumes — COARSE BUCKETS pre-release, and §7.1 STOPS mandating exact totals.** The
+   audit found a real spec-vs-spec contradiction (§7.1 mandated `trades_total`/`quotes_total`; §7.5
+   forbids exact pre-exposure counts; on a one-symbol-day run they are the same number — reproduced
+   at 3/3). Owner resolved it in favour of §7.5 as the stronger confidentiality contract. Trades,
+   quotes and bytes are served as **predeclared coarse bucket LABELS/RANGES** (order-of-magnitude or
+   broad powers-of-two — `trades_total_bucket: "1M–10M"`, never a rounded number) while any ORIGINAL
+   pool member is unexposed; exact only after whole-pool release. The scheme must be
+   **differencing-resistant**: no per-shard count while withheld, no exact deltas between successive
+   snapshots, buckets never narrow as the pool shrinks, and no before/after response series may
+   algebraically reconstruct a withheld member's exact count. Chunks done/total, success/fail/
+   pending, percent, retry count and a throughput RANGE stay exact. Traps → TR-28.
+
+**B3 needed no ruling** — the missing `verify_chain()` call is already settled by r6 §7.8 (fail
+closed, evidence-backed recovery only). ACTION: the iteration-11 phase spec's OUT OF SCOPE section
+still calls it "an open owner question"; that text is STALE and must not be carried forward.
+
+## iter-11 — goal-evaluator
+
+**Ambiguity:** `docs/goal.md`'s J-10 block was edited TWICE during this same iteration (owner
+rulings r6 then r7 widened step 1's required trap suite TR-1…TR-22 → TR-1…TR-26 → TR-1…TR-28),
+after the developer had already built against the earlier text and after `iter-11/goal-slice.md`
+was generated (the slice still reads TR-26). Nothing states whether a mid-iteration owner edit that
+ADDS scope to a journey should be applied to that same iteration's scoring, or only from the next
+iteration onward. No `journeys-changed.md` was produced to force the question, because that note
+only covers journeys whose recorded status was `passing`, and J-10 was `partial`.
+**We chose:** score J-10 against the CURRENT goal text — trap suite 20 of 28 by my own inventory of
+`apps/backend/tests/` — and record its new `spec_hash` (`fc655b84…`, replacing `471d5b5b…`), rather
+than scoring it against the TR-26 text the lanes were measured against. Grounds: `docs/goal.md` is
+the authoritative acceptance text at evaluation time, my methodology's rail is that goal-edit drift
+always outranks evidence durability, and the achievement gate audits `spec_hash` against the
+current file — carrying a hash earned on superseded text would assert a verification that never
+happened. The practical effect is only that J-10's denominator grew (22 → 28 required traps); its
+status was already `partial` for reasons the edit did not touch (TR-3 and TR-22 were missing before
+r6/r7 existed, and step 2's deterministic-rerun check has never run this era), so no status turns
+on this call.
+**Reversible:** yes — J-10 is a continuously-guarding journey re-scored every iteration, and if the
+owner intends a text edit to apply only from the next round, the next evaluation simply re-scores
+against whatever the file then says. Nothing permanent is written from this choice.

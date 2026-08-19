@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-rapid-microscope-iter-11",
+  "base_url": "http://localhost:3301",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Visit the Cockpit homepage",
+      "narration": "The Cockpit page shows the live price chart with candlestick data and a market tape panel that updates in real time.",
+      "point_out": "The chart renders candlesticks and the tape panel displays live bid, ask, and volume information from the simulated market feed.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/" },
+      "expect": { "text": "Bid" }
+    },
+    {
+      "n": 2,
+      "title": "Navigate to the Structure page",
+      "narration": "The Structure page displays the Tradable Map chart and tools for comparing different datasets and strategy results.",
+      "point_out": "The Tradable Map shows support and resistance levels, and the Comparison panel below provides dataset selection and analysis tools.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/structure" },
+      "expect": { "text": "Comparison" }
+    },
+    {
+      "n": 3,
+      "title": "Open the Dataset dropdown in the Comparison panel",
+      "narration": "The dataset selector allows you to choose which recorded data to compare and analyze.",
+      "point_out": "The dropdown opens to reveal available datasets, each showing the symbol, data split type, and a unique identifier.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "css": "[data-testid=\"comparison-dataset-select\"]" } },
+      "expect": { "text": "train" }
+    },
+    {
+      "n": 4,
+      "title": "View the Edge Report comparison results",
+      "narration": "The Edge Report displays a comparison of strategy results, or indicates if the analysis has not yet been computed.",
+      "point_out": "The panel shows either a table of comparison metrics or an honest 'Edge report not computed yet' message with a Compute button.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/structure" },
+      "expect": { "text": "Edge Report" }
+    },
+    {
+      "n": 5,
+      "title": "Open the Desk page",
+      "narration": "The Desk page brings together multiple research sections, with Microscope Readiness showing your recorded tape datasets.",
+      "point_out": "The page contains various analysis panels; the Microscope Readiness section near the bottom displays recorded datasets with their metadata.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/desk" },
+      "expect": { "text": "Microscope Readiness" }
+    },
+    {
+      "n": 6,
+      "title": "Examine the Legacy Tick Shards table in Microscope Readiness",
+      "narration": "The shard table lists each recorded tape dataset with its symbol, date, checksum, and current status.",
+      "point_out": "Each row displays the Symbol, Session Date, Checksum, and exposure state (exploratory or sealed) for a recorded tape shard.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "css": "[data-testid=\"micro-readiness-shards-table\"]" } },
+      "expect": { "text": "PG" }
+    },
+    {
+      "n": 7,
+      "title": "Return to Cockpit and confirm navigation",
+      "narration": "The navigation bar connects all three main pages and properly highlights the active section.",
+      "point_out": "All navigation links (Cockpit, Structure, Desk) are responsive, and the active link highlights to show which page you are viewing.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/" },
+      "expect": { "text": "Bid" }
+    }
+  ]
+}

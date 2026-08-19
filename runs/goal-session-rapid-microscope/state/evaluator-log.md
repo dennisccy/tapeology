@@ -534,3 +534,64 @@ the design, but none of it is built yet, and one question of the same family is 
 a damaged vault record make everything refuse (safe) or make everything open (what happens today)?
 Please also settle two smaller things when convenient: who decides a sealed recording's pass or
 fail verdict, and the timing stamp that is one quote too early, waiting since round 2.
+
+## Iteration 11 — goal-rapid-microscope-iter-11
+
+**Date:** 2026-08-19T09:10:00Z
+**Verdict:** CONTINUE
+**Depth dispatched:** full (the independent checker genuinely ran this time — the third attempt, after
+the budget arbiter cut it in rounds 3 and 8)
+**Journey deltas:**
+- Newly passing: none
+- Newly failing: none
+- Regressed: none
+- Changed content (status unchanged): J-06 "The recorder and the Vault" partial — the third step's
+  hiding rule moved from DECIDED to BUILT AND ATTACKED; still 3 of 5 steps. J-10 "The kept product
+  stands" partial — RE-SCORED against its goal text, which you changed twice since last round (the
+  required trap list grew from 22 to 26 to 28); the safety walk is green for the sixth run in a row,
+  and the trap half now stands at 20 of 28 by my own count of the test folder.
+- Unchanged: J-01, J-02, J-03, J-04, J-05 passing — all five re-checked on screen this round by the
+  replay lane, no journey cut for time; J-07 passing but CARRIED, not tested (the round ran over its
+  clock and its re-check was dropped); J-08, J-09 failing — out of scope, and I confirmed both on
+  disk myself rather than assuming.
+- Anti-goal violations: no critical ones, introduced or open. One NEW minor item (symbols and dates
+  are matched letter-for-letter with no tidying, so a plan registered as "AAPL" with a recording sent
+  as "aapl" would hide nothing). Five older minor items stay open, and the important news is that
+  ALL FIVE are now DECIDED rather than waiting on you — your rulings of 18 and 19 August settled every
+  one. None is built yet. For the first time this session, nothing is blocked on your answer.
+
+**Reasoning:** I took nothing on trust. I ran the three changed test files myself — 123 tests, no
+failures. I read your real data store myself: 18 recordings, no errors, all 12 old symbol-days still
+named in full, nothing hidden — so the new rule is provably harmless to what you already own. I built
+a fake half-finished recording job carrying a symbol, a date and an id, and asked the progress view
+what it would show: exactly ten total-only numbers, and not one of the three identifying values
+appeared. I re-checked the frozen parts myself — the settings fingerprint prints 08e471b10130e1e2 and
+all six judge files hash exactly as they did at the era's start. The independent checker did the one
+thing nobody else did: it drove the REAL recording code end to end under a registered plan and
+confirmed the recording it produced is hidden and absent from the public list, then swept all 78 web
+addresses for the hidden days' names and found nothing. It also caught two mistakes in other reports:
+the quality report claims a file was not changed when it was — and that file is the single most
+important edit in the round — and it caught that a journey's re-check was quietly dropped while the
+note explaining why it has no replay script was deleted. On the pictures: I opened them instead of
+reading the rows, and four of them are bad. The whole-product safety walk picture is completely blank,
+and it is byte-identical to two other pictures; the readiness-table picture shows a different panel
+altogether. The written descriptions beside them are detailed and plausible, and the same facts are
+proven elsewhere, so I treated these as bad photographs rather than broken product — but I have
+flagged both journeys for a re-take.
+
+**Next-step recommendation:** Do one focused tidy-up round next, under the full pipeline with the
+independent checker, and keep it to one theme. Everything in it is already decided, so nothing waits
+on you. In order: make every vault check refuse to answer when its own record file is damaged or
+missing, instead of quietly reporting "nothing is hidden"; hide a batch's symbol-and-date rule behind
+a sealed commitment until the whole batch is released; report the recorder's trade and quote totals as
+coarse bands rather than exact numbers; then three cheap items — match symbols and dates in a
+normalized way, widen the leak trap so it also searches for the symbol and the date and not only the
+id, and re-run J-07 "Graduation" while restoring the small file that records why it has no replay
+script. Please also correct one stale sentence in the written spec: it still calls the damaged-record
+question "an open owner question" a day after you answered it, and that stale sentence is exactly why
+nobody except the independent checker spotted the gap. Do NOT let the next round record real tape —
+J-06 step 4 must stay shut until those four items are built, because sealed tape cannot be corrected
+afterwards. Carry two passengers, never a round of their own: re-take the readiness-table picture and
+the whole-product safety-walk picture. After the tidy-up, build J-08 "The surface and MCP v6" — the
+four new Desk panels and the four new read-only tools — because J-09 "The pilot studies" shows its
+answers through those same panels and cannot finish before them.

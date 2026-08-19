@@ -34,6 +34,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
+from zoneinfo import ZoneInfo
 
 from ..config import CONFIG, Config
 from . import micro_features as mf
@@ -86,6 +87,27 @@ class MicroSnapshotIntegrityError(Exception):
     own one-exception-class-per-module-domain convention)."""
 
 
+# This module's own private ZoneInfo constant -- the micro_readiness.py/referee_evidence.py
+# per-module idiom (mirrored, not imported: "each module that needs ET wall-clock resolution owns
+# a private ZoneInfo constant"). Needed only so ``_pool_records`` below can test a record's own
+# (symbol, session_date) against a registered vault universe's ``date_rule`` (spec section 7.5
+# point 7, r5, iteration 11) -- generic ET arithmetic, not a research value, so duplicating it
+# module-locally carries no single-source-of-truth risk (a session date is a stdlib timezone
+# conversion, never a value this module could compute differently from any other).
+_ET_ZONE = ZoneInfo("America/New_York")
+
+
+def _et_session_date(window_start_utc: str) -> str:
+    """A stored UTC ISO ``window_start_utc``, converted to its ET calendar date -- the SAME
+    conversion ``micro_readiness._et_datetime`` performs, needed here only so
+    ``vault.unresolved_pool_dataset_ids`` can test a record's ``(symbol, session_date)`` against a
+    registered universe's ``date_rule``."""
+    parsed = datetime.fromisoformat(window_start_utc.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(_ET_ZONE).date().isoformat()
+
+
 def resolve_micro_snapshots_dir(dataset_dir_resolved: str) -> str:
     """``TAPEOLOGY_MICRO_SNAPSHOTS_DIR`` if set, else a ``micro_snapshots`` SIBLING of the
     caller's already-resolved dataset directory -- the ``resolve_desk_playbook_dir`` pattern,
@@ -96,23 +118,53 @@ def resolve_micro_snapshots_dir(dataset_dir_resolved: str) -> str:
     return str(Path(dataset_dir_resolved).parent / "micro_snapshots")
 
 
-def withheld_dataset_ids_for_store(dataset_store: DatasetStore) -> frozenset[str]:
-    """Every dataset id whose Validation-Vault shard has not yet reached ``exposed`` (spec
-    section 7.5 point 3, r3), resolved through the ONE
-    ``vault.shard_ledger_for_dataset_dir`` resolver every other vault consumer shares --
-    keyed on THIS store's own directory, never ``CONFIG``'s, so a ``tmp_path``-scoped caller
-    never reads the operator's real vault.
+def _pool_records(records: list[dict]) -> list[tuple[str, str, str, str]]:
+    """Every record's own ``(dataset_id, symbol, session_date, created_utc)`` -- the shape
+    ``vault.unresolved_pool_dataset_ids`` needs to test a dataset against a registered universe's
+    rule (spec section 7.5 point 7, r5, iteration 11). Pure metadata arithmetic over
+    already-loaded ``DatasetStore.list()`` records (``window_start_utc``/``created_utc``, both
+    already-verified manifest fields) -- no event read, so this can never become an exploratory
+    read of a withheld shard's tape."""
+    return [
+        (meta["id"], meta["symbol"], _et_session_date(meta["window_start_utc"]), meta.get("created_utc", ""))
+        for meta in records
+    ]
 
-    Snapshot building is where a sealed shard's raw EVENTS would be replayed, and the snapshot
+
+def _unresolved_pool_ids(dataset_store: DatasetStore, records: list[dict]) -> frozenset[str]:
+    """The ONE choke point ``withheld_dataset_ids_for_store``/``exclude_withheld`` below share --
+    resolves both vault ledgers off THIS store's own directory (never ``CONFIG``'s, so a
+    ``tmp_path``-scoped caller never reads the operator's real vault) and delegates the actual
+    withhold DECISION entirely to ``vault.unresolved_pool_dataset_ids`` (never a second, locally
+    reimplemented predicate)."""
+    root_dir = str(dataset_store.root)
+    return vault.unresolved_pool_dataset_ids(
+        vault.shard_ledger_for_dataset_dir(root_dir),
+        vault.universe_ledger_for_dataset_dir(root_dir),
+        _pool_records(records),
+    )
+
+
+def withheld_dataset_ids_for_store(dataset_store: DatasetStore) -> frozenset[str]:
+    """Every dataset id that is part of an unresolved registered-universe pool -- spec section 7.5
+    point 3 (r3, the ledger-tracked case) and point 7 (r5, iteration 11: the universe-RULE-tracked
+    case too -- see ``vault.unresolved_pool_universe_by_dataset_id``'s own docstring for why the
+    latter is needed at all). Resolved through the SAME ``vault.shard_ledger_for_dataset_dir``/
+    ``vault.universe_ledger_for_dataset_dir`` resolvers every other vault consumer shares -- keyed
+    on THIS store's own directory, never ``CONFIG``'s, so a ``tmp_path``-scoped caller never reads
+    the operator's real vault.
+
+    Snapshot building is where a withheld shard's raw EVENTS would be replayed, and the snapshot
     listing is where its ``dataset_id``/raw ``dataset_checksum``/``row_count``/``bytes_on_disk``
     would be re-published -- exactly the identity, exact counts and bytes section 7.5 withholds
-    until exposure. Both are closed against this set (iter-9 audit finding B1): the era's
-    *(critical)* anti-goal is that a sealed shard's event data and outcome aggregates are
-    "refused everywhere (routes, MCP, accessor, readiness) until its recorded exposure", and a
-    screening/feature pass over sealed tape would destroy the held-out property the vault exists
-    to create. Empty -- and therefore byte-identical to the pre-iter-9 behaviour -- until the
-    first shard is ever sealed."""
-    return vault.withheld_dataset_ids(vault.shard_ledger_for_dataset_dir(str(dataset_store.root)))
+    until exposure. Both are closed against this set (iter-9 audit finding B1, widened iteration
+    11): the era's *(critical)* anti-goal is that a withheld shard's event data and outcome
+    aggregates are "refused everywhere (routes, MCP, accessor, readiness) until its recorded
+    exposure", and a screening/feature pass over withheld tape would destroy the held-out property
+    the vault exists to create. Empty -- and therefore byte-identical to the pre-iter-9 behaviour
+    -- until the first shard is ever sealed OR the first universe is ever registered."""
+    records, _errors = dataset_store.list()
+    return _unresolved_pool_ids(dataset_store, records)
 
 
 def exclude_withheld(records: list[dict], dataset_store: DatasetStore) -> tuple[list[dict], int]:
@@ -123,15 +175,21 @@ def exclude_withheld(records: list[dict], dataset_store: DatasetStore) -> tuple[
     Owner ruling r4, stated as code: "a refusal wired only into a route is bypassed by any module
     that enumerates the store itself", so every enumerator filters at its single
     ``DatasetStore.list()`` choke point -- through THIS function, never a second predicate of its
-    own (a divergent copy is exactly how the iter-9 audit's B2 leak survived the route-level fix).
-    The count travels into the caller's report body and into any append-only row the run writes:
-    **silent exclusion is forbidden** -- these call sites already hold that "a partial report is a
-    misleading report", and the era's denominator rail forbids a corpus that shrinks without
-    saying so.
+    own (a divergent copy is exactly how the iter-9 audit's B2 leak survived the route-level fix,
+    and exactly the class of leak iteration 11 closes again for a dataset a real recorder
+    finalizes with no vault ledger row at all -- see ``vault.unresolved_pool_universe_by_dataset_
+    id``). The count travels into the caller's report body and into any append-only row the run
+    writes: **silent exclusion is forbidden** -- these call sites already hold that "a partial
+    report is a misleading report", and the era's denominator rail forbids a corpus that shrinks
+    without saying so.
 
-    Zero-cost and byte-identical while nothing is sealed: an empty vault withholds nothing, so
-    ``kept is`` every record and the disclosed count is ``0``."""
-    withheld = withheld_dataset_ids_for_store(dataset_store)
+    ``records`` is used AS GIVEN, never re-listed -- every existing call site already passes
+    exactly ``dataset_store.list()``'s own record list, so re-listing here would be a redundant,
+    potentially inconsistent second enumeration of the same store.
+
+    Zero-cost and byte-identical while nothing is sealed and no universe is registered: neither
+    predicate withholds anything, so ``kept is`` every record and the disclosed count is ``0``."""
+    withheld = _unresolved_pool_ids(dataset_store, records)
     kept = [record for record in records if record["id"] not in withheld]
     return kept, len(records) - len(kept)
 

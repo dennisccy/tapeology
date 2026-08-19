@@ -489,8 +489,20 @@ def _finalize_day(
     return meta["id"], "recorded"
 
 
-def _chunk_entry(chunk: dict, outcome: str, detail: str | None = None) -> dict:
-    return {**chunk, "outcome": outcome, "detail": detail, "dataset_id": None, "dataset_outcome": None}
+def _chunk_entry(
+    chunk: dict, outcome: str, detail: str | None = None, *, trade_count: int = 0, quote_count: int = 0,
+) -> dict:
+    """``trade_count``/``quote_count`` (era iteration 11, spec section 7.1) are populated ONLY at
+    the "fetched" call site below, from that chunk's own freshly-fetched ``HistoricalWindow`` --
+    read by the manager's ``_publish`` ONLY to increment its running ``trades_total``/
+    ``quotes_total`` aggregate. This entry itself (``run_tick_recording``'s own return value) is
+    never served verbatim by any route -- the manager's own live progress view
+    (``_progress_view``) is an explicit whitelist that never includes a per-chunk field, this one
+    included."""
+    return {
+        **chunk, "outcome": outcome, "detail": detail, "dataset_id": None, "dataset_outcome": None,
+        "trade_count": trade_count, "quote_count": quote_count,
+    }
 
 
 def run_tick_recording(
@@ -556,7 +568,9 @@ def run_tick_recording(
                     continue
                 checkpoint_store.put(chunk["symbol"], chunk["date"], chunk["start"], chunk["end"], fetched)
                 day_windows.append(fetched)
-                entry = _chunk_entry(chunk, "fetched")
+                entry = _chunk_entry(
+                    chunk, "fetched", trade_count=len(fetched.trades), quote_count=len(fetched.quotes)
+                )
             outcomes.append(entry)
             if progress is not None:
                 progress(entry)
@@ -606,19 +620,87 @@ def _iso_utc_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")
 
 
+# The manager's INTERNAL per-run progress baseline. `outcomes` (each entry's own symbol/date/
+# start/end -- see `_chunk_entry`) is kept SOLELY so `_resolve_terminal`'s pre-existing exception-
+# fallback path (a failure OUTSIDE any single chunk, e.g. TR-19, firing before `run_tick_recording`
+# ever returns its own list) can still build an accurate terminal run-log row from whatever this
+# process itself already saw -- it is NEVER served: `_progress_view` below is an EXPLICIT
+# whitelist (the `vault._serialize_shard` discipline, mirrored) that never spreads `progress`
+# itself into a response, so this internal field can never leak by accident. `trades_total`/
+# `quotes_total` are genuine RUNNING TOTALS (era iteration 11, spec section 7.1) accumulated
+# incrementally by `_publish` below -- never derived from a per-chunk count stored anywhere.
+_IDLE_PROGRESS: dict = {
+    "chunks_total": 0, "chunks_done": 0, "outcomes": [], "trades_total": 0, "quotes_total": 0,
+}
+
 _IDLE_RECORDER_SNAPSHOT: dict = {
     "run_id": None,
     "state": "idle",
-    "progress": {"chunks_total": 0, "chunks_done": 0, "outcomes": []},
+    "progress": dict(_IDLE_PROGRESS),
     "started_utc": None,
     "finished_utc": None,
     "error": None,
 }
 
 
+def _outcome_type_counts(tick_outcomes: list[dict]) -> dict:
+    """The four per-outcome-type counts (spec section 7.1) -- ONE counting implementation, shared
+    by ``_run_log_entry`` (the terminal run-log row, byte-unchanged below) and the live
+    aggregate-only progress projection (``_progress_view`` below, era iteration 11), so the two
+    surfaces can never disagree about how many chunks fetched/reused/were-unchanged/failed."""
+    return {
+        "chunks_fetched": sum(1 for o in tick_outcomes if o["outcome"] == "fetched"),
+        "chunks_reused": sum(1 for o in tick_outcomes if o["outcome"] == "reused"),
+        "chunks_unchanged": sum(1 for o in tick_outcomes if o["outcome"] == "unchanged"),
+        "chunks_failed": sum(1 for o in tick_outcomes if o["outcome"] == "failed"),
+    }
+
+
+def _elapsed_seconds(started_utc: str, end_utc: str) -> float:
+    start = datetime.fromisoformat(started_utc.replace("Z", "+00:00"))
+    end = datetime.fromisoformat(end_utc.replace("Z", "+00:00"))
+    return (end - start).total_seconds()
+
+
+def _progress_view(progress: dict, *, started_utc: str | None, finished_utc: str | None) -> dict:
+    """The aggregate-only PUBLIC projection of the manager's internal progress state (spec section
+    7.1, r5 -- era iteration 11: "GET /research/desk/micro/recorder/compute ... serves only
+    non-identifying aggregates ... MUST NOT serve symbol, date, dataset id, shard id, per-shard
+    byte or event counts, or any other per-chunk identity-bearing metadata"). An EXPLICIT
+    whitelist naming every field it serves, never ``dict(progress)``/``{**progress, ...}`` (the
+    ``vault._serialize_shard`` discipline, mirrored) -- ``progress`` still carries an internal
+    ``outcomes`` list (see ``_IDLE_PROGRESS``'s own docstring), so a blind spread would re-leak it.
+    ``percent_complete``/``elapsed_seconds`` are DERIVED here, never stored on ``progress`` itself,
+    since ``elapsed_seconds`` must reflect "now" for a still-running job."""
+    chunks_total = progress["chunks_total"]
+    chunks_done = progress["chunks_done"]
+    percent_complete = (chunks_done / chunks_total * 100.0) if chunks_total > 0 else 0.0
+    if started_utc is None:
+        elapsed_seconds = 0.0
+    else:
+        elapsed_seconds = _elapsed_seconds(started_utc, finished_utc or _iso_utc_now())
+    return {
+        "chunks_total": chunks_total,
+        "chunks_done": chunks_done,
+        **_outcome_type_counts(progress["outcomes"]),
+        "trades_total": progress["trades_total"],
+        "quotes_total": progress["quotes_total"],
+        "percent_complete": percent_complete,
+        "elapsed_seconds": elapsed_seconds,
+    }
+
+
 def _copy_recorder_snapshot(snapshot: dict) -> dict:
-    progress = snapshot["progress"]
-    return {**snapshot, "progress": {**progress, "outcomes": [dict(o) for o in progress["outcomes"]]}}
+    """The manager's PUBLIC projection -- used by BOTH ``snapshot()`` (``GET .../recorder/compute``)
+    and ``trigger()``'s own immediate return (``POST .../recorder/compute``), so neither surface can
+    diverge from the other. See ``_progress_view``'s own docstring for why this is an explicit
+    whitelist rather than a spread."""
+    return {
+        **snapshot,
+        "progress": _progress_view(
+            snapshot["progress"], started_utc=snapshot["started_utc"], finished_utc=snapshot["finished_utc"]
+        ),
+    }
 
 
 def _run_log_entry(
@@ -627,7 +709,10 @@ def _run_log_entry(
 ) -> dict:
     """THE single shared run-log-entry builder -- called by BOTH the manager's worker resolve path
     and the CLI's ``main()`` (the ``record_deep_backfill_run`` "one shared writer" precedent),
-    so a run's summary counts can never disagree between the two entry points."""
+    so a run's summary counts can never disagree between the two entry points. Byte-identical
+    output to before iteration 11's ``_outcome_type_counts`` extraction -- this route (``GET
+    .../recorder/runs``) is already aggregate-only and its shape is out of this iteration's
+    scope."""
     return {
         "run_id": run_id,
         "state": state,
@@ -635,10 +720,7 @@ def _run_log_entry(
         "finished_utc": finished_utc,
         "chunks_total": chunks_total,
         "chunks_done": len(tick_outcomes),
-        "chunks_fetched": sum(1 for o in tick_outcomes if o["outcome"] == "fetched"),
-        "chunks_reused": sum(1 for o in tick_outcomes if o["outcome"] == "reused"),
-        "chunks_unchanged": sum(1 for o in tick_outcomes if o["outcome"] == "unchanged"),
-        "chunks_failed": sum(1 for o in tick_outcomes if o["outcome"] == "failed"),
+        **_outcome_type_counts(tick_outcomes),
         "datasets_recorded": sum(1 for o in tick_outcomes if o.get("dataset_outcome") == "recorded"),
         "bars_recorded": sum(int(o.get("bars_recorded") or 0) for o in bar_outcomes),
         "error": error,
@@ -692,7 +774,7 @@ class TickRecorderComputeManager:
             self._snapshot = {
                 "run_id": run_id,
                 "state": "running",
-                "progress": {"chunks_total": len(chunks), "chunks_done": 0, "outcomes": []},
+                "progress": {**_IDLE_PROGRESS, "chunks_total": len(chunks)},
                 "started_utc": _iso_utc_now(),
                 "finished_utc": None,
                 "error": None,
@@ -704,12 +786,19 @@ class TickRecorderComputeManager:
                 if self._run_id != run_id:
                     return  # a NEWER job already replaced this one -- a stale reporter, ignored
                 current = self._snapshot
+                progress = current["progress"]
                 self._snapshot = {
                     **current,
                     "progress": {
-                        **current["progress"],
-                        "chunks_done": current["progress"]["chunks_done"] + 1,
-                        "outcomes": [*current["progress"]["outcomes"], entry],
+                        **progress,
+                        "chunks_done": progress["chunks_done"] + 1,
+                        "outcomes": [*progress["outcomes"], entry],
+                        # era iteration 11: running totals, accumulated AT FETCH TIME from each
+                        # "fetched" chunk's own HistoricalWindow (`_chunk_entry`'s own docstring)
+                        # -- a "reused"/"failed" entry's counts are 0, so this only ever grows on a
+                        # genuine new vendor pull THIS run, never on cached/checkpointed content.
+                        "trades_total": progress["trades_total"] + entry["trade_count"],
+                        "quotes_total": progress["quotes_total"] + entry["quote_count"],
                     },
                 }
 

@@ -15,11 +15,14 @@ per this iteration's own scope note). Covers, in order:
   7. The published sha256 split rule (spec section 7.3, unchanged -- NOT vault.py's new seal
      axis, which stays out of scope this iteration).
   8. Bar pairing through the EXISTING, UNCHANGED ``desk_deep_backfill`` machinery.
+  9. Era iteration 11 (spec section 7.1, r5): the LIVE recorder-progress path is aggregate-only
+     at every point during a run -- TC-6/TC-7, section 12 at the bottom of this file.
 """
 
 from __future__ import annotations
 
 import hashlib
+import json
 import threading
 import time
 from datetime import date, timezone
@@ -598,8 +601,12 @@ def test_tc7_a_cancelled_run_finishes_its_in_flight_chunk_and_stops_before_the_n
         snapshot = manager.snapshot()
 
     assert snapshot["state"] == "cancelled"
-    # A shorter-than-planned outcome list -- the walk stopped before every chunk was visited.
-    assert 0 < len(snapshot["progress"]["outcomes"]) < snapshot["progress"]["chunks_total"]
+    # Fewer chunks done than planned -- the walk stopped before every chunk was visited. Era
+    # iteration 11: `manager.snapshot()`'s own `progress` is now aggregate-only (spec section 7.1,
+    # r5) and no longer carries a raw `outcomes` list at all -- `chunks_done` is the SAME count
+    # `len(outcomes)` always equalled in the pre-iteration-11 shape (both incremented together by
+    # `_publish`), so this assertion's meaning is unchanged.
+    assert 0 < snapshot["progress"]["chunks_done"] < snapshot["progress"]["chunks_total"]
 
     runs = read_run_log(run_log_dir)
     assert len(runs) == 1
@@ -838,6 +845,145 @@ def test_cancel_while_running_stops_the_walk_cooperatively_through_the_route(rou
         assert snapshot is not None and snapshot["state"] == "cancelled"
     finally:
         mgr.join_all(timeout=10.0)
+
+
+# ==================================================================================================
+# 12. Era iteration 11 (spec section 7.1, r5): the LIVE recorder-progress path is aggregate-only
+#     at every point during a run -- TC-6/TC-7. The run-log route (GET .../recorder/runs, section
+#     11's `test_a_trigger_runs_to_done_records_a_dataset_and_the_runs_route_reports_it`) was
+#     already aggregate-only and is untouched; this section covers ONLY the live GET/POST compute
+#     paths, which used to carry a raw `progress.outcomes` list with each planned chunk's own
+#     symbol/date (`tick_recorder.py`'s pre-iteration-11 `_publish`/`_copy_recorder_snapshot`).
+# ==================================================================================================
+
+
+_PROGRESS_AGGREGATE_KEYS = {
+    "chunks_total", "chunks_done", "chunks_fetched", "chunks_reused", "chunks_unchanged",
+    "chunks_failed", "trades_total", "quotes_total", "percent_complete", "elapsed_seconds",
+}
+
+
+def _assert_progress_is_aggregate_only(progress: dict) -> None:
+    """TC-6's own field-shape assertion: EXACTLY the ten aggregate fields spec section 7.1 (r5)
+    names -- no ``outcomes``, no ``symbol``, no ``date``, no ``dataset_id``, nothing else."""
+    assert set(progress.keys()) == _PROGRESS_AGGREGATE_KEYS, sorted(progress.keys())
+
+
+def test_tc6_recorder_progress_never_leaks_a_planned_chunks_symbol_date_or_dataset_id(
+    route_ctx, monkeypatch
+):
+    """TC-6 (phase spec, literal scenario): "a tick-recorder compute job planned over 3 chunks
+    spanning 2 symbol-days ... polled mid-run and again after it reaches a terminal state ...
+    neither response body contains any planned chunk's symbol or date string value, nor any
+    dataset_id, anywhere in the JSON -- only chunks_total, chunks_done, the four per-outcome-type
+    counts, trades_total, quotes_total, percent_complete, and elapsed_seconds."
+
+    ``plan_recorder_chunks`` is monkeypatched to this EXACT 3-chunk/2-symbol-day plan: its own
+    real ``chunk_seconds`` default is bound at ITS OWN definition time (a plain Python default-
+    argument gotcha), so it cannot be narrowed through the public ``trigger()``/route surface
+    (which always calls it with none) without this -- the alternative, a real 26-chunks-per-
+    symbol-day walk under the recorder's own throttle, works too (proven by the route tests in
+    section 11 above) but is needlessly slow for what this test needs to prove. Everything AFTER
+    planning -- the walk, the checkpoints, the finalize, the manager's publish loop -- is
+    completely real, against the fake adapter."""
+    client, mgr, _adapter, tmp_path = route_ctx
+    from app.main import app, get_market_adapter
+
+    fake_plan = [
+        {"symbol": "AAPL", "date": "2026-06-01", "start": "2026-06-01T13:30:00Z", "end": "2026-06-01T15:00:00Z"},
+        {"symbol": "AAPL", "date": "2026-06-01", "start": "2026-06-01T15:00:00Z", "end": "2026-06-01T20:00:00Z"},
+        {"symbol": "MSFT", "date": "2026-06-01", "start": "2026-06-01T13:30:00Z", "end": "2026-06-01T20:00:00Z"},
+    ]
+    monkeypatch.setattr(tr, "plan_recorder_chunks", lambda symbols, dates: list(fake_plan))
+
+    blocking_adapter = _BlockingTickAdapter()
+    app.dependency_overrides[get_market_adapter] = lambda: blocking_adapter
+    try:
+        r = client.post(
+            "/research/desk/micro/recorder/compute",
+            json={"symbols": ["AAPL", "MSFT"], "dates": ["2026-06-01"]},
+        )
+        assert r.status_code == 200
+        assert blocking_adapter.started.wait(timeout=5.0)
+
+        # --- mid-run: the first chunk is being fetched, none have resolved yet ----------------
+        mid_run = client.get("/research/desk/micro/recorder/compute").json()
+        assert mid_run["state"] == "running"
+        assert mid_run["progress"]["chunks_total"] == 3
+        _assert_progress_is_aggregate_only(mid_run["progress"])
+        forbidden = {"AAPL", "MSFT", "2026-06-01"}
+        mid_run_text = json.dumps(mid_run)
+        for token in forbidden:
+            assert token not in mid_run_text, f"{token!r} leaked mid-run"
+        # the POST's own immediate return goes through the SAME projection (`trigger()`'s
+        # `published`, built by the SAME `_copy_recorder_snapshot`).
+        assert "AAPL" not in json.dumps(r.json()) and "MSFT" not in json.dumps(r.json())
+
+        blocking_adapter.proceed.set()  # let every remaining chunk (2, 3) proceed unblocked
+
+        deadline = time.time() + 15
+        terminal = None
+        while time.time() < deadline:
+            terminal = client.get("/research/desk/micro/recorder/compute").json()
+            if terminal["state"] != "running":
+                break
+            time.sleep(0.02)
+        assert terminal is not None and terminal["state"] == "done"
+
+        # --- terminal: still aggregate-only, and the aggregates are the RIGHT numbers ---------
+        _assert_progress_is_aggregate_only(terminal["progress"])
+        assert terminal["progress"]["chunks_done"] == terminal["progress"]["chunks_total"] == 3
+        assert terminal["progress"]["chunks_fetched"] == 3
+        assert terminal["progress"]["chunks_reused"] == 0
+        assert terminal["progress"]["chunks_unchanged"] == 0
+        assert terminal["progress"]["chunks_failed"] == 0
+        assert terminal["progress"]["trades_total"] == 3  # 1 trade/chunk -- the fake adapter's shape
+        assert terminal["progress"]["quotes_total"] == 3  # 1 quote/chunk
+        assert terminal["progress"]["percent_complete"] == 100.0
+        assert terminal["progress"]["elapsed_seconds"] >= 0.0
+
+        terminal_text = json.dumps(terminal)
+        for token in forbidden:
+            assert token not in terminal_text, f"{token!r} leaked at the terminal state"
+
+        # a leak-free trap that computed nothing proves nothing (the era's own "cannot pass merely
+        # because the rig computed nothing" discipline) -- the datasets were genuinely recorded.
+        dataset_store = DatasetStore(str(tmp_path / "datasets"))
+        records, _errors = dataset_store.list()
+        assert sorted(m["symbol"] for m in records) == ["AAPL", "MSFT"]
+
+        # the run-log route (already aggregate-only, untouched this iteration) still names them --
+        # proving the withholding above is TARGETED at the live path, never a blanket break.
+        runs = client.get("/research/desk/micro/recorder/runs").json()["runs"]
+        assert runs[0]["datasets_recorded"] == 2
+    finally:
+        blocking_adapter.proceed.set()
+        mgr.join_all(timeout=10.0)
+
+
+def test_tc7_the_recorder_progress_route_accepts_no_bypass_parameter_header_or_role(route_ctx):
+    """TC-7 (phase spec): "given the recorder-progress route's request handling, when it is
+    inspected for any query parameter, header, or role claim that would return per-chunk identity,
+    then none exists." Proven two ways: (1) the route's OWN OpenAPI schema declares zero
+    parameters of any kind (no query, no header, no path beyond the fixed URL); (2) a LIVE
+    behavioural check -- an arbitrary probe of query params and headers that might plausibly spell
+    "reveal it anyway" has literally no effect on the served body, because FastAPI ignores any
+    input a route does not declare. r5's own words: "There is no operator-only bypass -- using one
+    would itself be a human exposure event that destroys the tranche's blindness, and it is
+    unnecessary for ordinary monitoring." """
+    client, _mgr, _adapter, _tmp_path = route_ctx
+    from app.main import app
+
+    schema = app.openapi()["paths"]["/research/desk/micro/recorder/compute"]["get"]
+    assert schema.get("parameters", []) == []
+
+    plain = client.get("/research/desk/micro/recorder/compute").json()
+    probed = client.get(
+        "/research/desk/micro/recorder/compute",
+        params={"reveal": "true", "operator": "true", "role": "admin", "symbol": "AAPL", "bypass": "1"},
+        headers={"X-Operator-Override": "true", "X-Admin-Role": "operator", "Authorization": "Bearer x"},
+    ).json()
+    assert probed == plain  # every extra input is silently ignored -- no bypass exists anywhere
 
 
 from app.config import CONFIG  # noqa: E402 -- imported at bottom to keep the fixture section terse
