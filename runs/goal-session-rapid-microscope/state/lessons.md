@@ -375,3 +375,32 @@ auto-deletion of `state/golden-gaps`, the harness has now twice this era produce
 absence silently reads as coverage.
 **Applies to:** every evaluation — verify each cited evidence path exists on disk before scoring
 from it; and any framework work on `replay-lane.sh` / `demo_runner.py --mode verify`.
+
+## iter-14 — 2026-08-19T20:45:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** A framed screenshot carries evidence nobody wrote down. The Next.js dev-overlay badge
+in `UT-03-result.png` / `UT-04-result.png` reads "5 Issues" while the same page's earlier captures
+(`UT-01`, `UT-02`) and later fresh loads (`UT-11`, `UT-12`, `UT-17`) show no badge at all — which
+localises a brand-new defect to the exact click that expanded Walk-Forward. It is a `<details>` +
+`<pre>` nested inside a `<p>` at `apps/frontend/app/desk/page.tsx:6461-6472`, invalid HTML that
+React reports as a hydration error; a whole-file scan proved it is the ONLY such site in the
+12,000-line Desk page, so it is unambiguously this iteration's. Review, QA, browser-QA, coherence
+AND the independent auditor all passed it, because every lane asserted on DOM *content* and none
+asserted on console cleanliness AFTER expanding a section (UT-01 only checked the collapsed load).
+**Applies to:** any iteration adding a `/desk` or `/structure` section — assert a clean console
+*after* each new section is expanded, not only on first page load; and read the dev-overlay badge
+in every full-page capture as a first-class signal rather than page furniture.
+
+## iter-14 — 2026-08-19T20:45:00Z (second)
+
+**Verdict:** ESCALATE
+**Lesson:** Rendered-vs-stored equality is cheap to prove and worth proving every time a "reads
+verbatim, never recomputes" claim is made. Reading the five fold rows off `UT-03-result.png` and
+diffing them against `.data/micro_walkforward/walkforward_ledger.jsonl` matched exactly — including
+`0.019176079727258294` and `-0.007730667002689608` — which converts "no client-side arithmetic"
+from a regex guard's word into a measured fact in about two minutes. The full-precision floats are
+what make it decisive: any rounding, formatting or recomputation in the browser would have shown.
+**Applies to:** any iteration whose spec says a UI section renders an endpoint "verbatim" — pull
+the underlying store/ledger file and compare the longest-precision numeric on screen, rather than
+relying on the `_PRICE_ARITHMETIC_FIELDS` sweep alone.

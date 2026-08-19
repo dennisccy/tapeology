@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-rapid-microscope-iter-14",
+  "base_url": "http://localhost:3301",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open /desk to view all sections",
+      "narration": "The Desk page now shows three new sections below Microscope Readiness. Each is collapsed (arrow points right). Let's expand them to see how ideas move through screening, testing, and validation.",
+      "point_out": "You see four section headers in order: Microscope Readiness, Scout Ledger, Walk-Forward, Validation Vault. Each arrow points right (collapsed).",
+      "journey": "",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/desk" },
+      "expect": { "text": "Scout Ledger" }
+    },
+    {
+      "n": 2,
+      "title": "Expand Scout Ledger to see the screening record",
+      "narration": "Scout Ledger records every candidate idea that gets tested. Today it's empty—no ideas have been screened yet. Below that, Run History shows when screening runs happened.",
+      "point_out": "Scout Ledger opens. You see 'Ledger chain verification: ok', then 'No candidates ledgered.' (the honest empty state), then 'No scout runs recorded yet.' The enabled 'Run Screen' button sits below—we won't click it to avoid starting a long computation.",
+      "journey": "J-04",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Scout Ledger" } },
+      "expect": { "text": "Ledger chain verification: ok" }
+    },
+    {
+      "n": 3,
+      "title": "Expand Walk-Forward to see diagnostic test sequences",
+      "narration": "Walk-Forward tests ideas against data they haven't seen before, in time order. Today one sequence exists. You can see the fold results and whether it passed or failed.",
+      "point_out": "Walk-Forward opens. You see 'Ledger chain verification: ok', then Fold Specs, then a sequence with its test results. The verdict line says whether it passed or was refused (and why).",
+      "journey": "J-05",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Walk-Forward" } },
+      "expect": { "text": "Sequence verdict:" }
+    },
+    {
+      "n": 4,
+      "title": "Expand Validation Vault to see the read-only record",
+      "narration": "Validation Vault holds data sealed away from research—untouched data to test a finished idea against. Today it's empty; no data has been sealed yet. This section is read-only; there are no controls to change anything here.",
+      "point_out": "Validation Vault opens. Two chain-verification lines appear: 'Shard ledger chain verification: ok' and 'Universe ledger chain verification: ok'. Below: 'No shards recorded.' and 'No universes registered.' No buttons anywhere—the section is read-only.",
+      "journey": "",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Validation Vault" } },
+      "expect": { "text": "No shards recorded" }
+    },
+    {
+      "n": 5,
+      "title": "Verify Microscope Readiness section was unaffected",
+      "narration": "Microscope Readiness sits above the three new sections. It still shows what it always has: the corpus facts (12 symbol-days, 18 datasets) and readiness metrics.",
+      "point_out": "Microscope Readiness opens and shows its tables unchanged. The three new sections sit cleanly below with no visual disruption.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Microscope Readiness" } },
+      "expect": { "text": "symbol-days" }
+    },
+    {
+      "n": 6,
+      "title": "Navigate to /structure to check the other pages",
+      "narration": "The Structure page shows the tradable map for the corpus. This page didn't change—all the new work went only to /desk.",
+      "point_out": "/structure loads without error. The Tradable Map and comparison dropdown are visible.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "goto", "url": "/structure" },
+      "expect": { "text": "TRADABLE MAP" }
+    },
+    {
+      "n": 7,
+      "title": "Navigate to Cockpit to confirm the main page stayed the same",
+      "narration": "The Cockpit shows the live tape chart. This page also stayed the same—all changes went to /desk.",
+      "point_out": "The Cockpit loads and the chart renders. No errors.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "goto", "url": "/" },
+      "expect": { "text": "Confidence" }
+    }
+  ]
+}

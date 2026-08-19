@@ -2517,3 +2517,309 @@ export interface MicroReadinessResponse {
   study_floors: MicroReadinessStudyFloor[];
   integrity_errors: { file: string; error: string }[];
 }
+
+// goal-rapid-microscope-iter-14 (J-08 half 1): Scout Ledger, Walk-Forward, and Validation Vault --
+// three already-shipped backend endpoints rendered on /desk for the first time. Every shape below
+// is transcribed directly from `apps/backend/app/research/{micro_routes,scout,scout_ledger,
+// walkforward,walkforward_ledger,vault}.py`, read this planning pass -- never re-derived from
+// goal.md prose alone. A candidate/fold's own inner payload (`screen_result`, `econ_floor`,
+// `feature`, `outcome`, `structure_context`, a fold's `missing`) varies by candidate/fold type and
+// is typed as `Record<string, unknown>` rather than enumerated -- the page renders it as an opaque,
+// verbatim JSON detail (never guesses a fixed shape, so a field already served is never silently
+// dropped by a mis-typed interface).
+
+export interface MicroChainVerification {
+  ok: boolean;
+  failed_at_row: number | null;
+  reason: string | null;
+}
+
+// --- Scout Ledger -- GET /research/desk/micro/scout (scout.py `list_scout_families`,
+// `register_and_screen_candidate`/`build_candidate_spec_fields`'s own row shape) -----------------
+
+export interface ScoutTrialRow {
+  family_id: string;
+  family_root_id: string;
+  candidate_id: string;
+  spec_hash: string;
+  feature: { name: string; transform: string; params: Record<string, unknown> };
+  structure_context: { kind: string };
+  outcome: { horizon_key: string; sidedness: string | null };
+  fitting_rule: string | null;
+  econ_floor: Record<string, unknown>;
+  corpus_manifest: unknown[];
+  grid_version: number;
+  registered_at: string;
+  econ_floor_computed_at: string;
+  params_hash: string;
+  decision: string;
+  reason: string | null;
+  notes: string | null;
+  screen_result: Record<string, unknown>;
+  superseded_by: string | null;
+  // spec section 7.5 point 6 (r4): how many registered datasets this candidate's corpus manifest
+  // left out because their vault shards are withheld -- a disclosed COUNT, never an id.
+  withheld_excluded: number;
+}
+
+export interface ScoutFamily {
+  family_id: string;
+  family_root_id: string;
+  // The union-N denominator across every grid_version ever run for this family -- never a
+  // client-recount of `trials.length` (a superseded/tampered row must not silently change it).
+  variants_tried: number;
+  trials: ScoutTrialRow[];
+}
+
+export interface DeskScoutResponse {
+  families: ScoutFamily[];
+  chain_verification: MicroChainVerification;
+}
+
+export interface DeskScoutComputeProgress {
+  candidates_total: number;
+  candidates_done: number;
+  current_candidate_id: string | null;
+}
+
+// GET/POST /research/desk/micro/scout/compute -- served verbatim, no `id`/`run_id` field on the
+// GET shape (unlike DeskScreenComputeSnapshot/DeskTopupComputeSnapshot; confirmed against
+// `get_scout_compute`'s own return statement, not assumed from a sibling type).
+export interface DeskScoutComputeSnapshot {
+  state: "idle" | "running" | "done" | "cancelled" | "failed";
+  progress: DeskScoutComputeProgress;
+  started_utc: string | null;
+  finished_utc: string | null;
+  error: string | null;
+}
+
+// POST /research/desk/micro/scout/compute's own two-shape body (both at HTTP 200 -- a refusal is
+// NOT an HTTP error here, unlike the topup/reconcile precedent): confirmed against
+// `trigger_scout_compute`'s own body.
+export type DeskScoutComputeTriggerResponse =
+  | { state: "running"; run_id: string }
+  | { state: "refused"; reason: string };
+
+export interface DeskScoutRunLogEntry {
+  run_id: string;
+  state: "done" | "cancelled" | "failed";
+  started_utc: string;
+  finished_utc: string;
+  candidates_done: number;
+  candidates_total: number;
+  error: string | null;
+}
+
+export interface DeskScoutRunsResponse {
+  runs: DeskScoutRunLogEntry[];
+}
+
+// --- Walk-Forward -- GET /research/desk/micro/walkforward (walkforward.py `list_fold_specs`,
+// `list_walkforward_sequences`, `decay_view`, `sequence_verdict`/`evaluate_survivor_rule`) -------
+
+export interface WalkForwardFoldResultRow {
+  sequence_id: string;
+  corpus_id: string;
+  mode: string;
+  rule_id?: string;
+  fitting_rule?: string | null;
+  spec_hash?: string;
+  fold_index: number;
+  sidedness: string;
+  econ_floor: Record<string, unknown> | null;
+  evidence_class: string;
+  process_label: string;
+  registered_at: string;
+  status: string;
+  n: number;
+  n_sessions: number;
+  n_symbols: number;
+  effect: number | null;
+  sign: string | null;
+  missing: Record<string, string>;
+}
+
+export interface WalkForwardDecayFoldRow {
+  fold_index: number;
+  status: string;
+  effect: number | null;
+  n: number;
+  n_sessions: number;
+  sign: string | null;
+  evidence_class: string;
+  process_label: string;
+}
+
+export interface WalkForwardDecayView {
+  fold_rows: WalkForwardDecayFoldRow[];
+  recency: {
+    older_fold_count: number;
+    recent_fold_count: number;
+    older_positive_share: number | null;
+    recent_positive_share: number | null;
+  };
+}
+
+// WF_SURVIVOR_RULE_V1's own two-shape verdict (walkforward.py `sequence_verdict`): a refusal below
+// WF_MIN_SUFFICIENT_FOLDS, never a fabricated result, or the full five-condition predicate.
+export interface WalkForwardSurvivorConditions {
+  sufficient_oos_rule_process_folds: boolean;
+  sign_agreement: boolean;
+  pooled_effect_clears_econ_floor: boolean;
+  no_opposite_direction_sufficient_fold: boolean;
+  zero_voiding_events: boolean;
+}
+
+export type WalkForwardSequenceVerdict =
+  | { refused: true; reason: string; n_sufficient_folds: number }
+  | {
+      refused: false;
+      verdict: string;
+      rule_name: string;
+      conditions: WalkForwardSurvivorConditions;
+      n_sufficient_folds: number;
+      n_eligible_folds: number;
+      sign_agreement: number;
+      pooled_effect: number | null;
+    };
+
+export interface WalkForwardSequence {
+  sequence_id: string;
+  corpus_id: string;
+  mode: string | null;
+  fitting_rule: string | null;
+  rule_id: string | null;
+  sidedness: string;
+  econ_floor: Record<string, unknown> | null;
+  voided: boolean;
+  fold_results: WalkForwardFoldResultRow[];
+  decay_view: WalkForwardDecayView;
+  sequence_verdict: WalkForwardSequenceVerdict;
+}
+
+// `latest_fold_spec`'s own row -- carries at least `corpus_id`; the rest of the frozen geometry
+// (fold counts/day-widths/purge/embargo) rendered verbatim via an index signature rather than
+// enumerated field-for-field (T-1: never invent a shape not directly verified this pass).
+export interface WalkForwardFoldSpec {
+  corpus_id: string;
+  [key: string]: unknown;
+}
+
+export interface DeskWalkforwardResponse {
+  fold_specs: WalkForwardFoldSpec[];
+  sequences: WalkForwardSequence[];
+  chain_verification: MicroChainVerification;
+}
+
+export interface DeskWalkforwardComputeProgress {
+  steps_total: number;
+  steps_done: number;
+  current_step: string | null;
+}
+
+export interface DeskWalkforwardComputeSnapshot {
+  state: "idle" | "running" | "done" | "cancelled" | "failed";
+  progress: DeskWalkforwardComputeProgress;
+  started_utc: string | null;
+  finished_utc: string | null;
+  error: string | null;
+}
+
+export type DeskWalkforwardComputeTriggerResponse =
+  | { state: "running"; run_id: string }
+  | { state: "refused"; reason: string };
+
+export interface DeskWalkforwardRunLogEntry {
+  run_id: string;
+  state: "done" | "cancelled" | "failed";
+  started_utc: string;
+  finished_utc: string;
+  steps_done: number;
+  steps_total: number;
+  error: string | null;
+  // `trigger_walkforward_compute`'s own extra terminal-log fields (merged onto the run-log entry
+  // on success only -- absent on a `failed`/`cancelled` entry, since `_work`'s return is never
+  // reached in that path).
+  folds_evaluated?: number;
+  folds_replayed?: number;
+  validation_sessions?: number;
+  session_count?: number;
+}
+
+export interface DeskWalkforwardRunsResponse {
+  runs: DeskWalkforwardRunLogEntry[];
+}
+
+// --- Validation Vault -- GET /research/desk/micro/vault, READ-ONLY this iteration (vault.py
+// `build_vault_state`/`_serialize_shard`/`_serialize_universe`) ------------------------------------
+//
+// Section 7.5's three-stage shard reveal and the r7 two-stage universe reveal, both transcribed as
+// an explicit per-stage whitelist matching `vault.py`'s own positive whitelist (never a superset --
+// TC-4/TC-5/TC-15 depend on the FRONTEND never widening what the backend already narrowed).
+
+// `exposure_state` is the discriminant across BOTH interfaces (disjoint literal sets, never
+// widened to the full three-value union on either side) so the page can narrow on
+// `shard.exposure_state === "sealed"` — the server's own stage label — rather than on which
+// optional fields happen to be present (vault.py's own "never field-presence inference" rule,
+// carried into the type layer).
+export interface VaultOpaqueShard {
+  shard_id: string;
+  universe_id: string;
+  // Order-of-magnitude ONLY (`vault._coarse_size_bucket`: "~0" or "~10^N") -- never an exact count,
+  // and never arithmetic material (TC-9/Guardrails: no count is ever derived from this field).
+  size_bucket: string;
+  checksum_commitment: string;
+  sealed_at: string;
+  exposure_state: "sealed";
+}
+
+export interface VaultRevealedShard {
+  shard_id: string;
+  universe_id: string;
+  size_bucket: string;
+  checksum_commitment: string;
+  sealed_at: string;
+  exposure_state: "assigned" | "exposed";
+  dataset_id: string;
+  family_root_id: string;
+  symbol: string;
+  session_date: string;
+  assigned_at: string;
+  exposed_at: string | null;
+  // Present only once `exposure_state === "exposed"` (vault.py `_serialize_shard`).
+  content_checksum?: string;
+}
+
+export type VaultShardRow = VaultOpaqueShard | VaultRevealedShard;
+
+export interface VaultCommittedUniverse {
+  universe_id: string;
+  registered_at: string;
+  rule_commitment: string;
+  vault_secret_commitment: string;
+  symbol_rule_size: number;
+  date_rule_size: number;
+  rule_disclosure: "committed";
+}
+
+export interface VaultRevealedUniverse {
+  universe_id: string;
+  registered_at: string;
+  rule_commitment: string;
+  vault_secret_commitment: string;
+  symbol_rule: string[];
+  date_rule: string[];
+  commitment_nonce: string;
+  rule_disclosure: "revealed";
+}
+
+export type VaultUniverseRow = VaultCommittedUniverse | VaultRevealedUniverse;
+
+export interface DeskVaultResponse {
+  universes: VaultUniverseRow[];
+  shards: VaultShardRow[];
+  // TWO distinct chain-verification fields (never one shared `chain_verification` like Scout/
+  // Walk-Forward) -- the shard ledger and the universe ledger are separate hash chains.
+  shard_ledger_chain_verification: MicroChainVerification;
+  universe_ledger_chain_verification: MicroChainVerification;
+}

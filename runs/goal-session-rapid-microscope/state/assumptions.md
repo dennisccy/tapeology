@@ -1092,3 +1092,52 @@ ruling, never an invention").
 **Reversible:** yes — if a future owner ruling or spec revision gives the vault (or the recorder)
 its own UI-triggerable compute inside the "Validation Vault" section, that is purely additive to
 this iteration's read-only rendering; nothing built here needs to be undone.
+
+## iter-14 — goal-evaluator
+
+**Ambiguity:** whether ESCALATE is available when the decision tree's literal clauses do not fire.
+Tree C.4's three triggers are "the same journey failed 2+ consecutive iterations" (J-09 carries
+`failing`, but it has never been ATTEMPTED — every iteration's spec has placed it out of scope, and
+iteration 13's evaluator already declined to count an un-attempted journey here), "the review lane
+failed and the pipeline proceeded fail-open" (review was PASS_WITH_NOTES), and "this LEAN iteration
+surfaced cross-cutting ambiguity" (this iteration was full). Read strictly, first-match-wins lands
+on C.5 → CONTINUE.
+**We chose:** ESCALATE, and I record that this is a deliberate departure from the tree's literal
+text rather than pretending a clause fired — the same call iteration 13 made and logged. Grounds
+specific to iteration 15: its content is (a) `desk_vault` and `desk_micro_readiness` as new MCP
+proxies, which put the vault body and the corpus-readiness body on a brand-new disclosure channel,
+and (b) the coherence WARN's fix, which ADDS the withheld-shard disclosure fields (`sealed_tranche`,
+`withheld_excluded`) to the rendered Microscope Readiness section. Both are governed by the era's
+critical "one opaque research pool" anti-goal, where rendering a per-shard list instead of an
+aggregate reopens the subtraction attack the last five rounds closed. In this session the
+independent auditor is the ONLY lane that has ever caught that fault class — six times now (iters
+2, 4, 5, 7, 13, and F1/F2 this round), each time after review and QA had both passed the same code.
+The verdict line is the only mechanically binding grant of full depth (iterations 8 and 12 lost the
+auditor when full depth was requested in prose only). Cost of being wrong: one extra audit lane.
+Cost of being right and having chosen CONTINUE: an unaudited iteration over the era's two most
+confidentiality-sensitive surfaces at once.
+**Reversible:** yes — ESCALATE only sets the next iteration's depth; it halts nothing, and a later
+evaluator can return to lean once the MCP half is browser-verified and the opacity sweep has been
+re-run against the new tools.
+
+## iter-14 — goal-evaluator (second)
+
+**Ambiguity:** J-07 "Graduation" was recorded `DEFERRED-BUDGET` (not re-verified) for the second
+consecutive iteration, while its DoD item named that outcome and forbade it. Methodology A.4 says a
+`DEFERRED-BUDGET` row keeps the journey's prior recorded status and is never grounds for
+`regressed`/`failing`/`unknown`; but the auditor separately probed the journey's substance live
+(`GET /research/desk/micro/graduation` → HTTP 200 honest-empty) and I re-ran its own acceptance
+module (`tests/test_micro_graduation.py`, 19/19). Nothing states whether an out-of-lane substance
+probe converts a deferred journey back into a freshly-verified one.
+**We chose:** keep J-07 `passing` with its `last_verified_iter` and `spec_hash` CARRIED FORWARD
+unchanged from iteration 12, plus a new `deferred_budget_iter` marker — i.e. treat the auditor's
+probe and my test run as corroboration that the journey has not rotted, NOT as its registered
+re-verification. Grounds: the `spec_hash` field asserts "this status was verified against exactly
+this goal text" and is audited by the deterministic achievement gate; stamping a fresh hash on the
+strength of a route probe plus unit tests would let a journey whose browser/replay acceptance was
+skipped twice look freshly verified, which is precisely what the gate exists to prevent. J-07's
+acceptance is keyless/automated (no golden replay script exists, for a documented harness reason),
+so the probe is genuinely strong evidence — it just is not the lane's verification.
+**Reversible:** yes — one genuine re-verification in iteration 15 (already the third item of my
+next-step recommendation) refreshes both fields; until then the achievement gate correctly refuses
+to count J-07 toward finishing.

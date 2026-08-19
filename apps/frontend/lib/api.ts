@@ -10,6 +10,10 @@ import type {
   DeskDeepBackfillPlan,
   DeskReconcileComputeSnapshot,
   DeskReconcileRunsListResult,
+  DeskScoutComputeSnapshot,
+  DeskScoutComputeTriggerResponse,
+  DeskScoutResponse,
+  DeskScoutRunsResponse,
   DeskScreenCompareResult,
   DeskScreenComputeSnapshot,
   DeskScreenListResult,
@@ -33,6 +37,11 @@ import type {
   DeskTopupComputeSnapshot,
   DeskTopupRunsListResult,
   DeskUniverseSnapshotMeta,
+  DeskVaultResponse,
+  DeskWalkforwardComputeSnapshot,
+  DeskWalkforwardComputeTriggerResponse,
+  DeskWalkforwardResponse,
+  DeskWalkforwardRunsResponse,
   EdgeReportComputeSnapshot,
   EdgeReportPayload,
   LevelsResponse,
@@ -2430,5 +2439,268 @@ export async function cancelRefereeEvaluate(hypothesisId: string): Promise<{
     return { ok: false, error };
   } catch {
     return { ok: false, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// goal-rapid-microscope-iter-14 (J-08 half 1): Scout Ledger / Walk-Forward / Validation Vault --
+// three already-shipped, already-tested backend endpoints, their first-ever frontend consumers.
+// Every function below mirrors `fetchMicroReadiness`'s exact `{ok, data, error?}` envelope and
+// "Backend unreachable — is the API running?" fallback string verbatim.
+
+// GET /research/desk/micro/scout — every registered family's trials, verbatim, beside the ledger's
+// own chain-verification verdict. Never 404 on an empty ledger (an honest `families: []`).
+export async function fetchDeskScout(): Promise<{
+  ok: boolean;
+  data: DeskScoutResponse | null;
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/micro/scout`);
+    if (res.ok) {
+      return { ok: true, data: (await res.json()) as DeskScoutResponse };
+    }
+    let error = "The scout ledger could not be loaded.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, data: null, error };
+  } catch {
+    return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// POST /research/desk/micro/scout/compute — starts a screening run over the bounded reference
+// grid, or refuses (single-flight). Unlike triggerDeskTopupCompute/triggerDeskReconcileCompute, a
+// refusal is NOT an HTTP error here — both "running" and "refused" arrive at HTTP 200 with a
+// `state` field distinguishing them (confirmed against `trigger_scout_compute`'s own body); `res.ok
+// === false` is reserved for a genuine non-200/unreachable backend. This route takes no body — an
+// operator names no candidate/date, unlike the recorder or the screen compute triggers.
+export async function triggerDeskScoutCompute(): Promise<{
+  ok: boolean;
+  data: DeskScoutComputeTriggerResponse | null;
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/micro/scout/compute`, { method: "POST" });
+    if (res.ok) {
+      return { ok: true, data: (await res.json()) as DeskScoutComputeTriggerResponse };
+    }
+    let error = "The scout screening run could not be started.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, data: null, error };
+  } catch {
+    return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// GET /research/desk/micro/scout/compute — the current (or last-terminal) run's progress, served
+// verbatim. Never 404 (the idle default before any job has ever run this process).
+export async function fetchDeskScoutCompute(): Promise<{
+  ok: boolean;
+  data: DeskScoutComputeSnapshot | null;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/micro/scout/compute`);
+    if (!res.ok) return { ok: false, data: null };
+    const data = await res.json();
+    return { ok: true, data: (data as DeskScoutComputeSnapshot | null) ?? null };
+  } catch {
+    return { ok: false, data: null };
+  }
+}
+
+// POST /research/desk/micro/scout/compute/cancel — cancel the in-flight screening run. The
+// backend's 409 (idle) `detail` is surfaced verbatim.
+export async function cancelDeskScoutCompute(): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/micro/scout/compute/cancel`, {
+      method: "POST",
+    });
+    if (res.ok) return { ok: true };
+    let error = "The scout screening run could not be cancelled.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, error };
+  } catch {
+    return { ok: false, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// GET /research/desk/micro/scout/runs — the durable run history, newest first. Never 404 on zero
+// runs (an honest empty list).
+export async function fetchDeskScoutRuns(): Promise<{
+  ok: boolean;
+  data: DeskScoutRunsResponse | null;
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/micro/scout/runs`);
+    if (res.ok) {
+      return { ok: true, data: (await res.json()) as DeskScoutRunsResponse };
+    }
+    let error = "The scout run history could not be loaded.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, data: null, error };
+  } catch {
+    return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// GET /research/desk/micro/walkforward — every fold spec plus every sequence's fold results, decay
+// view, and sequence verdict, beside the ledger's own chain-verification verdict. Never 404 on an
+// empty ledger. Mirrors fetchDeskScout exactly.
+export async function fetchDeskWalkforward(): Promise<{
+  ok: boolean;
+  data: DeskWalkforwardResponse | null;
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/micro/walkforward`);
+    if (res.ok) {
+      return { ok: true, data: (await res.json()) as DeskWalkforwardResponse };
+    }
+    let error = "The walk-forward ledger could not be loaded.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, data: null, error };
+  } catch {
+    return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// POST /research/desk/micro/walkforward/compute — starts the diagnostic acceptance run against the
+// operator's real playbook/universe/bar stores, or refuses (single-flight). Same two-shape-at-200
+// body as triggerDeskScoutCompute; this route also takes no body.
+export async function triggerDeskWalkforwardCompute(): Promise<{
+  ok: boolean;
+  data: DeskWalkforwardComputeTriggerResponse | null;
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/micro/walkforward/compute`, {
+      method: "POST",
+    });
+    if (res.ok) {
+      return { ok: true, data: (await res.json()) as DeskWalkforwardComputeTriggerResponse };
+    }
+    let error = "The walk-forward run could not be started.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, data: null, error };
+  } catch {
+    return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// GET /research/desk/micro/walkforward/compute — mirrors fetchDeskScoutCompute exactly.
+export async function fetchDeskWalkforwardCompute(): Promise<{
+  ok: boolean;
+  data: DeskWalkforwardComputeSnapshot | null;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/micro/walkforward/compute`);
+    if (!res.ok) return { ok: false, data: null };
+    const data = await res.json();
+    return { ok: true, data: (data as DeskWalkforwardComputeSnapshot | null) ?? null };
+  } catch {
+    return { ok: false, data: null };
+  }
+}
+
+// POST /research/desk/micro/walkforward/compute/cancel — mirrors cancelDeskScoutCompute exactly.
+export async function cancelDeskWalkforwardCompute(): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/micro/walkforward/compute/cancel`, {
+      method: "POST",
+    });
+    if (res.ok) return { ok: true };
+    let error = "The walk-forward run could not be cancelled.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, error };
+  } catch {
+    return { ok: false, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// GET /research/desk/micro/walkforward/runs — mirrors fetchDeskScoutRuns exactly.
+export async function fetchDeskWalkforwardRuns(): Promise<{
+  ok: boolean;
+  data: DeskWalkforwardRunsResponse | null;
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/micro/walkforward/runs`);
+    if (res.ok) {
+      return { ok: true, data: (await res.json()) as DeskWalkforwardRunsResponse };
+    }
+    let error = "The walk-forward run history could not be loaded.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, data: null, error };
+  } catch {
+    return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// GET /research/desk/micro/vault — READ-ONLY this iteration (state/assumptions.md's iter-14
+// entry): every shard's CURRENT lifecycle state (opaque-only while sealed) and every registered
+// universe (committed-only until whole-ORIGINAL-pool release), beside BOTH ledgers' own
+// chain-verification verdicts. The ONLY fetch the Validation Vault section issues — never
+// /research/datasets, never the readiness result, to enrich or cross-reference a row (Guardrails/
+// TC-6).
+export async function fetchDeskVault(): Promise<{
+  ok: boolean;
+  data: DeskVaultResponse | null;
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/micro/vault`);
+    if (res.ok) {
+      return { ok: true, data: (await res.json()) as DeskVaultResponse };
+    }
+    let error = "The validation vault could not be loaded.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, data: null, error };
+  } catch {
+    return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
   }
 }

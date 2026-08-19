@@ -305,6 +305,24 @@ _PRICE_ARITHMETIC_FIELDS = (
     r"|session_equivalents|referee_tick_gate_symbol_days)"
     r"|shard\.(?:trade_count|quote_count|bytes|fallback_frac)"
     r"|floor\.(?:required_sessions|available_sessions)"
+    # goal-rapid-microscope-iter-14 (J-08 half 1): the new Scout Ledger / Walk-Forward / Validation
+    # Vault sections' own served numerics -- GET /research/desk/micro/{scout,walkforward,vault}
+    # read verbatim for the first time in the browser. The Scout Ledger's `screen_result` and the
+    # Walk-Forward sequence's `sequence_verdict`/raw `fold_results`/fold-spec geometry are rendered
+    # via `JSON.stringify(...)` (a serialization call, never arithmetic, the SAME class as
+    # `.toFixed()`/`.toLocaleString()` above) rather than destructured field-by-field, so no
+    # per-field entry is needed for those -- only the fields this page actually binds to a local
+    # name join this list. `size_bucket` (Vault, order-of-magnitude only) and
+    # `checksum_commitment`/`rule_commitment`/`vault_secret_commitment`/`commitment_nonce` (opaque
+    # strings) carry no numeric value and are deliberately absent from every alternation below.
+    r"|family\.(?:variants_tried)"
+    r"|trial\.(?:withheld_excluded)"
+    r"|fold\.(?:fold_index|effect|n|n_sessions)"
+    r"|sequence\.decay_view\.recency\.(?:older_fold_count|recent_fold_count|older_positive_share"
+    r"|recent_positive_share)"
+    r"|compute\??\.progress\.(?:candidates_done|candidates_total|steps_done|steps_total)"
+    r"|run\.(?:candidates_done|candidates_total|steps_done|steps_total|folds_evaluated)"
+    r"|universe\.(?:symbol_rule_size|date_rule_size)"
 )
 _PRICE_ARITHMETIC_PATTERN = re.compile(
     rf"({_PRICE_ARITHMETIC_FIELDS})\s*[-+*/]|[-+*/]\s*({_PRICE_ARITHMETIC_FIELDS})"

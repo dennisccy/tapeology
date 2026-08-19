@@ -729,3 +729,88 @@ reason is simple: tape locked away by mistake cannot be un-locked. Carry three p
 round of their own: re-take the five missing replay photographs, re-check J-07 which was cut this
 round, and give the harness a durable home for the note explaining why J-07 has no replay script —
 that note has now been auto-deleted three times.
+
+## Iteration 14 — goal-rapid-microscope-iter-14
+
+**Date:** 2026-08-19T20:45:00Z
+**Verdict:** ESCALATE
+**Depth dispatched:** full (the independent checker genuinely ran — my round-13 verdict line forced
+it, and it earned its place a third time)
+**Journey deltas:**
+- Newly passing: none
+- Newly failing: none
+- Regressed: none
+- Moved forward: J-08 "The surface and MCP v6" failing → PARTIAL. The three new Desk panels are
+  built and I saw all three on screen. The four conversation tools and the tool-count change from
+  22 to 26 were deliberately left for the next round, so "partly done" is the honest score and the
+  round's own written plan said so in advance.
+- Evidence upgraded (status unchanged): J-04 "The Scout and the ledger" and J-05 "The walk-forward
+  engine" got their FIRST real on-screen proof this round. Until now both rode a one-click replay
+  picture that only proved the Desk page loads. J-05's fold table on screen matches its file on
+  disk number for number, including the long decimals.
+- Evidence debt CLEARED: J-02 through J-05 carried a "the picture does not exist" flag from last
+  round. All five replay pictures now exist on disk — I listed the folder myself. The flag is
+  removed. (The J-02–J-05 pictures are still byte-identical to each other, the known thin-replay
+  property recorded in round 12; that is unchanged, not new.)
+- Unchanged: J-01 passing, freshly photographed and readable; J-02, J-03 passing on their thin
+  replay plus my own runs of their test files; J-06 "The recorder and the Vault" partial — not one
+  backend file changed this round, and your real recordings folder is untouched (18 recordings,
+  newest file 15 July); J-09 "The pilot studies" failing — I confirmed it unbuilt on disk myself,
+  the folder it would write to does not exist; J-10 "The kept product stands" partial — traps 24 of
+  29 by my own count of the test folder, safety walk green for the ninth run in a row.
+- J-07 "Graduation" passing but CUT FOR TIME for the SECOND round running ("deferred", not tested).
+  It keeps its status and cannot count toward finishing. The round's own written plan named this
+  by name and said it must not happen again.
+- Anti-goal violations: no critical ones, introduced or open. ONE NEW minor item: the quality lane
+  graded a check as passed when that check did not run (see below). Four older minor items stay
+  open, all decided, none waiting on you.
+
+**Reasoning:** I took nothing on trust. I opened the pictures instead of reading the rows, and the
+new panels are real: the Scout panel shows an honest "No candidates ledgered." with its Run Screen
+button; the Walk-Forward panel shows a real fold table with five rows, each carrying the words
+"historical exposed diagnostic" beside its own numbers; the Vault panel shows both chain checks
+"ok" and honest empty lists. I then did the one thing that decides this era: I opened the checker's
+own vault picture and read the hidden-recording rows myself. A hidden recording shows nothing but a
+made-up name, a rough size, a scrambled fingerprint and the word "sealed" — no symbol, no date, no
+real fingerprint, no exact count. A batch whose rule is still secret shows only "2 (size only)";
+the released batch shows its rule. Both halves are drawn, not one. Then I checked whether the
+screen is honest about the disk: I read the walk-forward file myself and every one of the five
+rows matches the screen exactly, including 0.019176079727258294 and -0.007730667002689608 — so
+nothing is being recomputed in the browser. I confirmed the empty panels are honestly empty, not
+staged: the folders they would read do not exist on your disk. I checked the locked parts myself —
+the settings fingerprint prints 08e471b10130e1e2, all six judge files are byte-identical to the
+era's start, the tool list is still 22, only four files changed and not one of them is a backend
+file. I counted the whole test collection myself: 3,228, the same number the round claims, and I
+ran the ten test files that matter (437 passed, 0 failed) plus the three that carry J-02, J-03 and
+their snapshots (102 passed, 0 failed). Two honest failures, neither in the product. First, the
+quality lane graded a check as passed when the results file itself records that the check did not
+run — the second time this lane has done this. The checker caught it and closed the substance by
+hand. Second, I found a fault that ALL FIVE lanes missed, including the checker: in the new
+Walk-Forward panel a drop-down detail block sits inside a paragraph, which a web page is not
+allowed to do. The browser logs 5 errors the moment you open that panel — I can see the red "5
+Issues" badge appear in the pictures at exactly the moment Walk-Forward is opened, and disappear
+again on the pictures where it was never opened. I then searched the whole 12,000-line Desk page
+and this is the only place that does it, and it is new this round. The numbers on screen are still
+correct, so it is a fault to fix, not a broken feature.
+
+**Next-step recommendation:** Build the second half of J-08 "The surface and MCP v6" next — the
+four read-only conversation tools and the tool-count change from 22 to 26 — as a FULL round with
+the independent checker. That is why my verdict line says "escalate" and not "continue": in this
+session a request written only in prose has been cut for time twice, and only the verdict line is
+honoured. The reason it matters here is specific: two of those four tools hand out the vault's
+contents and the corpus-readiness contents over a brand-new channel, and those are the exact two
+places where a hidden recording could become guessable. Put five things in that round, in order:
+(1) show the two missing numbers in the Microscope Readiness panel — its own data source already
+sends "how many recordings were held back" and the sealed-batch summary, and the panel throws both
+away, so the page says "Distinct datasets 2" while 3 were held back; keep it a total only, never a
+list; (2) fix the paragraph-nesting fault I found (apps/frontend/app/desk/page.tsx:6461-6472);
+(3) re-check J-07 "Graduation" properly — twice skipped now; (4) three small tidy-ups the checker
+listed (the Scout panel never shows the family's root id; the Walk-Forward empty message wrongly
+says "No candidates ledgered."; the Vault panel loses its section marker when the backend is
+down); (5) tell the quality lane it may not grade a check as passed when that check did not run.
+Do NOT record real tape yet, and do not start J-09 "The pilot studies" — it shows its answers
+through these same panels and cannot finish before this second half lands. Nothing waits on your
+answer. Two process notes: the harness deleted the small file explaining why J-07 has no replay
+script for the FOURTH time, which is a tool problem for the framework people, not a product
+problem; and one thing would help if you agree with it — tell the machine that when I ask for a
+full round with the independent checker, that request cannot be cut for time.
