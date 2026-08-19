@@ -49,6 +49,7 @@ from .research.routes import (
     set_registry,
 )
 from .research.store import JournalStore
+from .research.vault import VaultLedgerCorruptionError
 from .serializers import (
     serialize_events,
     serialize_features,
@@ -230,6 +231,23 @@ async def _real_data_error_handler(_, exc: RealDataError) -> JSONResponse:
     if exc.next_open is not None:
         content["next_open"] = exc.next_open
     return JSONResponse(status_code=exc.status_code, content=content)
+
+
+@app.exception_handler(VaultLedgerCorruptionError)
+async def _vault_ledger_corruption_handler(_, exc: VaultLedgerCorruptionError) -> JSONResponse:
+    # TR-25/spec section 7.8: a GLOBAL handler (the RealDataError precedent above), so every
+    # route this exception can reach -- not merely vault.py's own GET /vault -- gets a single,
+    # clear, non-500 refusal, without a route-by-route try/except audit. 503: a data-integrity
+    # incident the operator must resolve through lawful recovery (vault.recover_shard_ledger),
+    # never a client request error and never a silent 200. The body states which ledger and why,
+    # never a stack trace -- the same "typed refusal, no internals leaked" discipline every other
+    # vault refusal in this codebase already follows (SealedShardWithheldError's own precedent).
+    content = {
+        "detail": str(exc),
+        "ledger_kind": exc.ledger_kind,
+        "verify_chain": exc.verify_result,
+    }
+    return JSONResponse(status_code=503, content=content)
 
 
 def _engine_or_404(ticker: str):

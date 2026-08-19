@@ -859,13 +859,18 @@ def test_cancel_while_running_stops_the_walk_cooperatively_through_the_route(rou
 
 _PROGRESS_AGGREGATE_KEYS = {
     "chunks_total", "chunks_done", "chunks_fetched", "chunks_reused", "chunks_unchanged",
-    "chunks_failed", "trades_total", "quotes_total", "percent_complete", "elapsed_seconds",
+    "chunks_failed", "trades_total_bucket", "quotes_total_bucket", "percent_complete",
+    "elapsed_seconds",
 }
 
 
 def _assert_progress_is_aggregate_only(progress: dict) -> None:
     """TC-6's own field-shape assertion: EXACTLY the ten aggregate fields spec section 7.1 (r5)
-    names -- no ``outcomes``, no ``symbol``, no ``date``, no ``dataset_id``, nothing else."""
+    names -- no ``outcomes``, no ``symbol``, no ``date``, no ``dataset_id``, nothing else.
+
+    Iteration 12 (TR-28/r7): ``trades_total``/``quotes_total`` (exact) are GONE, replaced by
+    ``trades_total_bucket``/``quotes_total_bucket`` (coarse labels) -- the iteration-11 audit
+    proved a one-symbol-day run's "aggregate" exact total WAS that withheld shard's exact count."""
     assert set(progress.keys()) == _PROGRESS_AGGREGATE_KEYS, sorted(progress.keys())
 
 
@@ -937,8 +942,10 @@ def test_tc6_recorder_progress_never_leaks_a_planned_chunks_symbol_date_or_datas
         assert terminal["progress"]["chunks_reused"] == 0
         assert terminal["progress"]["chunks_unchanged"] == 0
         assert terminal["progress"]["chunks_failed"] == 0
-        assert terminal["progress"]["trades_total"] == 3  # 1 trade/chunk -- the fake adapter's shape
-        assert terminal["progress"]["quotes_total"] == 3  # 1 quote/chunk
+        # 3 trades/3 quotes total (1 trade/chunk, 1 quote/chunk -- the fake adapter's shape) both
+        # land in the SAME coarse bucket (iteration 12, TR-28/r7) -- never the exact number 3.
+        assert terminal["progress"]["trades_total_bucket"] == tr._volume_bucket(3) == "1-999"
+        assert terminal["progress"]["quotes_total_bucket"] == tr._volume_bucket(3) == "1-999"
         assert terminal["progress"]["percent_complete"] == 100.0
         assert terminal["progress"]["elapsed_seconds"] >= 0.0
 
@@ -984,6 +991,133 @@ def test_tc7_the_recorder_progress_route_accepts_no_bypass_parameter_header_or_r
         headers={"X-Operator-Override": "true", "X-Admin-Role": "operator", "Authorization": "Bearer x"},
     ).json()
     assert probed == plain  # every extra input is silently ignored -- no bypass exists anywhere
+
+
+# ==================================================================================================
+# 13. Era iteration 12 (spec section 7.1, r7): TR-28 -- event/byte VOLUMES are coarse BUCKETS
+#     pre-release, never exact totals. TC-9/TC-10/TC-11 (phase spec's own test-first contract).
+# ==================================================================================================
+
+
+def _run_a_one_symbol_day_recording_to_done(client) -> dict:
+    r = client.post(
+        "/research/desk/micro/recorder/compute", json={"symbols": ["AAPL"], "dates": ["2026-06-01"]},
+    )
+    assert r.status_code == 200
+    deadline = time.time() + 15
+    terminal = None
+    while time.time() < deadline:
+        terminal = client.get("/research/desk/micro/recorder/compute").json()
+        if terminal["state"] != "running":
+            break
+        time.sleep(0.02)
+    assert terminal is not None and terminal["state"] == "done"
+    return terminal
+
+
+def test_tc9_a_one_symbol_day_run_never_serves_an_exact_trade_or_quote_count(route_ctx):
+    """TC-9 (phase spec, literal scenario): a one-symbol-day recorder run whose pool is unexposed
+    -- ``GET /research/desk/micro/recorder/compute`` polled during and after the run never carries
+    an exact trade count, quote count, or byte count anywhere -- only a predeclared coarse bucket
+    label. The iteration-11 audit's own reproduction: on exactly this shape, the "aggregate"
+    ``trades_total``/``quotes_total`` WAS that one shard's exact count."""
+    client, _mgr, _adapter, _tmp_path = route_ctx
+    terminal = _run_a_one_symbol_day_recording_to_done(client)
+    progress = terminal["progress"]
+    _assert_progress_is_aggregate_only(progress)  # exactly the bucket-shaped field set, nothing else
+    assert isinstance(progress["trades_total_bucket"], str) and progress["trades_total_bucket"]
+    assert isinstance(progress["quotes_total_bucket"], str) and progress["quotes_total_bucket"]
+    body_text = json.dumps(terminal)
+    assert "trades_total\"" not in body_text and "quotes_total\"" not in body_text
+
+
+def test_tc10_before_after_a_run_grows_the_bucket_never_narrows_and_resists_differencing(
+    route_ctx, monkeypatch
+):
+    """TC-10: poll a run's progress before and after its own running totals GROW -- the served
+    bucket is monotonic non-decreasing (never narrows), and because it is ALWAYS a coarse label
+    (never conditionally exact -- ``_progress_view``'s own iteration-12 docstring), no pair of
+    snapshots can be combined to solve any count exactly: neither response carries an exact number
+    to difference in the first place."""
+    client, mgr, _adapter, _tmp_path = route_ctx
+    from app.main import app, get_market_adapter
+
+    fake_plan = [
+        {"symbol": "AAPL", "date": "2026-06-01", "start": "2026-06-01T13:30:00Z", "end": "2026-06-01T15:00:00Z"},
+        {"symbol": "AAPL", "date": "2026-06-01", "start": "2026-06-01T15:00:00Z", "end": "2026-06-01T20:00:00Z"},
+    ]
+    monkeypatch.setattr(tr, "plan_recorder_chunks", lambda symbols, dates: list(fake_plan))
+    blocking_adapter = _BlockingTickAdapter()
+    app.dependency_overrides[get_market_adapter] = lambda: blocking_adapter
+    try:
+        r = client.post(
+            "/research/desk/micro/recorder/compute", json={"symbols": ["AAPL"], "dates": ["2026-06-01"]},
+        )
+        assert r.status_code == 200
+        assert blocking_adapter.started.wait(timeout=5.0)
+        before = client.get("/research/desk/micro/recorder/compute").json()["progress"]
+
+        blocking_adapter.proceed.set()
+        deadline = time.time() + 15
+        terminal = None
+        while time.time() < deadline:
+            terminal = client.get("/research/desk/micro/recorder/compute").json()
+            if terminal["state"] != "running":
+                break
+            time.sleep(0.02)
+        assert terminal is not None and terminal["state"] == "done"
+        after = terminal["progress"]
+
+        for snapshot in (before, after):
+            assert "trades_total" not in snapshot and "quotes_total" not in snapshot
+
+        bucket_order = [label for _, _, label in tr._VOLUME_BUCKETS]
+        assert bucket_order.index(before["trades_total_bucket"]) <= bucket_order.index(
+            after["trades_total_bucket"]
+        )
+        assert bucket_order.index(before["quotes_total_bucket"]) <= bucket_order.index(
+            after["quotes_total_bucket"]
+        )
+    finally:
+        blocking_adapter.proceed.set()
+        mgr.join_all(timeout=10.0)
+
+
+def test_tc11_this_surface_deliberately_never_re_enables_exact_totals(route_ctx):
+    """TC-11 is PERMISSIVE ("exact totals MAY be served again"), never mandatory -- and the phase
+    spec's own NOTES sanction never threading per-universe vault-exposure state into this module at
+    all (recording strictly PRECEDES any possible exposure, so a completed run's own progress here
+    always describes pre-release history). This module's own choice: ``_progress_view`` ALWAYS
+    buckets, with no code path that could ever flip to exact -- pinned here so a future change
+    cannot silently re-open TR-28 by conditionally reinstating ``trades_total``."""
+    client, _mgr, _adapter, _tmp_path = route_ctx
+    terminal = _run_a_one_symbol_day_recording_to_done(client)
+    for _ in range(3):  # "long after" completion, simulated by simply re-polling with no new work
+        again = client.get("/research/desk/micro/recorder/compute").json()["progress"]
+        assert "trades_total" not in again and "quotes_total" not in again
+        assert again["trades_total_bucket"] == terminal["progress"]["trades_total_bucket"]
+        assert again["quotes_total_bucket"] == terminal["progress"]["quotes_total_bucket"]
+
+
+def test_volume_bucket_scheme_is_frozen_predeclared_and_never_a_rounded_number(monkeypatch):
+    """The scheme itself, pinned: a module constant (never a ``Config`` field, never tuned from an
+    observed run), monotonic, and never produces a label that LOOKS like a rounded exact count."""
+    assert tr._volume_bucket(0) == "0"
+    assert tr._volume_bucket(1) == tr._volume_bucket(999) == "1-999"
+    assert tr._volume_bucket(1000) == "1K-10K"
+    assert tr._volume_bucket(3_842_117) == "1M-10M"
+    labels = [label for _, _, label in tr._VOLUME_BUCKETS]
+    assert len(labels) == len(set(labels))  # no duplicate label across bands
+    # "0" is the one legitimate bare-digit label -- a genuinely, unambiguously empty count is not
+    # an approximation of anything hidden, so it carries no rounding risk. Every OTHER band must
+    # never look like a rounded exact number.
+    assert labels[0] == "0"
+    for label in labels[1:]:
+        assert not label.isdigit()
+    # monotonic across a wide, increasing sample -- never a larger count mapping to an earlier band.
+    sample = [0, 1, 500, 999, 1_000, 50_000, 999_999, 1_000_000, 5_000_000_000]
+    indices = [labels.index(tr._volume_bucket(n)) for n in sample]
+    assert indices == sorted(indices)
 
 
 from app.config import CONFIG  # noqa: E402 -- imported at bottom to keep the fixture section terse

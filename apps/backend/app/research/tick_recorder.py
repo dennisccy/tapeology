@@ -628,10 +628,54 @@ def _iso_utc_now() -> str:
 # whitelist (the `vault._serialize_shard` discipline, mirrored) that never spreads `progress`
 # itself into a response, so this internal field can never leak by accident. `trades_total`/
 # `quotes_total` are genuine RUNNING TOTALS (era iteration 11, spec section 7.1) accumulated
-# incrementally by `_publish` below -- never derived from a per-chunk count stored anywhere.
+# incrementally by `_publish` below -- never derived from a per-chunk count stored anywhere. They
+# stay EXACT here, internally: only `_progress_view`'s own SERVED projection buckets them
+# (iteration 12, TR-28/r7) -- so a future surface that legitimately needs the exact running total
+# (e.g. the terminal run-log row, untouched this iteration) never has to re-derive it.
 _IDLE_PROGRESS: dict = {
     "chunks_total": 0, "chunks_done": 0, "outcomes": [], "trades_total": 0, "quotes_total": 0,
 }
+
+# TR-28/spec section 7.1 (r7, iteration 12): the frozen, predeclared coarse bucket scheme
+# `_progress_view` serves in place of an exact `trades_total`/`quotes_total`. Broad powers-of-ten
+# ranges, carrying the LABEL rather than a rounded number (`"1M-10M"`, never `3842117` and never
+# `~3800000`) -- deliberately WIDE (each band spans a full order of magnitude or more) so a
+# one-symbol-day run's true count is never pinned down to something a reader could treat as
+# "close enough to exact". A module constant per this era's own parameters discipline (never a
+# `Config` field) -- frozen at authoring, never tuned from any observed run's actual volumes.
+_VOLUME_BUCKETS: tuple[tuple[int, int | None, str], ...] = (
+    (0, 0, "0"),
+    (1, 999, "1-999"),
+    (1_000, 9_999, "1K-10K"),
+    (10_000, 99_999, "10K-100K"),
+    (100_000, 999_999, "100K-1M"),
+    (1_000_000, 9_999_999, "1M-10M"),
+    (10_000_000, 99_999_999, "10M-100M"),
+    (100_000_000, 999_999_999, "100M-1B"),
+    (1_000_000_000, None, "1B+"),
+)
+
+
+def _volume_bucket(count: int) -> str:
+    """The deterministic, order-preserving map from an exact running total to its frozen coarse
+    label (`_VOLUME_BUCKETS` above) -- TR-28's differencing-resistance by construction:
+
+    * never a per-shard count while withheld -- the bucket is the ONLY thing this function can
+      ever return, for any input, so there is no code path that serves the raw `count` at all;
+    * never an exact delta between successive snapshots -- two calls a moment apart yield either
+      the SAME label or the next one up, never a number a reader could subtract;
+    * buckets never narrow as a pool shrinks -- the scheme is a FIXED partition of all possible
+      counts, not something parameterized by pool size, so it cannot narrow under any input; and
+    * monotonic -- a strictly larger `count` never maps to a strictly smaller bucket, so the
+      SEQUENCE of labels served over a run's own lifetime is itself never informative beyond "the
+      true count crossed into a wider band", never how far past the boundary it sits."""
+    if count <= 0:
+        return _VOLUME_BUCKETS[0][2]
+    for low, high, label in _VOLUME_BUCKETS[1:]:
+        if high is None or count <= high:
+            return label
+    return _VOLUME_BUCKETS[-1][2]  # unreachable (the last band's high is None) -- belt and braces
+
 
 _IDLE_RECORDER_SNAPSHOT: dict = {
     "run_id": None,
@@ -671,7 +715,22 @@ def _progress_view(progress: dict, *, started_utc: str | None, finished_utc: str
     ``vault._serialize_shard`` discipline, mirrored) -- ``progress`` still carries an internal
     ``outcomes`` list (see ``_IDLE_PROGRESS``'s own docstring), so a blind spread would re-leak it.
     ``percent_complete``/``elapsed_seconds`` are DERIVED here, never stored on ``progress`` itself,
-    since ``elapsed_seconds`` must reflect "now" for a still-running job."""
+    since ``elapsed_seconds`` must reflect "now" for a still-running job.
+
+    **TR-28/spec section 7.1 (r7, iteration 12): ``trades_total``/``quotes_total`` are GONE from
+    this projection, replaced by ``trades_total_bucket``/``quotes_total_bucket`` (``_volume_
+    bucket`` above).** The iteration-11 audit proved the contradiction this closes: on a
+    one-symbol-day run, the "aggregate" exact total WAS that withheld shard's exact count. This
+    surface ALWAYS buckets -- never conditionally, never threading per-universe vault-exposure
+    state through the recorder -- because recording strictly PRECEDES any possible exposure in
+    the one-way ``sealed -> assigned -> exposed`` lifecycle (``vault.py``'s own module docstring:
+    zero production call sites of ``seal_shard``/``assign_shard``/``expose_shard`` today), so by
+    the time a pool could ever be "whole-pool released" (TR-27's own gate), the recording run this
+    progress surface describes is already historical. This is the phase spec's own explicitly
+    sanctioned scope-reducing option (NOTES: "provably spec-compliant... TC-9/TC-10/TC-11 are
+    outcome-based and pass either way"), deliberately chosen to avoid new coupling between this
+    module and ``vault.py`` -- the OUT-OF-SCOPE item this iteration already names ("wiring
+    tick_recorder to call vault.seal_shard/assign_shard/expose_shard directly")."""
     chunks_total = progress["chunks_total"]
     chunks_done = progress["chunks_done"]
     percent_complete = (chunks_done / chunks_total * 100.0) if chunks_total > 0 else 0.0
@@ -683,8 +742,8 @@ def _progress_view(progress: dict, *, started_utc: str | None, finished_utc: str
         "chunks_total": chunks_total,
         "chunks_done": chunks_done,
         **_outcome_type_counts(progress["outcomes"]),
-        "trades_total": progress["trades_total"],
-        "quotes_total": progress["quotes_total"],
+        "trades_total_bucket": _volume_bucket(progress["trades_total"]),
+        "quotes_total_bucket": _volume_bucket(progress["quotes_total"]),
         "percent_complete": percent_complete,
         "elapsed_seconds": elapsed_seconds,
     }

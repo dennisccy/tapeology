@@ -872,3 +872,46 @@ on this call.
 **Reversible:** yes — J-10 is a continuously-guarding journey re-scored every iteration, and if the
 owner intends a text edit to apply only from the next round, the next evaluation simply re-scores
 against whatever the file then says. Nothing permanent is written from this choice.
+
+## iter-12 — goal-evaluator
+
+**Ambiguity:** how to score the recovery-path hole I found myself (an unprovable
+`recover_shard_ledger` lets a shard whose only ledger row was destroyed silently leave the
+withheld set, and re-heals the tail anchor so `verify_chain()` reports clean again). It
+contradicts spec r6 §7.8's governing invariant *verbatim* ("unknown exposure history may never be
+read as 'never exposed'") and touches a `*(critical)*`-tagged anti-goal, which would make it a
+REGRESSION halt; but it is unreachable in the running product, and my methodology says to treat
+an unclear severity as critical (fail-closed).
+**We chose:** MINOR + a new OPEN anti-goal-ledger item + a named must-fix-before-J-06-step-4,
+rather than a critical violation and a REGRESSION halt. Grounds I established myself, not from
+any report: zero registered universes, zero sealed shards, no `micro_vault` directory in the real
+`.data` store, and `recover_shard_ledger` has zero production call sites — so no real datum can
+be disclosed by it today; and the iteration made the vault strictly SAFER than the state it
+inherited (three older holes of the same family closed). I am recording that I was NOT genuinely
+torn here, because the session's own precedent is direct: the iteration-9 subtraction attack was
+*actually reachable through two GETs* and was still scored minor-and-open rather than a halt.
+**Reversible:** no in one direction — if J-06 step 4 records real tape into the vault before this
+closes, a damaged ledger plus an unprovable repair could publicly disclose a shard that was
+sealed, and sealed tape cannot be un-disclosed. That is why the item is written into the
+anti-goal ledger, the next-step recommendation, AND `iteration-state.md`'s blocker list rather
+than any one of them.
+
+## iter-12 — goal-evaluator (second)
+
+**Ambiguity:** J-02 through J-05 are "keyless/automated" journeys with no browser acceptance
+clause of their own, and their stored golden replay scripts turn out to be one `goto /desk` step
+with a single unrelated text assertion each (J-02 asserts "Top-up Runs", J-05 asserts "Playbook
+Signals") — which is why all four produce one byte-identical screenshot. Those replays therefore
+prove the desk still loads, not that each journey's own acceptance still holds; yet this
+iteration's `verify_chain()` gating reaches their code transitively (`micro_snapshots`'s withhold
+read and `walkforward`'s `currently_sealed_dataset_ids` call).
+**We chose:** keep all four `passing` on (a) the replay PASS rows, (b) my OWN full-suite run
+(3,212/3,204/8/0, including `test_walkforward.py`, `test_micro_readiness.py`,
+`test_micro_observer.py`), and (c) my own probe confirming the new gate raises a typed refusal
+rather than returning wrong data — instead of downgrading them to `unknown` for thin replay
+coverage. Grounds: the goal's own Must-have-journeys header declares these journeys
+keyless/automated with browser reveals landing in J-08, so a shallow page-load screenshot was
+never their evidence class; and their prior passes were earned by my own re-derivations against
+the owner's real data in rounds 8-11.
+**Reversible:** yes — J-08 renders these journeys' values on `/desk`, so each gets a real
+element-captured browser acceptance one iteration later, and a failure there would re-open them.

@@ -9,7 +9,9 @@ exactly one identity function).
 
 **Two distinct ledgers, per the phase spec's own naming (T-2 vocabulary trap).** ``VaultUniverseLedger``
 (recording-universe registrations: ``{universe_id, symbol_rule, date_rule, registered_at,
-rule_hash, vault_secret_commitment}``) and ``VaultShardLedger`` (the shard-lifecycle
+rule_hash, commitment_nonce, rule_commitment, vault_secret_commitment}`` -- the last three fields'
+own two-stage SERVING discipline is the "Iteration 12" paragraph below) and ``VaultShardLedger`` (the
+shard-lifecycle
 ``sealed -> assigned -> exposed`` transitions) are TWO separate ``micro_chain_ledger.
 HashChainedLedger`` instances -- the ``walkforward_ledger.WalkForwardLedger`` "thin domain wrapper
 over ONE HashChainedLedger" shape, built here TWICE (module docstring precedent: "once per
@@ -57,11 +59,16 @@ not enough; JOIN RESISTANCE is the actual requirement (r3), and it is met here i
    rows lets any reader compute ``sealed = expected - served`` and de-anonymise the whole sealed
    tranche by set subtraction -- defeating section 7.3's stated guarantee that "sealed membership
    cannot be inferred from public information before exposure". So the rule lists follow the SAME
-   commit-then-reveal discipline part 2 applies to ``content_checksum``: ``rule_hash`` (already
-   computed at registration) is served throughout, the raw lists only once every shard of that
-   universe has reached ``exposed``. Section 7.2's requirement is that the rule be RECORDED in the
-   vault ledger before any fetch -- unchanged here, and ``find_universe``/the TR-4 verifier still
-   read it verbatim from that ledger, so nothing about the batch check or its auditability moves.
+   commit-then-reveal discipline part 2 applies to ``content_checksum``: a commitment is served
+   throughout, the raw lists only once every shard of that universe has reached ``exposed``.
+   [**Iteration 12 update, r7/TR-27:** that served commitment is NOT ``rule_hash`` -- a bare
+   deterministic hash of a low-entropy, dictionary-enumerable rule is not a hiding commitment.
+   ``rule_hash`` stays purely internal (``register_universe``'s own freeze/idempotency check,
+   never served); ``_serialize_universe`` serves the NONCED ``rule_commitment`` instead. See the
+   "Iteration 12" paragraph below for the full reasoning.] Section 7.2's requirement is that the
+   rule be RECORDED in the vault ledger before any fetch -- unchanged here, and ``find_universe``/
+   the TR-4 verifier still read it verbatim from that ledger, so nothing about the batch check or
+   its auditability moves.
 
 TR-2 proves this by construction rather than by whitelist review (``tests/test_vault.py``'s
 adversarial join-resistance sweep over every registered GET route).
@@ -126,7 +133,86 @@ guard that keeps a later-registered universe from retroactively withholding a pr
 dataset). It is the ONE new choke point ``micro_snapshots.exclude_withheld``/
 ``withheld_dataset_ids_for_store`` (hence its 8 existing corpus-wide enumerator consumers) and
 ``micro_readiness.build_readiness`` both read -- never a second, divergent implementation of "is
-this dataset withheld"."""
+this dataset withheld".
+
+**Iteration 12 -- three closures, per ``docs/rapid-validation-spec.md`` r6/r7 (owner rulings
+2026-08-18/19).**
+
+1. **TR-25, vault-ledger integrity (spec section 7.8).** Every normal reader of either ledger now
+   goes through a GATED read -- ``VaultShardLedger.verified_rows()``/``VaultUniverseLedger.
+   verified_rows()`` -- which calls ``verify_chain()`` FIRST and raises ``VaultLedgerCorruptionError``
+   on any failure, never returning a result computed over a tampered or truncated chain. This is
+   wired in at the LOWEST shared choke points (``_latest_rows_by_dataset_id``, ``_latest_universes``,
+   ``find_universe``), so every one of this module's own public predicates and mutators
+   (``unresolved_pool_universe_by_dataset_id``, ``build_vault_state``, ``currently_sealed_dataset_ids``,
+   ``withheld_dataset_ids``, ``register_universe``, ``verify_universe_recording_batch``,
+   ``seal_shard``/``assign_shard``/``expose_shard`` via their own ``_latest_shard_row`` read)
+   inherits the gate automatically -- and so does every OTHER module that calls into this one
+   (``walkforward.py``'s direct ``currently_sealed_dataset_ids`` call, ``routes.py``'s
+   ``get_withheld_dataset_ids`` dependency) with ZERO changes to those files, exactly the
+   "single choke point, never a second divergent implementation" discipline this module already
+   follows for the withhold predicate itself. ``main.py`` registers ONE global FastAPI exception
+   handler for ``VaultLedgerCorruptionError`` (the ``RealDataError`` precedent), so every route
+   this exception can reach -- not merely this module's own ``GET /vault``/``GET /readiness`` --
+   gets a non-500 refusal, without needing a route-by-route try/except audit. Lawful recovery
+   (``recover_shard_ledger`` below) is the ONLY way back; there is no warn-and-continue path
+   anywhere in this module.
+
+   *Disclosed interpretation call (T-1), matching this module's own established convention of
+   logging rather than silently assuming a scope boundary.* The phase spec's own text asks the
+   shard mutators to check "both ledgers". This module implements that literally for the two
+   functions that already take both ledgers as parameters end to end
+   (``unresolved_pool_universe_by_dataset_id``, ``build_vault_state``) and transitively for
+   ``register_universe``/``find_universe``/``verify_universe_recording_batch`` (all of which read
+   the universe ledger through the same gated ``verified_rows()``). ``seal_shard``/``assign_shard``/
+   ``expose_shard`` are gated on their OWN (shard) ledger only, NOT additionally threaded with a
+   required ``universe_ledger`` parameter. Grounds: a repo-wide grep at authoring (unchanged from
+   iteration 11) still finds ZERO production call sites of these three functions -- everything that
+   calls them today is a test -- so widening their signature buys no real-world safety today, while
+   it would force a mechanical, high-blast-radius migration of roughly 90 call sites across TEN test
+   files (``test_vault.py`` alone has 42) that have nothing to do with ledger integrity, for a
+   currently-unreachable production risk. TC-2's own literal text ("no sealing, no assignment") is
+   satisfied by gating the SHARD ledger, the one these transitions actually read and write; a test
+   pins exactly that. When J-06 step 4 eventually wires real ``seal_shard``/``assign_shard``/
+   ``expose_shard`` calls into production, that wiring is the natural point to revisit whether the
+   universe ledger should also gate these specific transitions -- logged here so the boundary is
+   never silently assumed, exactly this module's own T-1 discipline elsewhere (see the single-shot
+   discipline paragraph above).
+
+2. **TR-27, nonced rule commitment (spec section 7.2/7.5, r7).** ``register_universe`` now mints a
+   high-entropy ``commitment_nonce`` (``secrets.token_hex(32)``) at registration and computes
+   ``rule_commitment = sha256(nonce + canonical_rule)`` (``compute_rule_commitment``) -- served in
+   place of the plain ``rule_hash`` at every disclosure stage. ``rule_hash``/``compute_rule_hash``
+   themselves are UNCHANGED and stay exactly what they were: the ledger's own internal,
+   never-served freeze/idempotency identity function for ``register_universe``'s re-registration
+   check (spec r7's own text: "rule_hash/compute_rule_hash stays as the ledger's own internal
+   identity function"). The reveal gate widens in the SAME diff, per the session's own hard-won
+   lesson ("never widen one side of a paired mechanism and leave its twin narrow"):
+   ``_fully_exposed_universe_ids`` (ledger-tracked-only, the iteration-11 audit's own two-GET
+   subtraction target, ``vault.py:926-938`` pre-iteration-12) is REPLACED by
+   ``_whole_pool_released_universe_ids``, which reuses ``expected_recording_pairs`` -- the SAME
+   expected-pairs computation ``unresolved_pool_universe_by_dataset_id`` already uses -- as the ONE
+   "whole ORIGINAL pool released" predicate. ``symbol_rule``/``date_rule``/``commitment_nonce`` serve
+   ONLY once (a) no ledger-tracked shard of that universe is short of ``exposed`` AND (b) every
+   expected pair has an ``exposed`` shard -- a universe with any ledger-tracked OR
+   untracked-but-rule-matching pair still short of ``exposed`` stays at the committed
+   (``rule_commitment``-only) stage. **Part (a) is not redundant with (b):** an adversarial
+   pre-ship review found that (b) ALONE is keyed on the ``(symbol, session_date)`` pair, not on
+   shard identity, so a SECOND, different ``dataset_id`` sealed+assigned under the SAME pair as an
+   already-exposed first shard (a re-recorded/retry day, spec section 7.7) would satisfy (b) while
+   genuinely still withheld -- reopening the exact two-GET subtraction class this widening exists
+   to close. See that function's own docstring and
+   ``test_two_shards_sharing_one_pair_keep_the_universe_hidden_even_after_one_is_exposed``.
+
+3. **The symbol/date withhold-match normalization (the third cheap companion item).** The
+   universe-rule membership test inside ``unresolved_pool_universe_by_dataset_id`` (test (b) in that
+   function's own docstring) now compares symbols case-insensitively (``_normalize_symbol``) on
+   BOTH the registered rule's own ``symbol_rule`` entries and the incoming record's symbol, so a
+   universe registered as ``aapl`` still withholds a recording produced as ``AAPL`` and vice versa.
+   Deliberately scoped to THIS predicate alone -- ``expected_recording_pairs``/
+   ``verify_recording_batch`` (TR-4's cherry-pick check) keep their own byte-exact matching
+   unchanged, since the phase spec names only "the universe-rule test" inside this one function, not
+   a broader normalization of the recording-batch verifier."""
 
 from __future__ import annotations
 
@@ -135,6 +221,7 @@ import hmac
 import json
 import math
 import os
+import secrets
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -147,18 +234,23 @@ __all__ = [
     "STATE_SEALED",
     "STATE_ASSIGNED",
     "STATE_EXPOSED",
+    "STATE_EXPOSURE_UNKNOWN",
     "VaultUniverseNotRegisteredError",
     "VaultUniverseAlreadyRegisteredError",
     "CherryPickedBatchError",
     "VaultSecretUnavailable",
     "ShardLifecycleOrderError",
     "SealedShardWithheldError",
+    "VaultLedgerCorruptionError",
     "resolve_vault_dir",
     "shard_ledger_for_dataset_dir",
     "universe_ledger_for_dataset_dir",
+    "recovery_ledger_for_dataset_dir",
     "VaultUniverseLedger",
     "VaultShardLedger",
+    "VaultRecoveryLedger",
     "compute_rule_hash",
+    "compute_rule_commitment",
     "register_universe",
     "find_universe",
     "expected_recording_pairs",
@@ -181,6 +273,8 @@ __all__ = [
     "compute_family_root_id",
     "RULE_DISCLOSURE_COMMITTED",
     "RULE_DISCLOSURE_REVEALED",
+    "preserve_corrupt_ledger",
+    "recover_shard_ledger",
 ]
 
 # docs/rapid-validation-spec.md section 1, transcribed verbatim -- NEVER a Config field (every
@@ -208,6 +302,15 @@ STATE_SEALED = "sealed"
 STATE_ASSIGNED = "assigned"
 STATE_EXPOSED = "exposed"
 
+# Iteration 12 (spec section 7.8, TR-25): the FOURTH, terminal lifecycle value -- never reachable
+# through seal_shard/assign_shard/expose_shard, written ONLY by recover_shard_ledger below when a
+# corrupted ledger's missing suffix cannot be proven complete. Matches neither STATE_SEALED nor
+# STATE_ASSIGNED, so the existing lifecycle guards in assign_shard/expose_shard already refuse any
+# further transition for a shard in this state with no new guard code (their own `actual_state !=
+# expected_state` checks do the job) -- "permanently ineligible for sealed-OOS use" falls out of
+# the existing single-shot machinery for free.
+STATE_EXPOSURE_UNKNOWN = "exposure_unknown"
+
 # The universe rule's two serving stages (module docstring's join-resistance part 4). A DIFFERENT
 # vocabulary from the shard lifecycle above on purpose: a universe has no lifecycle of its own --
 # its rule's disclosure is a pure function of whether every shard it owns has reached `exposed`.
@@ -219,6 +322,10 @@ _VAULT_SECRET_FILE_ENV = "TAPEOLOGY_VAULT_SECRET_FILE"
 
 _UNIVERSE_LEDGER_FILENAME = "vault_universe_ledger.jsonl"
 _SHARD_LEDGER_FILENAME = "vault_shard_ledger.jsonl"
+# Iteration 12 (spec section 7.8): the THIRD, SEPARATE ledger lawful recovery writes to -- "record
+# the corruption event separately and immutably" (never in the corrupted ledger itself, which
+# cannot be trusted to record its own corruption).
+_RECOVERY_LEDGER_FILENAME = "vault_recovery_ledger.jsonl"
 
 # Ledger-machinery keys ``HashChainedLedger.append_row`` itself manages -- stripped before a row's
 # OWN content is carried forward into a later row (``assign_shard``/``expose_shard`` below), so a
@@ -311,6 +418,31 @@ class SealedShardWithheldError(Exception):
         )
 
 
+class VaultLedgerCorruptionError(Exception):
+    """TR-25/spec section 7.8: raised by every GATED vault-ledger read (``VaultShardLedger.
+    verified_rows``/``VaultUniverseLedger.verified_rows``) the instant ``verify_chain()`` reports a
+    broken chain -- content-hash mismatch, prev-hash mismatch, tail truncation, or a head-hash
+    mismatch against the durable tail anchor. Fail-closed: no caller of a gated reader EVER
+    receives a result computed over a ledger that failed this check, and there is no
+    warn-and-continue path anywhere in this module (module docstring's own iteration-12 paragraph
+    lists every choke point this reaches transitively). The ONLY way back is
+    ``recover_shard_ledger`` below (lawful recovery, spec section 7.8) -- never a silent retry,
+    never treating a truncated chain as merely "empty" (TC-1's own requirement: "no shard is
+    reported as 'never exposed'"). ``main.py`` maps this to a single non-500 HTTP refusal for every
+    route it can reach (module docstring)."""
+
+    def __init__(self, ledger_kind: str, verify_result: dict) -> None:
+        self.ledger_kind = ledger_kind
+        self.verify_result = verify_result
+        super().__init__(
+            f"the {ledger_kind} vault ledger failed chain verification "
+            f"(reason={verify_result.get('reason')!r}, failed_at_row={verify_result.get('failed_at_row')!r}) "
+            "-- ALL vault/exposure work is refused (no sealing, no assignment, no exposure check, "
+            "no sealed evaluation) until a lawful, evidence-backed recovery completes (spec "
+            "section 7.8); unknown exposure history may NEVER be read as 'never exposed'"
+        )
+
+
 def _canonical(obj: object) -> bytes:
     """The one canonical JSON encoding this module hashes -- the identical sorted-keys,
     no-whitespace shape every sibling ledger in this codebase hashes (``scout_ledger.py``,
@@ -353,6 +485,15 @@ def universe_ledger_for_dataset_dir(dataset_dir_resolved: str) -> "VaultUniverse
     return VaultUniverseLedger(resolve_vault_dir(dataset_dir_resolved))
 
 
+def recovery_ledger_for_dataset_dir(dataset_dir_resolved: str) -> "VaultRecoveryLedger":
+    """The SEPARATE, immutable incident ledger lawful recovery writes to (spec section 7.8 step 2:
+    "record the corruption event separately and immutably" -- never in the corrupted ledger
+    itself, which cannot be trusted to record its own corruption). The SAME sibling-of-the-
+    dataset-dir resolution every other vault store shares (``resolve_vault_dir``), so there is
+    exactly one vault location, holding all three ledgers side by side."""
+    return VaultRecoveryLedger(resolve_vault_dir(dataset_dir_resolved))
+
+
 # === the two ledgers (module docstring: "once per ledger") =========================================
 
 
@@ -365,11 +506,39 @@ class VaultUniverseLedger:
     def __init__(self, root_dir: str) -> None:
         self._chain = HashChainedLedger(root_dir, _UNIVERSE_LEDGER_FILENAME)
 
+    @property
+    def path(self) -> Path:
+        return self._chain.path
+
+    @property
+    def head_anchor_path(self) -> Path:
+        return self._chain.head_anchor_path
+
     def verify_chain(self) -> dict:
         return self._chain.verify_chain()
 
     def all_rows(self) -> list[dict]:
+        """The RAW, UNGATED reader (``HashChainedLedger.all_rows()``'s own documented contract,
+        unchanged) -- used only by this module's own recovery tooling, which must be able to
+        inspect a corrupted ledger's content directly in order to repair it. Every NORMAL
+        predicate uses ``verified_rows()`` below instead."""
         return self._chain.all_rows()
+
+    def verified_rows(self) -> list[dict]:
+        """TR-25/spec section 7.8: the GATED reader every normal predicate uses. Calls
+        ``verify_chain()`` FIRST and raises ``VaultLedgerCorruptionError`` on any failure --
+        never returns a result computed over a tampered or truncated chain (module docstring's
+        iteration-12 paragraph)."""
+        result = self._chain.verify_chain()
+        if not result["ok"]:
+            raise VaultLedgerCorruptionError("universe", result)
+        return self._chain.all_rows()
+
+    def read_tail_anchor(self) -> dict | None:
+        return self._chain.read_tail_anchor()
+
+    def rewrite_from_recovery(self, rows: list[dict]) -> None:
+        self._chain.rewrite_from_recovery(rows)
 
     def append_row(self, fields: dict) -> dict:
         return self._chain.append_row(fields)
@@ -384,6 +553,53 @@ class VaultShardLedger:
 
     def __init__(self, root_dir: str) -> None:
         self._chain = HashChainedLedger(root_dir, _SHARD_LEDGER_FILENAME)
+
+    @property
+    def path(self) -> Path:
+        return self._chain.path
+
+    @property
+    def head_anchor_path(self) -> Path:
+        return self._chain.head_anchor_path
+
+    def verify_chain(self) -> dict:
+        return self._chain.verify_chain()
+
+    def all_rows(self) -> list[dict]:
+        """The RAW, UNGATED reader -- see ``VaultUniverseLedger.all_rows``'s own docstring; the
+        identical split, mirrored for the shard ledger."""
+        return self._chain.all_rows()
+
+    def verified_rows(self) -> list[dict]:
+        """TR-25/spec section 7.8: the GATED reader every normal predicate uses -- see
+        ``VaultUniverseLedger.verified_rows``'s own docstring, mirrored for the shard ledger."""
+        result = self._chain.verify_chain()
+        if not result["ok"]:
+            raise VaultLedgerCorruptionError("shard", result)
+        return self._chain.all_rows()
+
+    def read_tail_anchor(self) -> dict | None:
+        return self._chain.read_tail_anchor()
+
+    def rewrite_from_recovery(self, rows: list[dict]) -> None:
+        self._chain.rewrite_from_recovery(rows)
+
+    def append_row(self, fields: dict) -> dict:
+        return self._chain.append_row(fields)
+
+
+class VaultRecoveryLedger:
+    """A thin domain wrapper over a THIRD ``HashChainedLedger`` (module docstring: "once per
+    ledger") -- every corruption/recovery event lawful recovery records, in append order (spec
+    section 7.8: "record the corruption event separately and immutably"). Deliberately NOT
+    gated by its own ``verified_rows()`` -- this ledger is a pure audit trail no security
+    predicate reads to make a decision, so keeping it simple (raw ``all_rows()``/``verify_chain()``,
+    the pre-iteration-12 shape of the other two) avoids an unbounded regress of "who verifies the
+    verifier". ``record_recovery_event``'s own append is unaffected either way, since
+    ``HashChainedLedger.append_row`` never gates itself."""
+
+    def __init__(self, root_dir: str) -> None:
+        self._chain = HashChainedLedger(root_dir, _RECOVERY_LEDGER_FILENAME)
 
     def verify_chain(self) -> dict:
         return self._chain.verify_chain()
@@ -402,8 +618,35 @@ def compute_rule_hash(symbol_rule: list[str], date_rule: list[str]) -> str:
     """A pure content hash over the resolved, explicit ``symbol_rule``/``date_rule`` lists --
     excludes any wall-clock-derived value (``registered_at`` is never part of this), so two
     genuinely separate registration acts of the IDENTICAL rule compute the identical hash (the
-    ``scout_ledger.compute_spec_hash`` precedent, TC-2)."""
+    ``scout_ledger.compute_spec_hash`` precedent, TC-2).
+
+    **Never served publicly (spec r7/TR-27).** This stays exactly what it always was: the
+    ledger's own INTERNAL freeze/idempotency identity function, read only by
+    ``register_universe``'s own re-registration check. A bare deterministic hash of a low-entropy,
+    dictionary-enumerable rule is not a hiding commitment -- ``compute_rule_commitment`` below is
+    what ``_serialize_universe`` actually serves."""
     return _sha256_hex(_canonical({"symbol_rule": list(symbol_rule), "date_rule": list(date_rule)}))
+
+
+def compute_rule_commitment(nonce: str, symbol_rule: list[str], date_rule: list[str]) -> str:
+    """spec section 7.2/7.5 (r7, TR-27): ``rule_commitment = sha256(nonce ++ canonical_rule)``.
+
+    Unlike ``compute_rule_hash`` above, this is the value ``_serialize_universe`` actually SERVES
+    pre-reveal. The owner's ruling was explicit about why a bare hash will not do:
+    ``symbol_rule``/``date_rule`` are low-entropy and dictionary-enumerable (a real panel of
+    tickers and a real date range), so a third party holding only the served digest could simply
+    hash every plausible guess and check for a match. Prefixing a high-entropy nonce the ledger
+    holds PRIVATELY (never served until whole-pool release) makes this a genuine hiding
+    commitment: recomputing it without the nonce is infeasible, while an operator who legitimately
+    learns the nonce at reveal can recompute it exactly (TC-7) and prove the rule never changed
+    after registration.
+
+    ``nonce`` is encoded as UTF-8 bytes and concatenated directly in front of the SAME canonical
+    JSON encoding ``compute_rule_hash`` hashes -- a fixed-length hex string (``secrets.
+    token_hex(32)`` == 64 hex chars, always), so the boundary between the two halves is never
+    ambiguous."""
+    canonical_rule = _canonical({"symbol_rule": list(symbol_rule), "date_rule": list(date_rule)})
+    return _sha256_hex(nonce.encode("utf-8") + canonical_rule)
 
 
 def register_universe(
@@ -430,7 +673,11 @@ def register_universe(
       except one path" lesson); and
     * ``VaultUniverseAlreadyRegisteredError`` otherwise -- because ``find_universe`` resolves to the
       LATEST row, an unrefused re-registration under a narrowed ``symbol_rule`` would silently
-      redefine ``expected_recording_pairs`` and neutralize TR-4's cherry-pick refusal entirely."""
+      redefine ``expected_recording_pairs`` and neutralize TR-4's cherry-pick refusal entirely.
+
+    **TR-27 (r7): a fresh, high-entropy ``commitment_nonce`` is minted ONLY on a genuinely NEW
+    row.** An idempotent replay returns the EXISTING row -- including its ORIGINAL nonce -- never
+    generating a second one for what is, by definition, the same registration act."""
     rule_hash = compute_rule_hash(symbol_rule, date_rule)
     existing = find_universe(ledger, universe_id)
     if existing is not None:
@@ -440,12 +687,15 @@ def register_universe(
         ):
             return existing
         raise VaultUniverseAlreadyRegisteredError(universe_id, existing["rule_hash"], rule_hash)
+    nonce = secrets.token_hex(32)
     fields = {
         "universe_id": universe_id,
         "symbol_rule": list(symbol_rule),
         "date_rule": list(date_rule),
         "registered_at": registered_at if registered_at is not None else _iso_utc_now(),
         "rule_hash": rule_hash,
+        "commitment_nonce": nonce,
+        "rule_commitment": compute_rule_commitment(nonce, symbol_rule, date_rule),
         "vault_secret_commitment": vault_secret_commitment,
     }
     return ledger.append_row(fields)
@@ -453,8 +703,10 @@ def register_universe(
 
 def find_universe(ledger: VaultUniverseLedger, universe_id: str) -> dict | None:
     """The most recently registered universe row for ``universe_id``, or ``None`` -- append order
-    IS registration order (the ``walkforward_ledger.latest_fold_spec`` precedent)."""
-    matches = [row for row in ledger.all_rows() if row.get("universe_id") == universe_id]
+    IS registration order (the ``walkforward_ledger.latest_fold_spec`` precedent). TR-25: reads
+    through the GATED ``verified_rows()`` -- a corrupted universe ledger refuses rather than
+    silently resolving to a possibly-wrong "latest" row."""
+    matches = [row for row in ledger.verified_rows() if row.get("universe_id") == universe_id]
     return matches[-1] if matches else None
 
 
@@ -607,9 +859,16 @@ def _latest_rows_by_dataset_id(ledger: VaultShardLedger) -> dict[str, dict]:
 
     Keyed on ``dataset_id``, never on the served surrogate ``shard_id``: the surrogate exists only
     to be handed out (spec section 7.5 r3), while every lifecycle guard, every bridge to another
-    module, and every refusal is about the real dataset."""
+    module, and every refusal is about the real dataset.
+
+    TR-25/spec section 7.8: reads through the GATED ``verified_rows()`` -- this is the ONE scan
+    every reader in this module shares (module docstring), so gating it here reaches
+    ``currently_sealed_dataset_ids``, ``withheld_dataset_ids``, ``withheld_universe_by_dataset_id``,
+    ``unresolved_pool_universe_by_dataset_id``, ``build_vault_state``, and (via ``_latest_shard_row``
+    below) ``seal_shard``/``assign_shard``/``expose_shard`` -- every one of them, with no second
+    call site to remember to gate."""
     latest: dict[str, dict] = {}
-    for row in ledger.all_rows():
+    for row in ledger.verified_rows():
         latest[row["dataset_id"]] = row
     return latest
 
@@ -787,22 +1046,34 @@ def withheld_dataset_ids(ledger: VaultShardLedger) -> frozenset[str]:
 def _latest_universes(universe_ledger: VaultUniverseLedger) -> list[dict]:
     """Every currently-registered universe's own latest row (``find_universe``'s "most recent row
     per ``universe_id``" semantics, applied across EVERY ``universe_id`` at once rather than one
-    named universe) -- the one ledger scan ``_universe_pair_index`` below needs."""
+    named universe) -- the one ledger scan ``_universe_pair_index`` below needs. TR-25: reads
+    through the GATED ``verified_rows()``."""
     latest: dict[str, dict] = {}
-    for row in universe_ledger.all_rows():
+    for row in universe_ledger.verified_rows():
         latest[row["universe_id"]] = row
     return list(latest.values())
 
 
+def _normalize_symbol(symbol: str) -> str:
+    """Case-insensitive symbol matching, scoped SOLELY to the universe-rule withhold test inside
+    ``unresolved_pool_universe_by_dataset_id`` (iteration 12's cheap-companion item: "today AAPL
+    vs aapl hides nothing"). Deliberately NOT applied to ``expected_recording_pairs``/
+    ``verify_recording_batch`` (TR-4's cherry-pick check keeps its own, separately-tested,
+    byte-exact matching unchanged) -- the phase spec names only "the universe-rule test" inside
+    this one function, not a broader normalization of the recording-batch verifier."""
+    return symbol.strip().upper()
+
+
 def _universe_pair_index(universe_ledger: VaultUniverseLedger) -> dict[tuple[str, str], list[dict]]:
     """Every registered universe's own ``expected_recording_pairs()``, indexed by each
-    ``(symbol, date)`` pair it covers -- built ONCE per call so a wide ``symbol_rule x date_rule``
-    product is walked once per universe, never once per caller record (``unresolved_pool_
-    universe_by_dataset_id`` below does an O(1) dict lookup per record against this index)."""
+    NORMALIZED ``(symbol, date)`` pair it covers (``_normalize_symbol`` above) -- built ONCE per
+    call so a wide ``symbol_rule x date_rule`` product is walked once per universe, never once
+    per caller record (``unresolved_pool_universe_by_dataset_id`` below does an O(1) dict lookup
+    per record against this index)."""
     index: dict[tuple[str, str], list[dict]] = {}
     for universe in _latest_universes(universe_ledger):
-        for pair in expected_recording_pairs(universe):
-            index.setdefault(pair, []).append(universe)
+        for symbol, date in expected_recording_pairs(universe):
+            index.setdefault((_normalize_symbol(symbol), date), []).append(universe)
     return index
 
 
@@ -862,7 +1133,12 @@ def unresolved_pool_universe_by_dataset_id(
     assigned truth) and otherwise the first (b) match found -- every caller uses this only for
     AGGREGATE per-universe counting (``micro_readiness.py``'s ``sealed_tranche.by_universe``),
     never as a per-shard identity, so which universe wins a rare double-match is not itself an
-    identity leak."""
+    identity leak.
+
+    **Symbol matching is case-insensitive (iteration 12).** ``_universe_pair_index`` above
+    normalizes every registered rule's symbols; the incoming record's own symbol is normalized
+    the identical way at the lookup below -- so a universe registered as ``aapl`` still withholds
+    a recording produced as ``AAPL``, and vice versa (TC-12/TC-13)."""
     result: dict[str, str] = dict(withheld_universe_by_dataset_id(shard_ledger))
     pair_index = _universe_pair_index(universe_ledger)
     if pair_index:
@@ -874,7 +1150,7 @@ def unresolved_pool_universe_by_dataset_id(
         for dataset_id, symbol, session_date, created_utc in records:
             if dataset_id in result or dataset_id in ledger_tracked_ids:
                 continue
-            for universe in pair_index.get((symbol, session_date), ()):
+            for universe in pair_index.get((_normalize_symbol(symbol), session_date), ()):
                 if created_utc >= universe["registered_at"]:
                     result[dataset_id] = universe["universe_id"]
                     break
@@ -904,10 +1180,20 @@ def _serialize_shard(row: dict) -> dict:
     * ``assigned`` -- the opaque fields PLUS the family binding, the symbol, the session date and
       the surrogate -> ``dataset_id`` mapping (r3 point 1: revealed at assignment). TC-7.
     * ``exposed``  -- the above PLUS the raw ``content_checksum``, against which the salted
-      commitment can now be re-derived and verified (r3 point 2)."""
+      commitment can now be re-derived and verified (r3 point 2).
+    * ``exposure_unknown`` (iteration 12, TR-25/TC-5) -- a lawful-recovery downgrade, never a
+      lifecycle transition of its own. Serves whatever the shard's LAST KNOWN row already
+      disclosed and nothing more: still-opaque if recovery marked it unknown while it was only
+      ever ``sealed`` (``row["symbol"]`` is ``None``), else the ``assigned``-shape fields -- but
+      NEVER ``content_checksum``, since ``exposure_unknown`` never equals ``STATE_EXPOSED`` and
+      so the same ``if state == STATE_EXPOSED`` guard below already excludes it. This is the ONE
+      place ``exposure_unknown``'s "permanently ineligible for sealed-OOS use" requirement is
+      enforced at the SERVING layer; the lifecycle layer enforces it for free (module docstring
+      next to ``STATE_EXPOSURE_UNKNOWN``'s own definition: no further transition can ever match
+      a state that is neither ``sealed`` nor ``assigned``)."""
     opaque = {key: row[key] for key in _OPAQUE_SHARD_KEYS}
     state = row["exposure_state"]
-    if state == STATE_SEALED:
+    if state == STATE_SEALED or (state == STATE_EXPOSURE_UNKNOWN and row.get("symbol") is None):
         return opaque
     revealed = {
         **opaque,
@@ -923,39 +1209,103 @@ def _serialize_shard(row: dict) -> dict:
     return revealed
 
 
-def _fully_exposed_universe_ids(latest_shard_rows: dict[str, dict]) -> frozenset[str]:
-    """Every ``universe_id`` that (a) owns at least one shard and (b) has NO shard left in a state
-    short of ``exposed``. Fail-closed by construction: a universe with no shards yet -- registered
-    but not recorded, the window between spec section 7.2's step 5 and step 7 -- is absent from
-    this set, so its rule stays committed rather than published while the tranche is being built.
-    """
-    owning: set[str] = set()
-    withholding: set[str] = set()
+def _whole_pool_released_universe_ids(
+    latest_shard_rows: dict[str, dict], universe_ledger: VaultUniverseLedger
+) -> frozenset[str]:
+    """TR-27/spec section 7.2 (r7): widened from ``_fully_exposed_universe_ids`` (pre-iteration-12,
+    "every LEDGER-TRACKED shard exposed") to "every member of the universe's ORIGINAL registered
+    pool released" -- the iteration-11 audit's own two-GET subtraction target
+    (``vault._fully_exposed_universe_ids``, pre-iteration-12 ``vault.py:926-938``): a universe with
+    every TRACKED shard exposed but an UNTRACKED pool member still unresolved was wrongly
+    considered "fully exposed" by the old, narrower gate, which would have revealed the rule while
+    a real member of the pool was still hidden.
+
+    Reuses ``expected_recording_pairs`` -- the SAME expected-pairs computation
+    ``unresolved_pool_universe_by_dataset_id`` already uses (module docstring: never a second,
+    divergent implementation of "is this universe's pool resolved"). A universe_id is released iff
+    BOTH:
+
+    (a) no shard THIS LEDGER TRACKS for that universe (any ``dataset_id``, any row) is short of
+        ``STATE_EXPOSED``; and
+    (b) its OWN ``expected_recording_pairs()`` is a SUBSET of the ``(symbol, session_date)`` pairs
+        this ledger has recorded as ``STATE_EXPOSED`` for that universe -- i.e. literally every
+        pair the rule promised has reached the final lifecycle state, not merely every pair the
+        ledger happens to have a row for.
+
+    **Test (a) is load-bearing, not an optimization -- closes a real gap an adversarial pre-ship
+    review found in test (b) alone.** Nothing in this module (or TR-12's single-shot discipline,
+    which scopes to (family, shard), never to (symbol, date)) stops a SECOND, DIFFERENT shard
+    (``dataset_id`` is a random per-recording identifier -- ``datasets.py``) from being sealed and
+    assigned under the identical ``(symbol, session_date)`` pair as a first shard that has already
+    reached ``exposed`` -- a re-recorded/retry day is exactly the shape spec section 7.7
+    anticipates. Test (b) ALONE is pair-keyed and would have been satisfied by the first shard's
+    exposure while the second, genuinely still-withheld shard sat unexposed -- reopening exactly
+    the two-GET subtraction class this whole widening exists to close. Test (a) closes it: any
+    LEDGER-TRACKED shard of the universe that is not yet exposed keeps the universe hidden,
+    regardless of what the pair-coverage arithmetic in test (b) would otherwise say.
+
+    An empty rule (no ``symbol_rule``/``date_rule`` entries at all -- not reachable through the
+    Tier-B resolution order's own registration path, but not excluded by this module's own types
+    either) owns nothing to reveal and is never considered released, matching the pre-iteration-12
+    predicate's own fail-closed-on-no-shards behaviour."""
+    exposed_pairs_by_universe: dict[str, set[tuple[str, str]]] = {}
+    withholding_universe_ids: set[str] = set()
     for row in latest_shard_rows.values():
-        owning.add(row["universe_id"])
-        if row["exposure_state"] != STATE_EXPOSED:
-            withholding.add(row["universe_id"])
-    return frozenset(owning - withholding)
+        universe_id = row["universe_id"]
+        if row["exposure_state"] == STATE_EXPOSED:
+            exposed_pairs_by_universe.setdefault(universe_id, set()).add(
+                (row["symbol"], row["session_date"])
+            )
+        else:
+            withholding_universe_ids.add(universe_id)  # test (a)
+    released: set[str] = set()
+    for universe in _latest_universes(universe_ledger):
+        universe_id = universe["universe_id"]
+        if universe_id in withholding_universe_ids:
+            continue
+        expected = expected_recording_pairs(universe)
+        if expected and expected <= exposed_pairs_by_universe.get(universe_id, set()):  # test (b)
+            released.add(universe_id)
+    return frozenset(released)
 
 
-def _serialize_universe(row: dict, revealed_universe_ids: frozenset[str]) -> dict:
-    """A universe row's served projection -- the module docstring's join-resistance part 4.
+def _serialize_universe(row: dict, released_universe_ids: frozenset[str]) -> dict:
+    """A universe row's served projection -- the module docstring's join-resistance part 4,
+    widened for TR-27 (r7, iteration 12).
 
-    While ANY shard of this universe is still withheld, the ``symbol_rule``/``date_rule`` LISTS are
-    replaced by their already-stored ``rule_hash`` commitment plus their two sizes: the sizes state
-    the tranche's shape (how much evidence was pre-committed, which is the auditable claim section
-    7.2 exists to fix in advance) while revealing nothing about WHICH symbol-days it contains, so
-    ``expected - served`` cannot be computed against the public dataset listing. ``rule_disclosure``
-    names which of the two stages a reader is looking at, so a committed row can never be mistaken
-    for a universe that genuinely has no members."""
+    While the universe's WHOLE ORIGINAL POOL is not yet released (``_whole_pool_released_
+    universe_ids`` above -- never merely "every ledger-tracked shard exposed"), only the NONCED
+    ``rule_commitment`` (``compute_rule_commitment`` -- never the plain ``rule_hash``, which is
+    dictionary-attackable on its own and stays purely internal) is served, plus the rule's two
+    SIZES: the sizes state the tranche's shape (how much evidence was pre-committed, the
+    auditable claim section 7.2 exists to fix in advance) while revealing nothing about WHICH
+    symbol-days it contains, so ``expected - served`` cannot be computed against the public
+    dataset listing. ``rule_disclosure`` names which of the two stages a reader is looking at, so
+    a committed row can never be mistaken for a universe that genuinely has no members.
+
+    Once released, ``symbol_rule``, ``date_rule`` and ``commitment_nonce`` all serve alongside the
+    SAME ``rule_commitment`` -- so a reader can recompute ``compute_rule_commitment(nonce,
+    symbol_rule, date_rule)`` and prove it equals the value that was committed at registration,
+    long before the rule was ever revealed (TC-7). The plain ``rule_hash`` is never served at
+    either stage -- it is not needed for that proof and stays the ledger's own internal identity
+    function (module docstring)."""
     content = _row_content(row)
-    if content["universe_id"] in revealed_universe_ids:
-        return {**content, "rule_disclosure": RULE_DISCLOSURE_REVEALED}
-    return {
+    base = {
         "universe_id": content["universe_id"],
         "registered_at": content["registered_at"],
-        "rule_hash": content["rule_hash"],
+        "rule_commitment": content["rule_commitment"],
         "vault_secret_commitment": content["vault_secret_commitment"],
+    }
+    if content["universe_id"] in released_universe_ids:
+        return {
+            **base,
+            "symbol_rule": content["symbol_rule"],
+            "date_rule": content["date_rule"],
+            "commitment_nonce": content["commitment_nonce"],
+            "rule_disclosure": RULE_DISCLOSURE_REVEALED,
+        }
+    return {
+        **base,
         "symbol_rule_size": len(content["symbol_rule"]),
         "date_rule_size": len(content["date_rule"]),
         "rule_disclosure": RULE_DISCLOSURE_COMMITTED,
@@ -969,22 +1319,240 @@ def build_vault_state(shard_ledger: VaultShardLedger, universe_ledger: VaultUniv
     ``verify_chain()`` verdicts (the ``GET /scout``/``GET /walkforward`` precedent: surfaced beside
     the data, never silently accepted if tampered).
 
-    The universe rows go through ``_serialize_universe``'s own two-stage reveal. An earlier version
-    of this function served them in FULL, reasoning that "knowing a tranche covers S symbols x D
-    dates says nothing about WHICH of those symbol-days the secret-keyed HMAC sealed". That
-    reasoning was wrong, and the iter-9 audit (third pass, finding B1) reproduced why: it is true of
-    the rule in isolation and false the moment the rule is read beside ``GET /research/datasets``,
-    which serves every recorded shard EXCEPT the withheld ones. Since TR-4 forces the recorded batch
-    to be the rule's complete output, ``expected - served`` is exactly the sealed set -- a full
-    de-anonymisation from two public GETs. The rule is therefore committed (``rule_hash``, plus its
-    two sizes) until every shard of that universe is exposed. Section 7.2 is unaffected: it requires
-    the rule to be RECORDED in the vault ledger before any fetch, which it still is, and the TR-4
-    verifier reads it from that ledger, not from this payload."""
+    TR-25 (spec section 7.8): reads both ledgers through their GATED ``verified_rows()`` (via
+    ``_latest_rows_by_dataset_id``/``_whole_pool_released_universe_ids``'s own ``_latest_universes``
+    call and the final ``universe_ledger.verified_rows()`` below) -- a corrupted ledger raises
+    ``VaultLedgerCorruptionError`` BEFORE this function ever builds a response body, so the two
+    ``verify_chain()`` calls in the returned dict only ever report ``{"ok": True, ...}`` when this
+    function returns at all (they stay for the happy-path "surfaced beside the data" precedent,
+    exercised the instant either underlying gate has already passed).
+
+    The universe rows go through ``_serialize_universe``'s own two-stage reveal
+    (``_whole_pool_released_universe_ids``, TR-27/r7). An earlier version of this function served
+    them in FULL, reasoning that "knowing a tranche covers S symbols x D dates says nothing about
+    WHICH of those symbol-days the secret-keyed HMAC sealed". That reasoning was wrong, and the
+    iter-9 audit (third pass, finding B1) reproduced why: it is true of the rule in isolation and
+    false the moment the rule is read beside ``GET /research/datasets``, which serves every
+    recorded shard EXCEPT the withheld ones. Since TR-4 forces the recorded batch to be the rule's
+    complete output, ``expected - served`` is exactly the sealed set -- a full de-anonymisation
+    from two public GETs. The rule is therefore committed (``rule_commitment``, plus its two
+    sizes) until every member of the ORIGINAL pool is released. Section 7.2 is unaffected: it
+    requires the rule to be RECORDED in the vault ledger before any fetch, which it still is, and
+    the TR-4 verifier reads it from that ledger, not from this payload."""
     latest_shard_rows = _latest_rows_by_dataset_id(shard_ledger)
-    revealed = _fully_exposed_universe_ids(latest_shard_rows)
+    released = _whole_pool_released_universe_ids(latest_shard_rows, universe_ledger)
     return {
-        "universes": [_serialize_universe(row, revealed) for row in universe_ledger.all_rows()],
+        "universes": [_serialize_universe(row, released) for row in universe_ledger.verified_rows()],
         "shards": [_serialize_shard(row) for row in latest_shard_rows.values()],
         "shard_ledger_chain_verification": shard_ledger.verify_chain(),
         "universe_ledger_chain_verification": universe_ledger.verify_chain(),
     }
+
+
+# === iteration 12: lawful recovery -- fail closed, recover only on evidence (spec section 7.8) =====
+#
+# The ONLY way back from a `VaultLedgerCorruptionError` (module docstring's own iteration-12
+# paragraph). Scoped to the SHARD ledger, where the concrete `exposure_unknown` terminal state
+# lives (a disclosed scope choice, T-1): TC-4/TC-5's own language and the Data Contract's
+# `exposure_unknown` value are both shard-specific, and the universe ledger has no analogous
+# partial-recovery state to downgrade into. The shared low-level pieces below
+# (`preserve_corrupt_ledger`, `_verified_prefix_rows`, `_rehash_suffix`) are generic over EITHER
+# wrapper class, so a hypothetical `reconstruct`-only (TC-4-shape, no TC-5-shape partial mark) path
+# for the universe ledger could reuse them unchanged if a future iteration needs it -- not built
+# here because nothing in this iteration's own test-first contract exercises it.
+
+
+def preserve_corrupt_ledger(ledger, quarantine_dir: str, *, incident_id: str) -> dict:
+    """spec section 7.8 step 3: preserves the corrupt ledger file BYTE-FOR-BYTE before any repair
+    -- so a corrupted ledger becomes a forensic artifact, never silently discarded or overwritten
+    (this codebase's own "corrupt files surfaced, never overwritten" discipline, extended here to
+    an explicit, evidenced exception the recovery flow itself creates). Copies both the ledger's
+    own ``.jsonl`` file and its tail-anchor sidecar (when one exists) into ``quarantine_dir``,
+    named by ``incident_id`` so two incidents against the same ledger can never collide or
+    overwrite one another. The ORIGINAL files at ``ledger.path``/``ledger.head_anchor_path`` are
+    left exactly where they were -- this function only ever ADDS copies, never moves or deletes
+    the source, so an operator's own external forensic tooling still finds them too.
+
+    ``ledger`` is a ``VaultShardLedger``/``VaultUniverseLedger`` (anything exposing ``.path``/
+    ``.head_anchor_path``) -- generic over either wrapper class (module section note above)."""
+    quarantine_root = Path(quarantine_dir)
+    quarantine_root.mkdir(parents=True, exist_ok=True)
+    ledger_path = ledger.path
+    raw = ledger_path.read_bytes() if ledger_path.exists() else b""
+    preserved_ledger_path = quarantine_root / f"{incident_id}.{ledger_path.name}"
+    preserved_ledger_path.write_bytes(raw)
+
+    anchor_path = ledger.head_anchor_path
+    preserved_anchor_path = None
+    if anchor_path.exists():
+        preserved_anchor_path = quarantine_root / f"{incident_id}.{anchor_path.name}"
+        preserved_anchor_path.write_bytes(anchor_path.read_bytes())
+
+    return {
+        "preserved_ledger_path": str(preserved_ledger_path),
+        "preserved_anchor_path": str(preserved_anchor_path) if preserved_anchor_path else None,
+        "corrupt_ledger_sha256": _sha256_hex(raw),
+    }
+
+
+def _verified_prefix_rows(ledger, verify_result: dict) -> list[dict]:
+    """The prefix of ``ledger``'s RAW rows (``ledger.all_rows()``, the UNGATED reader) that lawful
+    recovery can still trust, given a FAILED ``verify_chain()`` result -- recovery must reason
+    about ledger content directly, since ``verify_chain()`` itself only ever reports pass/fail,
+    never "how much of this can still be trusted".
+
+    Conservative on the ONE failure mode where even EARLIER rows are not provably genuine:
+    ``head_hash_mismatch`` means the file's own per-row content/prev-hash walk was ALREADY
+    internally self-consistent from row 0 onward (``verify_chain()`` only reaches ``_verify_tail``
+    -- the check this reason comes from -- after that whole walk passes), yet the row at the
+    anchor's own recorded position does not match the hash the anchor committed for it. The tail
+    anchor's ``head_hash`` is the ONLY externally-anchored proof point in this whole scheme; if it
+    does not match, the current file could be a DIFFERENT, still-self-consistent chain (a
+    wholesale replacement, not a mere truncation), so nothing before it is provably the true
+    original either -- an empty trusted prefix, never a guess at how far back the replacement
+    might start. The same applies to ``head_anchor_missing`` with rows present (an anchor that
+    once existed and no longer does is exactly as suspect). ``tail_truncated`` is the opposite,
+    genuinely benign case: every row 0..len(rows)-1 already passed the SAME internal walk, and the
+    anchor merely claims MORE rows should exist -- the present rows ARE a genuine prefix of the
+    true history, so the whole file is trusted."""
+    reason = verify_result.get("reason")
+    raw_rows = ledger.all_rows()
+    if reason in ("content_hash_mismatch", "prev_hash_mismatch"):
+        return raw_rows[: verify_result["failed_at_row"]]
+    if reason == "tail_truncated":
+        return raw_rows
+    return []  # head_hash_mismatch / head_anchor_missing / anything unrecognised: trust nothing
+
+
+def _rehash_suffix(good_prefix: list[dict], suffix_fields: list[dict]) -> list[dict]:
+    """Re-derives the ``row_hash``/``prev_hash``/``row_index`` chain for ``suffix_fields`` (plain
+    content dicts, no ledger-internal keys) as though ``HashChainedLedger.append_row`` had
+    appended them one at a time onto ``good_prefix`` -- the IDENTICAL algorithm (this module's own
+    ``_canonical``/``_sha256_hex``, the same canonical encoding every sibling ledger in this
+    codebase hashes), so a genuinely faithful reconstruction reproduces byte-identical hashes to
+    the rows that were actually lost, and a wrong or incomplete guess provably does not."""
+    rows: list[dict] = []
+    prev_hash = good_prefix[-1]["row_hash"] if good_prefix else None
+    index = len(good_prefix)
+    for fields in suffix_fields:
+        content = {**fields, "row_index": index, "prev_hash": prev_hash}
+        row_hash = _sha256_hex(_canonical(content))
+        row = {**content, "row_hash": row_hash}
+        rows.append(row)
+        prev_hash = row_hash
+        index += 1
+    return rows
+
+
+def recover_shard_ledger(
+    shard_ledger: VaultShardLedger,
+    *,
+    verify_result: dict,
+    reconstructed_suffix: list[dict],
+    sources: list[dict],
+    operator_identity: str,
+    reason: str,
+    recovery_ledger: VaultRecoveryLedger,
+    incident_id: str,
+    quarantine_dir: str,
+    recovered_at: str | None = None,
+) -> dict:
+    """spec section 7.8's full lawful-recovery sequence for the SHARD ledger (the one ledger with
+    a defined ``exposure_unknown`` terminal state -- module section note above). Steps, in order:
+
+    1. Preserve the corrupt ledger byte-for-byte (``preserve_corrupt_ledger``) -- forensic
+       evidence, independent of whatever happens next. Also reads the ledger's OWN currently
+       committed tail anchor (``read_tail_anchor``) -- untouched by a content-only corruption in
+       the TC-1/TC-2/TC-3 scenarios -- as the hash-attested target step 3 below tests against.
+    2. Identify the last verified row (``_verified_prefix_rows``).
+    3. Re-chain the caller's ``reconstructed_suffix`` onto that prefix EXACTLY the way
+       ``HashChainedLedger.append_row`` would (``_rehash_suffix``) and test whether the result is
+       HASH-ATTESTED COMPLETE: its final row's hash equals the anchor's own ``head_hash`` and the
+       total row count equals the anchor's own ``row_count`` -- a byte-for-byte proof, never the
+       operator's word (module docstring: "operator attestation is audit metadata, never proof of
+       missing history").
+    4a. PROVEN COMPLETE (TC-4): the reconstructed prefix+suffix becomes the ledger's new content
+        (``VaultShardLedger.rewrite_from_recovery`` -- the ONE lawful whole-file rewrite this
+        module ever performs, and only here, only after the corrupt original is already
+        preserved); a ``recovery_completed`` row (citing every hash, source, operator identity and
+        reason) is appended to ``recovery_ledger``; returns ``{"ok": True, "resumed": True,
+        "exposure_unknown_dataset_ids": []}``. Predicates read this ledger normally again from
+        this point on, reporting the EXACT prior exposure state (TC-4).
+    4b. NOT proven -- missing or wrong suffix, a hash/row-count mismatch, or none supplied at all
+        (TC-5): refuses to truncate-and-continue. The ledger's new content is the verified prefix
+        PLUS one ``exposure_unknown`` row per DISTINCT ``dataset_id`` the prefix ever named --
+        conservative, since the lost suffix could have advanced ANY of them past what the prefix
+        last saw, and TR-25's own invariant forbids ever resolving that uncertainty in a shard's
+        favour. A ``recovery_incomplete`` row (naming the gap) is still appended to
+        ``recovery_ledger``; returns ``{"ok": False, "resumed": True,
+        "exposure_unknown_dataset_ids": [...]}``. Every affected shard is now permanently
+        ineligible for sealed-OOS use -- TR-12's own single-shot guards already refuse any further
+        ``assign_shard``/``expose_shard`` call for a shard whose state is not EXACTLY what those
+        transitions expect, so ``exposure_unknown`` (matching neither ``sealed`` nor ``assigned``)
+        is refused there automatically; no new lifecycle guard code is needed (``STATE_EXPOSURE_
+        UNKNOWN``'s own definition above).
+
+    Either branch RESUMES service (``resumed: True``): a corrupted ledger does not stay refused
+    forever once a lawful recovery -- proven or conservatively incomplete -- has run; only an
+    UNATTEMPTED recovery leaves ``VaultLedgerCorruptionError`` firing on every read."""
+    preserved = preserve_corrupt_ledger(shard_ledger, quarantine_dir, incident_id=incident_id)
+    anchor = shard_ledger.read_tail_anchor() or {}
+    good_prefix = _verified_prefix_rows(shard_ledger, verify_result)
+    candidate_suffix = _rehash_suffix(good_prefix, reconstructed_suffix)
+    candidate_rows = good_prefix + candidate_suffix
+    recovered_at = recovered_at if recovered_at is not None else _iso_utc_now()
+    final_hash = candidate_rows[-1]["row_hash"] if candidate_rows else None
+    proven_complete = (
+        len(candidate_rows) == anchor.get("row_count") and final_hash == anchor.get("head_hash")
+    )
+
+    last_verified_row_index = (len(good_prefix) - 1) if good_prefix else None
+    last_verified_row_hash = good_prefix[-1]["row_hash"] if good_prefix else None
+
+    if proven_complete:
+        shard_ledger.rewrite_from_recovery(candidate_rows)
+        recovery_ledger.append_row(
+            {
+                "kind": "recovery_completed",
+                "ledger_kind": "shard",
+                "incident_id": incident_id,
+                "corrupt_ledger_sha256": preserved["corrupt_ledger_sha256"],
+                "last_verified_row_index": last_verified_row_index,
+                "last_verified_row_hash": last_verified_row_hash,
+                "sources": list(sources),
+                "recovered_suffix_hash": _sha256_hex(_canonical(list(reconstructed_suffix))),
+                "operator_identity": operator_identity,
+                "reason": reason,
+                "recovered_at": recovered_at,
+                "outcome": "complete",
+            }
+        )
+        return {"ok": True, "resumed": True, "exposure_unknown_dataset_ids": []}
+
+    affected_dataset_ids = sorted({row["dataset_id"] for row in good_prefix})
+    latest_by_id: dict[str, dict] = {}
+    for row in good_prefix:
+        latest_by_id[row["dataset_id"]] = row
+    unknown_fields = [
+        {**_row_content(latest_by_id[dataset_id]), "exposure_state": STATE_EXPOSURE_UNKNOWN}
+        for dataset_id in affected_dataset_ids
+    ]
+    unknown_rows = _rehash_suffix(good_prefix, unknown_fields)
+    shard_ledger.rewrite_from_recovery(good_prefix + unknown_rows)
+    recovery_ledger.append_row(
+        {
+            "kind": "recovery_incomplete",
+            "ledger_kind": "shard",
+            "incident_id": incident_id,
+            "corrupt_ledger_sha256": preserved["corrupt_ledger_sha256"],
+            "last_verified_row_index": last_verified_row_index,
+            "last_verified_row_hash": last_verified_row_hash,
+            "attempted_sources": list(sources),
+            "operator_identity": operator_identity,
+            "reason": reason,
+            "recovered_at": recovered_at,
+            "exposure_unknown_dataset_ids": affected_dataset_ids,
+            "outcome": "incomplete",
+        }
+    )
+    return {"ok": False, "resumed": True, "exposure_unknown_dataset_ids": affected_dataset_ids}

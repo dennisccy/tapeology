@@ -321,3 +321,29 @@ carried "still open" list. Cheap companion check: `md5sum` the whole evidence di
 had three PASS rows citing byte-identical blank images and a fourth citing the wrong panel.
 **Applies to:** every iteration whose spec carries an "open owner questions" or "deferred, awaiting
 ruling" list, and every evaluation that reads a browser-QA evidence directory.
+
+## iter-12 — 2026-08-19T11:30:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** A recovery/repair primitive can satisfy every written test and still break the
+invariant it exists to protect, because the tests only cover entities the damaged artifact can
+still NAME. `vault.recover_shard_ledger`'s unprovable branch correctly marks the shards visible
+in the surviving prefix `exposure_unknown`, but a shard whose only row lived in the destroyed
+suffix silently leaves the withheld set entirely — and `rewrite_from_recovery` then regenerates
+the tail anchor, so `verify_chain()` reports `ok: True` again and the loss becomes undetectable
+from the vault's own state. The durable anchor knew the row count (3) versus the survivors (2),
+so a fail-closed refusal was available and simply was not taken. When auditing a
+recover-from-damage path, always probe the entity whose ONLY record was destroyed, and always
+re-run the integrity check AFTER the repair to see whether the repair erased the evidence.
+**Applies to:** any iteration touching `vault.py`'s recovery/epoch machinery, or adding a repair
+/ reconstruction path to any hash-chained ledger (`micro_chain_ledger.py` and its
+`ExposureRegistry` / `WalkForwardLedger` consumers); and any J-06 step-4 work that would let real
+sealed tape reach this code.
+
+**Lesson (process):** A `full`-depth request expressed only in the evaluator's *prose* is not
+binding — the engine's arbiter reads the VERDICT LINE. My iteration-11 CONTINUE + "run full next
+time" was demoted to lean, and the one lane that has found a real integrity defect in every full
+iteration of this era did not run on the iteration that shipped security-critical machinery. If
+the next iteration genuinely needs the auditor, the verdict must be ESCALATE, not CONTINUE with a
+recommendation.
+**Applies to:** every future evaluation in this session that wants the independent audit lane.

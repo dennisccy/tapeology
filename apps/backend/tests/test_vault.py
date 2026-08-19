@@ -1151,9 +1151,13 @@ def test_audit_b1_the_universe_rule_cannot_de_anonymise_the_sealed_tranche_by_su
         assert len(datasets["datasets"]) == 3
 
         universe = body["universes"][0]
-        # the commitment stage: the rule's HASH and SHAPE, never its membership.
+        # the commitment stage: the rule's NONCED COMMITMENT and SHAPE, never its membership, and
+        # never the plain rule_hash (r7/TR-27 -- a bare deterministic hash of a low-entropy,
+        # dictionary-enumerable rule is not a hiding commitment).
         assert universe["rule_disclosure"] == vault.RULE_DISCLOSURE_COMMITTED
-        assert universe["rule_hash"] == vault.compute_rule_hash(symbols, dates)
+        assert "rule_hash" not in universe
+        assert "commitment_nonce" not in universe
+        assert universe["rule_commitment"] != vault.compute_rule_hash(symbols, dates)
         assert (universe["symbol_rule_size"], universe["date_rule_size"]) == (2, 2)
         assert "symbol_rule" not in universe and "date_rule" not in universe
         for token in symbols + dates:
@@ -1175,8 +1179,13 @@ def test_audit_b1_the_universe_rule_cannot_de_anonymise_the_sealed_tranche_by_su
             key in universe for key in ("symbol_rule", "date_rule", "expected_pairs")
         )
 
-    # the reveal half: once EVERY shard of the universe is exposed, section 7.2's audit trail is
-    # served in full again -- the commitment is a delay, never a permanent withholding.
+    # TC-6/TR-27 (r7): assigning, then EXPOSING, this ONE tracked shard does NOT reveal the
+    # universe -- three of its four ORIGINAL pool members (both ZQXAAA pairs, and ZQXBBB's other
+    # date) were never even ledger-tracked, let alone exposed. The pre-iteration-12 gate
+    # (`_fully_exposed_universe_ids`, "every LEDGER-TRACKED shard exposed") would have wrongly
+    # revealed the rule here -- the exact two-GET subtraction door the iteration-11 audit proved
+    # open (module docstring). The widened `_whole_pool_released_universe_ids` requires every
+    # ORIGINAL pool member, not merely every member this ledger happens to know about.
     family_root = vault.compute_family_root_id("impact_efficiency_trend", "band_wall_touch", "trades_20")
     vault.assign_shard(
         shard_ledger, dataset_id=sealed_meta["id"], family_root_id=family_root,
@@ -1186,18 +1195,48 @@ def test_audit_b1_the_universe_rule_cannot_de_anonymise_the_sealed_tranche_by_su
     assert still_withheld["rule_disclosure"] == vault.RULE_DISCLOSURE_COMMITTED  # assigned != exposed
 
     vault.expose_shard(shard_ledger, dataset_id=sealed_meta["id"], family_root_id=family_root)
+    one_of_four_exposed = vault.build_vault_state(shard_ledger, universe_ledger)["universes"][0]
+    assert one_of_four_exposed["rule_disclosure"] == vault.RULE_DISCLOSURE_COMMITTED  # STILL hidden
+    assert "symbol_rule" not in one_of_four_exposed
+
+    # the actual reveal half (TC-7): seal, assign and expose the THREE remaining pool members too
+    # -- only once literally every one of the universe's four ORIGINAL pairs is exposed does the
+    # rule (plus the nonce) serve, and it recomputes EXACTLY to the commitment registration
+    # produced up front.
+    for pair in metas:  # metas' own keys ARE the universe's full 2x2 expected set (module setup)
+        if pair == secret_member:
+            continue
+        meta = metas[pair]
+        vault.seal_shard(
+            shard_ledger, dataset_id=meta["id"], universe_id="starter-tranche-v1",
+            content_checksum=meta["checksum"], event_count=meta["event_counts"]["total"],
+            vault_secret=_FIXTURE_SECRET,
+        )
+        vault.assign_shard(
+            shard_ledger, dataset_id=meta["id"], family_root_id=family_root,
+            symbol=pair[0], session_date=pair[1],
+        )
+        vault.expose_shard(shard_ledger, dataset_id=meta["id"], family_root_id=family_root)
+
     revealed = vault.build_vault_state(shard_ledger, universe_ledger)["universes"][0]
     assert revealed["rule_disclosure"] == vault.RULE_DISCLOSURE_REVEALED
     assert revealed["symbol_rule"] == symbols and revealed["date_rule"] == dates
-    assert revealed["rule_hash"] == vault.compute_rule_hash(symbols, dates)
+    assert revealed["rule_commitment"] == universe["rule_commitment"]  # unchanged since registration
+    assert (
+        vault.compute_rule_commitment(revealed["commitment_nonce"], symbols, dates)
+        == revealed["rule_commitment"]
+    )
 
 
 def test_audit_b1_a_universe_with_no_shards_yet_keeps_its_rule_committed(tmp_path):
     """The fail-closed half of the fix. Spec section 7.2's mandated order registers the universe
     (step 5) BEFORE any vendor fetch (step 7), so there is a real window in which the universe owns
     zero shards -- and a reader who harvests the rule during that window keeps it for the whole
-    tranche's life. `_fully_exposed_universe_ids` therefore reveals only a universe that owns at
-    least one shard AND has none left withheld; "no shards" reveals nothing."""
+    tranche's life. `_whole_pool_released_universe_ids` (iteration 12's widened successor to the
+    pre-iteration-12 `_fully_exposed_universe_ids`) therefore reveals only a universe whose full
+    EXPECTED pair set (`expected_recording_pairs`) is a subset of its own EXPOSED pairs; "no shards
+    at all" trivially fails that subset test (an empty exposed-pairs set can never contain the
+    universe's own non-empty expected set), so "no shards" reveals nothing."""
     vault_dir = str(tmp_path / "vault")
     universe_ledger = vault.VaultUniverseLedger(vault_dir)
     vault.register_universe(
@@ -1442,3 +1481,549 @@ def test_tc8_tc9_r5_inference_trap_a_registered_pool_with_mixed_provenance_leave
             "unexposed dataset's (symbol, date) uniquely -- proving TC-8's fixed-code assertion "
             "above is not vacuous"
         )
+
+
+# =====================================================================================================
+# Iteration 12 (docs/phases/goal-rapid-microscope-iter-12.md): TR-25 vault-ledger integrity (spec
+# section 7.8), TR-27 nonced rule commitment (spec section 7.2/7.5, r7), and the symbol-case
+# normalization companion item. TC-1 through TC-14, per the phase spec's own test-first contract.
+# =====================================================================================================
+
+
+def _seal_two_shards(shard_ledger: vault.VaultShardLedger) -> list[dict]:
+    """Two sealed shards (``d-1`` then ``d-2``), so a truncated-tail scenario has something real
+    to lose -- the shared fixture every TR-25 test below builds on."""
+    rows = []
+    for i, (dataset_id, checksum) in enumerate((("d-1", "a" * 64), ("d-2", "b" * 64))):
+        rows.append(
+            vault.seal_shard(
+                shard_ledger, dataset_id=dataset_id, universe_id="u1",
+                content_checksum=checksum, event_count=100 + i, vault_secret=_FIXTURE_SECRET,
+            )
+        )
+    return rows
+
+
+def _truncate_ledger_tail(ledger) -> None:
+    """Drops the LAST line of ``ledger``'s own ``.jsonl`` file, leaving its tail anchor
+    (``chain_head.json``, UNTOUCHED) still claiming the ORIGINAL row count -- TC-1/TC-3's own
+    scenario: a genuine, self-consistent prefix of true history, short by one row the anchor
+    proves should exist. Works for either ``VaultShardLedger`` or ``VaultUniverseLedger``."""
+    lines = ledger.path.read_text(encoding="utf-8").splitlines()
+    ledger.path.write_text("\n".join(lines[:-1]) + ("\n" if lines[:-1] else ""), encoding="utf-8")
+
+
+def _mutate_interior_row(ledger_path: Path, row_index: int, key: str, value: object) -> None:
+    """Rewrites ONE key of an already-appended, interior row -- TC-2's own scenario: the row's own
+    content hash no longer matches what it committed to."""
+    lines = ledger_path.read_text(encoding="utf-8").splitlines()
+    row = json.loads(lines[row_index])
+    row[key] = value
+    lines[row_index] = json.dumps(row, sort_keys=True)
+    ledger_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+# --- TC-1/TC-2/TC-3: fail closed on a corrupted ledger, never treat it as empty or complete -------
+
+
+def test_tc1_a_truncated_shard_ledger_tail_fails_closed_on_every_predicate(tmp_path):
+    shard_ledger = vault.VaultShardLedger(str(tmp_path / "vault"))
+    universe_ledger = vault.VaultUniverseLedger(str(tmp_path / "vault"))
+    _seal_two_shards(shard_ledger)
+    _truncate_ledger_tail(shard_ledger)
+
+    assert shard_ledger.verify_chain()["reason"] == "tail_truncated"
+    with pytest.raises(vault.VaultLedgerCorruptionError) as exc_info:
+        vault.currently_sealed_dataset_ids(shard_ledger)
+    assert exc_info.value.ledger_kind == "shard"
+    with pytest.raises(vault.VaultLedgerCorruptionError):
+        vault.withheld_dataset_ids(shard_ledger)  # never silently omits the lost row's shard
+    with pytest.raises(vault.VaultLedgerCorruptionError):
+        vault.unresolved_pool_universe_by_dataset_id(shard_ledger, universe_ledger, [])
+    with pytest.raises(vault.VaultLedgerCorruptionError):
+        vault.build_vault_state(shard_ledger, universe_ledger)
+
+
+def test_tc1_a_truncated_universe_ledger_tail_fails_closed(tmp_path):
+    universe_ledger = vault.VaultUniverseLedger(str(tmp_path / "vault"))
+    vault.register_universe(
+        universe_ledger, universe_id="u1", symbol_rule=["PG"], date_rule=["2026-06-09"],
+        vault_secret_commitment=vault.commit_vault_secret(_FIXTURE_SECRET),
+    )
+    vault.register_universe(
+        universe_ledger, universe_id="u2", symbol_rule=["AAPL"], date_rule=["2026-06-10"],
+        vault_secret_commitment=vault.commit_vault_secret(_FIXTURE_SECRET),
+    )
+    _truncate_ledger_tail(universe_ledger)
+    assert universe_ledger.verify_chain()["reason"] == "tail_truncated"
+
+    with pytest.raises(vault.VaultLedgerCorruptionError) as exc_info:
+        vault.find_universe(universe_ledger, "u2")
+    assert exc_info.value.ledger_kind == "universe"
+    shard_ledger = vault.VaultShardLedger(str(tmp_path / "vault"))
+    with pytest.raises(vault.VaultLedgerCorruptionError):
+        vault.unresolved_pool_universe_by_dataset_id(shard_ledger, universe_ledger, [])
+    with pytest.raises(vault.VaultLedgerCorruptionError):
+        vault.build_vault_state(shard_ledger, universe_ledger)
+    # register_universe's own freeze/idempotency check reads the universe ledger too -- refused
+    # rather than silently re-registering (or silently refusing) against unverifiable history.
+    with pytest.raises(vault.VaultLedgerCorruptionError):
+        vault.register_universe(
+            universe_ledger, universe_id="u3", symbol_rule=["MSFT"], date_rule=["2026-06-11"],
+            vault_secret_commitment=vault.commit_vault_secret(_FIXTURE_SECRET),
+        )
+
+
+def test_tc2_an_interior_row_mutation_fails_closed_and_halts_sealing_and_assignment(tmp_path):
+    shard_ledger = vault.VaultShardLedger(str(tmp_path / "vault"))
+    universe_ledger = vault.VaultUniverseLedger(str(tmp_path / "vault"))
+    _seal_two_shards(shard_ledger)
+    _mutate_interior_row(shard_ledger.path, 0, "universe_id", "a-different-universe")
+
+    assert shard_ledger.verify_chain()["reason"] == "content_hash_mismatch"
+    with pytest.raises(vault.VaultLedgerCorruptionError):
+        vault.build_vault_state(shard_ledger, universe_ledger)
+    # spec section 7.8's own literal words: "no sealing, no assignment, no exposure check".
+    with pytest.raises(vault.VaultLedgerCorruptionError):
+        vault.seal_shard(
+            shard_ledger, dataset_id="d-3", universe_id="u1", content_checksum="c" * 64,
+            event_count=10, vault_secret=_FIXTURE_SECRET,
+        )
+    with pytest.raises(vault.VaultLedgerCorruptionError):
+        vault.assign_shard(
+            shard_ledger, dataset_id="d-1", family_root_id="root", symbol="PG",
+            session_date="2026-06-09",
+        )
+    with pytest.raises(vault.VaultLedgerCorruptionError):
+        vault.expose_shard(shard_ledger, dataset_id="d-1", family_root_id="root")
+
+
+def test_tc3_a_last_known_good_prefix_still_fails_closed_when_the_anchor_proves_more_existed(tmp_path):
+    """The raw prefix, taken in isolation, IS internally hash-chain-consistent -- proving this
+    isn't a trivially-broken file a naive "does row 0 verify" check would already catch. The GATED
+    reader refuses anyway, because the durable tail anchor proves a row is missing."""
+    shard_ledger = vault.VaultShardLedger(str(tmp_path / "vault"))
+    _seal_two_shards(shard_ledger)
+    _truncate_ledger_tail(shard_ledger)
+
+    raw_rows = shard_ledger.all_rows()  # the UNGATED reader -- still works, on purpose
+    assert len(raw_rows) == 1 and raw_rows[0]["dataset_id"] == "d-1"
+
+    with pytest.raises(vault.VaultLedgerCorruptionError) as exc_info:
+        shard_ledger.verified_rows()
+    assert exc_info.value.verify_result["reason"] == "tail_truncated"
+    with pytest.raises(vault.VaultLedgerCorruptionError):
+        vault.currently_sealed_dataset_ids(shard_ledger)
+
+
+# --- TC-4/TC-5: lawful recovery -- proven resumes exactly; unprovable marks exposure_unknown ------
+
+
+def test_tc4_a_hash_attested_reconstruction_resumes_service_and_reports_exact_prior_state(tmp_path):
+    vault_dir = str(tmp_path / "vault")
+    shard_ledger = vault.VaultShardLedger(vault_dir)
+    original_rows = _seal_two_shards(shard_ledger)
+    assert shard_ledger.verify_chain()["ok"] is True
+
+    _truncate_ledger_tail(shard_ledger)  # loses d-2's own seal row
+    verify_result = shard_ledger.verify_chain()
+    assert verify_result["ok"] is False
+
+    lost_row_fields = vault._row_content(original_rows[1])  # the caller's own trusted source
+    recovery_ledger = vault.VaultRecoveryLedger(vault_dir)
+    outcome = vault.recover_shard_ledger(
+        shard_ledger, verify_result=verify_result, reconstructed_suffix=[lost_row_fields],
+        sources=[{"source": "test-fixture-recall", "sha256": "irrelevant-for-this-test"}],
+        operator_identity="test-operator", reason="unit test TC-4",
+        recovery_ledger=recovery_ledger, incident_id="incident-tc4",
+        quarantine_dir=str(tmp_path / "quarantine"),
+    )
+    assert outcome == {"ok": True, "resumed": True, "exposure_unknown_dataset_ids": []}
+
+    # service resumes, reporting the EXACT prior state.
+    assert shard_ledger.verify_chain()["ok"] is True
+    assert vault.currently_sealed_dataset_ids(shard_ledger) == frozenset({"d-1", "d-2"})
+    state = vault.build_vault_state(shard_ledger, vault.VaultUniverseLedger(vault_dir))
+    assert {s["shard_id"] for s in state["shards"]} == {r["shard_id"] for r in original_rows}
+
+    # the recovery event is on permanent record, in the SEPARATE ledger -- never the shard ledger.
+    recovery_rows = recovery_ledger.all_rows()
+    assert len(recovery_rows) == 1
+    assert recovery_rows[0]["outcome"] == "complete"
+    assert recovery_rows[0]["operator_identity"] == "test-operator"
+    assert recovery_rows[0]["last_verified_row_index"] == 0
+    assert recovery_rows[0]["last_verified_row_hash"] == original_rows[0]["row_hash"]
+
+    # the corrupt original was preserved byte-for-byte, never overwritten in place.
+    quarantined = list((tmp_path / "quarantine").glob("incident-tc4.*"))
+    assert quarantined, "no forensic copy of the corrupt ledger was preserved"
+
+
+def test_tc5_an_unprovable_reconstruction_marks_affected_shards_exposure_unknown_permanently(tmp_path):
+    vault_dir = str(tmp_path / "vault")
+    shard_ledger = vault.VaultShardLedger(vault_dir)
+    _seal_two_shards(shard_ledger)
+    _truncate_ledger_tail(shard_ledger)
+    verify_result = shard_ledger.verify_chain()
+
+    recovery_ledger = vault.VaultRecoveryLedger(vault_dir)
+    # no trusted source at all -- the honest "we cannot prove what was lost" case.
+    outcome = vault.recover_shard_ledger(
+        shard_ledger, verify_result=verify_result, reconstructed_suffix=[],
+        sources=[], operator_identity="test-operator", reason="unit test TC-5",
+        recovery_ledger=recovery_ledger, incident_id="incident-tc5",
+        quarantine_dir=str(tmp_path / "quarantine"),
+    )
+    assert outcome["ok"] is False
+    assert outcome["resumed"] is True
+    assert outcome["exposure_unknown_dataset_ids"] == ["d-1"]  # the ONLY shard the trusted prefix names
+
+    # service resumes -- but d-1 (the only shard this ledger could still vouch for) is now
+    # exposure_unknown, never simply "still sealed".
+    assert shard_ledger.verify_chain()["ok"] is True
+    state = vault.build_vault_state(shard_ledger, vault.VaultUniverseLedger(vault_dir))
+    (entry,) = state["shards"]
+    assert entry["exposure_state"] == vault.STATE_EXPOSURE_UNKNOWN
+    assert vault.currently_sealed_dataset_ids(shard_ledger) == frozenset()  # no longer "sealed"
+    assert vault.withheld_dataset_ids(shard_ledger) == frozenset({"d-1"})  # still withheld, though
+
+    # permanence: no further lifecycle transition can ever claim it again -- the EXISTING
+    # single-shot guards refuse it automatically (module docstring next to STATE_EXPOSURE_UNKNOWN).
+    with pytest.raises(vault.ShardLifecycleOrderError):
+        vault.assign_shard(
+            shard_ledger, dataset_id="d-1", family_root_id="root", symbol="PG",
+            session_date="2026-06-09",
+        )
+    with pytest.raises(vault.ShardLifecycleOrderError):
+        vault.seal_shard(
+            shard_ledger, dataset_id="d-1", universe_id="u1", content_checksum="c" * 64,
+            event_count=1, vault_secret=_FIXTURE_SECRET,
+        )
+
+
+def test_tc5_a_wrong_nonempty_reconstruction_is_also_refused_never_treated_as_proven(tmp_path):
+    """TC-5's other failure shape: a SUPPLIED but WRONG suffix (not merely an empty one) must
+    ALSO fail the hash-attested completeness check and fall to the same conservative
+    exposure_unknown path -- proving `recover_shard_ledger` actually verifies the reconstruction
+    byte-for-byte rather than trusting that the caller supplied SOMETHING."""
+    vault_dir = str(tmp_path / "vault")
+    shard_ledger = vault.VaultShardLedger(vault_dir)
+    _seal_two_shards(shard_ledger)
+    _truncate_ledger_tail(shard_ledger)  # loses d-2's own seal row
+    verify_result = shard_ledger.verify_chain()
+
+    recovery_ledger = vault.VaultRecoveryLedger(vault_dir)
+    # a PLAUSIBLE-LOOKING but WRONG guess -- right shape, wrong content (a different checksum than
+    # d-2 actually had) -- never a byte-for-byte match of what was truly lost.
+    wrong_guess = {
+        "dataset_id": "d-2", "content_checksum": "f" * 64, "shard_id": "vshard-wrong-guess",
+        "universe_id": "u1", "checksum_commitment": "wrong-commitment", "size_bucket": "~10^2",
+        "sealed_at": "2026-06-09T00:00:00.000000Z", "exposure_state": vault.STATE_SEALED,
+        "family_root_id": None, "symbol": None, "session_date": None,
+        "assigned_at": None, "exposed_at": None,
+    }
+    outcome = vault.recover_shard_ledger(
+        shard_ledger, verify_result=verify_result, reconstructed_suffix=[wrong_guess],
+        sources=[{"source": "a-wrong-guess", "sha256": "irrelevant"}],
+        operator_identity="test-operator", reason="unit test TC-5 (wrong guess)",
+        recovery_ledger=recovery_ledger, incident_id="incident-tc5-wrong",
+        quarantine_dir=str(tmp_path / "quarantine"),
+    )
+    # refused exactly like the empty-suffix case -- a wrong guess is not "proven complete".
+    assert outcome["ok"] is False
+    assert outcome["exposure_unknown_dataset_ids"] == ["d-1"]  # d-2 still could not be NAMED
+
+    state = vault.build_vault_state(shard_ledger, vault.VaultUniverseLedger(vault_dir))
+    (entry,) = state["shards"]  # the WRONG guess's row was never written -- only d-1 exists
+    assert entry["exposure_state"] == vault.STATE_EXPOSURE_UNKNOWN
+    assert "vshard-wrong-guess" not in json.dumps(state)  # the rejected guess never entered the ledger
+
+    recovery_rows = recovery_ledger.all_rows()
+    assert recovery_rows[-1]["outcome"] == "incomplete"
+
+    # the incomplete recovery is on permanent record too.
+    recovery_rows = recovery_ledger.all_rows()
+    assert len(recovery_rows) == 1
+    assert recovery_rows[0]["outcome"] == "incomplete"
+    assert recovery_rows[0]["exposure_unknown_dataset_ids"] == ["d-1"]
+
+
+def test_tc5_a_shard_recovery_could_not_name_stays_protected_by_the_universe_rule_predicate(tmp_path):
+    """The other half of TC-5's safety net. ``recover_shard_ledger`` cannot even NAME ``d-2`` --
+    its own seal row was inside the unrecoverable gap -- so it is not among the ``exposure_unknown``
+    ids returned. That does NOT mean ``d-2`` is forgotten: after recovery it carries NO row at all
+    in the shard ledger, which is exactly the "untracked pool member" case
+    ``unresolved_pool_universe_by_dataset_id``'s test (b) already exists for -- if ``d-2`` was
+    recorded under a REGISTERED universe's rule, that predicate independently re-catches it, with
+    no reliance on the shard ledger's own (now-incomplete) memory of it."""
+    vault_dir = str(tmp_path / "vault")
+    shard_ledger = vault.VaultShardLedger(vault_dir)
+    universe_ledger = vault.VaultUniverseLedger(vault_dir)
+    vault.register_universe(
+        universe_ledger, universe_id="u1", symbol_rule=["PG", "AAPL"],
+        date_rule=["2026-06-08", "2026-06-09"],
+        vault_secret_commitment=vault.commit_vault_secret(_FIXTURE_SECRET),
+    )
+    _seal_two_shards(shard_ledger)  # d-1, then d-2 -- d-2's own row will be the one lost
+    _truncate_ledger_tail(shard_ledger)
+    verify_result = shard_ledger.verify_chain()
+
+    recovery_ledger = vault.VaultRecoveryLedger(vault_dir)
+    outcome = vault.recover_shard_ledger(
+        shard_ledger, verify_result=verify_result, reconstructed_suffix=[],
+        sources=[], operator_identity="test-operator", reason="unit test TC-5 (b)",
+        recovery_ledger=recovery_ledger, incident_id="incident-tc5b",
+        quarantine_dir=str(tmp_path / "quarantine"),
+    )
+    assert outcome["exposure_unknown_dataset_ids"] == ["d-1"]  # d-2 could not even be NAMED
+
+    # d-2 (recorded AFTER u1's registration, matching its rule) is still caught -- test (b).
+    withheld = vault.unresolved_pool_universe_by_dataset_id(
+        shard_ledger, universe_ledger,
+        [("d-2", "AAPL", "2026-06-09", "2027-01-01T00:00:00.000000Z")],
+    )
+    assert withheld.get("d-2") == "u1"
+
+
+# --- TR-27/TC-6/TC-8: the nonced commitment -- dictionary-attack resistance ------------------------
+
+
+def test_tc8_a_dictionary_attack_cannot_verify_the_commitment_without_the_nonce(tmp_path):
+    universe_ledger = vault.VaultUniverseLedger(str(tmp_path / "vault"))
+    real_symbols, real_dates = ["PG", "AAPL", "MSFT"], ["2026-06-08", "2026-06-09"]
+    row = vault.register_universe(
+        universe_ledger, universe_id="u1", symbol_rule=real_symbols, date_rule=real_dates,
+        vault_secret_commitment=vault.commit_vault_secret(_FIXTURE_SECRET),
+    )
+    served_commitment = row["rule_commitment"]
+    assert served_commitment != row["rule_hash"]  # the served value is NEVER the bare hash
+
+    # a plausible-guess dictionary attack -- every guess hashed WITHOUT the nonce (never served
+    # pre-reveal), including guessing the EXACT right rule and a re-ordered permutation of it.
+    guesses = [
+        (["PG"], ["2026-06-08"]),
+        (["PG", "AAPL"], ["2026-06-08", "2026-06-09"]),
+        (real_symbols, real_dates),
+        (["AAPL", "MSFT", "PG"], real_dates),
+    ]
+    for symbols_guess, dates_guess in guesses:
+        assert vault.compute_rule_hash(symbols_guess, dates_guess) != served_commitment
+        assert vault.compute_rule_commitment("0" * 64, symbols_guess, dates_guess) != served_commitment
+
+    # the REAL nonce (never served pre-reveal) is the only input that reproduces it.
+    assert (
+        vault.compute_rule_commitment(row["commitment_nonce"], real_symbols, real_dates)
+        == served_commitment
+    )
+
+
+def test_the_committed_stage_never_serves_a_bare_rule_hash_or_the_nonce(tmp_path):
+    universe_ledger = vault.VaultUniverseLedger(str(tmp_path / "vault"))
+    vault.register_universe(
+        universe_ledger, universe_id="u1", symbol_rule=["PG"], date_rule=["2026-06-09"],
+        vault_secret_commitment=vault.commit_vault_secret(_FIXTURE_SECRET),
+    )
+    committed = vault.build_vault_state(
+        vault.VaultShardLedger(str(tmp_path / "vault")), universe_ledger
+    )["universes"][0]
+    assert committed["rule_disclosure"] == vault.RULE_DISCLOSURE_COMMITTED
+    assert "rule_hash" not in committed
+    assert "commitment_nonce" not in committed
+    assert set(committed) == {
+        "universe_id", "registered_at", "rule_commitment", "vault_secret_commitment",
+        "symbol_rule_size", "date_rule_size", "rule_disclosure",
+    }
+
+
+def test_an_idempotent_re_registration_keeps_the_same_nonce_and_commitment(tmp_path):
+    """TR-27's own idempotency corollary: a crash-retry of the ONE operator registration act must
+    not mint a SECOND nonce for what is, by definition, the same registration."""
+    universe_ledger = vault.VaultUniverseLedger(str(tmp_path / "vault"))
+    kwargs = dict(
+        universe_id="u1", symbol_rule=["PG"], date_rule=["2026-06-09"],
+        vault_secret_commitment=vault.commit_vault_secret(_FIXTURE_SECRET),
+    )
+    first = vault.register_universe(universe_ledger, **kwargs)
+    again = vault.register_universe(universe_ledger, **kwargs)
+    assert again["commitment_nonce"] == first["commitment_nonce"]
+    assert again["rule_commitment"] == first["rule_commitment"]
+    assert len(universe_ledger.all_rows()) == 1
+
+
+def test_two_shards_sharing_one_pair_keep_the_universe_hidden_even_after_one_is_exposed(tmp_path):
+    """Adversarial pre-ship review finding, pinned as a permanent regression test.
+
+    Nothing in this module (or TR-12's single-shot discipline, which scopes to (family, shard),
+    never to (symbol, date)) stops a SECOND, DIFFERENT shard from being sealed and assigned under
+    the identical (symbol, session_date) pair as a first shard that has already reached
+    ``exposed`` -- ``dataset_id`` is a random per-recording identifier, and a re-recorded/retry
+    day is exactly the shape spec section 7.7 anticipates. A pair-keyed-only "whole pool released"
+    check would be satisfied by the FIRST shard's exposure alone, wrongly revealing the universe's
+    rule while the SECOND, genuinely still-withheld shard for that very pair sits unexposed --
+    reopening the exact two-GET subtraction class TR-27 exists to close. This is the failure mode
+    ``_whole_pool_released_universe_ids``'s own test (a) (ledger-tracked-shard check) closes,
+    alongside test (b) (pair-coverage) -- this test exercises the UNION, not either half alone."""
+    vault_dir = str(tmp_path / "vault")
+    shard_ledger = vault.VaultShardLedger(vault_dir)
+    universe_ledger = vault.VaultUniverseLedger(vault_dir)
+    vault.register_universe(
+        universe_ledger, universe_id="u1", symbol_rule=["PG"], date_rule=["2026-06-09"],
+        vault_secret_commitment=vault.commit_vault_secret(_FIXTURE_SECRET),
+    )
+    family_root = vault.compute_family_root_id("impact_efficiency_trend", "band_wall_touch", "trades_20")
+
+    # shard A: sealed -> assigned -> EXPOSED, for ("PG", "2026-06-09").
+    vault.seal_shard(
+        shard_ledger, dataset_id="shard-a", universe_id="u1", content_checksum="a" * 64,
+        event_count=100, vault_secret=_FIXTURE_SECRET,
+    )
+    vault.assign_shard(
+        shard_ledger, dataset_id="shard-a", family_root_id=family_root, symbol="PG",
+        session_date="2026-06-09",
+    )
+    vault.expose_shard(shard_ledger, dataset_id="shard-a", family_root_id=family_root)
+
+    # a NAIVE pair-only check would already call the pool "released" here -- confirm the pair IS
+    # covered by an exposed shard before proving the fuller predicate still refuses.
+    exposed_only_state = vault.build_vault_state(shard_ledger, universe_ledger)
+    assert exposed_only_state["universes"][0]["rule_disclosure"] == vault.RULE_DISCLOSURE_REVEALED, (
+        "test setup sanity check failed: with only shard A sealed, the SAME pair with no second "
+        "shard legitimately releases -- if this fails, the rest of this test proves nothing"
+    )
+
+    # shard B: sealed -> assigned for the SAME pair, but never exposed -- a second, independent
+    # dataset_id (a re-recorded/retry day), still genuinely withheld.
+    vault.seal_shard(
+        shard_ledger, dataset_id="shard-b", universe_id="u1", content_checksum="b" * 64,
+        event_count=200, vault_secret=_FIXTURE_SECRET,
+    )
+    vault.assign_shard(
+        shard_ledger, dataset_id="shard-b", family_root_id=family_root, symbol="PG",
+        session_date="2026-06-09",
+    )
+
+    state = vault.build_vault_state(shard_ledger, universe_ledger)
+    universe = state["universes"][0]
+    assert universe["rule_disclosure"] == vault.RULE_DISCLOSURE_COMMITTED, (
+        "shard B is sealed+assigned but NOT exposed -- the universe must stay hidden even though "
+        "shard A already covers this pair's exact (symbol, date)"
+    )
+    assert "symbol_rule" not in universe and "date_rule" not in universe
+
+    # exposing shard B too (closing the pool for real) now correctly reveals.
+    vault.expose_shard(shard_ledger, dataset_id="shard-b", family_root_id=family_root)
+    fully_released = vault.build_vault_state(shard_ledger, universe_ledger)["universes"][0]
+    assert fully_released["rule_disclosure"] == vault.RULE_DISCLOSURE_REVEALED
+
+
+# --- TC-12/TC-13: symbol-case normalization on the withhold predicate -------------------------------
+
+
+def test_tc12_a_lowercase_registered_rule_still_withholds_an_uppercase_recorded_dataset(tmp_path):
+    vault_dir = str(tmp_path / "vault")
+    shard_ledger = vault.VaultShardLedger(vault_dir)
+    universe_ledger = vault.VaultUniverseLedger(vault_dir)
+    vault.register_universe(
+        universe_ledger, universe_id="u1", symbol_rule=["aapl"], date_rule=["2026-06-09"],
+        vault_secret_commitment=vault.commit_vault_secret(_FIXTURE_SECRET),
+    )
+    withheld = vault.unresolved_pool_universe_by_dataset_id(
+        shard_ledger, universe_ledger,
+        [("d-1", "AAPL", "2026-06-09", "2027-01-01T00:00:00.000000Z")],
+    )
+    assert withheld == {"d-1": "u1"}
+
+
+def test_tc13_an_uppercase_registered_rule_still_withholds_a_lowercase_recorded_dataset(tmp_path):
+    """TC-12's mirror -- normalization must work in BOTH directions, never only one."""
+    vault_dir = str(tmp_path / "vault")
+    shard_ledger = vault.VaultShardLedger(vault_dir)
+    universe_ledger = vault.VaultUniverseLedger(vault_dir)
+    vault.register_universe(
+        universe_ledger, universe_id="u1", symbol_rule=["AAPL"], date_rule=["2026-06-09"],
+        vault_secret_commitment=vault.commit_vault_secret(_FIXTURE_SECRET),
+    )
+    withheld = vault.unresolved_pool_universe_by_dataset_id(
+        shard_ledger, universe_ledger,
+        [("d-1", "aapl", "2026-06-09", "2027-01-01T00:00:00.000000Z")],
+    )
+    assert withheld == {"d-1": "u1"}
+
+
+def test_case_mismatch_normalization_does_not_widen_a_genuinely_different_symbol(tmp_path):
+    """The counter-test: normalization is case-folding ONLY, never a fuzzy match -- a genuinely
+    different ticker never withholds."""
+    vault_dir = str(tmp_path / "vault")
+    shard_ledger = vault.VaultShardLedger(vault_dir)
+    universe_ledger = vault.VaultUniverseLedger(vault_dir)
+    vault.register_universe(
+        universe_ledger, universe_id="u1", symbol_rule=["AAPL"], date_rule=["2026-06-09"],
+        vault_secret_commitment=vault.commit_vault_secret(_FIXTURE_SECRET),
+    )
+    withheld = vault.unresolved_pool_universe_by_dataset_id(
+        shard_ledger, universe_ledger,
+        [("d-1", "AAPLE", "2026-06-09", "2027-01-01T00:00:00.000000Z")],
+    )
+    assert withheld == {}
+
+
+# --- TC-14: the widened TR-2 sweep -- an untracked pool member's symbol/date strings too -----------
+
+
+def test_tc14_the_widened_tr2_sweep_forbids_an_untracked_pool_members_symbol_and_date_strings(
+    tmp_path, monkeypatch
+):
+    """The gap the phase spec's own BACKGROUND names precisely: the pre-iteration-12 sweeps check
+    dataset id/raw checksum (and, for a single globally-unique sealed shard, its symbol/window) --
+    but the r5 inference-trap fixture's OWN "mixed provenance" pool deliberately REUSES symbols and
+    dates across its exposed/withheld members (to test the (a)+(b) union logic), which makes a
+    naive raw-substring check there a false-positive trap. This test uses a CLEAN fixture instead:
+    one untracked pool member (test (b) territory -- no vault ledger row at all) whose symbol AND
+    date are GLOBALLY UNIQUE, not shared with anything else served -- so "this string appears
+    nowhere in the swept union" is a meaningful, unambiguous assertion."""
+    _scope_everything_to(tmp_path, monkeypatch)
+    store = _combined_fixture_store(tmp_path)  # the 2 real PG fixtures -- proven compute-safe
+
+    untracked_symbol, untracked_date = "ZQXTC14", "2031-09-09"
+    vault_dir = str(tmp_path / "micro_vault")
+    universe_ledger = vault.VaultUniverseLedger(vault_dir)
+    vault.register_universe(
+        universe_ledger, universe_id="tc14-universe", symbol_rule=[untracked_symbol],
+        date_rule=[untracked_date], vault_secret_commitment=vault.commit_vault_secret(_FIXTURE_SECRET),
+    )
+    untracked_meta = _record_pool_dataset(
+        store, symbol=untracked_symbol, session_date=untracked_date, nonce=99
+    )
+    # deliberately NO vault.seal_shard call -- today's actual recorder gap (test (b) territory).
+
+    with TestClient(app) as client:
+        assert client.post("/research/desk/micro/snapshots/compute").json()["state"] == "running"
+        assert _poll_compute(client, "/research/desk/micro/snapshots/compute")["state"] == "done"
+        assert client.post("/research/desk/micro/scout/compute").json()["state"] == "running"
+        assert _poll_compute(client, "/research/desk/micro/scout/compute")["state"] == "done"
+
+        built = {m["dataset_id"] for m in client.get("/research/desk/micro/snapshots").json()["snapshots"]}
+        assert untracked_meta["id"] not in built  # the counter-test: withholding really happened
+
+        swept: dict[str, object] = {}
+        for path in _sweepable_get_paths():
+            url = path.replace("{dataset_id}", untracked_meta["id"])
+            if "{" in url:
+                continue
+            response = client.get(url)
+            try:
+                swept[path] = response.json()
+            except ValueError:
+                swept[path] = response.text
+        assert len(swept) >= 50, f"the sweep only reached {len(swept)} routes"
+        assert "/research/desk/micro/recorder/compute" in swept  # the recorder progress path too
+
+        from app.mcp import _STATIC_PATHS
+
+        assert _STATIC_PATHS["datasets"] in swept  # the `datasets` MCP tool's exact proxied path
+
+        served_text = json.dumps(swept, sort_keys=True, default=str)
+        assert untracked_symbol not in served_text, "the untracked pool member's symbol leaked"
+        assert untracked_date not in served_text, "the untracked pool member's session date leaked"
+        assert untracked_meta["id"] not in served_text
+        assert untracked_meta["checksum"] not in served_text

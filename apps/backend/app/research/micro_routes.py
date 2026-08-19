@@ -540,11 +540,13 @@ def get_vault(vault_dir: str = Depends(get_vault_dir)) -> dict:
     """Serves ``vault.py``'s own state verbatim (``vault.build_vault_state`` -- no second
     computation in this handler): every shard's CURRENT lifecycle state (opaque-only while
     ``sealed``, full symbol/date/family provenance from ``assigned`` onward -- section 7.5, TR-2),
-    every registered universe (never the raw secret, only its commitment -- and, while any of that
-    universe's shards is still withheld, only its ``rule_hash``/sizes rather than the
-    ``symbol_rule``/``date_rule`` LISTS, since those minus the public dataset listing would spell
-    out the sealed tranche by subtraction: iter-9 audit third pass, ``vault._serialize_universe``),
-    and both ledgers' own chain-verification verdicts. Never 404/500 on an empty vault -- the desk
+    every registered universe (never the raw secret, only its commitment -- and, while any member
+    of that universe's ORIGINAL registered pool is still unresolved, only the NONCED
+    ``rule_commitment``/sizes rather than the ``symbol_rule``/``date_rule`` LISTS or the nonce
+    itself, since those minus the public dataset listing would spell out the sealed tranche by
+    subtraction: iter-9 audit third pass, widened iteration 12/r7 TR-27,
+    ``vault._serialize_universe``), and both ledgers' own chain-verification verdicts. Never
+    404/500 on an empty vault -- the desk
     router's established never-404-on-absence convention: an honest empty ``shards``/``universes``
     before any universe is ever registered (registration is a step-4, operator-attended act, out of THIS iteration's
     scope)."""
@@ -573,7 +575,20 @@ def get_graduation(graduation_dir: str = Depends(get_micro_graduation_dir)) -> d
     Design Direction example) accompanies the empty ``families`` list at HTTP 200, never a
     fabricated row. Page-load GETs never compute (T-8): J-07 is keyless/automated -- a candidate's
     state is recorded by calling ``micro_graduation.py``'s evaluation functions directly (a test
-    today; a future J-08/J-09 wiring act later), never by this route."""
+    today; a future J-08/J-09 wiring act later), never by this route.
+
+    **Why this route has no golden REPLAY script (iteration 12, TC-15).** J-07 has no frontend
+    page this iteration (J-08's unbuilt scope), so its only browser-verifiable surface is this
+    RAW backend JSON URL, visited directly (``http://<backend-host>:<port>/research/desk/micro/
+    graduation``). The deterministic replay runner's own ``normalize_url`` (``incredible_auto_
+    dev/scripts/automation/lib/demo_runner.py``) FORCIBLY rewrites any localhost absolute URL onto
+    the run's single frontend ``base_url`` host:port -- there is no per-step override in the
+    replay schema -- so a golden script cannot express "navigate to the backend origin" at all; it
+    would silently 404 against the frontend instead. This is therefore genuinely infeasible, not
+    merely unbuilt: the gap is disclosed at ``runs/goal-session-rapid-microscope/state/golden-
+    gaps`` (``J-07``) rather than left to silently disappear, and this surface is re-verified each
+    iteration through the LLM browser-qa lane instead (iteration-10's own ``UT-J-07`` precedent:
+    navigate the browser directly to the backend URL, read the extracted body text)."""
     ledger = GraduationLedger(graduation_dir)
     families = list_graduation_families(ledger)
     return {

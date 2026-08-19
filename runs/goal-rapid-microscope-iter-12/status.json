@@ -1,0 +1,24 @@
+{
+  "phase": "goal-rapid-microscope-iter-12",
+  "status": "in_progress",
+  "current_step": "dev_complete",
+  "updated_at": "2026-08-19T00:00:00.000000Z",
+  "started_at": "2026-08-19T00:00:00.000000Z",
+  "cli": "claude",
+  "blockers": [],
+  "note": "INITIAL BUILD of the three iteration-11-audit-open gates: TR-25 vault-ledger integrity (verify_chain()-first fail-closed gating at the lowest shared choke points in vault.py + a full lawful-recovery primitive -- preserve_corrupt_ledger/recover_shard_ledger/VaultRecoveryLedger + new STATE_EXPOSURE_UNKNOWN terminal state -- + a global FastAPI exception handler in main.py mapping VaultLedgerCorruptionError to 503 across every route it can reach in both micro_routes.py and routes.py), TR-27 nonced rule commitment (register_universe mints a high-entropy commitment_nonce; rule_commitment = sha256(nonce . canonical_rule) served in place of the plain rule_hash at every disclosure stage; the reveal gate widened in the same diff from ledger-tracked-only to whole-ORIGINAL-pool-released), and TR-28 coarse pre-release volumes (tick_recorder.py's _progress_view always serves trades_total_bucket/quotes_total_bucket, never exact, per the phase spec's own sanctioned scope-reducing option). Plus symbol-case normalization in the vault withhold predicate (TC-12/TC-13) and J-07 golden-gaps regression-coverage restoration (confirmed a deterministic replay script is genuinely infeasible for that surface; restored state/golden-gaps + a durable in-code explanation). An independent adversarial-review subagent (dispatched in place of the demoted auditor lane) found one real defect in the widened TR-27 reveal gate -- a pair-keyed-only check could be satisfied by one exposed shard while a second, different shard sharing the same (symbol, date) stayed withheld -- fixed in the same diff with a dedicated regression test, plus a second coverage-gap test the reviewer also flagged. Full backend suite: 3212 collected / 3204 passed / 8 skipped / 0 failed (iteration-11 baseline 3192/3184/8/0 -- +20 passed, 0 regressions, run to completion twice after the fix). Config().config_fingerprint() unchanged (08e471b10130e1e2); all six referee_*.py files byte-untouched (git-confirmed, SHA-256 hashes recorded in the dev handoff); MCP tool count still the 22-tuple; real .data store byte-unchanged (18 datasets, no micro_vault directory). Era trap-suite inventory now 23 of 28 (TR-3/TR-22/TR-23/TR-24/TR-26 remain the only ones missing, each named in the iteration spec's OUT OF SCOPE). Zero frontend files touched this iteration (no UI change; affected fields are API/MCP-only, J-08's unbuilt scope). Live-verified end to end: started the real backend against the operator's own .data store (200s on /vault, /readiness, /graduation, /research/datasets); separately built a genuinely corrupted vault ledger (sealed 2 real shards, truncated the tail) and pointed a second live backend at it, confirming 503 (never 500) on /vault, /readiness, and /research/datasets -- the last one being in a DIFFERENT router (routes.py) than micro_routes.py, which is exactly why the global-handler design was chosen over a route-by-route try/except. Both smoke-test backend processes killed after verification.",
+  "changed_files": [
+    "apps/backend/app/research/vault.py",
+    "apps/backend/app/research/micro_chain_ledger.py",
+    "apps/backend/app/main.py",
+    "apps/backend/app/research/tick_recorder.py",
+    "apps/backend/app/research/micro_routes.py",
+    "apps/backend/tests/test_vault.py",
+    "apps/backend/tests/test_tick_recorder.py",
+    "runs/goal-session-rapid-microscope/state/golden-gaps",
+    "docs/handoffs/goal-rapid-microscope-iter-12-dev.md"
+  ],
+  "tests_run": true,
+  "browser_checks_run": false,
+  "next_action": "review"
+}

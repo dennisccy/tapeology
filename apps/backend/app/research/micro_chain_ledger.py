@@ -70,6 +70,49 @@ class HashChainedLedger:
     def path(self) -> Path:
         return self._path
 
+    @property
+    def head_anchor_path(self) -> Path:
+        """PUBLIC accessor for the durable tail-anchor sidecar's own path -- additive (era
+        iteration 12) for lawful-recovery tooling (``vault.py``'s TR-25/spec section 7.8
+        primitive), which must preserve the anchor file byte-for-byte alongside the main chain
+        file BEFORE any repair. Never used by this class's own methods, which already resolve
+        ``self._head_path`` directly."""
+        return self._head_path
+
+    def read_tail_anchor(self) -> dict | None:
+        """PUBLIC accessor for the tail anchor's own parsed content -- additive (era iteration
+        12), for lawful-recovery tooling that must read the anchor INDEPENDENTLY of a broken
+        main-chain walk (``verify_chain()`` itself only ever reports pass/fail, never the
+        anchor's own raw content). Returns ``None`` when no anchor has ever been written (a
+        pristine, never-appended ledger) -- the exact same case ``verify_chain()``'s own
+        ``_verify_tail`` already treats as trivially OK."""
+        return self._read_head_anchor()
+
+    def rewrite_from_recovery(self, rows: list[dict]) -> None:
+        """The ONE lawful whole-file rewrite this primitive ever performs -- exclusively for a
+        caller's own audited, evidenced lawful-recovery flow (this class's callers -- ``vault.
+        py``'s TR-25 primitive today -- are responsible for preserving the corrupt original
+        BYTE-FOR-BYTE and recording the recovery event on a SEPARATE ledger BEFORE ever calling
+        this; see that module's own ``recover_shard_ledger``). Writes ``rows`` (already
+        hash-chained content -- e.g. a caller-side re-derivation of THIS class's own
+        ``append_row`` algorithm, so a faithful reconstruction reproduces byte-identical hashes
+        to whatever was lost) as the ledger's entire new content, then regenerates the tail
+        anchor to match, so a subsequent ``verify_chain()`` call sees a clean, complete chain.
+        Additive: no existing caller of this class (``ExposureRegistry``, ``WalkForwardLedger``)
+        calls this method, so their own behaviour is untouched."""
+        self._root.mkdir(parents=True, exist_ok=True)
+        with self._path.open("w", encoding="utf-8") as fh:
+            for row in rows:
+                fh.write(json.dumps(row, sort_keys=True))
+                fh.write("\n")
+        self._head_path.write_text(
+            json.dumps(
+                {"row_count": len(rows), "head_hash": rows[-1]["row_hash"] if rows else None},
+                sort_keys=True,
+            ),
+            encoding="utf-8",
+        )
+
     def _read_raw(self) -> list[dict]:
         """Every row, append order, parsed but NOT chain-verified -- ``verify_chain()`` is the
         explicit tamper check; a caller just wanting the data reads this (or ``all_rows``)

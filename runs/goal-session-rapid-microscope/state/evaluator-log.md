@@ -595,3 +595,69 @@ afterwards. Carry two passengers, never a round of their own: re-take the readin
 the whole-product safety-walk picture. After the tidy-up, build J-08 "The surface and MCP v6" — the
 four new Desk panels and the four new read-only tools — because J-09 "The pilot studies" shows its
 answers through those same panels and cannot finish before them.
+
+## Iteration 12 — goal-rapid-microscope-iter-12
+
+**Date:** 2026-08-19T11:30:00Z
+**Verdict:** ESCALATE
+**Depth dispatched:** lean (the plan asked for FULL — my own binding round-11 instruction — and
+the machine's budget arbiter downgraded it, so the independent checker never ran, exactly as in
+rounds 3 and 8)
+**Journey deltas:**
+- Newly passing: none
+- Newly failing: none
+- Regressed: none
+- Changed content (status unchanged): J-06 "The recorder and the Vault" partial — the third
+  step's remaining hardening is now BUILT AND ATTACKED (the refuse-when-damaged lock, the
+  hiding lock with its secret ingredient, and coarse counts); still 3 of 5 steps. J-10 "The kept
+  product stands" partial — traps now 23 of 28 by my own count, safety walk green for the
+  seventh run in a row.
+- Unchanged: J-01, J-02, J-03, J-04, J-05 passing — all five re-checked on screen this round, no
+  journey cut for time; J-07 passing and FRESHLY re-checked this round (last round it was
+  carried), with its missing-replay-script note restored on disk; J-08, J-09 failing — out of
+  scope, and I confirmed both on disk myself rather than assuming.
+- Evidence flags cleared: the two bad photographs I flagged last round (the readiness table and
+  the whole-product safety walk) were re-taken and I opened both — real content in each.
+- Anti-goal violations: no critical ones, introduced or open. THREE older minor items CLOSED,
+  each proved by me on the running code: the vault-record integrity hole open since round 9, the
+  "work out the hidden set by subtraction" family (its last two doors), and the letter-case
+  matching that hid nothing. ONE NEW minor item opened — a hole I found myself in the brand-new
+  repair tool. Three older minor items stay open, and all three are DECIDED, not waiting on you.
+
+**Reasoning:** I took nothing on trust. I ran the whole test suite myself: 3,212 collected,
+3,204 passed, 8 skipped, 0 failures — the same number the coder and the reviewer got, 20 more
+tests than last round, nothing lost. I checked the locked parts myself: the settings fingerprint
+prints 08e471b10130e1e2, all six judge files hash exactly as at the era's start, the tool list is
+still 22, no settings field was added, and not one line of the website front-end changed. Your
+real records are untouched — 18 recordings, newest file dating from 15 July, and still no vault
+folder. Instead of reading the coder's tests I wrote my own probes against the real code: I ran a
+1,404-guess attack against a hidden plan's published fingerprint (the true rule was inside the
+guess list) and got zero matches, while confirming the OLD scheme would have given it away at
+once; I damaged a vault record two ways and all four checks refused to answer rather than
+reporting "nothing is hidden"; and I confirmed fifty different true counts all report the same
+band, so no one can subtract two readings. I opened the photographs rather than reading the rows,
+and both of last round's bad ones are now genuinely fixed. The one real failure is not in the
+product: the round was cut short — the independent checker never ran, on a round that shipped
+safety-critical machinery. So I did that job myself, and found a hole nobody else caught: when a
+vault record is damaged and the repair cannot be proved, an item whose only line was destroyed
+quietly stops being hidden and becomes an ordinary public recording, and the repair rewrites the
+tamper seal so afterwards everything reports "clean". I reproduced it end to end. It cannot fire
+today — no plans, no locked items, no vault folder, and nothing running calls the repair tool —
+so it is minor, but it must close before real tape is ever locked away.
+
+**Next-step recommendation:** Run the next round as a FULL round with the independent checker,
+and do not let the machine cut that step again — that is why my verdict line says "escalate"
+rather than "continue". Last round I asked for a full round in words, the machine downgraded it
+because my verdict line did not force it, and this is the result. Give the next round one theme:
+finish the vault's repair story before any real tape is recorded. In order — fix the hole I
+found (a destroyed record must not silently make an item public; refuse or halt, and say on the
+vault page that a repair happened); settle the reviewer's one real question, which is a decision
+not a bug (the written plan says BOTH record files must be checked when an item is locked or
+released, and the coder checked only one, with his reasons written down — either follow the plan
+or record that the narrower reading is intended); then two small tidy-ups (a stale description of
+the recorder's fields, and a letter-case mismatch that could stop a plan ever being revealed).
+After that, build J-08 "The surface and MCP v6" — the four new Desk panels and four read-only
+tools — because J-09 "The pilot studies" shows its answers through those panels and cannot finish
+before them. Do NOT record real tape yet. Nothing waits on your answer. One thing would help if
+you agree with it: tell the machine that when I ask for a full round with the independent
+checker, that request cannot be cut for time.
