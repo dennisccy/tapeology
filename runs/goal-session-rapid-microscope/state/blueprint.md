@@ -76,9 +76,35 @@ ALREADY-registered "Recorder job + tranche progress/runs" row, no new owner, no 
 |---|---|---|---|
 | `progress.chunks_total` / `progress.chunks_done` | `int >= 0` each | `tick_recorder.py` (`TickRecorderComputeManager`) | `GET /research/desk/micro/recorder/compute` |
 | `progress.chunks_fetched` / `progress.chunks_reused` / `progress.chunks_unchanged` / `progress.chunks_failed` | `int >= 0` each — per-outcome-type counts, never a per-chunk row | `tick_recorder.py` (`TickRecorderComputeManager`) | `GET /research/desk/micro/recorder/compute` |
-| `progress.trades_total` / `progress.quotes_total` | `int >= 0` each — aggregate event counts, never per-chunk | `tick_recorder.py` (`TickRecorderComputeManager`) | `GET /research/desk/micro/recorder/compute` |
+| `progress.trades_total` / `progress.quotes_total` | `int >= 0` each — aggregate event counts, never per-chunk. **iter-12 note:** valid only after whole-ORIGINAL-pool release (r7 §7.1) — see the new bucket sub-fields below for the pre-release form this same surface serves while any pool member is unexposed | `tick_recorder.py` (`TickRecorderComputeManager`) | `GET /research/desk/micro/recorder/compute` |
 | `progress.percent_complete` | `float, 0.0–100.0` | `tick_recorder.py` (`TickRecorderComputeManager`) | `GET /research/desk/micro/recorder/compute` |
 | `progress.elapsed_seconds` | `float >= 0` | `tick_recorder.py` (`TickRecorderComputeManager`) | `GET /research/desk/micro/recorder/compute` |
+
+**Universe rule-reveal sub-fields** (registered iter-12 — r7 §7.2 closure, sub-fields of the
+ALREADY-registered "Vault shards, universes, exposure ledger" row, no new owner, no new endpoint):
+
+| Sub-field | Type/shape | Owner (already-registered parent module) | Served by (existing endpoint) |
+|---|---|---|---|
+| `rule_commitment` | `str` — 64-hex-char `sha256(nonce ‖ canonical_rule)`; served in place of the plain `rule_hash` at the committed (pre-whole-pool-release) stage | `vault.py` (`register_universe`, `_serialize_universe`) | `GET /research/desk/micro/vault` |
+| `commitment_nonce` | `str` — the high-entropy nonce, held privately with the registration row; served ONLY once a universe's revealed stage begins (whole-ORIGINAL-pool release — never merely "all ledger-tracked shards exposed") | `vault.py` (`register_universe`, `_serialize_universe`) | `GET /research/desk/micro/vault` |
+
+**Recorder-progress volume sub-fields** (registered iter-12 — r7 §7.1 closure, sub-fields of the
+ALREADY-registered "Recorder job + tranche progress/runs" row, no new owner, no new endpoint;
+supersede the iter-11-registered `progress.trades_total`/`progress.quotes_total` at THIS surface
+while the run's pool is unexposed — the exact int fields above stay valid only after whole-pool
+release, a state this surface cannot reach before its own recording finishes, let alone before
+assignment/exposure):
+
+| Sub-field | Type/shape | Owner (already-registered parent module) | Served by (existing endpoint) |
+|---|---|---|---|
+| `progress.trades_total_bucket` / `progress.quotes_total_bucket` | `str` — a frozen, predeclared coarse label (order-of-magnitude or power-of-two range, e.g. `"1M-10M"`), never a rounded number, differencing-resistant across successive snapshots | `tick_recorder.py` (`TickRecorderComputeManager`) | `GET /research/desk/micro/recorder/compute` |
+
+**Exposure-state value-space extension** (registered iter-12 — r6 §7.8 closure; widens the
+ALREADY-registered `exposure_state` field of the "Vault shards, universes, exposure ledger" row; no
+new owner, no new endpoint): the legal value set gains `exposure_unknown` beside the already-served
+`sealed`/`assigned`/`exposed` — a shard whose freshness an unverifiable ledger recovery could not
+prove, permanently ineligible for sealed-OOS use. Owner `vault.py`, served by
+`GET /research/desk/micro/vault` exactly as the other three values already are.
 
 **Unchanged owners** (this era reads them verbatim, never recomputes, never re-serves from a
 second endpoint): datasets/replay → `datasets.py` (`DatasetStore.replay`; gains one additive
@@ -126,3 +152,19 @@ from its one endpoint, read verbatim by UI/MCP/reports.
      `micro_readiness.build_readiness()`) — no second implementation anywhere. Zero behavioural
      change against the real store, which has zero registered vault universes today. No
      nav-skeleton change; no reapproval file written. -->
+
+<!-- iter-12 note (r6 §7.8 / r7 §7.2+§7.1 closure): the three sub-tables added this iteration
+     (universe rule-reveal, recorder-progress volume buckets, exposure-state value-space extension)
+     are the ONLY Data Contract change this round — all are sub-fields of already-registered rows
+     (Vault shards/universes/exposure ledger; Recorder job + tranche progress/runs), served by
+     their already-registered endpoints, owned by their already-registered modules. No new page, no
+     new route, no new MCP tool, no nav-skeleton change; no reapproval file written. The
+     `verify_chain()` fail-closed retrofit (r6 §7.8, TR-25) adds no displayed value at all -- it is
+     a refusal behaviour, not a served field, so it has no Data Contract row of its own. Zero
+     behavioural change against the real store: it still has no `micro_vault` directory (confirmed
+     again this iteration), so no universe is registered, no shard is sealed, and the recorder's own
+     progress surface has never yet served an exact `trades_total`/`quotes_total` pair for withheld
+     data in production. The reveal-gate widening (`_fully_exposed_universe_ids` becoming
+     pool-rule-aware rather than ledger-row-only) changes WHEN the existing revealed-stage fields
+     become servable, not their shape -- no new row for that change either, matching this file's
+     own iter-11-note precedent for semantics-broadening-without-shape-change edits. -->
