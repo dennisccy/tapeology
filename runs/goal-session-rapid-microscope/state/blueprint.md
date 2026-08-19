@@ -215,3 +215,19 @@ from its one endpoint, read verbatim by UI/MCP/reports.
      (`total`/`playbook_signal_count`/`band_touch_count`/`by_setup_id`) stay unrendered this
      iteration (state/assumptions.md's iter-15 entry has the full reasoning); they remain fetched
      and fully typed, so nothing served is silently dropped from the type going forward. -->
+
+<!-- iter-16 note: pure trap-suite completion (TR-3 accessor-fence, TR-22 exposure-registry
+     auto-classification, TR-26 quote_depletion revealing-quote timing fix) plus three small
+     frontend/test passengers (MicroReadinessSection testid parity with ValidationVaultSection,
+     Scout-table malformed-row defensive reads, a `_PRICE_ARITHMETIC_FIELDS` seeded-violation
+     counter-test for the two iter-15 clauses) -- no Data Contract change of shape, ownership, or
+     endpoint, and no Information Architecture change. `quote_depletion`'s `available_at`/
+     `observed_through` correction is a within-snapshot TIMING fix to an already-frozen,
+     already-typed feature value `micro_observer.py` has always owned (spec r6 §3); the value
+     itself is never served through any `/desk` endpoint or MCP tool -- it is read only by
+     `scout.py`/`walkforward.py`/`micro_join.py` during compute, matching this file's own
+     "keyless/automated" J-02 IA row above -- so it carries no new row here. TR-3/TR-22's
+     mechanisms (`micro_accessor.py`'s origin fence + `ExposureRegistry`, `walkforward.py`'s
+     `classify_evidence_class`) are pre-existing and equally unserved directly; this iteration
+     only adds their formal, explicitly-labeled trap-suite test coverage. No new page, route, MCP
+     tool, or nav-skeleton change; no reapproval file written. -->
