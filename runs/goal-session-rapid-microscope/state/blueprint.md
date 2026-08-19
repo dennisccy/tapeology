@@ -183,3 +183,14 @@ from its one endpoint, read verbatim by UI/MCP/reports.
      ruling (spec r8, recovery is halt-only) is the RETRACTION of iter-12's `exposure_unknown`
      value-space extension, recorded in place above rather than silently dropped. No new page,
      route, MCP tool, or nav-skeleton change; no reapproval file written. -->
+
+<!-- iter-14 note: J-08 half 1 (Scout Ledger, Walk-Forward, Validation Vault sections) fulfills the
+     ALREADY-REGISTERED Information Architecture homes for these three features (present since era
+     baseline) -- no new row, no nav-skeleton change, no new Data Contract value. All three sections
+     render already-registered Data Contract rows verbatim from their already-registered endpoints;
+     no second computation path introduced anywhere. The Validation Vault section is read-only this
+     iteration (no compute control) -- see runs/goal-session-rapid-microscope/state/assumptions.md's
+     iter-14 entry for why the recorder/seal/assign/expose acts stay out of this section. J-08 half 2
+     (the four desk_* MCP tools + EXPECTED_TOOLS 26-tuple bump) is unbuilt and carries no blueprint
+     change of its own beyond what the era-baseline Data Contract table already names. No
+     reapproval file written. -->

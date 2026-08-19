@@ -1070,3 +1070,25 @@ had both passed the same code. Cost of being wrong: one extra audit lane. Cost o
 having chosen CONTINUE: an unaudited iteration over the era's most confidentiality-sensitive surface.
 **Reversible:** yes — ESCALATE only sets the next iteration's depth; it halts nothing, and a later
 evaluator can return to lean once J-08's surfaces are built and browser-verified.
+
+## iter-14 — goal-decomposer
+
+**Ambiguity:** goal.md's J-08 step 1 says "every compute behind its own operator button with
+progress + cancel" without saying whether "every compute" means every one of the four rendered
+sections, or every compute-endpoint that actually exists among them. The Product Shape's Data
+Contract gives Scout and Walk-Forward their own POST/GET/POST-cancel `.../compute` triples but
+gives the Vault row ("Vault shards, universes, exposure ledger") no such triple — only a plain
+`GET /research/desk/micro/vault`. The Recorder's own `POST/GET/POST-cancel .../recorder/compute`
+belongs to a DIFFERENT Data Contract row (`tick_recorder.py`), not "Validation Vault," and
+`seal_shard`/`assign_shard`/`expose_shard` have zero production call sites (iteration-13 assumption
+ledger entry). A literal "every [section gets a] compute [button]" reading would require inventing
+a vault-mutating control the spec never registers.
+**We chose:** "every compute" means every compute-endpoint that already exists among the four
+sections (Scout, Walk-Forward) — the Validation Vault section this iteration is READ-ONLY, with no
+button that seals, assigns, exposes, or starts a recorder run. This keeps J-06 steps 4-5 genuinely
+shut (a binding carry-forward instruction from iteration 13's evaluator) and avoids inventing an
+unregistered mutation path, consistent with T-1 ("an unspecified constant or rule is a drop + owner
+ruling, never an invention").
+**Reversible:** yes — if a future owner ruling or spec revision gives the vault (or the recorder)
+its own UI-triggerable compute inside the "Validation Vault" section, that is purely additive to
+this iteration's read-only rendering; nothing built here needs to be undone.
