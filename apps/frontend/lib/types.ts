@@ -2511,11 +2511,34 @@ export interface MicroReadinessStudyFloor {
   status: string;
 }
 
+// goal-rapid-microscope-iter-15 (J-08 half 2): `joinable_corpus` and `sealed_tranche` -- both
+// ALREADY served by `micro_readiness.py`'s unchanged `build_readiness` (transcribed verbatim from
+// its own return statement) -- were fetched but silently dropped by this interface until now. Only
+// `joinable_corpus.withheld_excluded` and every `sealed_tranche` field are rendered this iteration
+// (aggregate-only, spec section 7.5); `total`/`playbook_signal_count`/`band_touch_count`/
+// `by_setup_id`/`playbook_integrity_errors` stay typed/fetched but UNRENDERED (a future J-09 home).
+export interface MicroReadinessJoinableCorpus {
+  total: number;
+  playbook_signal_count: number;
+  band_touch_count: { status: string; count: number | null };
+  by_setup_id: Record<string, number>;
+  playbook_integrity_errors: { file: string; error: string }[];
+  withheld_excluded: number;
+}
+
+export interface MicroReadinessSealedTranche {
+  shard_count: number;
+  symbol_days: number;
+  by_universe: Record<string, { shard_count: number; symbol_days: number }>;
+}
+
 export interface MicroReadinessResponse {
   totals: MicroReadinessTotals;
   shards: MicroReadinessShard[];
   study_floors: MicroReadinessStudyFloor[];
   integrity_errors: { file: string; error: string }[];
+  joinable_corpus: MicroReadinessJoinableCorpus;
+  sealed_tranche: MicroReadinessSealedTranche;
 }
 
 // goal-rapid-microscope-iter-14 (J-08 half 1): Scout Ledger, Walk-Forward, and Validation Vault --

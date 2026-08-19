@@ -404,3 +404,46 @@ what make it decisive: any rounding, formatting or recomputation in the browser 
 **Applies to:** any iteration whose spec says a UI section renders an endpoint "verbatim" — pull
 the underlying store/ledger file and compare the longest-precision numeric on screen, rather than
 relying on the `_PRICE_ARITHMETIC_FIELDS` sweep alone.
+
+## iter-15 — 2026-08-20T00:20:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** A regression test can be structurally unable to fail while looking perfectly green.
+This round's own opaque-pool sweep (`tests/test_mcp_server.py`
+`test_tr2_the_new_mcp_tools_leak_nothing_about_a_sealed_shard`) sealed its shard under an
+*unregistered* universe — inherited from every member of `test_vault.py`'s TR-2 family — so
+`vault._serialize_universe`'s committed/revealed branch never executed and the sweep was blind to
+the single most direct de-anonymisation the spec names. It was caught only by mutation-proof
+(patch production to leak; watch the old test still pass), not by reading the test. Every new trap
+test in this era needs a non-vacuity assertion proving the state it sweeps is genuinely populated
+in the branch under test — the fix added five (`test_mcp_server.py:1292-1299`).
+**Applies to:** any iteration adding or editing a TR-* trap test, any test that "sweeps every
+route/tool for a forbidden string", and specifically the five remaining traps (TR-3, TR-22, TR-23,
+TR-24, TR-26).
+
+## iter-15 (second) — 2026-08-20T00:20:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** Three browser-QA rows this round were graded PASS on a client-side `window.fetch`
+substitution (UT-04), a direct source read (UT-05, UT-07 Part C), and one optional non-zero-fixture
+check was SKIPPED outright (UT-12) — each honestly disclosed inside its own row, which is a real
+improvement over iteration 14. But the substance only became evidence when the independent auditor
+seeded the non-zero state and rendered it live. When the real store's honest state is all-zero, the
+browser lane structurally cannot exercise the non-zero render path; plan for a second seeded rig
+(or accept that the auditor is the lane that closes it) rather than treating a source read as a
+browser pass.
+**Applies to:** any iteration whose new UI renders a value the real `.data` store currently has
+none of (vault shards, scout families, walk-forward sequences, graduation bundles).
+
+## iter-15 (third) — 2026-08-20T00:20:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** `reports/qa/goal-rapid-microscope-iter-15-evidence/J-0{2,3,4,5}-verify.png` are
+md5-identical (`28403a00c2da3d7ec9b3b0957a9afe93`) because their golden scripts
+(`runs/goal-session-rapid-microscope/journey-scripts/J-0{2..5}.json`) are one step each — `goto
+/desk` plus one collapsed-heading assertion. "6/6 replay journeys passed" therefore carries almost
+no regression weight for four of the six. This is NOT a capture defect (a re-capture yields the
+same picture) — it is script depth, and it should be fixed by deepening the scripts, not by
+re-shooting them.
+**Applies to:** any future evaluator reading a green replay table; and the harness owner, when
+J-02–J-05's golden scripts are next touched.

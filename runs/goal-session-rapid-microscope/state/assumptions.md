@@ -1184,3 +1184,74 @@ inventing one now would be scope creep the evaluator did not ask for and would r
 "budget trimmer drops the auditor" outcome the carried context's point 1 warns against.
 **Reversible:** yes — nothing built this iteration blocks a future Graduation UI section if a later
 iteration's evaluator asks for one; the direct-endpoint evidence stays valid evidence either way.
+
+## iter-15 — goal-evaluator
+
+**Ambiguity:** whether ESCALATE is available when the decision tree's literal clauses do not fire.
+Tree C.4's three triggers are "the same journey failed 2+ consecutive iterations" (J-09 carries
+`failing` across iterations 13–15, but it has never been ATTEMPTED — every phase spec has placed it
+out of scope, and the iteration-13 and iteration-14 evaluators both declined to count an
+un-attempted journey here; I maintain that reading rather than adopting it now because it is
+convenient), "the review lane failed and the pipeline proceeded fail-open" (review was
+PASS_WITH_NOTES, QA PASS, closure CLOSURE-PASS — no fail-open), and "this LEAN iteration surfaced
+cross-cutting ambiguity" (this iteration was full). Read strictly, first-match-wins lands on C.5 →
+CONTINUE.
+**We chose:** ESCALATE — the fourth consecutive one, and I record again that it is a deliberate
+departure from the tree's literal text rather than a pretence that a clause fired. Two new grounds
+specific to iteration 15, beyond the ones iterations 13/14 logged. (1) EMPIRICAL, from this
+session's own record, which I checked rather than assumed: every ESCALATE verdict here produced a
+full next iteration (iters 9, 12, 13, 14, 15 — `iter-N/depth-dispatched`), while iteration 11's
+CONTINUE + "Depth Recommendation: full" produced a LEAN iteration 12. In this engine the depth
+recommendation line is advisory; only the verdict line binds. (2) CONTENT: iteration 16's subject
+is the five remaining leakage traps (TR-3, TR-22, TR-23, TR-24, TR-26) — Success Criterion 2's
+"No leakage trap fails, ever" — and THIS iteration produced a live demonstration that a trap test
+can be structurally unable to fail while reporting green (audit B1, mutation-proved both
+directions). The reviewer read that test and passed it; QA passed it; only the independent auditor
+attacked it. Cost of being wrong: one extra audit lane. Cost of being right and having chosen
+CONTINUE: an unaudited round whose entire content is the guards that certify the era's critical
+anti-goals.
+**Reversible:** yes — ESCALATE only sets the next iteration's depth; it halts nothing, and a later
+evaluator can return to lean once the trap suite is complete and mutation-proved.
+
+## iter-15 — goal-evaluator (second)
+
+**Ambiguity:** J-08's acceptance requires the four sections to render "screenshots on record, one
+per section, element-captured", and step 1 requires "every compute behind its own operator button
+with progress + cancel". This round's captures are FULL-PAGE, not element-cropped; and no compute
+button was ever clicked (the era's own performance trap: a live Scout screen has run past 25
+minutes without completing one candidate, and the phase spec forbids relying on it). Nothing states
+whether a full-page capture in which the section is legible satisfies "element-captured", or
+whether "progress + cancel" must be demonstrated running to count as built.
+**We chose:** score J-08 `passing`. Grounds: (a) the goal's own ACCEPTANCE sentence names rendering
+served values verbatim, byte-identical tool bodies, the 26-tool contract test and the replay-script
+static sweep, and class labels — all four verified by me directly (opened UT-07-partA showing all
+four sections; UT-02 whose served values the browser lane byte-matched against curl; my own runs of
+`test_mcp_server.py` 61/61 and `test_desk_ui_guards.py` 80/80; TOOL_NAMES/EXPECTED_TOOLS both 26 in
+the correct order) — and it does NOT name a live compute demonstration; (b) iteration 14 supplied
+element captures for the three panels, so the element-capture requirement is satisfied across the
+journey's evidence, not lost; (c) the progress/cancel controls exist and are wired to the shipped
+manager pattern (`scout-ledger-cancel`, `walk-forward-cancel` testids, "Screening…"/"Running…"
+labels) — demanding a live 25-minute compute would trade a real host-guard/scope risk for a
+cosmetic proof.
+**Reversible:** yes — if a later round runs a Scout or fold compute for real and the progress/cancel
+path misbehaves, J-08 re-opens immediately; nothing downstream depends on this scoring except the
+ordering of the next round.
+
+## iter-15 — goal-evaluator (third)
+
+**Ambiguity:** the independent auditor's F1 (a malformed Scout trial row crashes the whole `/desk`
+page — `page.tsx:6315` reads `trial.feature.name` undefended, no error boundary anywhere) was
+explicitly left for the evaluator to affirm or override; the auditor recorded being torn between
+GAP and IMPORTANT. Nothing states whether an unreachable-today crash in the surface whose stated
+purpose is to hand a reader a tampered ledger's verdict counts as an anti-goal violation.
+**We chose:** affirm GAP — a tracked defect, not an anti-goal violation, and not a blocker on J-08.
+Grounds: the line is unchanged iteration-14 code; the only production writer
+(`scout.register_and_screen_candidate`, via `build_candidate_spec_fields`) always writes the full
+field set, so no shipped path can reach it; and a crash is a loud failure, not a laundering or a
+silent disclosure, so it does not breach any anti-goal's text. I did verify the finding myself and
+found it slightly WORSE than reported: `trial.outcome.horizon_key` at `page.tsx:6317` shares the
+exposure, and `grep -c "ErrorBoundary\|componentDidCatch\|getDerivedStateFromError"` on the whole
+12,000-line page returns 0 — so any throw in any Desk section blanks the page. It rides the next
+round as a passenger, not as a round of its own.
+**Reversible:** yes — if a tampered or partially-written ledger row ever becomes reachable (the
+recorder tranche, or a hand-edited store), this re-opens as IMPORTANT immediately.

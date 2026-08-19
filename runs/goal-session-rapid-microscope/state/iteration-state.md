@@ -1,39 +1,40 @@
 # Iteration State — rapid-microscope
 
-**After iteration:** 14 · **Date:** 2026-08-19 · **Verdict:** ESCALATE
+**After iteration:** 15 · **Date:** 2026-08-20 · **Verdict:** ESCALATE
 
 ## Journeys
 
-6 passing (J-01..J-05, J-07) · 3 partial (J-06 J-08 J-10) · 1 failing (J-09) — 10 total. J-07 cut
-for time twice running (deferred, not tested) — cannot count toward finishing.
+7 passing (J-01 J-02 J-03 J-04 J-05 J-07 J-08) · 2 partial (J-06 J-10) · 1 failing (J-09) — 10 total
 
 ## Active blockers
 
-- **none owner-owned** — all coding work; r6/r7/r8 settled every ruling.
-- dev · Microscope Readiness drops two fields its endpoint serves (`sealed_tranche`,
-  `joinable_corpus.withheld_excluded`): says "Distinct datasets 2" while 3 were withheld.
-  `types.ts:2514` + `MicroReadinessSection`. COHERENCE-WARN + audit F3. Render AGGREGATE ONLY —
-  a per-shard list reopens the subtraction attack.
-- dev · NEW, evaluator-found, missed by all five lanes: `<details>`/`<pre>` inside a `<p>` at
-  `apps/frontend/app/desk/page.tsx:6461-6472` — invalid HTML, 5 console errors on expand; the only
-  such site in the 12k-line page.
-- dev · J-07 "Graduation" needs a genuine re-check (2nd consecutive DEFERRED-BUDGET).
-- dev · 3 MINORs: Scout never renders `family_root_id`; Walk-Forward's empty state wrongly reads
-  "No candidates ledgered."; Vault's error state drops its `validation-vault-section` testid.
-- process · QA graded TC-13 PASS when the results file records it not run (2nd occurrence).
-  harness · `state/golden-gaps` auto-deleted a 4th time (framework gap, not product).
+- **J-10 traps 24 of 29** (dev) — TR-3, TR-22, TR-23, TR-24, TR-26 absent from `apps/backend/tests/`;
+  TR-22 gates J-09's honest predeclaration, so traps land BEFORE the pilot studies. J-10 step 2 (the
+  deterministic-rerun check) has also never run this era.
+- **J-06 steps 4-5** (human/operator, deliberately shut) — the real Alpaca tranche stays barred until
+  the r8-deferred vault identity hole closes: deleting `micro_vault`'s ledger AND its anchor together
+  makes `verify_chain()` report ok over an empty ledger.
+- Frontend consolidation (dev, 3 passengers): `MicroReadinessSection` loses its section testid when
+  loading/unavailable (`page.tsx:5892`,`:5896-5898`) — the sole COHERENCE-WARN; `:6315`/`:6317` read
+  `trial.feature.*`/`trial.outcome.*` undefended, no error boundary, so a malformed Scout row blanks
+  `/desk`; the two new `_PRICE_ARITHMETIC_FIELDS` clauses lack a seeded-violation counter-test.
 
 ## Last 2 verdicts
 
-- iter 14: ESCALATE — J-08 panels shipped and verified on screen (vault opacity holds at BOTH
-  stages); iter 15 adds `desk_vault`/`desk_micro_readiness` MCP proxies AND renders the withheld
-  disclosure — two opaque-pool-critical surfaces at once, so the auditor is mandatory.
-- iter 13: ESCALATE — J-08 was next and only the verdict line binds full depth.
+- iter 15: ESCALATE — J-08 complete (26 MCP tools, readiness fix, 4 defects, J-07 re-verified); the next
+  round is all leakage traps and this one proved a trap can pass while unable to fail.
+- iter 14: ESCALATE — J-08 half 1 (three panels) landed; MCP half deferred to 15; J-07 deferred twice.
 
 ## Do not redo
 
-- Scout / Walk-Forward / Validation Vault `/desk` sections — BUILT, browser-verified (`page.tsx:6123-6763`, mounted `:12034-12084`).
-- Vault opacity through the UI — PROVEN at both shard + universe stages (`AUDIT-vault-fixture-both-stages.png`); only re-sweep NEW surfaces.
-- Poll-leak + Scout duplicate-key — FIXED in-lane (`microComputePollStopRef` `:9711`; key `:6232`).
-- Frozen rails RE-VERIFIED: fingerprint `08e471b10130e1e2`, 6/6 `referee_*.py` byte-identical since era open, `EXPECTED_TOOLS` 22, engine/config + real `.data` store untouched.
-- J-02–J-05 evidence-makeup debt CLOSED; Vault stays READ-ONLY; J-06 steps 4-5 and the r8 identity-commitment revision stay shut.
+- **J-08 is DONE** — 4 sections render, `TOOL_NAMES`/`EXPECTED_TOOLS` = 26 (verified), 4 tools
+  byte-identical empty+seeded, TR-2 swept across all 26, `sealed_tranche`/`withheld_excluded` rendered
+  aggregate-only; the 4 iter-14 defects are fixed too (nesting, `family_root_id`, WF copy, Vault testid).
+- **J-07 is re-verified** (iter-15: UT-10 + 19/19 `test_micro_graduation.py`); it has NO golden replay
+  script by design — direct-endpoint navigation is its permanent path, so do not build a Graduation UI.
+- The TR-2 MCP sweep's blind-universe bug is FIXED in-round with 5 non-vacuity assertions
+  (`tests/test_mcp_server.py:1292-1299`) — copy that pattern into new traps, do not re-derive it.
+- Frozen rails re-verified at iter-15: fingerprint `08e471b10130e1e2`, six `referee_*.py` +
+  `micro_chain_ledger.py` SHA-256 match iteration-0, zero new `Config` fields. Suite 3237/3229/8/0.
+- `joinable_corpus`'s four other fields stay typed+fetched but UNRENDERED by decision (iter-15
+  assumption 1) — a J-09 home, not a bug.

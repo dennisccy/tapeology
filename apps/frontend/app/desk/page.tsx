@@ -5966,6 +5966,82 @@ function MicroReadinessSection({
         </div>
       </div>
 
+      <div data-testid="micro-readiness-sealed-tranche-block" className="mb-4">
+        <h4 className="mb-2 text-xs font-semibold text-slate-400">Sealed Tranche (Aggregate Only)</h4>
+        <p className="mb-2 text-[11px] text-slate-500">
+          A recorded tranche is one opaque pool until its shards are exposed — aggregate counts
+          only, never a per-shard identity for a withheld shard.
+        </p>
+        <div className="overflow-x-auto">
+          <table
+            data-testid="micro-readiness-sealed-tranche-table"
+            className="w-full min-w-[420px] border-collapse text-xs"
+          >
+            <tbody>
+              <tr className="border-b border-slate-900">
+                <td className="px-1.5 py-1 text-slate-500">Sealed shard count</td>
+                <td
+                  data-testid="micro-readiness-sealed-shard-count"
+                  className="px-1.5 py-1 text-right font-mono text-slate-300"
+                >
+                  {readiness.sealed_tranche.shard_count}
+                </td>
+              </tr>
+              <tr className="border-b border-slate-900">
+                <td className="px-1.5 py-1 text-slate-500">Sealed symbol-days</td>
+                <td
+                  data-testid="micro-readiness-sealed-symbol-days"
+                  className="px-1.5 py-1 text-right font-mono text-slate-300"
+                >
+                  {readiness.sealed_tranche.symbol_days}
+                </td>
+              </tr>
+              <tr>
+                <td className="px-1.5 py-1 text-slate-500">Joinable corpus — withheld (excluded)</td>
+                <td
+                  data-testid="micro-readiness-withheld-excluded"
+                  className="px-1.5 py-1 text-right font-mono text-slate-300"
+                >
+                  {readiness.joinable_corpus.withheld_excluded}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {Object.keys(readiness.sealed_tranche.by_universe).length === 0 ? (
+          <EmptyState testid="micro-readiness-sealed-by-universe-empty" title="No sealed shards recorded." />
+        ) : (
+          <div className="mt-2 overflow-x-auto">
+            <table
+              data-testid="micro-readiness-sealed-by-universe-table"
+              className="w-full min-w-[420px] border-collapse text-xs"
+            >
+              <thead>
+                <tr className="border-b border-slate-800 text-left text-slate-500">
+                  <th className="px-1.5 py-1">Universe</th>
+                  <th className="px-1.5 py-1 text-right">Shard count</th>
+                  <th className="px-1.5 py-1 text-right">Symbol-days</th>
+                </tr>
+              </thead>
+              <tbody data-testid="micro-readiness-sealed-by-universe-rows">
+                {Object.entries(readiness.sealed_tranche.by_universe).map(([universeId, universeCounts]) => (
+                  <tr key={universeId} className="border-b border-slate-900">
+                    <td className="px-1.5 py-1 text-slate-300">{universeId}</td>
+                    <td className="px-1.5 py-1 text-right font-mono text-slate-300">
+                      {universeCounts.shard_count}
+                    </td>
+                    <td className="px-1.5 py-1 text-right font-mono text-slate-300">
+                      {universeCounts.symbol_days}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
       <div data-testid="micro-readiness-shards-block" className="mb-4">
         <h4 className="mb-2 text-xs font-semibold text-slate-400">Legacy Tick Shards</h4>
         {readiness.shards.length === 0 ? (
@@ -6198,7 +6274,7 @@ function ScoutLedgerSection({
                 <h4 className="mb-1 text-xs font-semibold text-slate-400">
                   {family.family_id}{" "}
                   <span className="font-normal text-slate-500">
-                    — {family.variants_tried} variants tried
+                    (root {family.family_root_id}) — {family.variants_tried} variants tried
                   </span>
                 </h4>
                 <div className="overflow-x-auto">
@@ -6441,7 +6517,7 @@ function WalkForwardSection({
           </div>
 
           {walkforwardResult.data.sequences.length === 0 ? (
-            <EmptyState testid="walk-forward-sequences-empty" title="No candidates ledgered." />
+            <EmptyState testid="walk-forward-sequences-empty" title="No walk-forward sequences run." />
           ) : (
             walkforwardResult.data.sequences.map((sequence) => {
               const verdict = sequence.sequence_verdict;
@@ -6458,7 +6534,7 @@ function WalkForwardSection({
                       {sequence.voided ? "voided" : "not voided"}
                     </span>
                   </h4>
-                  <p className="mb-1 text-[11px] text-slate-500">
+                  <div className="mb-1 text-[11px] text-slate-500">
                     Sequence verdict:{" "}
                     <span className="font-mono text-slate-300">
                       {verdict.refused ? `refused — ${verdict.reason}` : verdict.verdict}
@@ -6469,7 +6545,7 @@ function WalkForwardSection({
                         {JSON.stringify(verdict, null, 2)}
                       </pre>
                     </details>
-                  </p>
+                  </div>
                   <div className="overflow-x-auto">
                     <table className="w-full min-w-[760px] border-collapse text-xs">
                       <thead>
@@ -6606,14 +6682,20 @@ function ValidationVaultSection({
   vaultResult: { ok: boolean; data: DeskVaultResponse | null; error?: string } | null;
 }) {
   if (vaultResult === null) {
-    return <LoadingPanel testid="validation-vault-loading" />;
+    return (
+      <div data-testid="validation-vault-section">
+        <LoadingPanel testid="validation-vault-loading" />
+      </div>
+    );
   }
   if (!vaultResult.ok || vaultResult.data === null) {
     return (
-      <UnavailablePanel
-        testid="validation-vault-unavailable"
-        message={vaultResult.error ?? "The validation vault could not be loaded."}
-      />
+      <div data-testid="validation-vault-section">
+        <UnavailablePanel
+          testid="validation-vault-unavailable"
+          message={vaultResult.error ?? "The validation vault could not be loaded."}
+        />
+      </div>
     );
   }
   const vault = vaultResult.data;

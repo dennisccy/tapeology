@@ -323,6 +323,16 @@ _PRICE_ARITHMETIC_FIELDS = (
     r"|compute\??\.progress\.(?:candidates_done|candidates_total|steps_done|steps_total)"
     r"|run\.(?:candidates_done|candidates_total|steps_done|steps_total|folds_evaluated)"
     r"|universe\.(?:symbol_rule_size|date_rule_size)"
+    # goal-rapid-microscope-iter-15 (J-08 half 2): the Microscope Readiness section's own TWO new
+    # aggregate-only served numerics -- the sealed-tranche totals (`sealed_tranche.shard_count`/
+    # `.symbol_days`, plus the per-universe breakdown's own `shard_count`/`symbol_days` counts,
+    # rendered off the destructured `[universeId, universeCounts]` entry) and the joinable-corpus
+    # `withheld_excluded` count. Both are ALREADY served by unchanged `micro_readiness.py` code --
+    # this iteration only adds a reader -- but per this file's own "every new served numeric joins
+    # this list" contract, they join it on the same footing as every other readiness field above.
+    r"|readiness\.sealed_tranche\.(?:shard_count|symbol_days)"
+    r"|universeCounts\.(?:shard_count|symbol_days)"
+    r"|readiness\.joinable_corpus\.(?:withheld_excluded)"
 )
 _PRICE_ARITHMETIC_PATTERN = re.compile(
     rf"({_PRICE_ARITHMETIC_FIELDS})\s*[-+*/]|[-+*/]\s*({_PRICE_ARITHMETIC_FIELDS})"

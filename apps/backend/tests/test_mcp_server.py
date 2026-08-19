@@ -38,6 +38,9 @@ from app.mcp import (
     list_tools,
 )
 from app.providers.adapters.base import RawBar
+from app.research import vault
+from app.research import walkforward as wf
+from app.research import walkforward_ledger as wl
 from app.research.bars import BarSeriesAlreadyRegistered, BarStore
 from app.research.desk_forward import FORWARD_REGISTER, ForwardStore, forward_parameters
 from app.research.desk_playbook import PLAYBOOK_REGISTER, PlaybookStore, playbook_parameters
@@ -46,6 +49,25 @@ from app.research.desk_universe import UniverseStore
 from app.research.referee_adjudicate import REFEREE_REGISTER
 from app.research.referee_null import REFEREE_NULL_TOD_SPEC_ID, REFEREE_TEST_PERM_SPEC_ID
 from app.research.referee_registry import REFEREE_MIN_OCCURRENCES, REFEREE_MIN_SESSIONS
+from app.research.scout_ledger import ScoutLedger
+
+# Era "The Rapid Microscope" J-08's own opaque-pool-critical proof reuses, rather than
+# reimplements, `test_vault.py`'s own TR-2 fixture rig (its module docstring: "an ADVERSARIAL
+# JOIN-RESISTANCE SWEEP, not a whitelist review") -- the cross-test-file import precedent this
+# codebase already establishes (`test_desk_forward.py`'s `from test_copy_discipline import
+# find_violations`, `test_edge_report.py`'s `from test_backtests import _sim_events`, etc.).
+from test_vault import (
+    _FIXTURE_SECRET,
+    _SWEEP_QUOTES,
+    _SWEEP_SYMBOL,
+    _SWEEP_TRADES,
+    _SWEEP_WINDOW_END,
+    _SWEEP_WINDOW_START,
+    _combined_fixture_store,
+    _record_distinctive_dataset,
+    _scalars,
+    _scope_everything_to,
+)
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 
@@ -54,9 +76,11 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 # (era-5B J-02), ``desk_universe``/``desk_screen`` (era-desk J-06, MCP contract v3 -- 15 -> 17
 # tools), ``desk_forward`` (forward-test era, 17 -> 18 tools), ``desk_playbook``/
 # ``desk_playbook_evidence`` (Era B2 "The Playbook" J-09, the era's own MCP contract v4 -- 18 -> 20
-# tools), and ``desk_referee``/``desk_referee_registry`` (Era 6 "The Referee" J-09, MCP contract v5
-# -- 20 -> 22 tools) are the newest additions, each positioned right after its dependency-order
-# sibling (the same store/registry+route+MCP shape, mirrored end to end).
+# tools), ``desk_referee``/``desk_referee_registry`` (Era 6 "The Referee" J-09, MCP contract v5 --
+# 20 -> 22 tools), and ``desk_micro_readiness``/``desk_scout``/``desk_walkforward``/``desk_vault``
+# (Era "The Rapid Microscope" J-08, the era's own MCP contract v6 -- 22 -> 26 tools) are the newest
+# additions, each positioned right after its dependency-order sibling (the same store/registry+
+# route+MCP shape, mirrored end to end).
 EXPECTED_TOOLS = (
     "tape_state",
     "tape_features",
@@ -76,6 +100,10 @@ EXPECTED_TOOLS = (
     "desk_playbook_evidence",
     "desk_referee",
     "desk_referee_registry",
+    "desk_micro_readiness",
+    "desk_scout",
+    "desk_walkforward",
+    "desk_vault",
     "pnl_ledger",
     "taxonomy",
     "ui_route_map",
@@ -129,6 +157,9 @@ def backend_paths(tmp_path_factory):
         "TAPEOLOGY_DESK_SCREEN_DIR": str(tmp_path_factory.mktemp("mcp-desk-screen")),
         "TAPEOLOGY_DESK_FORWARD_DIR": str(tmp_path_factory.mktemp("mcp-desk-forward")),
         "TAPEOLOGY_DESK_PLAYBOOK_DIR": str(tmp_path_factory.mktemp("mcp-desk-playbook")),
+        "TAPEOLOGY_MICRO_SCOUT_DIR": str(tmp_path_factory.mktemp("mcp-micro-scout")),
+        "TAPEOLOGY_MICRO_WALKFORWARD_DIR": str(tmp_path_factory.mktemp("mcp-micro-walkforward")),
+        "TAPEOLOGY_MICRO_VAULT_DIR": str(tmp_path_factory.mktemp("mcp-micro-vault")),
     }
 
 
@@ -908,6 +939,373 @@ async def test_desk_referee_tool_byte_identical_with_a_corrupted_hypothesis_file
     )
 
 
+# --- Era "The Rapid Microscope" J-08: desk_micro_readiness / desk_scout / desk_walkforward /
+# desk_vault (MCP contract v6, 22 -> 26 tools; empty + populated + the MCP-surface TR-2 sweep) -----
+#
+# Placed HERE, deliberately BEFORE `test_datasets_tool_byte_identical_on_a_non_empty_live_list`
+# (the first test anywhere in this module that ever records a tick dataset) and before any test
+# that ever touches the scout/walkforward/vault stores (nothing before this point does) -- so every
+# "honest empty" assertion below is genuinely observed on a corpus with ZERO recorded datasets and
+# ZERO registered vault universes, the SAME file-order-matters discipline every other store in this
+# module already follows. Each populated-state test seeds its OWN env-scoped store directly through
+# its ledger's own public write path (`ScoutLedger.append_row`/`walkforward_ledger.
+# append_fold_result`/`vault.register_universe`+`vault.seal_shard`) -- NEVER a live
+# screen/fold-run/recorder compute, which the era's own evidence shows can run past 25 minutes
+# against the real corpus with zero completed candidates (goal.md's own performance trap).
+
+
+@pytest.mark.anyio
+async def test_desk_micro_readiness_tool_byte_identical_on_the_honest_empty_state(mcp_env):
+    """Before any tick dataset has ever been recorded and before any vault universe has ever been
+    registered on this test backend, `desk_micro_readiness` proxies `GET /research/desk/micro/
+    readiness`'s explicit HTTP 200 honest-empty payload -- an empty `shards` list, zero totals, and
+    an all-zero `sealed_tranche` -- never a 404 (the `desk_referee` convention this route itself
+    follows)."""
+    result = await call_tool("desk_micro_readiness", {})
+    rest = httpx.get(f"{mcp_env}/research/desk/micro/readiness", timeout=15.0)
+    assert rest.status_code == 200
+    body = rest.json()
+    assert body["shards"] == []
+    assert body["totals"]["distinct_datasets"] == 0
+    assert body["sealed_tranche"] == {"shard_count": 0, "symbol_days": 0, "by_universe": {}}
+    assert result.isError is False
+    assert len(result.content) == 1
+    assert result.content[0].text.encode("utf-8") == rest.content, "desk_micro_readiness not byte-identical"
+
+
+@pytest.mark.anyio
+async def test_desk_micro_readiness_tool_byte_identical_on_a_populated_state(mcp_env):
+    """The `datasets`/`backtests`/`edge_report` J-02/J-03 precedent, applied to readiness: after
+    recording ONE real (keyless, synthetic `reference`-source) dataset through the live backend's
+    own public `POST /research/datasets` route -- the SAME call, same window, and same 200/409
+    idempotence tolerance every other "flip to live" test in this module already uses -- the tool's
+    JSON is still byte-identical to its curl equivalent, now over a NON-EMPTY `shards` list."""
+    recorded = httpx.post(
+        f"{mcp_env}/research/datasets",
+        json={
+            "source_kind": "reference",
+            "split": "train",
+            "start": "2026-06-09T17:00:00Z",
+            "end": "2026-06-09T17:00:30Z",
+        },
+        timeout=15.0,
+    )
+    assert recorded.status_code in (200, 409)  # 409 = already recorded by an earlier run/test
+    result = await call_tool("desk_micro_readiness", {})
+    rest = httpx.get(f"{mcp_env}/research/desk/micro/readiness", timeout=15.0)
+    assert rest.status_code == 200
+    body = rest.json()
+    assert len(body["shards"]) >= 1, "the live result must be non-empty for this proof"
+    assert result.isError is False
+    assert len(result.content) == 1
+    assert result.content[0].text.encode("utf-8") == rest.content, "desk_micro_readiness not byte-identical"
+
+
+@pytest.mark.anyio
+async def test_desk_scout_tool_byte_identical_on_the_honest_empty_state(mcp_env):
+    """Before any trial has ever been ledgered, `desk_scout` proxies `GET /research/desk/micro/
+    scout`'s explicit HTTP 200 honest-empty payload -- an empty `families` list beside an `ok`
+    chain verification -- never a 404 (the `desk_referee` convention this route itself follows)."""
+    result = await call_tool("desk_scout", {})
+    rest = httpx.get(f"{mcp_env}/research/desk/micro/scout", timeout=5.0)
+    assert rest.status_code == 200
+    assert rest.json() == {
+        "families": [],
+        "chain_verification": {"ok": True, "failed_at_row": None, "reason": None},
+    }
+    assert result.isError is False
+    assert len(result.content) == 1
+    assert result.content[0].text.encode("utf-8") == rest.content, "desk_scout not byte-identical"
+
+
+@pytest.mark.anyio
+async def test_desk_scout_tool_byte_identical_on_a_populated_state(mcp_env, backend_paths):
+    """Seed ONE real trial directly through `ScoutLedger.append_row()` -- the ledger's own public
+    write path, NEVER a live `POST /scout/compute` run (goal.md's own performance trap: a real
+    Scout screen against the real corpus has run past 25 minutes without producing one completed
+    candidate) -- into the live backend's env-scoped `TAPEOLOGY_MICRO_SCOUT_DIR`, then prove the
+    tool's JSON is byte-identical to its curl equivalent on a NON-EMPTY result."""
+    scout_dir = Path(backend_paths["TAPEOLOGY_MICRO_SCOUT_DIR"])
+    ScoutLedger(scout_dir).append_row(
+        {
+            "family_id": "mcp-test-family",
+            "family_root_id": "mcp-test-root",
+            "candidate_id": "mcp-test-candidate",
+            "decision": "killed_null",
+            "reason": "no_edge",
+        }
+    )
+    result = await call_tool("desk_scout", {})
+    rest = httpx.get(f"{mcp_env}/research/desk/micro/scout", timeout=5.0)
+    assert rest.status_code == 200
+    body = rest.json()
+    assert len(body["families"]) >= 1, "the live list must be non-empty for this proof"
+    assert result.isError is False
+    assert len(result.content) == 1
+    assert result.content[0].text.encode("utf-8") == rest.content, "desk_scout not byte-identical"
+
+
+@pytest.mark.anyio
+async def test_desk_walkforward_tool_byte_identical_on_the_honest_empty_state(mcp_env):
+    """Before any fold has ever been ledgered, `desk_walkforward` proxies `GET /research/desk/
+    micro/walkforward`'s explicit HTTP 200 honest-empty payload -- empty `fold_specs`/`sequences`
+    beside an `ok` chain verification -- never a 404."""
+    result = await call_tool("desk_walkforward", {})
+    rest = httpx.get(f"{mcp_env}/research/desk/micro/walkforward", timeout=5.0)
+    assert rest.status_code == 200
+    assert rest.json() == {
+        "fold_specs": [],
+        "sequences": [],
+        "chain_verification": {"ok": True, "failed_at_row": None, "reason": None},
+    }
+    assert result.isError is False
+    assert len(result.content) == 1
+    assert result.content[0].text.encode("utf-8") == rest.content, "desk_walkforward not byte-identical"
+
+
+@pytest.mark.anyio
+async def test_desk_walkforward_tool_byte_identical_on_a_populated_state(mcp_env, backend_paths):
+    """Seed ONE real fold result directly through `walkforward_ledger.append_fold_result()` -- the
+    ledger's own public write path (the `test_walkforward.py` row shape every fold-result test in
+    that file already uses), NEVER a live `POST /walkforward/compute` run -- into the live
+    backend's env-scoped `TAPEOLOGY_MICRO_WALKFORWARD_DIR`, then prove the tool's JSON is
+    byte-identical to its curl equivalent on a NON-EMPTY result."""
+    wf_dir = Path(backend_paths["TAPEOLOGY_MICRO_WALKFORWARD_DIR"])
+    wl.append_fold_result(
+        wl.WalkForwardLedger(str(wf_dir)),
+        {
+            "sequence_id": "mcp-test-sequence",
+            "corpus_id": "mcp-test-corpus",
+            "fold_index": 0,
+            "spec_hash": "mcp-test-spec-hash",
+            "status": wf.FOLD_STATUS_SUFFICIENT,
+            "evidence_class": wf.EVIDENCE_CLASS_HISTORICAL_EXPOSED_DIAGNOSTIC,
+            "process_label": wf.PROCESS_LABEL_RULE,
+            "effect": 0.01,
+            "sign": "positive",
+            "n": 10,
+            "n_sessions": 5,
+            "n_symbols": 3,
+            "missing": {},
+            "sidedness": "long",
+            "econ_floor": None,
+        },
+    )
+    result = await call_tool("desk_walkforward", {})
+    rest = httpx.get(f"{mcp_env}/research/desk/micro/walkforward", timeout=5.0)
+    assert rest.status_code == 200
+    body = rest.json()
+    assert len(body["sequences"]) >= 1, "the live list must be non-empty for this proof"
+    assert result.isError is False
+    assert len(result.content) == 1
+    assert result.content[0].text.encode("utf-8") == rest.content, "desk_walkforward not byte-identical"
+
+
+@pytest.mark.anyio
+async def test_desk_vault_tool_byte_identical_on_the_honest_empty_state(mcp_env):
+    """Before any universe has ever been registered or any shard sealed, `desk_vault` proxies
+    `GET /research/desk/micro/vault`'s explicit HTTP 200 honest-empty payload -- empty
+    `universes`/`shards` beside both ledgers' own `ok` chain verifications -- never a 404."""
+    result = await call_tool("desk_vault", {})
+    rest = httpx.get(f"{mcp_env}/research/desk/micro/vault", timeout=5.0)
+    assert rest.status_code == 200
+    assert rest.json() == {
+        "universes": [],
+        "shards": [],
+        "shard_ledger_chain_verification": {"ok": True, "failed_at_row": None, "reason": None},
+        "universe_ledger_chain_verification": {"ok": True, "failed_at_row": None, "reason": None},
+    }
+    assert result.isError is False
+    assert len(result.content) == 1
+    assert result.content[0].text.encode("utf-8") == rest.content, "desk_vault not byte-identical"
+
+
+@pytest.mark.anyio
+async def test_desk_vault_tool_byte_identical_on_a_populated_state(mcp_env, backend_paths):
+    """Seed ONE real registered universe AND one sealed shard directly through `vault.py`'s own
+    public write path (`register_universe`/`seal_shard` -- the `test_vault.py` TC-2/TC-6
+    precedent), NEVER through a live compute run, into the live backend's env-scoped
+    `TAPEOLOGY_MICRO_VAULT_DIR`, then prove the tool's JSON is byte-identical to its curl
+    equivalent on a NON-EMPTY result -- including a sealed shard's own opaque, aggregate-only
+    projection (the section 7.5 field whitelist), never its raw dataset id/checksum."""
+    vault_dir = Path(backend_paths["TAPEOLOGY_MICRO_VAULT_DIR"])
+    universe_ledger = vault.VaultUniverseLedger(str(vault_dir))
+    shard_ledger = vault.VaultShardLedger(str(vault_dir))
+    secret = b"mcp-test-vault-secret"
+    commitment = vault.commit_vault_secret(secret)
+    vault.register_universe(
+        universe_ledger,
+        universe_id="mcp-test-universe",
+        symbol_rule=["ZQXVLT-MCP"],
+        date_rule=["2026-06-09"],
+        vault_secret_commitment=commitment,
+    )
+    vault.seal_shard(
+        shard_ledger,
+        dataset_id="mcp-test-sealed-dataset",
+        universe_id="mcp-test-universe",
+        content_checksum="f" * 64,
+        event_count=42,
+        vault_secret=secret,
+    )
+    result = await call_tool("desk_vault", {})
+    rest = httpx.get(f"{mcp_env}/research/desk/micro/vault", timeout=5.0)
+    assert rest.status_code == 200
+    body = rest.json()
+    assert len(body["universes"]) >= 1 and len(body["shards"]) >= 1, (
+        "the live lists must be non-empty for this proof"
+    )
+    assert set(body["shards"][0]) == {
+        "shard_id", "universe_id", "size_bucket", "checksum_commitment", "sealed_at", "exposure_state",
+    }
+    assert result.isError is False
+    assert len(result.content) == 1
+    assert result.content[0].text.encode("utf-8") == rest.content, "desk_vault not byte-identical"
+
+
+@pytest.mark.anyio
+async def test_tr2_the_new_mcp_tools_leak_nothing_about_a_sealed_shard(tmp_path, monkeypatch):
+    """The round's opaque-pool-critical proof (goal.md's own carried-forward reminder): closes the
+    gap `test_vault.py`'s own `test_tr2_the_mcp_surface_is_closed_structurally_not_route_by_route`
+    documents but does not itself execute -- the MCP server is a genuinely SEPARATE process the
+    existing REST-only `app.openapi()`-driven TR-2 sweep never actually calls over the wire.
+
+    Reuses `test_vault.py`'s own TR-2 fixture rig verbatim (`_combined_fixture_store`/
+    `_record_distinctive_dataset`/`_scope_everything_to`/`_scalars`) -- then spawns a DEDICATED,
+    freshly hermetic backend subprocess over that exact store (never the shared module-scoped
+    `backend` fixture, whose dataset dir has already accumulated many other tests' recordings by
+    the time this test runs) and calls every one of the 26 registered MCP tools against it,
+    asserting the sealed shard's raw dataset id, raw content checksum, symbol, session date,
+    window bounds, and exact trade/quote counts appear in ZERO tool response bodies.
+
+    **The shard is sealed under a REGISTERED universe whose original pool is not yet fully
+    released** (iteration-15 audit fix): TC-4's own scenario line names exactly that precondition,
+    and spec section 7.5's governing inference trap is stated over "the registered universe
+    (section 7.2) plus EVERY public artifact the system serves" -- the registered universe is the
+    half that is public by construction, so a sweep with an EMPTY universe ledger (every prior
+    TR-2 test in `test_vault.py`, which this test originally copied) never exercises
+    `_serialize_universe`'s own two-stage reveal at all, and would not catch a committed
+    universe's `symbol_rule`/`date_rule` contents leaking onto the MCP surface. Registering it
+    also makes `desk_vault`'s `universes` list non-empty, so the sweep runs against the RICHER
+    payload rather than a structurally empty one."""
+    _scope_everything_to(tmp_path, monkeypatch)
+    store = _combined_fixture_store(tmp_path)
+    sealed_meta = _record_distinctive_dataset(store)
+    assert len(store.list()[0]) == 3  # 2 public PG fixtures + the 1 distinctive shard, pre-seal
+
+    # The sweep window opens 09:31 ET, so the ET session date is the window start's own calendar
+    # day -- the rule value a committed universe must never disclose.
+    sealed_session_date = _SWEEP_WINDOW_START[:10]
+    vault.register_universe(
+        vault.universe_ledger_for_dataset_dir(str(tmp_path / "datasets")),
+        universe_id="starter-tranche-v1",
+        symbol_rule=[_SWEEP_SYMBOL],
+        date_rule=[sealed_session_date],
+        vault_secret_commitment=vault.commit_vault_secret(_FIXTURE_SECRET),
+    )
+    vault.seal_shard(
+        vault.shard_ledger_for_dataset_dir(str(tmp_path / "datasets")),
+        dataset_id=sealed_meta["id"],
+        universe_id="starter-tranche-v1",
+        content_checksum=sealed_meta["checksum"],
+        event_count=sealed_meta["event_counts"]["total"],
+        vault_secret=_FIXTURE_SECRET,
+    )
+
+    port = _free_port()
+    base = f"http://127.0.0.1:{port}"
+    env = os.environ.copy()  # carries every _scope_everything_to monkeypatch override forward
+    log_path = tmp_path / "tr2-mcp-uvicorn.log"
+    with open(log_path, "wb") as log:
+        proc = subprocess.Popen(
+            [sys.executable, "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", str(port)],
+            cwd=BACKEND_DIR, env=env, stdout=log, stderr=subprocess.STDOUT,
+        )
+    try:
+        deadline = time.time() + 20
+        while True:
+            try:
+                if httpx.get(f"{base}/health", timeout=1.0).status_code == 200:
+                    break
+            except httpx.HTTPError:
+                pass
+            if proc.poll() is not None or time.time() > deadline:
+                raise AssertionError(f"TR-2 MCP sweep backend failed to start:\n{log_path.read_text()[-2000:]}")
+            time.sleep(0.2)
+
+        monkeypatch.setenv("TAPEOLOGY_API_BASE", base)
+
+        forbidden_substrings = {
+            "dataset id": sealed_meta["id"],
+            "raw content checksum": sealed_meta["checksum"],
+            "symbol": _SWEEP_SYMBOL,
+            "window start": _SWEEP_WINDOW_START,
+            "window end": _SWEEP_WINDOW_END,
+            # iteration-15 audit fix: the committed universe's own date_rule value. Section 7.5
+            # withholds symbol AND date range pre-exposure, and the symbol above would not catch a
+            # date-only disclosure (the window-bound tokens are full timestamps, never the bare
+            # session date a rule carries).
+            "session date": sealed_session_date,
+        }
+        forbidden_scalars = {_SWEEP_TRADES, _SWEEP_QUOTES, sealed_meta["event_counts"]["total"]}
+        args_for = {
+            "tape_state": {"ticker": "SIM-BUYER"},
+            "tape_features": {"ticker": "SIM-BUYER"},
+            "tape_history": {"ticker": "SIM-BUYER"},
+            "levels": {"symbol": "PG", "as_of": "2026-06-09T21:00:00Z"},
+            "tradability": {"symbol": "PG", "as_of": "2026-06-09T21:00:00Z"},
+            "get_endpoint": {"path": "/research/datasets"},
+        }
+
+        assert len(TOOL_NAMES) == 26, "the 26-tool contract must hold for this sweep to be complete"
+        leaks: list[str] = []
+        for name in TOOL_NAMES:
+            result = await call_tool(name, args_for.get(name, {}))
+            for content_item in result.content:
+                for leak_kind, token in forbidden_substrings.items():
+                    if token in content_item.text:
+                        leaks.append(f"tool {name!r} serves the sealed shard's {leak_kind}")
+            try:
+                payload = json.loads(result.content[0].text)
+            except ValueError:
+                payload = None
+            if payload is not None:
+                hits = sorted(set(_scalars(payload, [])) & forbidden_scalars)
+                if hits:
+                    leaks.append(f"tool {name!r} serves the sealed shard's exact event counts {hits}")
+
+        assert leaks == [], "join-resistance breached over the MCP surface:\n  " + "\n  ".join(leaks)
+
+        # Counter-test: the sweep is not vacuous -- the sealed shard genuinely IS being withheld,
+        # its two public PG siblings are still fully served, and the tool proxies really did run
+        # against a live surface carrying real data (never a coincidentally-empty backend).
+        readiness = await call_tool("desk_micro_readiness", {})
+        readiness_body = json.loads(readiness.content[0].text)
+        assert readiness_body["sealed_tranche"]["shard_count"] >= 1
+
+        vault_tool_result = await call_tool("desk_vault", {})
+        vault_body = json.loads(vault_tool_result.content[0].text)
+        assert len(vault_body["shards"]) >= 1
+        assert set(vault_body["shards"][0]) == {
+            "shard_id", "universe_id", "size_bucket", "checksum_commitment", "sealed_at", "exposure_state",
+        }
+        # iteration-15 audit fix, non-vacuity for the REGISTERED half of the trap: the universe is
+        # genuinely on the served surface (so `_serialize_universe` really did run) and is still in
+        # its COMMITTED stage -- the stage whose rule contents the sweep above proves are withheld.
+        assert len(vault_body["universes"]) == 1
+        assert vault_body["universes"][0]["universe_id"] == "starter-tranche-v1"
+        assert vault_body["universes"][0]["rule_disclosure"] == "committed"
+        assert "symbol_rule" not in vault_body["universes"][0]
+        assert "date_rule" not in vault_body["universes"][0]
+
+        datasets_tool_result = await call_tool("datasets", {})
+        datasets_body = json.loads(datasets_tool_result.content[0].text)
+        assert len(datasets_body["datasets"]) == 2  # the two public PG siblings, sealed one excluded
+    finally:
+        proc.terminate()
+        proc.wait(timeout=10)
+
+
 @pytest.mark.anyio
 async def test_desk_screen_reference_close_field_proxies_verbatim(mcp_env, backend_paths):
     """goal-desk-iter-17 (J-13) TC-10: `reference_close` -- `desk_screen.py`'s new ranked-row field
@@ -1528,9 +1926,10 @@ async def test_get_endpoint_desk_topup_runs_byte_identical_with_no_new_tool(mcp_
     assert len(result.content) == 1
     assert result.content[0].text.encode("utf-8") == rest.content, "topup/runs not byte-identical"
     assert rest.json() == {"runs": [], "latest": None, "integrity_errors": []}
-    # goal-referee-iter-10: the total grew 20 -> 22 (desk_referee/desk_referee_registry) -- this
-    # route's own no-new-tool claim is unaffected, so only the tracked total is re-derived here.
-    assert "desk_topup_runs" not in TOOL_NAMES and len(TOOL_NAMES) == 22
+    # goal-rapid-microscope-iter-15: the total grew 22 -> 26 (desk_micro_readiness/desk_scout/
+    # desk_walkforward/desk_vault) -- this route's own no-new-tool claim is unaffected, so only
+    # the tracked total is re-derived here.
+    assert "desk_topup_runs" not in TOOL_NAMES and len(TOOL_NAMES) == 26
 
 
 @pytest.mark.anyio
@@ -1549,9 +1948,10 @@ async def test_get_endpoint_desk_screen_runs_byte_identical_with_no_new_tool(mcp
     assert len(result.content) == 1
     assert result.content[0].text.encode("utf-8") == rest.content, "screen/runs not byte-identical"
     assert rest.json() == {"runs": [], "latest": None, "integrity_errors": []}
-    # goal-referee-iter-10: the total grew 20 -> 22 (desk_referee/desk_referee_registry) -- this
-    # route's own no-new-tool claim is unaffected, so only the tracked total is re-derived here.
-    assert "desk_screen_runs" not in TOOL_NAMES and len(TOOL_NAMES) == 22
+    # goal-rapid-microscope-iter-15: the total grew 22 -> 26 (desk_micro_readiness/desk_scout/
+    # desk_walkforward/desk_vault) -- this route's own no-new-tool claim is unaffected, so only
+    # the tracked total is re-derived here.
+    assert "desk_screen_runs" not in TOOL_NAMES and len(TOOL_NAMES) == 26
 
 
 @pytest.mark.anyio

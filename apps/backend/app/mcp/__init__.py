@@ -20,8 +20,10 @@ Result contract (locked by ``tests/test_mcp_server.py``):
     at era-4 J-04; ``tradability`` at era-5B J-01; ``setups`` at era-5B J-02; ``edge_report`` at
     era-5B J-04; ``desk_universe``/``desk_screen`` at era-desk J-06; ``desk_playbook``/
     ``desk_playbook_evidence`` at Era B2 J-09; ``desk_referee``/``desk_referee_registry`` at Era 6
-    "The Referee" J-09); an allowlisted-but-UNKNOWN path (any unshipped ``/research/*``) still
-    surfaces the backend's honest 404 this way — never placeholder data.
+    "The Referee" J-09; ``desk_micro_readiness``/``desk_scout``/``desk_walkforward``/``desk_vault``
+    at Era "The Rapid Microscope" J-08, MCP contract v6 — 22 -> 26 tools); an
+    allowlisted-but-UNKNOWN path (any unshipped ``/research/*``) still surfaces the backend's
+    honest 404 this way — never placeholder data.
   * backend unreachable — an explicit tool error naming the base URL and the failure
     (``BackendUnreachableError``); NEVER cached or fabricated data (no cache, no retry loop,
     no offline snapshot exists anywhere in this module).
@@ -138,6 +140,16 @@ _STATIC_PATHS: dict[str, str] = {
     # both routes take none.
     "desk_referee": "/research/desk/referee/adjudications",
     "desk_referee_registry": "/research/desk/referee/registry",
+    # `desk_micro_readiness`/`desk_scout`/`desk_walkforward`/`desk_vault` (Era "The Rapid
+    # Microscope" J-08, MCP contract v6 -- 22 -> 26 tools) are the IDENTICAL no-required-param
+    # shape as `desk_referee`/`desk_referee_registry` directly above: each proxies an endpoint
+    # that already serves an explicit HTTP 200 honest-empty/honest-live payload before any
+    # snapshot/trial/fold/shard is ever built or recorded (never a 404). None exposes any
+    # query-param variant -- all four routes take none.
+    "desk_micro_readiness": "/research/desk/micro/readiness",
+    "desk_scout": "/research/desk/micro/scout",
+    "desk_walkforward": "/research/desk/micro/walkforward",
+    "desk_vault": "/research/desk/micro/vault",
 }
 
 _TAPE_PATHS: dict[str, str] = {
@@ -404,6 +416,56 @@ TOOLS: tuple[types.Tool, ...] = (
             "J-05's append-only pre-registration registry: every recorded family, hypothesis "
             "(with its read-side status/discovery/accrual additions), withdrawal, and "
             "certificate, JSON verbatim. Never 404/500 on an empty registry."
+        ),
+        inputSchema=_object_schema({}),
+    ),
+    types.Tool(
+        name="desk_micro_readiness",
+        description=(
+            "Read-only proxy of GET /research/desk/micro/readiness -- Era \"The Rapid Microscope\" "
+            "J-01's honest corpus-truth surface: per-shard symbol/date/feed/window/counts/"
+            "coverage-gaps/fallback_frac/checksum for every EXPOSED tick dataset, corpus totals "
+            "(distinct symbol-days, RTH minutes, session-equivalents) beside the referee's "
+            "file-count gate, per-pilot-study predeclared-floor met/unmet status, the joinable "
+            "playbook-signal corpus count, and the AGGREGATE-ONLY sealed-tranche totals (shard "
+            "count and distinct symbol-days per registered universe) -- JSON verbatim. A dataset "
+            "caught in an unresolved sealed pool carries no per-shard row and no identity anywhere "
+            "in this payload (spec section 7.5)."
+        ),
+        inputSchema=_object_schema({}),
+    ),
+    types.Tool(
+        name="desk_scout",
+        description=(
+            "Read-only proxy of GET /research/desk/micro/scout -- the Scout's exploratory "
+            "candidate ledger: every registered family's hash-chained, append-only trials, the "
+            "union-N denominator across every grid version ever run, each trial's closed-"
+            "vocabulary decision/kill reason and withheld_excluded count, beside the ledger's own "
+            "chain-verification verdict -- JSON verbatim. Never 404/500 on an empty ledger."
+        ),
+        inputSchema=_object_schema({}),
+    ),
+    types.Tool(
+        name="desk_walkforward",
+        description=(
+            "Read-only proxy of GET /research/desk/micro/walkforward -- the chronological "
+            "walk-forward engine's registered fold specs plus every sequence's per-fold results, "
+            "evidence-class labeling, temporal-stability/decay view, and sequence verdict, beside "
+            "the ledger's own chain-verification verdict -- JSON verbatim. Never 404/500 on an "
+            "empty ledger."
+        ),
+        inputSchema=_object_schema({}),
+    ),
+    types.Tool(
+        name="desk_vault",
+        description=(
+            "Read-only proxy of GET /research/desk/micro/vault -- the Validation Vault's current "
+            "state: every registered universe's rule disclosure (opaque/committed while any "
+            "member of its original pool is unresolved) and every shard's one-way lifecycle state "
+            "(sealed / assigned / exposed), beside both ledgers' own chain-verification verdicts "
+            "-- JSON verbatim. A sealed or not-yet-fully-released shard carries only the opaque "
+            "pre-exposure fields (shard_id, universe_id, size_bucket, checksum_commitment, "
+            "sealed_at, exposure_state) -- never a symbol, date, dataset id, or raw checksum."
         ),
         inputSchema=_object_schema({}),
     ),
