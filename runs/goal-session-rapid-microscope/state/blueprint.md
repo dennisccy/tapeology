@@ -194,3 +194,24 @@ from its one endpoint, read verbatim by UI/MCP/reports.
      (the four desk_* MCP tools + EXPECTED_TOOLS 26-tuple bump) is unbuilt and carries no blueprint
      change of its own beyond what the era-baseline Data Contract table already names. No
      reapproval file written. -->
+
+<!-- iter-15 note: J-08 half 2 (the four desk_micro_readiness/desk_scout/desk_walkforward/desk_vault
+     MCP proxies + EXPECTED_TOOLS 22->26 bump) introduces NO new Data Contract row -- each is a
+     byte-identical GET proxy of an ALREADY-registered row/endpoint above (readiness/scout/
+     walkforward/vault), per this codebase's own established MCP-tool convention (desk_playbook,
+     desk_referee, etc. were never given their own Data Contract row either): an MCP tool is a
+     transport-layer proxy of an already-registered endpoint, not a second computing module or a
+     second serving path, and byte-identity is enforced by tests, not registration. No new page, no
+     new nav, no reapproval file written -- the MCP surface is not part of the Information
+     Architecture nav skeleton (it is goal.md's "Target Users" bullet 2, Claude + MCP).
+
+     This iteration also closes the iter-9/iter-14-flagged WARN ("registered-not-rendered"): the
+     Microscope Readiness section (`MicroReadinessSection`) now renders `sealed_tranche`
+     (shard_count/symbol_days/by_universe) and `joinable_corpus.withheld_excluded` -- BOTH already
+     Data Contract sub-rows since iter-10's "Disclosure sub-fields" table above, served by the
+     already-registered `micro_readiness.py` owner and `GET /research/desk/micro/readiness`
+     endpoint, unchanged this iteration. This is a pure UI-wiring completion of an existing contract
+     row, not a new one -- no table edit needed for it. `joinable_corpus`'s remaining fields
+     (`total`/`playbook_signal_count`/`band_touch_count`/`by_setup_id`) stay unrendered this
+     iteration (state/assumptions.md's iter-15 entry has the full reasoning); they remain fetched
+     and fully typed, so nothing served is silently dropped from the type going forward. -->

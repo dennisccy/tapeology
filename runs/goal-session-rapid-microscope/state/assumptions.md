@@ -1141,3 +1141,46 @@ so the probe is genuinely strong evidence — it just is not the lane's verifica
 **Reversible:** yes — one genuine re-verification in iteration 15 (already the third item of my
 next-step recommendation) refreshes both fields; until then the achievement gate correctly refuses
 to count J-07 toward finishing.
+
+## iter-15 — goal-decomposer
+
+**Ambiguity:** the carried escalation context and iteration-14's own coherence WARN both name
+"`sealed_tranche` and `withheld_excluded`" (or "the two missing numbers") as what Microscope
+Readiness must add, but the same endpoint's `joinable_corpus` object also carries `total`/
+`playbook_signal_count`/`band_touch_count`/`by_setup_id` — none of which is rendered anywhere on
+`/desk` today (grep-confirmed zero `"joinable"` hits in `page.tsx`), and `blueprint.md`'s own
+iter-3 note treats the WHOLE `joinable_corpus` field as "served ahead of its UI wiring," naming
+J-08 as the wiring iteration. Whether the fix is meant to wire only `withheld_excluded`, or the
+whole `joinable_corpus` object now that J-08 has landed, is not settled by either source.
+**We chose:** wire ONLY `sealed_tranche` (the full aggregate: `shard_count`/`symbol_days`/
+`by_universe`) and `joinable_corpus.withheld_excluded` — the two numbers the evaluator/auditor
+explicitly named and screenshotted as missing — while still typing `joinable_corpus`'s full shape
+in `types.ts` (so nothing served is silently dropped from the type going forward) but leaving
+`total`/`playbook_signal_count`/`band_touch_count`/`by_setup_id` unrendered this iteration.
+Grounds: (a) the escalation's own scope-control instruction ("keep the plan tight enough that the
+budget trimmer cannot drop the auditor") argues against silently widening a two-number fix into a
+four-more-field one; (b) neither the evaluator, the auditor, nor goal.md's J-08/J-09 step text asks
+for a "structure x flow" joinable-corpus display — J-09 (still out of scope) is the natural
+consumer of that count, not this fix.
+**Reversible:** yes — the four unrendered `joinable_corpus` fields are already fetched and typed; a
+future iteration (plausibly J-09's own work, since `by_setup_id` is a per-setup breakdown a pilot
+study would want) can render them with no re-fetch and no type change.
+
+## iter-15 — goal-decomposer (second)
+
+**Ambiguity:** the carried escalation context requires J-07 to "ride the LLM browser lane" this
+iteration since no golden replay script exists for it, but J-07 has no dedicated `/desk` UI section
+of its own — goal.md's J-08 step 1 names exactly three sections (Scout Ledger, Walk-Forward,
+Validation Vault), and grep confirms zero graduation-stage rendering exists anywhere on the page
+today. It is unclear whether "browser lane" means navigating to the raw
+`GET /research/desk/micro/graduation` JSON endpoint directly, or building a UI surface for it first.
+**We chose:** the browser lane hits the raw endpoint directly (navigate to
+`GET /research/desk/micro/graduation` on the store-scoped rig and screenshot the JSON body),
+mirroring this era's own established precedent for keyless/automated journeys with no UI section
+(J-02/J-03's own "thin replay" evidence, and the iteration-13/14 evaluators' own "auditor's live
+HTTP 200 probe" language for this exact route) — NOT building a fourth `/desk` section. Grounds:
+goal.md's J-08 step 1 enumerates exactly three sections to build, never a fourth for Graduation;
+inventing one now would be scope creep the evaluator did not ask for and would risk exactly the
+"budget trimmer drops the auditor" outcome the carried context's point 1 warns against.
+**Reversible:** yes — nothing built this iteration blocks a future Graduation UI section if a later
+iteration's evaluator asks for one; the direct-endpoint evidence stays valid evidence either way.
