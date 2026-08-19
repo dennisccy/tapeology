@@ -915,3 +915,51 @@ never their evidence class; and their prior passes were earned by my own re-deri
 the owner's real data in rounds 8-11.
 **Reversible:** yes — J-08 renders these journeys' values on `/desk`, so each gets a real
 element-captured browser acceptance one iteration later, and a failure there would re-open them.
+
+## iter-13 — goal-decomposer
+
+**Ambiguity:** spec §7.8 offers two lawful outcomes when a `recover_shard_ledger` reconstruction
+attempt cannot be proven complete — "every shard whose freshness could be affected is
+conservatively marked `exposure_unknown` ... — or the whole tranche halts" — without stating which
+condition selects which branch. The shipped iteration-12 implementation always took the first
+(marking) branch, which is exactly what let a shard entirely absent from both the surviving prefix
+and the caller's reconstruction attempt escape marking altogether (the hole iteration 13 fixes).
+**We chose:** the dividing line is whether the recovery attempt's own claimed rows (verified
+prefix + caller-supplied suffix) account for every row the ledger's own durable tail anchor
+attests existed — i.e., whether every row is at least NAMED by a dataset_id somewhere in the
+attempt, even if its content cannot be verified. When row counts match (every row is named, only
+content is unproven), mark the named union `exposure_unknown` and resume. When the attempt's row
+count falls short of the anchor's, or the anchor itself is unreadable, some row's dataset_id is
+entirely unrepresented — refuse to resume at all; the ledger stays refused until a fuller
+reconstruction is supplied.
+**Reversible:** yes in the sense that a later, more complete reconstruction attempt against the
+SAME still-untouched corrupted file can still succeed normally (a halt never consumes or alters
+the original corrupted ledger). No in the sense that this iteration also revises three existing
+unit tests' asserted outcomes to match the corrected behavior — a future reader trusting the OLD
+test names/assertions without reading this entry could unknowingly re-introduce the hole by
+reverting them.
+
+## iter-13 — goal-decomposer (second)
+
+**Ambiguity:** the iteration-12 phase spec's own IN SCOPE text said to retrofit `seal_shard`/
+`assign_shard`/`expose_shard` to call `verify_chain()` "on both ledgers" (shard + universe), but
+the shipped code only gates each mutator on its own shard ledger. The iteration-12 reviewer
+flagged this as an open, undecided scope question rather than a bug ("either follow the plan or
+record that the narrower reading is intended") — note this "both ledgers" phrase is the
+iteration-12 phase spec's own wording, not text from `docs/rapid-validation-spec.md` itself, which
+never uses it.
+**We chose:** confirm the narrower (own-ledger-only) reading as intentional rather than widen it,
+because (a) `seal_shard`/`assign_shard`/`expose_shard` have zero production call sites and never
+read the universe ledger for any purpose today (a `universe_id` is stored verbatim, never looked
+up), so a corrupted universe ledger cannot corrupt what they write; (b) the surfaces that DO need
+cross-ledger soundness (`unresolved_pool_universe_by_dataset_id`, `build_vault_state`) already
+gate on both, per iteration 12; (c) making the mutators' own gating mandatory would force updating
+roughly 81 existing test call sites across ten unrelated test files for zero production-reachable
+benefit; and (d) widening the gate without a matching universe-ledger recovery primitive (which
+does not exist yet) would introduce a new halt-with-no-recovery-path failure mode — exactly the
+"widen one side, leave the twin narrow" pattern this era's own lessons warn against — so both are
+deferred together, not split.
+**Reversible:** yes — nothing observable in the running product depends on this reading today
+(zero call sites either way); a future iteration that wires real production callers for
+`seal_shard`/`assign_shard`/`expose_shard` (J-06 step 4's eventual scope) is the natural place to
+revisit both halves together.

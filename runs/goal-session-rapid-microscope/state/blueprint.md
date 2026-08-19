@@ -168,3 +168,11 @@ from its one endpoint, read verbatim by UI/MCP/reports.
      pool-rule-aware rather than ledger-row-only) changes WHEN the existing revealed-stage fields
      become servable, not their shape -- no new row for that change either, matching this file's
      own iter-11-note precedent for semantics-broadening-without-shape-change edits. -->
+
+<!-- iter-13 note: pure internal-correctness fix (vault.py's `recover_shard_ledger` recovery-path
+     soundness + two documentation-only clarifications: `seal_shard`/`assign_shard`/`expose_shard`'s
+     own-ledger-only gating scope, and a stale `micro_routes.py` docstring) — no Data Contract
+     change. The corrected halt/union-marking behavior has no serving endpoint (0 production call
+     sites, matching the iter-12 coherence audit's own precedent for `VaultRecoveryLedger`'s
+     content: "no Data Contract row needed yet ... register it if/when a route or CLI ever surfaces
+     it"). No new page, route, MCP tool, or nav-skeleton change; no reapproval file written. -->
