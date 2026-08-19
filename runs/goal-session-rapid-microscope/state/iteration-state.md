@@ -1,29 +1,39 @@
 # Iteration State — rapid-microscope
 
-**After iteration:** 12 · **Date:** 2026-08-19 · **Verdict:** ESCALATE
+**After iteration:** 13 · **Date:** 2026-08-19 · **Verdict:** ESCALATE
 
 ## Journeys
-
-6 passing (J-01..J-05, J-07) · 2 partial (J-06 step 3 hardened, steps 4-5 unbuilt; J-10 traps 23/28, sentinel green 7th run) · 2 failing (J-08, J-09 — never yet scoped) — 10 total
+6 passing (J-01..J-05, J-07) · 2 partial (J-06 steps 3/5, J-10 traps 24/29) · 2 failing (J-08, J-09) — 10 total
 
 ## Active blockers
-
-- **NEXT ROUND MUST RUN FULL WITH THE AUDITOR.** Iteration 12's spec asked for `full`; the arbiter demoted it to lean and the audit lane never ran on an iteration shipping security-critical vault code. Owner: engine/dispatch. My ESCALATE exists to force it.
-- **New, mine (dev-owned):** `vault.py:1541` — an unprovable `recover_shard_ledger` marks visible shards `exposure_unknown` correctly, but a shard whose ONLY row was in the destroyed suffix silently leaves the withheld set (reads as never-sealed, publicly listable), and `rewrite_from_recovery` re-heals the tail anchor so `verify_chain()` reports `ok: True` again. Reproduced end to end. Inert today (0 universes, 0 sealed shards, no `micro_vault` dir, 0 production call sites); **must close before J-06 step 4.**
-- **Reviewer MINOR, needs a call (dev or owner):** `vault.py:880` — `seal_shard`/`assign_shard`/`expose_shard` gate `verify_chain()` on their own shard ledger only; the spec text literally says "both ledgers". No disclosure hole today (serving paths gate both); it is a developer scope call against unambiguous spec text.
-- Three older minor items open, all DECIDED, none owner-blocked: depletion stamp one quote early (TR-26); `referee_evidence` seal-unaware count (disclose-only); the two graduation improvisations (TR-23/TR-24).
-- **Nothing waits on the owner.** J-06 step 4 (real tape) stays shut until the recovery hole closes.
+- **Vault identity commitment — owner-DEFERRED by r8, MUST close before J-06 step 4.** Deleting the
+  ledger AND its tail anchor together (two plain `rm`s, no forgery) makes `verify_chain()` report
+  `ok: True` over an empty ledger and every sealed shard re-sealable — reproduced end to end by BOTH the
+  auditor (B2) and this evaluator (P4), at `micro_chain_ledger.py:186-189` (`_verify_tail`). Unreachable
+  today (0 universes, 0 sealed shards, no `micro_vault`). Needs a NAMED spec revision (ordered row
+  identities / canonical checkpoint / Merkle manifest); r8 forbids designing it ad hoc. Second argument:
+  post-B1 an anchor-lag crash strands the vault even for an honest operator (P3). Nothing else waits on
+  the owner — r6/r7/r8 settled every ruling.
+- Evidence debt (passengers, never their own round): replay lane wrote NO `J-0{1..5}-verify.png` though
+  the results table cites them; J-07 cut for time (`DEFERRED-BUDGET`), which blocks GOAL_ACHIEVED until
+  re-verified; `state/golden-gaps` auto-deleted a 3rd time (J-07 correctly has no golden).
 
 ## Last 2 verdicts
-
-- iter 12: ESCALATE — three gates built and independently attacked by me (all hold), but the audit lane was cut and I found a real recovery-path hole myself; ESCALATE is the only verdict that forces `full` next round.
-- iter 11: CONTINUE — r5 opacity built and attacked; recommended `full` in prose only, which the arbiter downgraded (the mistake this verdict corrects).
+- iter 13: ESCALATE — recovery hole genuinely closed (evaluator probes P1/P2), but J-08 next builds the
+  opaque-pool panels and only an ESCALATE line binds the arbiter to keep the auditor, which has caught
+  this fault class 5 times after review+QA both passed.
+- iter 12: ESCALATE — arbiter downgraded a prose request for full depth; no auditor ran on
+  safety-critical vault machinery and the evaluator found the recovery hole itself.
 
 ## Do not redo
-
-- **TR-25/TR-27/TR-28 are BUILT and verified by me**, not just by the dev's tests: 4 vault predicates fail closed on a truncated AND an interior-mutated ledger; a 1,404-guess dictionary attack on `rule_commitment` scored 0 hits; 50 consecutive counts collapse to one volume bucket. Do not re-implement — only fix the recovery hole above.
-- **The reveal gate is already widened** to whole-ORIGINAL-pool release (`_whole_pool_released_universe_ids`), paired with the nonce in the same diff. Do not ship a second "whole pool released" predicate.
-- **Symbol case-normalization is done** in `unresolved_pool_universe_by_dataset_id` (TC-12/TC-13 green). Date-format normalization was deliberately NOT done and is not a known gap.
-- **J-07's missing golden script is a genuine, disclosed infeasibility**, not an omission: `demo_runner.normalize_url()` rewrites any localhost URL onto the frontend base_url, so no golden can reach J-07's backend-only route. Disclosed at `state/golden-gaps`. Do not re-investigate; re-verify J-07 through the LLM browser lane.
-- **Evidence retakes are DONE** — the readiness table and the whole-product sentinel were re-captured and I opened both. Do not schedule another retake round.
-- **Frozen rails re-verified by me this round**: fingerprint `08e471b10130e1e2`, six `referee_*.py` hashes unchanged, MCP tools 22, zero new Config fields, zero frontend diff, real `.data` store byte-untouched (18 datasets, no `micro_vault`). Suite 3212/3204/8/0.
+- **`recover_shard_ledger` is DONE and hardened** (r8 halt-only, 5 conjuncts incl. the audit's
+  `len(candidate_rows) >= preserved_row_count`). Never reintroduce a graded/union-marking branch; never
+  resurrect `STATE_EXPOSURE_UNKNOWN` (deleted, zero dangling). Row-count equality is never identity
+  evidence — settled by r8. `seal_shard`/`assign_shard`/`expose_shard` gate their OWN shard ledger only
+  — documented, pinned by TC-7, paired-deferred with the missing universe-ledger recovery primitive.
+- **Frozen rails re-verified by the evaluator:** fingerprint `08e471b10130e1e2`, six `referee_*.py` =
+  iteration-0 hashes, `EXPECTED_TOOLS` 22, zero frontend diffs, zero `Config` fields,
+  `micro_chain_ledger.py` byte-untouched, real `.data` = 18 datasets / no `micro_vault`. **Suite
+  baseline 3228 / 3220 passed / 8 skipped / 0 failed** (re-run by the evaluator); the handoff's
+  3227/3219 predates the auditor's +1 test — do not quote it.
+- **J-06 steps 4-5 stay shut** (no vendor call, no real-tape recording) until the blocker above closes.

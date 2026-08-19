@@ -661,3 +661,71 @@ tools — because J-09 "The pilot studies" shows its answers through those panel
 before them. Do NOT record real tape yet. Nothing waits on your answer. One thing would help if
 you agree with it: tell the machine that when I ask for a full round with the independent
 checker, that request cannot be cut for time.
+
+## Iteration 13 — goal-rapid-microscope-iter-13
+
+**Date:** 2026-08-19T17:05:00Z
+**Verdict:** ESCALATE
+**Depth dispatched:** full (the independent checker genuinely ran — my round-12 verdict line forced
+it back, and it earned its place again)
+**Journey deltas:**
+- Newly passing: none
+- Newly failing: none
+- Regressed: none
+- Changed content (status unchanged): J-06 "The recorder and the Vault" partial — the destroyed-record
+  hole I found myself last round is now genuinely CLOSED, and I proved it on the running code rather
+  than reading the report; still 3 of 5 steps. J-10 "The kept product stands" partial — RE-SCORED
+  against its goal text, which your r8 ruling changed this round (required trap list 28 → 29); traps
+  now 24 of 29 by my own count of the test folder, safety walk green for the eighth run in a row.
+- Unchanged: J-01 passing — freshly photographed this round AND re-derived by me against your real
+  data under the new code; J-02, J-03, J-04, J-05 passing — the replay lane reported all four green
+  but the five photographs it names DO NOT EXIST on disk, so I kept them passing on their unchanged
+  program files plus my own full test run and flagged them for a re-take; J-07 passing but CUT FOR
+  TIME this round ("deferred", not tested — it keeps its status and cannot count toward finishing);
+  J-08, J-09 failing — out of scope, and I confirmed both unbuilt on disk myself.
+- Anti-goal violations: no critical ones, introduced or open. ONE older minor item CLOSED and I
+  proved it myself on the running program (a damaged record can no longer make a locked-away
+  recording quietly become an ordinary public one; the destroyed item is never lockable again).
+  ONE NEW minor item opened, which I also reproduced end to end: deleting the record file AND its
+  companion stamp together — two plain deletes, no skill needed — makes the integrity check report
+  "clean" over an empty record and every locked-away item lockable again as if new. It is deferred
+  by your own r8 ruling, not an oversight. Three older minor items stay open, all decided, none
+  waiting on you.
+
+**Reasoning:** I took nothing on trust. I ran the whole test suite myself: 3,228 collected, 3,220
+passed, 8 skipped, 0 failures, clean exit — the same number the independent checker got AFTER its own
+fix, and 10 more tests than the round started with, none lost. (The coder's handoff says 3,227; that
+was correct before the checker added one test. Do not quote 3,227.) Instead of reading anyone's tests
+I wrote my own attack program against the live vault code and ran five probes. The headline: the
+destroyed-record hole is genuinely shut — I sealed four items, put the record's companion stamp one
+step behind the file exactly as a power cut would, damaged an earlier line, then handed the program a
+completely genuine reconstruction of the shorter history, and it now REFUSES, keeps all four lines on
+disk, and will not re-lock the fourth item. I also tried a shape nobody had tried: using the repair to
+undo a recording's release. It refuses that too. Then I checked the honesty of what is still broken,
+and it is real: deleting the record file and its companion stamp together — two ordinary deletes —
+makes the check report "clean" over nothing at all, and every locked-away item becomes lockable again
+as if new. I opened the photographs rather than reading the rows: the Desk page really shows the
+corpus panel with its five totals, the shard table, all three study floors honestly unmet, and "No
+integrity errors"; the Cockpit really watches a live tape with changing numbers; the Structure page
+really shows the champion still at v1 with its "simulated — not indicative of live results" line. I
+re-checked the frozen parts myself — the settings fingerprint prints 08e471b10130e1e2 (it is even
+visible on screen), all six judge files hash exactly as at the era's start, the tool list is still 22,
+no settings field was added, not one website file changed, and your real recordings folder is
+untouched with its newest file still dating from 15 July. Two process failures, neither in the
+product: the round again ran over its clock, so one journey's re-check was dropped and the
+non-blocking reviewer was shed; and the replay lane named five photographs it never wrote.
+
+**Next-step recommendation:** Build J-08 "The surface and MCP v6" next — the four new Desk panels and
+the four new read-only tools — as a FULL round with the independent checker. That is why my verdict
+line says "escalate" and not "continue": in this session a request in plain words has been cut for
+time twice, and only the verdict line is honoured. In this session the checker has caught a serious fault
+after the review and the quality check had BOTH already passed the same code at rounds 2, 4, 5, 7 and
+13, plus further faults at rounds 9 and 11 — and J-08 is exactly where that matters — those panels are the ones that must never reveal which
+recordings are locked away and which are not. Split J-08 across two rounds (panels first, then the
+tools and the contract bump): your smaller-rounds ruling is working, but this round still overran and
+paid for it. Do NOT record real tape yet. Please also let me schedule the vault's identity-record fix
+BEFORE the real-tape step rather than after — the independent checker recommends the same, and the
+reason is simple: tape locked away by mistake cannot be un-locked. Carry three passengers, never a
+round of their own: re-take the five missing replay photographs, re-check J-07 which was cut this
+round, and give the harness a durable home for the note explaining why J-07 has no replay script —
+that note has now been auto-deleted three times.

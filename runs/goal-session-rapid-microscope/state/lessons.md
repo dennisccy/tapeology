@@ -347,3 +347,31 @@ iteration of this era did not run on the iteration that shipped security-critica
 the next iteration genuinely needs the auditor, the verdict must be ESCALATE, not CONTINUE with a
 recommendation.
 **Applies to:** every future evaluation in this session that wants the independent audit lane.
+
+## iter-13 — 2026-08-19T17:05:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** A comment asserting that a race window is harmless is the best place to attack, not a
+reason to stop. `micro_chain_ledger.append_row` writes the row BEFORE its tail anchor and its own
+comment calls the gap "benign -- never falsely short"; that sentence is exactly why three passes
+(dev self-attack, reviewer, my own iter-12 probe) all missed that with the anchor lagging one row, a
+**byte-genuine** reconstruction of the anchor-length history satisfies every conjunct and
+`rewrite_from_recovery` truncates a real sealed shard away — no attacker needed, a power loss plus an
+honest operator reproduces it. The audit caught it only by ignoring the comment and executing the
+crash state. Corollary confirmed by my own probes: the same window also lets a recovery revert a
+recorded EXPOSURE, so the harm class was broader than the one instance anybody reported.
+**Applies to:** any iteration touching `micro_chain_ledger.py`, `vault.py`'s recovery/lifecycle
+paths, or any append-only store whose durable summary (anchor, checkpoint, manifest, count cache) is
+written in a separate step from the data it commits to — attack the crash state between the two
+writes, and never accept an in-code claim that the window is benign.
+
+## iter-13 — 2026-08-19T17:06:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** The deterministic replay lane emitted five PASS rows citing
+`reports/qa/goal-rapid-microscope-iter-13-evidence/J-0{1..5}-verify.png` and wrote **none of them**
+(iters 11 and 12 both did). A results row is not evidence — open the file. Paired with the third
+auto-deletion of `state/golden-gaps`, the harness has now twice this era produced artifacts whose
+absence silently reads as coverage.
+**Applies to:** every evaluation — verify each cited evidence path exists on disk before scoring
+from it; and any framework work on `replay-lane.sh` / `demo_runner.py --mode verify`.

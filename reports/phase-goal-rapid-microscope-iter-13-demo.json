@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-rapid-microscope-iter-13",
+  "base_url": "http://localhost:3301",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the Cockpit",
+      "narration": "The Cockpit is the main trading dashboard. It shows live price data and tape activity for the symbol you're watching.",
+      "point_out": "The top bar with the ticker input and Watch button is visible, and no error message appears.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "goto", "url": "/"},
+      "expect": {"text": "Watch"}
+    },
+    {
+      "n": 2,
+      "title": "Watch a ticker",
+      "narration": "Type a ticker symbol and click Watch to start seeing live price updates and recent trades on the chart.",
+      "point_out": "The price chart appears below the top bar and shows a candlestick graph. Live quote and tape data begin ticking.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "fill", "target": {"placeholder": "Ticker symbol (e.g. AAPL)"}, "text": "SIM-BUYER"},
+      "expect": {"text": "SIM-BUYER"}
+    },
+    {
+      "n": 3,
+      "title": "Click Watch to start",
+      "narration": "Click the Watch button to begin streaming live data.",
+      "point_out": "The chart and tape become active with real-time price and volume updates.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "click", "target": {"role": "button", "name": "Watch"}},
+      "expect": {"text": "Buyer Control"}
+    },
+    {
+      "n": 4,
+      "title": "Navigate to Structure",
+      "narration": "The Structure page shows the price bands and zones where trades tend to cluster. It helps you see support and resistance levels at a glance.",
+      "point_out": "The Tradable Map panel is visible with band and zone data. No error message or unavailable state appears.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "goto", "url": "/structure"},
+      "expect": {"text": "Structure"}
+    },
+    {
+      "n": 5,
+      "title": "Open Desk monitoring",
+      "narration": "The Desk page lets you see readiness metrics for live trading and review your recorded trading setups.",
+      "point_out": "The Playbook Signals panel and Backscan control are visible at the top. The page loads without errors.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "goto", "url": "/desk"},
+      "expect": {"text": "Playbook Signals"}
+    },
+    {
+      "n": 6,
+      "title": "Expand Microscope Readiness section",
+      "narration": "The Microscope Readiness section at the bottom shows the health and coverage of your recorded tick data. Click its header to expand and see the corpus summary.",
+      "point_out": "The section expands to show a Corpus Totals table with five rows (Distinct symbol-days, Distinct datasets, RTH minutes covered, Session-equivalents, Referee tick-gate). No error state appears.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "click", "target": {"text": "Microscope Readiness"}},
+      "expect": {"text": "Distinct symbol-days"}
+    }
+  ]
+}

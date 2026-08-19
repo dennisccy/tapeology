@@ -874,6 +874,25 @@ def _assert_progress_is_aggregate_only(progress: dict) -> None:
     assert set(progress.keys()) == _PROGRESS_AGGREGATE_KEYS, sorted(progress.keys())
 
 
+def test_tc8_the_recorder_progress_route_docstring_names_the_bucketed_fields_it_actually_serves():
+    """TC-8 (iteration 13, docstring-only fix -- goal-rapid-microscope-iter-13): the route
+    function's own docstring must name the fields ``_progress_view`` actually serves today
+    (``trades_total_bucket``/``quotes_total_bucket``, TR-28/r7 -- pinned above by
+    ``_assert_progress_is_aggregate_only``) -- never the stale, pre-iteration-12 unconditional
+    ``trades_total``/``quotes_total`` pair as though it were still served plain."""
+    from app.research.micro_routes import get_tick_recorder_compute
+
+    doc = get_tick_recorder_compute.__doc__ or ""
+    assert "trades_total_bucket" in doc
+    assert "quotes_total_bucket" in doc
+    # the OLD, stale field-LIST form -- `chunks_failed` through `percent_complete` listed
+    # back-to-back with the bare (un-bucketed) names in the middle, as though served plain -- must
+    # not appear anywhere in the corrected docstring. (The corrected prose still legitimately
+    # names the bare pair once, elsewhere, to explain that they are NEVER served -- this checks
+    # the specific stale listing shape, not bare mentions of the field names.)
+    assert "``chunks_failed``/``trades_total``/``quotes_total``/``percent_complete``" not in doc
+
+
 def test_tc6_recorder_progress_never_leaks_a_planned_chunks_symbol_date_or_dataset_id(
     route_ctx, monkeypatch
 ):

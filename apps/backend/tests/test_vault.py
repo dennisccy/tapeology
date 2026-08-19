@@ -1504,6 +1504,24 @@ def _seal_two_shards(shard_ledger: vault.VaultShardLedger) -> list[dict]:
     return rows
 
 
+def _seal_three_shards(shard_ledger: vault.VaultShardLedger) -> list[dict]:
+    """Three sealed shards (``d-1``, ``d-2``, ``d-3``) -- iteration 13's own fixture, the exact
+    shape of the iteration-12 evaluator's own reproduction (goal-rapid-microscope-iter-13's
+    BACKGROUND): a genuine two-row verified prefix (``d-1``, ``d-2``) in front of a THIRD shard
+    whose own row can be destroyed on its own, entirely unnamed by anything before it."""
+    rows = []
+    for i, (dataset_id, checksum) in enumerate(
+        (("d-1", "a" * 64), ("d-2", "b" * 64), ("d-3", "c" * 64))
+    ):
+        rows.append(
+            vault.seal_shard(
+                shard_ledger, dataset_id=dataset_id, universe_id="u1",
+                content_checksum=checksum, event_count=100 + i, vault_secret=_FIXTURE_SECRET,
+            )
+        )
+    return rows
+
+
 def _truncate_ledger_tail(ledger) -> None:
     """Drops the LAST line of ``ledger``'s own ``.jsonl`` file, leaving its tail anchor
     (``chain_head.json``, UNTOUCHED) still claiming the ORIGINAL row count -- TC-1/TC-3's own
@@ -1616,7 +1634,14 @@ def test_tc3_a_last_known_good_prefix_still_fails_closed_when_the_anchor_proves_
         vault.currently_sealed_dataset_ids(shard_ledger)
 
 
-# --- TC-4/TC-5: lawful recovery -- proven resumes exactly; unprovable marks exposure_unknown ------
+# --- TC-4/TC-5 (iteration 12) -- lawful recovery, HALT-ONLY since spec revision r8 (2026-08-19
+# owner ruling; vault.py's own module docstring, spec section 7.8, TR-29). Exactly two outcomes: a
+# hash-attested proof of completeness resumes the EXACT prior state, and every other input -- empty,
+# short, wrong, reordered, padded to the right length, or unanchored -- refuses to resume at all,
+# leaving the corrupt file untouched and the whole vault blocked. Iteration 12's graded middle
+# branch (resume while marking the named dataset ids `exposure_unknown`) was DELETED by r8 after the
+# iteration-13 review proved it launders identity: row-count equality is not evidence of identity.
+# The tests below assert the refusals; TR-29's own block further down attacks them. -------------
 
 
 def test_tc4_a_hash_attested_reconstruction_resumes_service_and_reports_exact_prior_state(tmp_path):
@@ -1638,7 +1663,7 @@ def test_tc4_a_hash_attested_reconstruction_resumes_service_and_reports_exact_pr
         recovery_ledger=recovery_ledger, incident_id="incident-tc4",
         quarantine_dir=str(tmp_path / "quarantine"),
     )
-    assert outcome == {"ok": True, "resumed": True, "exposure_unknown_dataset_ids": []}
+    assert outcome == {"ok": True, "resumed": True}
 
     # service resumes, reporting the EXACT prior state.
     assert shard_ledger.verify_chain()["ok"] is True
@@ -1659,7 +1684,180 @@ def test_tc4_a_hash_attested_reconstruction_resumes_service_and_reports_exact_pr
     assert quarantined, "no forensic copy of the corrupt ledger was preserved"
 
 
-def test_tc5_an_unprovable_reconstruction_marks_affected_shards_exposure_unknown_permanently(tmp_path):
+# --- iteration 13's own TC-1/TC-2/TC-3/TC-4 (docs/phases/goal-rapid-microscope-iter-13.md): the
+# hole the iteration-12 evaluator found -- a shard entirely unnamed by any recovery attempt must
+# never silently escape marking; it must halt the whole ledger instead. --------------------------
+
+
+def test_tc1_the_iteration_12_reproduction_an_entirely_unnamed_lost_row_refuses_to_resume(tmp_path):
+    """The exact end-to-end reproduction the iteration-12 evaluator ran (goal.md's BACKGROUND):
+    seal d-1/d-2/d-3, destroy d-3's own row (only), attempt recovery with NOTHING to reconstruct
+    it. Before this iteration's fix, this silently resumed -- marking only d-1/d-2 (the surviving
+    verified prefix) exposure_unknown -- letting d-3 escape into looking like an ordinary,
+    never-sealed dataset even though verify_chain() reported clean again afterward. The corrected
+    behavior (r8): nothing here is PROVEN, so recovery refuses to resume at all."""
+    vault_dir = str(tmp_path / "vault")
+    shard_ledger = vault.VaultShardLedger(vault_dir)
+    _seal_three_shards(shard_ledger)
+    assert shard_ledger.read_tail_anchor()["row_count"] == 3
+
+    _truncate_ledger_tail(shard_ledger)  # loses d-3's own seal row; d-1/d-2 remain a genuine prefix
+    verify_result = shard_ledger.verify_chain()
+    assert verify_result["ok"] is False and verify_result["reason"] == "tail_truncated"
+
+    recovery_ledger = vault.VaultRecoveryLedger(vault_dir)
+    outcome = vault.recover_shard_ledger(
+        shard_ledger, verify_result=verify_result, reconstructed_suffix=[],
+        sources=[], operator_identity="test-operator", reason="unit test iter-13 TC-1",
+        recovery_ledger=recovery_ledger, incident_id="incident-iter13-tc1",
+        quarantine_dir=str(tmp_path / "quarantine"),
+    )
+    assert outcome == {"ok": False, "resumed": False}
+
+    # never rewritten -- the corrupted file on disk is exactly as it was before the attempt.
+    assert shard_ledger.verify_chain() == verify_result
+    raw_dataset_ids = [row["dataset_id"] for row in shard_ledger.all_rows()]
+    assert raw_dataset_ids == ["d-1", "d-2"]
+
+    # d-3 appears in NO row anywhere -- not sealed, not "unknown", not anything.
+    recovery_rows = recovery_ledger.all_rows()
+    assert len(recovery_rows) == 1
+    assert recovery_rows[0]["outcome"] == "halted"
+    assert recovery_rows[0]["anchor_row_count"] == 3
+    assert recovery_rows[0]["attempted_row_count"] == 2
+    assert "d-3" not in json.dumps(recovery_rows)
+
+
+def test_tc2_a_missing_tail_anchor_refuses_to_resume_even_with_a_perfect_reconstruction(tmp_path):
+    """iteration-13 TC-2: the ledger's own durable tail-anchor SIDECAR file (not its content rows)
+    is the one thing missing here -- all three rows are still fully present and internally
+    self-consistent on disk. Even so, `recover_shard_ledger` must never call this "proven
+    complete": with no anchor, there is no independent proof of the true history to test the
+    reconstruction against AT ALL, so a HALT is the only lawful outcome -- regardless of how
+    faithful the caller's own reconstructed_suffix happens to be."""
+    vault_dir = str(tmp_path / "vault")
+    shard_ledger = vault.VaultShardLedger(vault_dir)
+    original_rows = _seal_three_shards(shard_ledger)
+    assert shard_ledger.verify_chain()["ok"] is True
+
+    shard_ledger.head_anchor_path.unlink()
+    verify_result = shard_ledger.verify_chain()
+    assert verify_result == {"ok": False, "failed_at_row": None, "reason": "head_anchor_missing"}
+
+    recovery_ledger = vault.VaultRecoveryLedger(vault_dir)
+    # a BYTE-PERFECT full reconstruction, offered as the caller's own reconstructed_suffix -- and
+    # it still cannot save the attempt, because nothing independent of the missing anchor can
+    # prove three rows (not two, not four) is the true count.
+    perfect_suffix = [vault._row_content(row) for row in original_rows]
+    outcome = vault.recover_shard_ledger(
+        shard_ledger, verify_result=verify_result, reconstructed_suffix=perfect_suffix,
+        sources=[{"source": "operator-recall", "sha256": "irrelevant-for-this-test"}],
+        operator_identity="test-operator", reason="unit test iter-13 TC-2",
+        recovery_ledger=recovery_ledger, incident_id="incident-iter13-tc2",
+        quarantine_dir=str(tmp_path / "quarantine"),
+    )
+    assert outcome == {"ok": False, "resumed": False}
+
+    # never rewritten -- still failing the identical way immediately after the attempt.
+    assert shard_ledger.verify_chain() == verify_result
+    recovery_rows = recovery_ledger.all_rows()
+    assert len(recovery_rows) == 1
+    assert recovery_rows[0]["outcome"] == "halted"
+    assert recovery_rows[0]["anchor_row_count"] is None
+    assert recovery_rows[0]["anchor_head_hash"] is None
+
+
+def test_tc3_predicates_keep_raising_after_a_halt_rather_than_omitting_the_unnamed_shard(tmp_path):
+    """TC-3: after TC-1's halt, currently_sealed_dataset_ids/withheld_dataset_ids/
+    unresolved_pool_universe_by_dataset_id/build_vault_state must each raise
+    VaultLedgerCorruptionError -- never silently return a result that simply omits d-3, which is
+    exactly the shape of the iteration-12 hole (a corrupted-but-"clean-looking" ledger)."""
+    vault_dir = str(tmp_path / "vault")
+    shard_ledger = vault.VaultShardLedger(vault_dir)
+    universe_ledger = vault.VaultUniverseLedger(vault_dir)
+    _seal_three_shards(shard_ledger)
+    _truncate_ledger_tail(shard_ledger)
+    verify_result = shard_ledger.verify_chain()
+
+    recovery_ledger = vault.VaultRecoveryLedger(vault_dir)
+    outcome = vault.recover_shard_ledger(
+        shard_ledger, verify_result=verify_result, reconstructed_suffix=[],
+        sources=[], operator_identity="test-operator", reason="unit test iter-13 TC-3",
+        recovery_ledger=recovery_ledger, incident_id="incident-iter13-tc3",
+        quarantine_dir=str(tmp_path / "quarantine"),
+    )
+    assert outcome["resumed"] is False
+
+    with pytest.raises(vault.VaultLedgerCorruptionError):
+        vault.currently_sealed_dataset_ids(shard_ledger)
+    with pytest.raises(vault.VaultLedgerCorruptionError):
+        vault.withheld_dataset_ids(shard_ledger)
+    with pytest.raises(vault.VaultLedgerCorruptionError):
+        vault.unresolved_pool_universe_by_dataset_id(shard_ledger, universe_ledger, [])
+    with pytest.raises(vault.VaultLedgerCorruptionError):
+        vault.build_vault_state(shard_ledger, universe_ledger)
+
+
+def test_tc4_a_later_fuller_reconstruction_still_succeeds_against_the_same_untouched_file(tmp_path):
+    """TC-4: a halt never consumes or destroys the corrupted original -- a SECOND
+    recover_shard_ledger call, this time with a byte-correct reconstruction of the truly lost row,
+    proves complete exactly as the unchanged proven-complete path (TC-6) always has, and the
+    recovery_ledger shows BOTH the earlier halted attempt and the later completed one, on
+    permanent record."""
+    vault_dir = str(tmp_path / "vault")
+    shard_ledger = vault.VaultShardLedger(vault_dir)
+    original_rows = _seal_three_shards(shard_ledger)
+    _truncate_ledger_tail(shard_ledger)
+    verify_result = shard_ledger.verify_chain()
+
+    recovery_ledger = vault.VaultRecoveryLedger(vault_dir)
+    halted = vault.recover_shard_ledger(
+        shard_ledger, verify_result=verify_result, reconstructed_suffix=[],
+        sources=[], operator_identity="test-operator", reason="unit test iter-13 TC-4 (halt)",
+        recovery_ledger=recovery_ledger, incident_id="incident-iter13-tc4-halt",
+        quarantine_dir=str(tmp_path / "quarantine"),
+    )
+    assert halted == {"ok": False, "resumed": False}
+
+    # the SAME still-corrupted ledger, re-verified fresh -- untouched by the halted attempt --
+    # this time with d-3's true lost row supplied faithfully.
+    verify_result_again = shard_ledger.verify_chain()
+    assert verify_result_again == verify_result
+    lost_row_fields = vault._row_content(original_rows[2])
+    completed = vault.recover_shard_ledger(
+        shard_ledger, verify_result=verify_result_again, reconstructed_suffix=[lost_row_fields],
+        sources=[{"source": "test-fixture-recall", "sha256": "irrelevant-for-this-test"}],
+        operator_identity="test-operator", reason="unit test iter-13 TC-4 (complete)",
+        recovery_ledger=recovery_ledger, incident_id="incident-iter13-tc4-complete",
+        quarantine_dir=str(tmp_path / "quarantine"),
+    )
+    assert completed == {"ok": True, "resumed": True}
+
+    assert shard_ledger.verify_chain()["ok"] is True
+    assert vault.currently_sealed_dataset_ids(shard_ledger) == frozenset({"d-1", "d-2", "d-3"})
+    state = vault.build_vault_state(shard_ledger, vault.VaultUniverseLedger(vault_dir))
+    assert {s["shard_id"] for s in state["shards"]} == {r["shard_id"] for r in original_rows}
+
+    recovery_rows = recovery_ledger.all_rows()
+    assert len(recovery_rows) == 2
+    assert recovery_rows[0]["outcome"] == "halted"
+    assert recovery_rows[1]["outcome"] == "complete"
+
+
+# --- iteration 12's own TC-5, revised twice (iteration 13 + spec revision r8): the smaller-scale,
+# two-shard reproductions. An empty suffix halts (below); a wrong suffix that pads the row count to
+# the anchor's own count ALSO halts (further below -- iteration 13 first shipped that case as a
+# graded resume, which is exactly what r8 deleted). -----------------------------------------------
+
+
+def test_tc5_an_entirely_unnamed_shortfall_refuses_to_resume_rather_than_marking_a_subset(tmp_path):
+    """The smaller-scale (two-shard) companion to iteration 13's own TC-1: before this iteration's
+    fix, an entirely-unnamed lost row (nothing in the verified prefix, nothing in an empty
+    reconstructed_suffix) still let the recovery "succeed" by marking ONLY the surviving prefix
+    (d-1) exposure_unknown -- silently dropping d-2 out of every predicate with no trace, while
+    `rewrite_from_recovery` re-healed the tail anchor so `verify_chain()` reported clean again.
+    The corrected behavior: nothing about the lost row is PROVEN, so recovery refuses to resume at
+    all and d-2 can never silently read as "never sealed" (spec section 7.8's own invariant)."""
     vault_dir = str(tmp_path / "vault")
     shard_ledger = vault.VaultShardLedger(vault_dir)
     _seal_two_shards(shard_ledger)
@@ -1674,27 +1872,27 @@ def test_tc5_an_unprovable_reconstruction_marks_affected_shards_exposure_unknown
         recovery_ledger=recovery_ledger, incident_id="incident-tc5",
         quarantine_dir=str(tmp_path / "quarantine"),
     )
-    assert outcome["ok"] is False
-    assert outcome["resumed"] is True
-    assert outcome["exposure_unknown_dataset_ids"] == ["d-1"]  # the ONLY shard the trusted prefix names
+    assert outcome == {"ok": False, "resumed": False}
 
-    # service resumes -- but d-1 (the only shard this ledger could still vouch for) is now
-    # exposure_unknown, never simply "still sealed".
-    assert shard_ledger.verify_chain()["ok"] is True
-    state = vault.build_vault_state(shard_ledger, vault.VaultUniverseLedger(vault_dir))
-    (entry,) = state["shards"]
-    assert entry["exposure_state"] == vault.STATE_EXPOSURE_UNKNOWN
-    assert vault.currently_sealed_dataset_ids(shard_ledger) == frozenset()  # no longer "sealed"
-    assert vault.withheld_dataset_ids(shard_ledger) == frozenset({"d-1"})  # still withheld, though
+    # the ledger is refused, not "recovered incompletely" -- still failing, byte-untouched.
+    assert shard_ledger.verify_chain() == verify_result
+    assert [row["dataset_id"] for row in shard_ledger.all_rows()] == ["d-1"]  # untouched, 1 raw row
 
-    # permanence: no further lifecycle transition can ever claim it again -- the EXISTING
-    # single-shot guards refuse it automatically (module docstring next to STATE_EXPOSURE_UNKNOWN).
-    with pytest.raises(vault.ShardLifecycleOrderError):
+    # every dependent predicate keeps raising -- d-1 is NOT quietly served as "currently sealed"
+    # either, since that would itself misstate a shard whose true post-corruption state is unknown.
+    with pytest.raises(vault.VaultLedgerCorruptionError):
+        vault.currently_sealed_dataset_ids(shard_ledger)
+    with pytest.raises(vault.VaultLedgerCorruptionError):
+        vault.build_vault_state(shard_ledger, vault.VaultUniverseLedger(vault_dir))
+
+    # permanence of the REFUSAL: no lifecycle transition can sneak past it either -- the gated
+    # reader every one of them shares raises before any lifecycle-state check even runs.
+    with pytest.raises(vault.VaultLedgerCorruptionError):
         vault.assign_shard(
             shard_ledger, dataset_id="d-1", family_root_id="root", symbol="PG",
             session_date="2026-06-09",
         )
-    with pytest.raises(vault.ShardLifecycleOrderError):
+    with pytest.raises(vault.VaultLedgerCorruptionError):
         vault.seal_shard(
             shard_ledger, dataset_id="d-1", universe_id="u1", content_checksum="c" * 64,
             event_count=1, vault_secret=_FIXTURE_SECRET,
@@ -1702,19 +1900,29 @@ def test_tc5_an_unprovable_reconstruction_marks_affected_shards_exposure_unknown
 
 
 def test_tc5_a_wrong_nonempty_reconstruction_is_also_refused_never_treated_as_proven(tmp_path):
-    """TC-5's other failure shape: a SUPPLIED but WRONG suffix (not merely an empty one) must
-    ALSO fail the hash-attested completeness check and fall to the same conservative
-    exposure_unknown path -- proving `recover_shard_ledger` actually verifies the reconstruction
-    byte-for-byte rather than trusting that the caller supplied SOMETHING."""
+    """TC-5's other failure shape: a SUPPLIED but WRONG suffix (not merely an empty one), whose row
+    count exactly matches the anchor's own row_count=2.
+
+    **Revised by spec revision r8** (2026-08-19 owner ruling). Iteration 13 first shipped this case
+    as a graded RESUME: because both d-1 and d-2 were named, it rewrote the ledger with the named
+    ids marked `exposure_unknown` and returned `resumed: True`. The owner deleted that branch after
+    the iteration-13 review proved a same-length suffix can name anything at all (TR-29 below), so
+    the assertions here now demand a REFUSAL -- a strictly stronger guarantee than the graded
+    outcome this test used to assert, not a loosened one: the ledger is not rewritten, the vault
+    stays blocked, and no shard is left in a state that says "we are not sure about this one".
+    Also proves `recover_shard_ledger` verifies the reconstruction byte-for-byte rather than
+    trusting that the caller supplied SOMETHING of the right length."""
     vault_dir = str(tmp_path / "vault")
     shard_ledger = vault.VaultShardLedger(vault_dir)
     _seal_two_shards(shard_ledger)
     _truncate_ledger_tail(shard_ledger)  # loses d-2's own seal row
     verify_result = shard_ledger.verify_chain()
+    assert shard_ledger.read_tail_anchor()["row_count"] == 2
 
     recovery_ledger = vault.VaultRecoveryLedger(vault_dir)
-    # a PLAUSIBLE-LOOKING but WRONG guess -- right shape, wrong content (a different checksum than
-    # d-2 actually had) -- never a byte-for-byte match of what was truly lost.
+    # a PLAUSIBLE-LOOKING but WRONG guess -- right shape, right dataset_id, right COUNT, wrong
+    # content (a different checksum than d-2 actually had): never a byte-for-byte match of what
+    # was truly lost.
     wrong_guess = {
         "dataset_id": "d-2", "content_checksum": "f" * 64, "shard_id": "vshard-wrong-guess",
         "universe_id": "u1", "checksum_commitment": "wrong-commitment", "size_bucket": "~10^2",
@@ -1729,33 +1937,33 @@ def test_tc5_a_wrong_nonempty_reconstruction_is_also_refused_never_treated_as_pr
         recovery_ledger=recovery_ledger, incident_id="incident-tc5-wrong",
         quarantine_dir=str(tmp_path / "quarantine"),
     )
-    # refused exactly like the empty-suffix case -- a wrong guess is not "proven complete".
-    assert outcome["ok"] is False
-    assert outcome["exposure_unknown_dataset_ids"] == ["d-1"]  # d-2 still could not be NAMED
+    # the count matched the anchor exactly -- and it bought the attempt nothing (r8).
+    assert outcome == {"ok": False, "resumed": False}
 
-    state = vault.build_vault_state(shard_ledger, vault.VaultUniverseLedger(vault_dir))
-    (entry,) = state["shards"]  # the WRONG guess's row was never written -- only d-1 exists
-    assert entry["exposure_state"] == vault.STATE_EXPOSURE_UNKNOWN
-    assert "vshard-wrong-guess" not in json.dumps(state)  # the rejected guess never entered the ledger
+    # the corrupted file is byte-untouched: still one raw row, still failing identically.
+    assert shard_ledger.verify_chain() == verify_result
+    assert [row["dataset_id"] for row in shard_ledger.all_rows()] == ["d-1"]
+    with pytest.raises(vault.VaultLedgerCorruptionError):
+        vault.build_vault_state(shard_ledger, vault.VaultUniverseLedger(vault_dir))
 
-    recovery_rows = recovery_ledger.all_rows()
-    assert recovery_rows[-1]["outcome"] == "incomplete"
-
-    # the incomplete recovery is on permanent record too.
+    # the halted attempt is on permanent record, saying WHY the proof failed: the count matched,
+    # the hash did not.
     recovery_rows = recovery_ledger.all_rows()
     assert len(recovery_rows) == 1
-    assert recovery_rows[0]["outcome"] == "incomplete"
-    assert recovery_rows[0]["exposure_unknown_dataset_ids"] == ["d-1"]
+    assert recovery_rows[0]["outcome"] == "halted"
+    assert recovery_rows[0]["anchor_row_count"] == recovery_rows[0]["attempted_row_count"] == 2
+    assert recovery_rows[0]["attempted_final_row_hash"] != recovery_rows[0]["anchor_head_hash"]
 
 
-def test_tc5_a_shard_recovery_could_not_name_stays_protected_by_the_universe_rule_predicate(tmp_path):
-    """The other half of TC-5's safety net. ``recover_shard_ledger`` cannot even NAME ``d-2`` --
-    its own seal row was inside the unrecoverable gap -- so it is not among the ``exposure_unknown``
-    ids returned. That does NOT mean ``d-2`` is forgotten: after recovery it carries NO row at all
-    in the shard ledger, which is exactly the "untracked pool member" case
-    ``unresolved_pool_universe_by_dataset_id``'s test (b) already exists for -- if ``d-2`` was
-    recorded under a REGISTERED universe's rule, that predicate independently re-catches it, with
-    no reliance on the shard ledger's own (now-incomplete) memory of it."""
+def test_tc5_a_registered_universe_rule_does_not_bypass_the_post_halt_corruption_refusal(tmp_path):
+    """The `unresolved_pool_universe_by_dataset_id` predicate reads BOTH ledgers (module
+    docstring) -- this proves its fail-closed check truly runs FIRST, before any universe-rule
+    reasoning, even when a real registered universe's rule would otherwise match the very shard a
+    halted recovery could not name. Before this iteration's fix, a shard the shard ledger's own
+    recovery could not name still fell back on this predicate's universe-rule test as a safety
+    net (`recover_shard_ledger` used to resume, marking only d-1); after the fix, no fallback is
+    ever reached at all, because the corrupted shard ledger refuses to resume in the first place
+    -- a strictly stronger guarantee that makes the old safety net unnecessary."""
     vault_dir = str(tmp_path / "vault")
     shard_ledger = vault.VaultShardLedger(vault_dir)
     universe_ledger = vault.VaultUniverseLedger(vault_dir)
@@ -1775,14 +1983,541 @@ def test_tc5_a_shard_recovery_could_not_name_stays_protected_by_the_universe_rul
         recovery_ledger=recovery_ledger, incident_id="incident-tc5b",
         quarantine_dir=str(tmp_path / "quarantine"),
     )
-    assert outcome["exposure_unknown_dataset_ids"] == ["d-1"]  # d-2 could not even be NAMED
+    assert outcome == {"ok": False, "resumed": False}
 
-    # d-2 (recorded AFTER u1's registration, matching its rule) is still caught -- test (b).
-    withheld = vault.unresolved_pool_universe_by_dataset_id(
-        shard_ledger, universe_ledger,
-        [("d-2", "AAPL", "2026-06-09", "2027-01-01T00:00:00.000000Z")],
+    # d-2 (recorded AFTER u1's registration, matching its rule) would have matched test (b)'s
+    # universe-rule membership check -- but the function never reaches it: the shard ledger's own
+    # corruption check fires first and refuses the whole call.
+    with pytest.raises(vault.VaultLedgerCorruptionError):
+        vault.unresolved_pool_universe_by_dataset_id(
+            shard_ledger, universe_ledger,
+            [("d-2", "AAPL", "2026-06-09", "2027-01-01T00:00:00.000000Z")],
+        )
+
+
+# =====================================================================================================
+# TR-29 (spec revision r8, 2026-08-19 owner ruling -- docs/rapid-validation-spec.md section 9 and
+# the rewritten section 7.8): RECOVERY IS HALT-ONLY. The iteration-13 review proved by execution
+# that the graded branch iteration 13 itself shipped launders identity, because the tail anchor
+# commits to a row COUNT plus the final row's hash and to NO per-row identity. Every trap below
+# hands `recover_shard_ledger` a reconstruction that SATISFIES the deleted branch's own row-count
+# test exactly, and demands a refusal -- so a future edit that reintroduces any count-based
+# resumption fails here, loudly. Each case asserts the count equality explicitly, so none of these
+# refusals can be passing for the trivial reason of a short suffix.
+# =====================================================================================================
+
+
+def _fabricated_seal_row_fields(dataset_id: str) -> dict:
+    """A structurally valid sealed-shard row for a shard that was never sealed -- the padding
+    material every TR-29 case uses to reach the anchor's own row count. Built by hand rather than
+    through `seal_shard`, precisely because an attacker (or a well-meaning operator working from a
+    faulty recollection) writing a reconstructed_suffix is under no obligation to use this module's
+    own write path."""
+    return {
+        "dataset_id": dataset_id, "content_checksum": "9" * 64,
+        "shard_id": f"vshard-fabricated-{dataset_id}", "universe_id": "u1",
+        "checksum_commitment": "fabricated-commitment", "size_bucket": "~10^2",
+        "sealed_at": "2026-06-09T00:00:00.000000Z", "exposure_state": vault.STATE_SEALED,
+        "family_root_id": None, "symbol": None, "session_date": None,
+        "assigned_at": None, "exposed_at": None,
+    }
+
+
+def test_tr29_a_same_length_suffix_naming_an_unrelated_dataset_is_refused_and_never_reseals(tmp_path):
+    """**The demonstrated attack, verbatim from the owner's ruling.** Seal d-1/d-2/d-3, destroy the
+    row containing d-3, then present a SAME-LENGTH reconstructed suffix containing an unrelated
+    `d-fake`. Under the deleted graded branch this "recovered": it resumed, marked d-1/d-2/d-fake
+    exposure_unknown, re-healed the tail anchor so verify_chain() reported clean, and left d-3 in no
+    ledger at all -- after which seal_shard could re-seal d-3 FRESH under a different universe, as
+    if its sealed history had never existed (a single-shot-exposure anti-goal breach reached
+    through a corruption). r8: refuse, and stay refused."""
+    vault_dir = str(tmp_path / "vault")
+    shard_ledger = vault.VaultShardLedger(vault_dir)
+    _seal_three_shards(shard_ledger)
+    assert shard_ledger.read_tail_anchor()["row_count"] == 3
+
+    _truncate_ledger_tail(shard_ledger)  # destroys the row containing d-3
+    verify_result = shard_ledger.verify_chain()
+    assert verify_result["ok"] is False
+
+    recovery_ledger = vault.VaultRecoveryLedger(vault_dir)
+    outcome = vault.recover_shard_ledger(
+        shard_ledger, verify_result=verify_result,
+        reconstructed_suffix=[_fabricated_seal_row_fields("d-fake")],
+        sources=[{"source": "operator-reconstruction", "sha256": "0" * 64}],
+        operator_identity="test-operator", reason="TR-29 demonstrated attack",
+        recovery_ledger=recovery_ledger, incident_id="incident-tr29-attack",
+        quarantine_dir=str(tmp_path / "quarantine"),
     )
-    assert withheld.get("d-2") == "u1"
+    assert outcome == {"ok": False, "resumed": False}
+
+    # NON-VACUITY: this input satisfies the DELETED branch's own test exactly -- three rows named
+    # against an anchor attesting three -- so the refusal is the identity proof firing, never an
+    # incidental shortfall.
+    halted = recovery_ledger.all_rows()[0]
+    assert halted["outcome"] == "halted"
+    assert halted["attempted_row_count"] == halted["anchor_row_count"] == 3
+    assert halted["attempted_final_row_hash"] != halted["anchor_head_hash"]
+
+    # the fabricated identity never entered the shard ledger, and the corrupt file is untouched.
+    assert [row["dataset_id"] for row in shard_ledger.all_rows()] == ["d-1", "d-2"]
+    assert "d-fake" not in shard_ledger.path.read_text(encoding="utf-8")
+    assert shard_ledger.verify_chain() == verify_result
+
+    # every predicate stays fail-closed -- nothing reads "clean" the way it did pre-r8.
+    with pytest.raises(vault.VaultLedgerCorruptionError):
+        vault.currently_sealed_dataset_ids(shard_ledger)
+    with pytest.raises(vault.VaultLedgerCorruptionError):
+        vault.withheld_dataset_ids(shard_ledger)
+    with pytest.raises(vault.VaultLedgerCorruptionError):
+        vault.build_vault_state(shard_ledger, vault.VaultUniverseLedger(vault_dir))
+
+    # THE HEADLINE the owner named: d-3 never becomes sealable again under another universe.
+    with pytest.raises(vault.VaultLedgerCorruptionError):
+        vault.seal_shard(
+            shard_ledger, dataset_id="d-3", universe_id="u2", content_checksum="c" * 64,
+            event_count=102, vault_secret=_FIXTURE_SECRET,
+        )
+
+
+def test_tr29_a_same_count_suffix_with_reordered_identities_is_refused(tmp_path):
+    """Same row count, same dataset ids, WRONG ORDER. Every identity the anchor ever covered is
+    named -- and history is still not proven, because the order of exposure events is part of the
+    history. The second half of the test supplies the identical rows in their true order against
+    the identical untouched file and proves complete, so the refusal above is demonstrably about
+    the ordering and nothing else."""
+    vault_dir = str(tmp_path / "vault")
+    shard_ledger = vault.VaultShardLedger(vault_dir)
+    original_rows = _seal_three_shards(shard_ledger)
+    _truncate_ledger_tail(shard_ledger)  # loses d-3's row
+    _truncate_ledger_tail(shard_ledger)  # loses d-2's row too -- the verified prefix is [d-1]
+    verify_result = shard_ledger.verify_chain()
+    assert [row["dataset_id"] for row in shard_ledger.all_rows()] == ["d-1"]
+
+    true_suffix = [vault._row_content(original_rows[1]), vault._row_content(original_rows[2])]
+    recovery_ledger = vault.VaultRecoveryLedger(vault_dir)
+    reordered = vault.recover_shard_ledger(
+        shard_ledger, verify_result=verify_result, reconstructed_suffix=list(reversed(true_suffix)),
+        sources=[{"source": "operator-reconstruction", "sha256": "0" * 64}],
+        operator_identity="test-operator", reason="TR-29 reordered identities",
+        recovery_ledger=recovery_ledger, incident_id="incident-tr29-reordered",
+        quarantine_dir=str(tmp_path / "quarantine"),
+    )
+    assert reordered == {"ok": False, "resumed": False}
+    halted = recovery_ledger.all_rows()[0]
+    assert halted["attempted_row_count"] == halted["anchor_row_count"] == 3
+    assert shard_ledger.verify_chain() == verify_result  # untouched
+
+    # NON-VACUITY: the SAME two rows, in their true order, against the SAME file -> proven.
+    completed = vault.recover_shard_ledger(
+        shard_ledger, verify_result=shard_ledger.verify_chain(), reconstructed_suffix=true_suffix,
+        sources=[{"source": "operator-reconstruction", "sha256": "0" * 64}],
+        operator_identity="test-operator", reason="TR-29 reordered identities (true order)",
+        recovery_ledger=recovery_ledger, incident_id="incident-tr29-reordered-true",
+        quarantine_dir=str(tmp_path / "quarantine"),
+    )
+    assert completed == {"ok": True, "resumed": True}
+    assert vault.currently_sealed_dataset_ids(shard_ledger) == frozenset({"d-1", "d-2", "d-3"})
+
+
+def test_tr29_a_same_count_suffix_with_one_substituted_identity_is_refused(tmp_path):
+    """The minimal substitution: the destroyed row reconstructed byte-for-byte EXCEPT its
+    `dataset_id`, which names a lookalike shard. Row count matches; one identity is a lie. Refused
+    -- and the true row against the same untouched file proves complete, so the single substituted
+    field is provably the whole difference."""
+    vault_dir = str(tmp_path / "vault")
+    shard_ledger = vault.VaultShardLedger(vault_dir)
+    original_rows = _seal_three_shards(shard_ledger)
+    _truncate_ledger_tail(shard_ledger)  # loses d-3's row
+    verify_result = shard_ledger.verify_chain()
+
+    true_lost_row = vault._row_content(original_rows[2])
+    substituted = {**true_lost_row, "dataset_id": "d-3-lookalike"}
+    recovery_ledger = vault.VaultRecoveryLedger(vault_dir)
+    refused = vault.recover_shard_ledger(
+        shard_ledger, verify_result=verify_result, reconstructed_suffix=[substituted],
+        sources=[{"source": "operator-reconstruction", "sha256": "0" * 64}],
+        operator_identity="test-operator", reason="TR-29 substituted identity",
+        recovery_ledger=recovery_ledger, incident_id="incident-tr29-substituted",
+        quarantine_dir=str(tmp_path / "quarantine"),
+    )
+    assert refused == {"ok": False, "resumed": False}
+    halted = recovery_ledger.all_rows()[0]
+    assert halted["attempted_row_count"] == halted["anchor_row_count"] == 3
+    assert "d-3-lookalike" not in shard_ledger.path.read_text(encoding="utf-8")
+
+    # NON-VACUITY: the same row with its TRUE dataset_id proves complete.
+    completed = vault.recover_shard_ledger(
+        shard_ledger, verify_result=shard_ledger.verify_chain(),
+        reconstructed_suffix=[true_lost_row],
+        sources=[{"source": "operator-reconstruction", "sha256": "0" * 64}],
+        operator_identity="test-operator", reason="TR-29 substituted identity (true row)",
+        recovery_ledger=recovery_ledger, incident_id="incident-tr29-substituted-true",
+        quarantine_dir=str(tmp_path / "quarantine"),
+    )
+    assert completed == {"ok": True, "resumed": True}
+    assert vault.currently_sealed_dataset_ids(shard_ledger) == frozenset({"d-1", "d-2", "d-3"})
+
+
+def test_tr29_a_missing_earlier_exposure_padded_to_the_same_final_count_is_refused(tmp_path):
+    """The most dangerous shape the owner named: the reconstruction reaches the anchor's final row
+    COUNT, but an EXPOSURE that really happened is missing from it -- its slot filled by a
+    fabricated seal of an unrelated shard. Accepting this would erase the record of d-1 having
+    already been drawn once, which is exactly the "never a second draw" anti-goal. Refused; and
+    afterwards no lifecycle call can hand d-1 a second exposure either."""
+    vault_dir = str(tmp_path / "vault")
+    shard_ledger = vault.VaultShardLedger(vault_dir)
+    family_root = "root"
+    _seal_two_shards(shard_ledger)  # rows 0,1: seal d-1, seal d-2
+    assigned = vault.assign_shard(  # row 2
+        shard_ledger, dataset_id="d-1", family_root_id=family_root, symbol="PG",
+        session_date="2026-06-09",
+    )
+    vault.expose_shard(shard_ledger, dataset_id="d-1", family_root_id=family_root)  # row 3
+    sealed_d3 = vault.seal_shard(  # row 4
+        shard_ledger, dataset_id="d-3", universe_id="u1", content_checksum="c" * 64,
+        event_count=102, vault_secret=_FIXTURE_SECRET,
+    )
+    assert shard_ledger.read_tail_anchor()["row_count"] == 5
+
+    for _ in range(3):  # destroy rows 2,3,4 -- including d-1's own EXPOSURE row
+        _truncate_ledger_tail(shard_ledger)
+    verify_result = shard_ledger.verify_chain()
+
+    # a reconstruction that keeps the assignment and the later seal, drops the exposure, and pads
+    # the count back to five with a fabricated shard.
+    reconstruction = [
+        vault._row_content(assigned),
+        vault._row_content(sealed_d3),
+        _fabricated_seal_row_fields("d-4"),
+    ]
+    recovery_ledger = vault.VaultRecoveryLedger(vault_dir)
+    outcome = vault.recover_shard_ledger(
+        shard_ledger, verify_result=verify_result, reconstructed_suffix=reconstruction,
+        sources=[{"source": "operator-reconstruction", "sha256": "0" * 64}],
+        operator_identity="test-operator", reason="TR-29 missing earlier exposure",
+        recovery_ledger=recovery_ledger, incident_id="incident-tr29-missing-exposure",
+        quarantine_dir=str(tmp_path / "quarantine"),
+    )
+    assert outcome == {"ok": False, "resumed": False}
+    halted = recovery_ledger.all_rows()[0]
+    assert halted["attempted_row_count"] == halted["anchor_row_count"] == 5
+
+    # d-1's exposure is nowhere on disk, and the vault is blocked rather than pretending otherwise.
+    surviving = shard_ledger.all_rows()  # the UNGATED reader -- the raw file, exactly as it stands
+    assert [row["exposure_state"] for row in surviving] == [vault.STATE_SEALED] * 2
+    assert all(row["exposed_at"] is None for row in surviving)
+    assert shard_ledger.verify_chain() == verify_result
+    with pytest.raises(vault.VaultLedgerCorruptionError):
+        vault.build_vault_state(shard_ledger, vault.VaultUniverseLedger(vault_dir))
+    # no second draw for d-1 -- the gated reader refuses before any lifecycle check runs.
+    with pytest.raises(vault.VaultLedgerCorruptionError):
+        vault.expose_shard(shard_ledger, dataset_id="d-1", family_root_id=family_root)
+    with pytest.raises(vault.VaultLedgerCorruptionError):
+        vault.assign_shard(
+            shard_ledger, dataset_id="d-1", family_root_id="root-2", symbol="PG",
+            session_date="2026-06-09",
+        )
+
+
+def test_tr29_a_cleanly_internally_rechained_forged_suffix_is_not_proof_of_completeness(tmp_path):
+    """Internal consistency is not historical completeness. `_rehash_suffix` re-chains ANY supplied
+    fields into a perfectly valid chain -- that is its job -- so a forged suffix always produces a
+    ledger that verifies against ITS OWN regenerated anchor. This test writes exactly that forged
+    ledger into a scratch directory and shows it verifying clean there, which is precisely what the
+    deleted graded branch would have published over the real ledger. Against the ORIGINAL anchor,
+    which the forgery cannot reproduce, recovery refuses."""
+    vault_dir = str(tmp_path / "vault")
+    shard_ledger = vault.VaultShardLedger(vault_dir)
+    _seal_three_shards(shard_ledger)
+    _truncate_ledger_tail(shard_ledger)  # loses d-3's row
+    verify_result = shard_ledger.verify_chain()
+
+    forged_fields = [_fabricated_seal_row_fields("d-3")]  # right identity, invented content
+    good_prefix = vault._verified_prefix_rows(shard_ledger, verify_result)
+    forged_chain = good_prefix + vault._rehash_suffix(good_prefix, forged_fields)
+    for index, row in enumerate(forged_chain):  # the forgery IS internally clean
+        assert row["row_index"] == index
+        assert row["prev_hash"] == (forged_chain[index - 1]["row_hash"] if index else None)
+    scratch = vault.VaultShardLedger(str(tmp_path / "forged"))
+    scratch.rewrite_from_recovery(forged_chain)
+    assert scratch.verify_chain()["ok"] is True  # clean -- and worthless as proof
+
+    recovery_ledger = vault.VaultRecoveryLedger(vault_dir)
+    outcome = vault.recover_shard_ledger(
+        shard_ledger, verify_result=verify_result, reconstructed_suffix=forged_fields,
+        sources=[{"source": "operator-reconstruction", "sha256": "0" * 64}],
+        operator_identity="test-operator", reason="TR-29 forged but internally clean suffix",
+        recovery_ledger=recovery_ledger, incident_id="incident-tr29-forged",
+        quarantine_dir=str(tmp_path / "quarantine"),
+    )
+    assert outcome == {"ok": False, "resumed": False}
+    halted = recovery_ledger.all_rows()[0]
+    assert halted["attempted_row_count"] == halted["anchor_row_count"] == 3
+    # the real ledger never received the forgery, and still fails exactly as before.
+    assert shard_ledger.verify_chain() == verify_result
+    assert [row["dataset_id"] for row in shard_ledger.all_rows()] == ["d-1", "d-2"]
+
+
+def test_tr29_operator_attestation_alone_never_certifies_missing_identity_evidence(tmp_path):
+    """`sources`, `operator_identity` and `reason` are audit metadata -- recorded on every attempt,
+    read by no decision. Three escalating attestations against the identical corrupted ledger
+    (silence, a named operator swearing completeness, a source row that claims a verifying hash)
+    produce the identical refusal, and all three are on permanent record having changed nothing."""
+    vault_dir = str(tmp_path / "vault")
+    shard_ledger = vault.VaultShardLedger(vault_dir)
+    _seal_three_shards(shard_ledger)
+    _truncate_ledger_tail(shard_ledger)
+    verify_result = shard_ledger.verify_chain()
+    recovery_ledger = vault.VaultRecoveryLedger(vault_dir)
+
+    attestations = [
+        ([], "unknown-operator", "no sources at all"),
+        (
+            [{"source": "operator-attestation", "attests": "the suffix above is complete"}],
+            "chief-research-operator",
+            "operator certifies the reconstruction is complete and correct",
+        ),
+        (
+            [{"source": "backup", "sha256": "a" * 64, "attests": "hash verified by operator"}],
+            "chief-research-operator",
+            "operator certifies a hash-verified backup",
+        ),
+    ]
+    for index, (sources, identity, reason) in enumerate(attestations):
+        outcome = vault.recover_shard_ledger(
+            shard_ledger, verify_result=verify_result,
+            reconstructed_suffix=[_fabricated_seal_row_fields("d-fake")],
+            sources=sources, operator_identity=identity, reason=reason,
+            recovery_ledger=recovery_ledger, incident_id=f"incident-tr29-attest-{index}",
+            quarantine_dir=str(tmp_path / "quarantine"),
+        )
+        assert outcome == {"ok": False, "resumed": False}, f"attestation {index} changed the outcome"
+        assert shard_ledger.verify_chain() == verify_result
+
+    rows = recovery_ledger.all_rows()
+    assert [row["outcome"] for row in rows] == ["halted", "halted", "halted"]
+    assert [row["operator_identity"] for row in rows] == [a[1] for a in attestations]
+    assert [row["attempted_sources"] for row in rows] == [a[0] for a in attestations]
+
+
+def test_r8_an_empty_reconstruction_can_never_prove_the_ledger_was_always_empty(tmp_path):
+    """Found by attacking `recover_shard_ledger` directly while fixing it, not by any report. A
+    tail anchor reading `{"row_count": 0, "head_hash": null}` -- which `append_row` never writes,
+    so it means tampering or an earlier bad rewrite -- used to be "matched" by supplying NOTHING at
+    all: zero rows equals zero rows, no final hash equals no head hash, so the attempt proved
+    complete, `rewrite_from_recovery` wiped every sealed row off the ledger, and the three shards
+    became fresh and re-sealable under any universe. That is the r8-forbidden outcome reached
+    through the PROVEN side of the door rather than the graded one, so the proof now requires a
+    non-empty candidate."""
+    vault_dir = str(tmp_path / "vault")
+    shard_ledger = vault.VaultShardLedger(vault_dir)
+    _seal_three_shards(shard_ledger)
+    shard_ledger.head_anchor_path.write_text(
+        json.dumps({"row_count": 0, "head_hash": None}, sort_keys=True), encoding="utf-8"
+    )
+
+    recovery_ledger = vault.VaultRecoveryLedger(vault_dir)
+    outcome = vault.recover_shard_ledger(
+        shard_ledger, verify_result=shard_ledger.verify_chain(), reconstructed_suffix=[],
+        sources=[], operator_identity="test-operator", reason="r8 empty-proof probe",
+        recovery_ledger=recovery_ledger, incident_id="incident-r8-empty",
+        quarantine_dir=str(tmp_path / "quarantine"),
+    )
+    assert outcome == {"ok": False, "resumed": False}
+    assert recovery_ledger.all_rows()[0]["outcome"] == "halted"
+
+    # nothing was wiped: all three sealed shards are still on the ledger and still sealed...
+    assert [row["dataset_id"] for row in shard_ledger.all_rows()] == ["d-1", "d-2", "d-3"]
+    assert vault.currently_sealed_dataset_ids(shard_ledger) == frozenset({"d-1", "d-2", "d-3"})
+    # ...so a re-seal is refused as the ordinary single-shot violation it is, never granted as if
+    # the shard were fresh.
+    with pytest.raises(vault.ShardLifecycleOrderError):
+        vault.seal_shard(
+            shard_ledger, dataset_id="d-1", universe_id="u2", content_checksum="f" * 64,
+            event_count=100, vault_secret=_FIXTURE_SECRET,
+        )
+
+
+def test_r8_a_prefix_the_file_no_longer_authenticates_can_never_prove_completeness(tmp_path):
+    """The second path found by attacking `recover_shard_ledger` directly. `_verified_prefix_rows`
+    trusts the CALLER-SUPPLIED `verify_result` to decide how much of the on-disk file is genuine,
+    so a `verify_result` that understates the damage ("tail_truncated" over a file whose interior
+    row was edited in place) hands the proof a prefix the file itself no longer authenticates --
+    and because an in-place edit leaves the LATER rows' stored hashes untouched, the anchor's count
+    and head hash both still matched. The attempt therefore used to return `ok: True` and write a
+    permanent `recovery_completed` attestation over rows containing a substituted dataset_id. The
+    candidate chain is now re-derived from its own contents and must reproduce itself exactly."""
+    vault_dir = str(tmp_path / "vault")
+    shard_ledger = vault.VaultShardLedger(vault_dir)
+    _seal_three_shards(shard_ledger)
+    _mutate_interior_row(shard_ledger.path, 0, "dataset_id", "d-evil")  # no rehash: row 0 now lies
+
+    honest = shard_ledger.verify_chain()
+    assert honest["reason"] == "content_hash_mismatch" and honest["failed_at_row"] == 0
+    # NON-VACUITY: the count and head-hash conjuncts are both still satisfied by this file, so the
+    # refusal below is the internal-consistency conjunct doing the work.
+    anchor = shard_ledger.read_tail_anchor()
+    raw_rows = shard_ledger.all_rows()
+    assert anchor["row_count"] == len(raw_rows) == 3
+    assert anchor["head_hash"] == raw_rows[-1]["row_hash"]
+
+    recovery_ledger = vault.VaultRecoveryLedger(vault_dir)
+    outcome = vault.recover_shard_ledger(
+        shard_ledger,
+        verify_result={"ok": False, "failed_at_row": None, "reason": "tail_truncated"},
+        reconstructed_suffix=[], sources=[], operator_identity="test-operator",
+        reason="r8 understated-damage probe", recovery_ledger=recovery_ledger,
+        incident_id="incident-r8-understated", quarantine_dir=str(tmp_path / "quarantine"),
+    )
+    assert outcome == {"ok": False, "resumed": False}
+    halted = recovery_ledger.all_rows()[0]
+    assert halted["outcome"] == "halted"
+    assert halted["attempted_row_count"] == halted["anchor_row_count"] == 3
+    assert halted["attempted_final_row_hash"] == halted["anchor_head_hash"]  # both matched!
+    assert halted["attempted_chain_internally_consistent"] is False  # and it still refused
+
+    # no `recovery_completed` attestation exists over a tampered file, and it stays fail-closed.
+    assert [row["kind"] for row in recovery_ledger.all_rows()] == ["recovery_halted"]
+    assert shard_ledger.verify_chain() == honest
+    with pytest.raises(vault.VaultLedgerCorruptionError):
+        vault.build_vault_state(shard_ledger, vault.VaultUniverseLedger(vault_dir))
+
+
+def test_audit_a_recovery_can_never_delete_rows_the_corrupt_file_itself_still_carries(tmp_path):
+    """**Iteration-13 AUDIT finding, reproduced end to end before this guard existed.** The tail
+    anchor is written AFTER the row it commits to (`micro_chain_ledger.append_row`'s own comment
+    calls the window "benign -- never falsely short"), so a crash between the two leaves the ledger
+    LONGER than the anchor -- a state the ledger reads and serves perfectly happily. Let an interior
+    row then be corrupted, and a byte-GENUINE reconstruction of the ANCHOR-LENGTH history satisfies
+    every other conjunct of the proof: non-empty, count == anchor row_count, final hash == anchor
+    head_hash, internally consistent. `rewrite_from_recovery` then truncates the surplus rows away.
+
+    Observed before the fix: d-4's seal row vanished, `verify_chain()` reported clean, d-4 was
+    re-sealable FRESH under another universe, and a permanent `recovery_completed` attestation
+    certified the loss -- r8 section 7.8's forbidden outcome ("no affected shard becomes fresh,
+    sealable, assignable ... merely because the reconstructed ledger now verifies internally")
+    reached through the PROVEN side of the door rather than the deleted graded one. A recovery may
+    never DELETE rows the preserved corrupt file itself still carries."""
+    vault_dir = str(tmp_path / "vault")
+    shard_ledger = vault.VaultShardLedger(vault_dir)
+    original = _seal_three_shards(shard_ledger)
+    anchor_at_three = shard_ledger.head_anchor_path.read_text(encoding="utf-8")
+    vault.seal_shard(  # the append whose anchor write never landed
+        shard_ledger, dataset_id="d-4", universe_id="u1", content_checksum="d" * 64,
+        event_count=103, vault_secret=_FIXTURE_SECRET,
+    )
+    shard_ledger.head_anchor_path.write_text(anchor_at_three, encoding="utf-8")
+
+    # NON-VACUITY: the lagging anchor is not itself a corruption -- all four shards read as sealed.
+    assert shard_ledger.verify_chain()["ok"] is True
+    assert vault.currently_sealed_dataset_ids(shard_ledger) == frozenset({"d-1", "d-2", "d-3", "d-4"})
+
+    _mutate_interior_row(shard_ledger.path, 0, "universe_id", "u-evil")
+    verify_result = shard_ledger.verify_chain()
+    assert verify_result["reason"] == "content_hash_mismatch"
+
+    recovery_ledger = vault.VaultRecoveryLedger(vault_dir)
+    outcome = vault.recover_shard_ledger(
+        shard_ledger, verify_result=verify_result,
+        reconstructed_suffix=[vault._row_content(row) for row in original],  # byte-genuine rows
+        sources=[{"source": "trusted-backup", "sha256": "0" * 64}],
+        operator_identity="honest-operator", reason="audit: anchor-lag truncation probe",
+        recovery_ledger=recovery_ledger, incident_id="incident-audit-anchor-lag",
+        quarantine_dir=str(tmp_path / "quarantine"),
+    )
+    assert outcome == {"ok": False, "resumed": False}
+
+    # NON-VACUITY: every OTHER conjunct of the proof was satisfied -- the refusal is this guard.
+    halted = recovery_ledger.all_rows()[0]
+    assert halted["outcome"] == "halted"
+    assert halted["attempted_row_count"] == halted["anchor_row_count"] == 3
+    assert halted["attempted_final_row_hash"] == halted["anchor_head_hash"]
+    assert halted["attempted_chain_internally_consistent"] is True
+    assert halted["preserved_row_count"] == 4
+
+    # d-4's row was never deleted, the vault stays blocked, and d-4 is not sealable again.
+    assert [row["dataset_id"] for row in shard_ledger.all_rows()] == ["d-1", "d-2", "d-3", "d-4"]
+    assert shard_ledger.verify_chain() == verify_result
+    with pytest.raises(vault.VaultLedgerCorruptionError):
+        vault.build_vault_state(shard_ledger, vault.VaultUniverseLedger(vault_dir))
+    with pytest.raises(vault.VaultLedgerCorruptionError):
+        vault.seal_shard(
+            shard_ledger, dataset_id="d-4", universe_id="u2", content_checksum="d" * 64,
+            event_count=103, vault_secret=_FIXTURE_SECRET,
+        )
+
+
+def test_r8_a_shard_row_carrying_an_unrecognised_state_serves_only_the_opaque_projection(tmp_path):
+    """r8 deleted the fourth lifecycle value (`exposure_unknown`) along with the branch that wrote
+    it, so this module's state vocabulary is exactly {sealed, assigned, exposed}. `_serialize_shard`
+    therefore reveals identity on a POSITIVE whitelist of the two states that earned it, never by
+    excluding a blacklist of the ones that did not: a row carrying any other value discloses
+    nothing beyond the sealed-shape opaque projection, even though its own content still holds the
+    symbol and session date from an earlier assignment."""
+    vault_dir = str(tmp_path / "vault")
+    shard_ledger = vault.VaultShardLedger(vault_dir)
+    vault.seal_shard(
+        shard_ledger, dataset_id="d-1", universe_id="u1", content_checksum="a" * 64,
+        event_count=100, vault_secret=_FIXTURE_SECRET,
+    )
+    assigned = vault.assign_shard(
+        shard_ledger, dataset_id="d-1", family_root_id="root", symbol="PG",
+        session_date="2026-06-09",
+    )
+    assert "symbol" in vault._serialize_shard(assigned)  # assigned reveals, as always
+
+    shard_ledger.append_row({**vault._row_content(assigned), "exposure_state": "some_future_state"})
+    entry = vault.build_vault_state(shard_ledger, vault.VaultUniverseLedger(vault_dir))["shards"][0]
+    assert set(entry) == set(vault._OPAQUE_SHARD_KEYS)
+    assert entry["exposure_state"] == "some_future_state"
+    for leaked in ("symbol", "session_date", "dataset_id", "content_checksum", "family_root_id"):
+        assert leaked not in entry
+
+
+# --- iteration 13's own TC-7: seal_shard/assign_shard/expose_shard are pinned own-ledger-only ----
+
+
+def test_tc7_seal_assign_expose_are_scoped_to_their_own_shard_ledger_by_design(tmp_path):
+    """spec section 7.8's cross-ledger gating question (the iteration-12 reviewer's open item,
+    resolved by the iter-13 decomposer, `state/assumptions.md`'s iter-13 second entry):
+    seal_shard/assign_shard/expose_shard deliberately gate on their OWN shard ledger only, never
+    the universe ledger -- a documented, intentional scope, not an oversight. Pinned two ways: the
+    docstrings say so, and a corrupted UNIVERSE ledger (shard ledger intact) does not stop any of
+    the three from succeeding exactly as before this iteration."""
+    for fn in (vault.seal_shard, vault.assign_shard, vault.expose_shard):
+        doc = fn.__doc__ or ""
+        assert "own shard ledger only" in doc, (
+            f"{fn.__name__}'s docstring must state its corruption gating is scoped to its own "
+            "shard ledger only"
+        )
+
+    vault_dir = str(tmp_path / "vault")
+    shard_ledger = vault.VaultShardLedger(vault_dir)
+    universe_ledger = vault.VaultUniverseLedger(vault_dir)
+    vault.register_universe(
+        universe_ledger, universe_id="u1", symbol_rule=["PG"], date_rule=["2026-06-09"],
+        vault_secret_commitment=vault.commit_vault_secret(_FIXTURE_SECRET),
+    )
+    _truncate_ledger_tail(universe_ledger)  # the OTHER ledger corrupted -- shard ledger untouched
+    assert universe_ledger.verify_chain()["ok"] is False
+    assert shard_ledger.verify_chain()["ok"] is True  # pristine -- nothing sealed here yet
+
+    sealed = vault.seal_shard(
+        shard_ledger, dataset_id="d-1", universe_id="u1", content_checksum="a" * 64,
+        event_count=100, vault_secret=_FIXTURE_SECRET,
+    )
+    assert sealed["exposure_state"] == vault.STATE_SEALED
+    assigned = vault.assign_shard(
+        shard_ledger, dataset_id="d-1", family_root_id="root", symbol="PG",
+        session_date="2026-06-09",
+    )
+    assert assigned["exposure_state"] == vault.STATE_ASSIGNED
+    exposed = vault.expose_shard(shard_ledger, dataset_id="d-1", family_root_id="root")
+    assert exposed["exposure_state"] == vault.STATE_EXPOSED
+
+    # the corrupted universe ledger is exactly as corrupted as before -- none of these touched it.
+    assert universe_ledger.verify_chain()["ok"] is False
 
 
 # --- TR-27/TC-6/TC-8: the nonced commitment -- dictionary-attack resistance ------------------------

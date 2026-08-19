@@ -212,7 +212,40 @@ this dataset withheld".
    Deliberately scoped to THIS predicate alone -- ``expected_recording_pairs``/
    ``verify_recording_batch`` (TR-4's cherry-pick check) keep their own byte-exact matching
    unchanged, since the phase spec names only "the universe-rule test" inside this one function, not
-   a broader normalization of the recording-batch verifier."""
+   a broader normalization of the recording-batch verifier.
+
+**Iteration 13 -- spec revision r8: recovery is HALT-ONLY this era.** (Owner ruling of
+2026-08-19, recorded in ``docs/rapid-validation-spec.md``'s r8 revision header, its rewritten
+section 7.8, and trap TR-29; and in ``state/assumptions.md``'s ``2026-08-19 -- OWNER RULING``
+entry.) Iteration 12 shipped a GRADED recovery: a reconstruction that could not be PROVEN
+complete still resumed service, marking the dataset ids it could name ``exposure_unknown``.
+Iteration 13's first pass NARROWED that branch -- resume only when the attempt named at least as
+many rows as the anchor attested -- rather than removing it, and the iteration-13 review then
+disproved the whole design by execution. The tail anchor commits to a row
+COUNT plus the final row's hash and to NO per-row identity, so a SAME-LENGTH suffix naming an
+unrelated dataset satisfied every check the graded branch was able to make: the genuinely
+destroyed shard then existed in no ledger at all, ``verify_chain()`` reported clean, and
+``seal_shard`` would re-seal it FRESH under another universe -- the exact "unknown exposure
+history read as never exposed" outcome section 7.8 forbids. **Row-count equality is not evidence
+of identity and must NEVER authorize recovery.**
+
+r8 therefore DELETES the graded branch outright. ``recover_shard_ledger`` below resumes ONLY on a
+hash-attested proof of completeness; in EVERY other case it refuses -- leaving the corrupt file
+byte-untouched and every vault predicate fail-closed -- no matter how much the operator attests.
+The ``exposure_unknown`` lifecycle value is deleted with it: its only writer was that branch, and
+its only purpose was to make a partially-known ledger servable, which is precisely what r8
+forbids. No affected shard becomes fresh, sealable, assignable or ``historical_oos`` merely
+because some reconstructed ledger would verify internally; if completeness cannot be proven, the
+affected vault/tranche stays BLOCKED. Graded recovery returns only under a FUTURE named revision
+built on a real identity commitment -- at minimum ordered row/event identities, preferably a
+canonical checkpoint/manifest or Merkle-style commitment tied to the chain -- and that migration
+is explicitly NOT designed here. The owner's governing sentence, which every branch below
+implements literally: **for this era, safety wins over degraded availability -- unknown or
+unprovable exposure history means the vault is unavailable, never "fresh".**
+
+The SAME diff also pins, as a documented and tested decision rather than an open reviewer
+question, that ``seal_shard``/``assign_shard``/``expose_shard`` gate on their own shard ledger
+only (see each function's own docstring, and ``state/assumptions.md``'s iter-13 second entry)."""
 
 from __future__ import annotations
 
@@ -234,7 +267,6 @@ __all__ = [
     "STATE_SEALED",
     "STATE_ASSIGNED",
     "STATE_EXPOSED",
-    "STATE_EXPOSURE_UNKNOWN",
     "VaultUniverseNotRegisteredError",
     "VaultUniverseAlreadyRegisteredError",
     "CherryPickedBatchError",
@@ -296,20 +328,18 @@ SURROGATE_SHARD_ID_PREFIX = "vshard-"
 _SURROGATE_LABEL = "vault-shard-surrogate-v1:"
 _CHECKSUM_COMMITMENT_LABEL = "vault-checksum-commitment-v1:"
 
-# The one-way lifecycle's three states (module docstring T-2: this module's OWN vocabulary,
-# distinct from micro_readiness.py's EXPOSURE_STATE_EXPLORATORY/SPLIT_PROVENANCE_HAND_ASSIGNED).
+# The one-way lifecycle's three states -- the WHOLE vocabulary, there is no fourth (module
+# docstring T-2: this module's OWN vocabulary, distinct from micro_readiness.py's
+# EXPOSURE_STATE_EXPLORATORY/SPLIT_PROVENANCE_HAND_ASSIGNED).
+#
+# Iteration 12 added a fourth, `exposure_unknown`, as the graded-recovery downgrade target;
+# spec revision r8 (2026-08-19, module docstring's own "Iteration 13" paragraph) DELETED both the
+# branch that wrote it and the value itself. A vault whose exposure history cannot be PROVEN is
+# unavailable -- never partially servable under a "we are not sure about this shard" state, which
+# is exactly the degraded availability the owner traded away for safety.
 STATE_SEALED = "sealed"
 STATE_ASSIGNED = "assigned"
 STATE_EXPOSED = "exposed"
-
-# Iteration 12 (spec section 7.8, TR-25): the FOURTH, terminal lifecycle value -- never reachable
-# through seal_shard/assign_shard/expose_shard, written ONLY by recover_shard_ledger below when a
-# corrupted ledger's missing suffix cannot be proven complete. Matches neither STATE_SEALED nor
-# STATE_ASSIGNED, so the existing lifecycle guards in assign_shard/expose_shard already refuse any
-# further transition for a shard in this state with no new guard code (their own `actual_state !=
-# expected_state` checks do the job) -- "permanently ineligible for sealed-OOS use" falls out of
-# the existing single-shot machinery for free.
-STATE_EXPOSURE_UNKNOWN = "exposure_unknown"
 
 # The universe rule's two serving stages (module docstring's join-resistance part 4). A DIFFERENT
 # vocabulary from the shard lifecycle above on purpose: a universe has no lifecycle of its own --
@@ -906,7 +936,21 @@ def seal_shard(
     id, silently voiding r3's entire join-resistance guarantee at the one moment it is supposed to
     take effect. Checked at the door rather than trusted from the caller, because ``seal_shard``
     takes raw bytes and a future operator act could hand it something other than
-    ``load_vault_secret``'s already-validated return."""
+    ``load_vault_secret``'s already-validated return.
+
+    **Corruption gating covers this function's own shard ledger only (iteration 13) -- a
+    deliberate scope, not an oversight (TC-7 pins this).** ``seal_shard``/``assign_shard``/
+    ``expose_shard`` read and write ONLY ``VaultShardLedger`` (via ``_latest_shard_row``'s own
+    gated ``verified_rows()``); none of the three ever reads the universe ledger, even though a
+    ``universe_id`` is stored on every row -- it is recorded verbatim, never looked up, so a
+    corrupted UNIVERSE ledger cannot corrupt what these three write. Widening the gate to also
+    require a sound universe ledger stays deferred until a matching universe-ledger recovery
+    primitive exists to pair with it (module docstring's own "Iteration 12" paragraph, point 1's
+    disclosed interpretation call, and ``state/assumptions.md``'s iter-13 second entry have the
+    full reasoning): these three functions have zero production call sites today, so widening buys
+    no real-world safety yet, while it would force updating roughly 81 unrelated test call sites
+    across ten files and introduce a new halt-with-no-recovery-path failure mode the moment the
+    universe ledger alone became corrupted."""
     if not vault_secret.strip():
         raise VaultSecretUnavailable(
             "seal_shard was handed an empty vault secret -- refused (spec section 7.5 r3): an "
@@ -951,7 +995,10 @@ def assign_shard(
     ``symbol``/``session_date`` -- and, per r3, the surrogate -> ``dataset_id`` mapping -- for the
     first time (TC-7). Refused (``ShardLifecycleOrderError``, TR-12) unless the shard's own latest
     row is currently ``sealed`` -- covers BOTH "never sealed" and "already assigned/exposed"
-    (module docstring's shard-global single-shot reading, TC-8)."""
+    (module docstring's shard-global single-shot reading, TC-8).
+
+    **Corruption gating covers this function's own shard ledger only (iteration 13) -- see
+    ``seal_shard``'s own docstring for the full reasoning.**"""
     latest = _latest_shard_row(ledger, dataset_id)
     actual_state = latest["exposure_state"] if latest is not None else None
     if actual_state != STATE_SEALED:
@@ -977,7 +1024,10 @@ def expose_shard(
     ``checksum_commitment`` can be re-derived from it and verified (r3 point 2). Refused
     (``ShardLifecycleOrderError``, TR-12) unless the shard's own latest row is currently
     ``assigned`` for THIS ``family_root_id`` -- covers "never assigned", "already exposed", and
-    "assigned to a different family" alike."""
+    "assigned to a different family" alike.
+
+    **Corruption gating covers this function's own shard ledger only (iteration 13) -- see
+    ``seal_shard``'s own docstring for the full reasoning.**"""
     latest = _latest_shard_row(ledger, dataset_id)
     actual_state = latest["exposure_state"] if latest is not None else None
     if actual_state != STATE_ASSIGNED or latest.get("family_root_id") != family_root_id:
@@ -1181,19 +1231,18 @@ def _serialize_shard(row: dict) -> dict:
       the surrogate -> ``dataset_id`` mapping (r3 point 1: revealed at assignment). TC-7.
     * ``exposed``  -- the above PLUS the raw ``content_checksum``, against which the salted
       commitment can now be re-derived and verified (r3 point 2).
-    * ``exposure_unknown`` (iteration 12, TR-25/TC-5) -- a lawful-recovery downgrade, never a
-      lifecycle transition of its own. Serves whatever the shard's LAST KNOWN row already
-      disclosed and nothing more: still-opaque if recovery marked it unknown while it was only
-      ever ``sealed`` (``row["symbol"]`` is ``None``), else the ``assigned``-shape fields -- but
-      NEVER ``content_checksum``, since ``exposure_unknown`` never equals ``STATE_EXPOSED`` and
-      so the same ``if state == STATE_EXPOSED`` guard below already excludes it. This is the ONE
-      place ``exposure_unknown``'s "permanently ineligible for sealed-OOS use" requirement is
-      enforced at the SERVING layer; the lifecycle layer enforces it for free (module docstring
-      next to ``STATE_EXPOSURE_UNKNOWN``'s own definition: no further transition can ever match
-      a state that is neither ``sealed`` nor ``assigned``)."""
+
+    The reveal test is a POSITIVE whitelist of the two states that provably earned disclosure
+    (``assigned``, ``exposed``), not a blacklist of ``sealed`` -- so ``sealed`` and ANY value
+    outside this module's three-state vocabulary alike serve only the opaque projection.
+    Iteration 12 wrote the test the other way round (reveal unless ``sealed`` or the since-deleted
+    ``exposure_unknown``), which would have disclosed symbol/date for any unrecognised state; r8
+    (module docstring) removed the fourth state, and the whitelist form makes the serving layer
+    fail CLOSED on an unrecognised one rather than depending on the exhaustiveness of a
+    blacklist."""
     opaque = {key: row[key] for key in _OPAQUE_SHARD_KEYS}
     state = row["exposure_state"]
-    if state == STATE_SEALED or (state == STATE_EXPOSURE_UNKNOWN and row.get("symbol") is None):
+    if state not in (STATE_ASSIGNED, STATE_EXPOSED):
         return opaque
     revealed = {
         **opaque,
@@ -1349,17 +1398,16 @@ def build_vault_state(shard_ledger: VaultShardLedger, universe_ledger: VaultUniv
     }
 
 
-# === iteration 12: lawful recovery -- fail closed, recover only on evidence (spec section 7.8) =====
+# === lawful recovery -- fail closed, recover only on PROOF (spec section 7.8, r8) ==================
 #
-# The ONLY way back from a `VaultLedgerCorruptionError` (module docstring's own iteration-12
-# paragraph). Scoped to the SHARD ledger, where the concrete `exposure_unknown` terminal state
-# lives (a disclosed scope choice, T-1): TC-4/TC-5's own language and the Data Contract's
-# `exposure_unknown` value are both shard-specific, and the universe ledger has no analogous
-# partial-recovery state to downgrade into. The shared low-level pieces below
-# (`preserve_corrupt_ledger`, `_verified_prefix_rows`, `_rehash_suffix`) are generic over EITHER
-# wrapper class, so a hypothetical `reconstruct`-only (TC-4-shape, no TC-5-shape partial mark) path
-# for the universe ledger could reuse them unchanged if a future iteration needs it -- not built
-# here because nothing in this iteration's own test-first contract exercises it.
+# The ONLY way back from a `VaultLedgerCorruptionError`, and since r8 (module docstring's own
+# "Iteration 13" paragraph) it is a single, all-or-nothing door: a hash-attested proof of
+# completeness resumes exact prior service, and everything else halts. Scoped to the SHARD ledger
+# (a disclosed scope choice, T-1) because that is the ledger whose corruption can make a shard look
+# fresh; the shared low-level pieces below (`preserve_corrupt_ledger`, `_verified_prefix_rows`,
+# `_rehash_suffix`) are generic over EITHER wrapper class, so an equivalent universe-ledger door
+# could reuse them unchanged if a future iteration needs one -- not built here because nothing in
+# this iteration's own test-first contract exercises it.
 
 
 def preserve_corrupt_ledger(ledger, quarantine_dir: str, *, incident_id: str) -> dict:
@@ -1457,53 +1505,128 @@ def recover_shard_ledger(
     quarantine_dir: str,
     recovered_at: str | None = None,
 ) -> dict:
-    """spec section 7.8's full lawful-recovery sequence for the SHARD ledger (the one ledger with
-    a defined ``exposure_unknown`` terminal state -- module section note above). Steps, in order:
+    """spec section 7.8's full lawful-recovery sequence for the SHARD ledger. **Halt-only since
+    spec revision r8** (2026-08-19 owner ruling; module docstring's own "Iteration 13" paragraph):
+    exactly TWO outcomes, divided by a byte-for-byte PROOF -- never a row count, never a shape,
+    never the operator's word.
+
+    Steps, in order:
 
     1. Preserve the corrupt ledger byte-for-byte (``preserve_corrupt_ledger``) -- forensic
        evidence, independent of whatever happens next. Also reads the ledger's OWN currently
-       committed tail anchor (``read_tail_anchor``) -- untouched by a content-only corruption in
-       the TC-1/TC-2/TC-3 scenarios -- as the hash-attested target step 3 below tests against.
+       committed tail anchor (``read_tail_anchor``) -- untouched by a content-only corruption --
+       as the hash-attested target step 3 below tests against.
     2. Identify the last verified row (``_verified_prefix_rows``).
     3. Re-chain the caller's ``reconstructed_suffix`` onto that prefix EXACTLY the way
        ``HashChainedLedger.append_row`` would (``_rehash_suffix``) and test whether the result is
-       HASH-ATTESTED COMPLETE: its final row's hash equals the anchor's own ``head_hash`` and the
-       total row count equals the anchor's own ``row_count`` -- a byte-for-byte proof, never the
-       operator's word (module docstring: "operator attestation is audit metadata, never proof of
-       missing history").
-    4a. PROVEN COMPLETE (TC-4): the reconstructed prefix+suffix becomes the ledger's new content
-        (``VaultShardLedger.rewrite_from_recovery`` -- the ONE lawful whole-file rewrite this
-        module ever performs, and only here, only after the corrupt original is already
-        preserved); a ``recovery_completed`` row (citing every hash, source, operator identity and
-        reason) is appended to ``recovery_ledger``; returns ``{"ok": True, "resumed": True,
-        "exposure_unknown_dataset_ids": []}``. Predicates read this ledger normally again from
-        this point on, reporting the EXACT prior exposure state (TC-4).
-    4b. NOT proven -- missing or wrong suffix, a hash/row-count mismatch, or none supplied at all
-        (TC-5): refuses to truncate-and-continue. The ledger's new content is the verified prefix
-        PLUS one ``exposure_unknown`` row per DISTINCT ``dataset_id`` the prefix ever named --
-        conservative, since the lost suffix could have advanced ANY of them past what the prefix
-        last saw, and TR-25's own invariant forbids ever resolving that uncertainty in a shard's
-        favour. A ``recovery_incomplete`` row (naming the gap) is still appended to
-        ``recovery_ledger``; returns ``{"ok": False, "resumed": True,
-        "exposure_unknown_dataset_ids": [...]}``. Every affected shard is now permanently
-        ineligible for sealed-OOS use -- TR-12's own single-shot guards already refuse any further
-        ``assign_shard``/``expose_shard`` call for a shard whose state is not EXACTLY what those
-        transitions expect, so ``exposure_unknown`` (matching neither ``sealed`` nor ``assigned``)
-        is refused there automatically; no new lifecycle guard code is needed (``STATE_EXPOSURE_
-        UNKNOWN``'s own definition above).
+       HASH-ATTESTED COMPLETE -- FIVE conjuncts, every one required and none sufficient alone:
+       the candidate is non-empty, its row count equals the anchor's own ``row_count``, its final
+       row's hash equals the anchor's own ``head_hash``, the whole candidate chain is internally
+       consistent when re-derived from its own row contents, and it accounts for at least as many
+       rows as the preserved corrupt file itself still carries (a recovery may never DELETE
+       preserved evidence). The three guards beyond the original count+hash pair each close a
+       laundering path found by attacking this function directly; the inline comments at the check
+       itself carry all three reproductions. See also the r8 note below on why the count conjunct
+       can never be promoted into a dividing line of its own.
+    4. Two outcomes, and only two:
 
-    Either branch RESUMES service (``resumed: True``): a corrupted ledger does not stay refused
-    forever once a lawful recovery -- proven or conservatively incomplete -- has run; only an
-    UNATTEMPTED recovery leaves ``VaultLedgerCorruptionError`` firing on every read."""
+       a. **PROVEN COMPLETE -> resume exactly.** The reconstructed prefix+suffix becomes the
+          ledger's new content (``VaultShardLedger.rewrite_from_recovery`` -- the ONE lawful
+          whole-file rewrite this module ever performs, and only here, only after the corrupt
+          original is already preserved); a ``recovery_completed`` row (citing every hash, source,
+          operator identity and reason) is appended to ``recovery_ledger``; returns ``{"ok": True,
+          "resumed": True}``. Predicates read this ledger normally again from this point on,
+          reporting the EXACT prior exposure state -- no shard's history is guessed at, because
+          the reconstruction reproduced the committed head hash bit for bit.
+       b. **ANYTHING ELSE -> HALT.** A missing, truncated, tampered, wrong, reordered, padded or
+          merely unproven suffix -- and equally a missing or unreadable anchor
+          (``read_tail_anchor()`` returned ``None``, so no independent proof of the true history
+          exists to test against AT ALL) -- all land here. ``rewrite_from_recovery`` is NEVER
+          called: the corrupted file on disk stays byte-untouched, ``verify_chain()`` keeps
+          reporting exactly the same failure immediately afterward, and every dependent predicate
+          (``currently_sealed_dataset_ids``, ``withheld_dataset_ids``,
+          ``unresolved_pool_universe_by_dataset_id``, ``build_vault_state``, and the
+          ``seal_shard``/``assign_shard``/``expose_shard`` transitions, all gated through
+          ``verified_rows()``) keeps raising ``VaultLedgerCorruptionError``. The affected vault
+          stays BLOCKED -- no shard of it becomes fresh, sealable, assignable or ``historical_oos``
+          on the strength of an unproven story about its own history. An immutable incident row
+          (``outcome: "halted"``, citing the anchor's own ``row_count``/``head_hash`` beside what
+          the attempt actually produced) is still appended to ``recovery_ledger``, so the attempt
+          is on permanent record even though nothing about the shard ledger changed. Returns
+          ``{"ok": False, "resumed": False}``. A LATER call against the SAME still-corrupted file,
+          given a genuinely provable reconstruction, still succeeds normally -- a halt never
+          consumes or alters the original corrupted ledger.
+
+    **Why there is no third, "graded" branch (r8, and TR-29 keeps it deleted).** Iteration 12 had
+    one, and iteration 13's first pass narrowed it instead of removing it: if the attempt merely
+    NAMED as many rows as the anchor attested, it resumed with the named dataset ids marked
+    ``exposure_unknown``. The iteration-13 review broke that by execution --
+    seal ``d-1``/``d-2``/``d-3``, destroy ``d-3``'s row, hand this function a SAME-LENGTH suffix
+    naming an unrelated ``d-fake``, and ``d-3`` vanished from every ledger while ``verify_chain()``
+    reported clean and ``seal_shard`` would re-seal it fresh under another universe. The defect is
+    not fixable by tightening that comparison, because the tail anchor commits to a row COUNT plus
+    the final row's hash and to NO per-row identity: **counting can never prove identity.** A
+    future named revision may reintroduce graded recovery once the ledger carries a real identity
+    commitment (at minimum ordered row/event identities, preferably a canonical checkpoint or
+    Merkle-style manifest tied to the chain) -- deliberately NOT designed here, and no on-disk
+    format changes in this fix.
+
+    ``sources``/``operator_identity``/``reason`` are recorded as audit metadata on every outcome
+    and are read by NO decision this function makes: operator attestation can never substitute for
+    missing identity evidence (spec section 7.8), so no value of any of them can turn a halt into a
+    resume. Only the hashes decide."""
     preserved = preserve_corrupt_ledger(shard_ledger, quarantine_dir, incident_id=incident_id)
     anchor = shard_ledger.read_tail_anchor() or {}
+    anchor_row_count = anchor.get("row_count")
     good_prefix = _verified_prefix_rows(shard_ledger, verify_result)
+    preserved_row_count = len(shard_ledger.all_rows())
     candidate_suffix = _rehash_suffix(good_prefix, reconstructed_suffix)
     candidate_rows = good_prefix + candidate_suffix
     recovered_at = recovered_at if recovered_at is not None else _iso_utc_now()
     final_hash = candidate_rows[-1]["row_hash"] if candidate_rows else None
+
+    # Spec section 7.8's own "verify the reconstruction is internally consistent" step, applied to
+    # the WHOLE candidate ledger rather than the suffix half alone. `_rehash_suffix` already IS the
+    # definition of a valid chain (`HashChainedLedger.append_row`'s algorithm), so re-deriving every
+    # row from its content and demanding byte-equality re-checks each row's own content hash, its
+    # prev_hash link and its row_index in one comparison -- with no second implementation of the
+    # chain walk. It matters because `good_prefix` comes from `_verified_prefix_rows`, which trusts
+    # the CALLER-SUPPLIED `verify_result` to decide how much of the on-disk file is genuine: hand
+    # this function a `verify_result` that understates the damage (say "tail_truncated" over a file
+    # whose interior row was edited in place) and the stored final row hash can still match the
+    # anchor, so the two hash/count conjuncts alone would attest "proven complete" over rows the
+    # file itself no longer authenticates. Verified by execution before this line existed.
+    rederived = _rehash_suffix([], [_row_content(row) for row in candidate_rows])
+    internally_consistent = rederived == candidate_rows
+
+    # `bool(candidate_rows)`: an EMPTY reconstruction can never be a proof. Without it, an anchor
+    # reading `{"row_count": 0, "head_hash": null}` -- which `append_row` never writes, so it means
+    # tampering or an earlier bad rewrite -- is "matched" by supplying nothing at all (0 == 0, None
+    # == None), and the recovery would WIPE the ledger and report success: every sealed shard gone,
+    # re-sealable fresh under any universe. Verified by execution before this guard existed. A
+    # genuinely empty ledger has no lost history to recover and never reaches this function.
+    #
+    # `len(candidate_rows) >= preserved_row_count` (iteration-13 AUDIT): a recovery may never DELETE
+    # rows the corrupt file itself still carries. The anchor is written AFTER the row it commits to
+    # (`micro_chain_ledger.append_row`'s own comment calls the window "benign -- never falsely
+    # short"), so a crash between the two leaves the ledger LONGER than the anchor. In that state a
+    # byte-GENUINE reconstruction of the anchor-length history satisfies the four conjuncts above
+    # while `rewrite_from_recovery` truncates the surplus rows away -- observed end to end: seal
+    # d-1..d-4 with the anchor lagging at 3, corrupt an interior row, recover with the true first
+    # three rows, and d-4's seal row is gone, `verify_chain()` reports clean, `seal_shard` re-seals
+    # d-4 FRESH, and a `recovery_completed` attestation certifies the loss. That is r8 section 7.8's
+    # forbidden outcome ("no affected shard becomes fresh, sealable, assignable ... merely because
+    # the reconstructed ledger now verifies internally") reached through the PROVEN side of the
+    # door. This conjunct is a pure additional REFUSAL -- it can only turn a proof into a halt,
+    # never the reverse -- so it does not resurrect count equality as evidence of anything: it is a
+    # floor against destroying preserved evidence, never an authorization. When it fires the vault
+    # stays BLOCKED, which is r8's own trade (safety over degraded availability).
     proven_complete = (
-        len(candidate_rows) == anchor.get("row_count") and final_hash == anchor.get("head_hash")
+        bool(candidate_rows)
+        and anchor_row_count == len(candidate_rows)
+        and final_hash == anchor.get("head_hash")
+        and internally_consistent
+        and len(candidate_rows) >= preserved_row_count
     )
 
     last_verified_row_index = (len(good_prefix) - 1) if good_prefix else None
@@ -1527,32 +1650,40 @@ def recover_shard_ledger(
                 "outcome": "complete",
             }
         )
-        return {"ok": True, "resumed": True, "exposure_unknown_dataset_ids": []}
+        return {"ok": True, "resumed": True}
 
-    affected_dataset_ids = sorted({row["dataset_id"] for row in good_prefix})
-    latest_by_id: dict[str, dict] = {}
-    for row in good_prefix:
-        latest_by_id[row["dataset_id"]] = row
-    unknown_fields = [
-        {**_row_content(latest_by_id[dataset_id]), "exposure_state": STATE_EXPOSURE_UNKNOWN}
-        for dataset_id in affected_dataset_ids
-    ]
-    unknown_rows = _rehash_suffix(good_prefix, unknown_fields)
-    shard_ledger.rewrite_from_recovery(good_prefix + unknown_rows)
+    # NOT PROVEN COMPLETE -> HALT, unconditionally (spec section 7.8 r8; docstring branch 4b). No
+    # secondary test runs here and none may ever be added on the CURRENT anchor schema: the anchor
+    # commits to a row count and the final row's hash only, so nothing available at this point can
+    # distinguish "every truly lost row is accounted for" from "the count was padded with rows that
+    # were never there" -- the exact laundering TR-29 pins. The corrupted file is left alone; the
+    # vault stays blocked; the attempt goes on permanent record and changes nothing else.
     recovery_ledger.append_row(
         {
-            "kind": "recovery_incomplete",
+            "kind": "recovery_halted",
             "ledger_kind": "shard",
             "incident_id": incident_id,
             "corrupt_ledger_sha256": preserved["corrupt_ledger_sha256"],
             "last_verified_row_index": last_verified_row_index,
             "last_verified_row_hash": last_verified_row_hash,
+            # Audit metadata only -- recorded because a halt must say what was attempted, never
+            # read back by any decision above (docstring's closing paragraph).
             "attempted_sources": list(sources),
             "operator_identity": operator_identity,
             "reason": reason,
             "recovered_at": recovered_at,
-            "exposure_unknown_dataset_ids": affected_dataset_ids,
-            "outcome": "incomplete",
+            # Why the proof failed: the two dimensions the anchor actually commits to, plus
+            # whether the candidate chain even hangs together on its own terms.
+            "anchor_row_count": anchor_row_count,
+            "attempted_row_count": len(candidate_rows),
+            # How many rows the preserved corrupt file itself still carried -- an attempt that
+            # accounts for FEWER than this would have destroyed preserved evidence (see the
+            # `preserved_row_count` conjunct above).
+            "preserved_row_count": preserved_row_count,
+            "anchor_head_hash": anchor.get("head_hash"),
+            "attempted_final_row_hash": final_hash,
+            "attempted_chain_internally_consistent": internally_consistent,
+            "outcome": "halted",
         }
     )
-    return {"ok": False, "resumed": True, "exposure_unknown_dataset_ids": affected_dataset_ids}
+    return {"ok": False, "resumed": False}

@@ -99,12 +99,16 @@ assignment/exposure):
 |---|---|---|---|
 | `progress.trades_total_bucket` / `progress.quotes_total_bucket` | `str` — a frozen, predeclared coarse label (order-of-magnitude or power-of-two range, e.g. `"1M-10M"`), never a rounded number, differencing-resistant across successive snapshots | `tick_recorder.py` (`TickRecorderComputeManager`) | `GET /research/desk/micro/recorder/compute` |
 
-**Exposure-state value-space extension** (registered iter-12 — r6 §7.8 closure; widens the
-ALREADY-registered `exposure_state` field of the "Vault shards, universes, exposure ledger" row; no
-new owner, no new endpoint): the legal value set gains `exposure_unknown` beside the already-served
-`sealed`/`assigned`/`exposed` — a shard whose freshness an unverifiable ledger recovery could not
-prove, permanently ineligible for sealed-OOS use. Owner `vault.py`, served by
-`GET /research/desk/micro/vault` exactly as the other three values already are.
+**Exposure-state value-space extension** (registered iter-12 — r6 §7.8 closure; **RETRACTED
+iter-13 by spec revision r8**): iter-12 widened the ALREADY-registered `exposure_state` field of the
+"Vault shards, universes, exposure ledger" row with a fourth legal value, `exposure_unknown`, for a
+shard whose freshness an unverifiable ledger recovery could not prove. The 2026-08-19 owner ruling
+(spec r8) deleted the graded-recovery branch that was its only writer — recovery is now halt-only, so
+a vault whose history cannot be PROVEN stays blocked rather than partially servable — and the value
+is gone with it. The legal value set is back to exactly `sealed`/`assigned`/`exposed`, owner
+`vault.py`, served by `GET /research/desk/micro/vault`. No shape change, no new/removed field, no
+endpoint change: this row is recorded so the contract does not keep advertising a value nothing can
+produce. A future named revision may reintroduce a graded state only on a real identity commitment.
 
 **Unchanged owners** (this era reads them verbatim, never recomputes, never re-serves from a
 second endpoint): datasets/replay → `datasets.py` (`DatasetStore.replay`; gains one additive
@@ -172,7 +176,10 @@ from its one endpoint, read verbatim by UI/MCP/reports.
 <!-- iter-13 note: pure internal-correctness fix (vault.py's `recover_shard_ledger` recovery-path
      soundness + two documentation-only clarifications: `seal_shard`/`assign_shard`/`expose_shard`'s
      own-ledger-only gating scope, and a stale `micro_routes.py` docstring) — no Data Contract
-     change. The corrected halt/union-marking behavior has no serving endpoint (0 production call
-     sites, matching the iter-12 coherence audit's own precedent for `VaultRecoveryLedger`'s
-     content: "no Data Contract row needed yet ... register it if/when a route or CLI ever surfaces
-     it"). No new page, route, MCP tool, or nav-skeleton change; no reapproval file written. -->
+     change of shape or ownership. `recover_shard_ledger` itself has 0 production call sites and no
+     serving endpoint (matching the iter-12 coherence audit's own precedent for
+     `VaultRecoveryLedger`'s content: "no Data Contract row needed yet ... register it if/when a
+     route or CLI ever surfaces it"). The one contract-visible consequence of the iter-13 owner
+     ruling (spec r8, recovery is halt-only) is the RETRACTION of iter-12's `exposure_unknown`
+     value-space extension, recorded in place above rather than silently dropped. No new page,
+     route, MCP tool, or nav-skeleton change; no reapproval file written. -->

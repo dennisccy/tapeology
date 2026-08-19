@@ -109,6 +109,22 @@
 > scheme must be differencing-resistant. Rejected in both cases: accepting the residual leak.
 > A third audit finding (B3, the missing `verify_chain()` call) needed no ruling — r6 §7.8 already
 > settled it; the iteration-11 phase spec's claim that it is "an open owner question" is STALE.
+>
+> **Revision r8 (2026-08-19, owner ruling — recovery is halt-only this era).** The iteration-13
+> review PROVED by execution that r6 §7.8's graded resume branch cannot be made safe on the current
+> ledger: the tail anchor stores a row COUNT plus the final row's hash and no per-row identity, so a
+> same-length reconstructed suffix naming an unrelated dataset passes the completeness check —
+> the genuinely destroyed shard then exists in no ledger at all, `verify_chain()` reports clean, and
+> `seal_shard` will re-seal it fresh under another universe as if it had never existed. **Row-count
+> equality is not evidence of identity and must never authorize recovery.** r8 therefore DELETES the
+> union-marking / degraded-resume branch for this era: §7.8 becomes halt-only. Graded recovery
+> returns only under a FUTURE named revision built on a real identity commitment — and that
+> commitment must not be a mere SET of dataset ids: it must preserve enough to prove the exact
+> historical suffix (at minimum ordered row/event identities, preferably a canonical
+> checkpoint/manifest or Merkle-style commitment tied to the ledger chain). That migration is not to
+> be designed ad hoc inside this fix. Owner's governing sentence: **for this era, safety wins over
+> degraded availability — unknown or unprovable exposure history means the vault is unavailable,
+> never "fresh".** Traps → TR-29.
 
 ---
 
@@ -722,9 +738,28 @@ evaluation event is accounted for · write a NEW ledger epoch/recovery record ci
 ledger hash, last verified row + hash, reconstruction sources + hashes, recovered suffix hash,
 operator identity and time, and an explicit recovery reason. Only then may predicates resume.
 
-**If the missing suffix cannot be PROVEN complete, recovery must not truncate to the last verified
-row.** Every shard whose freshness could be affected is conservatively marked `exposure_unknown`
-and is permanently ineligible for sealed-OOS use — or the whole tranche halts.
+**If the missing suffix cannot be PROVEN complete, recovery HALTS — full stop (r8).** The owner
+deleted the graded resume branch after the iteration-13 review proved it unsafe: the tail anchor
+carries a row COUNT and the final row's hash but no per-row identity, so a same-length suffix
+naming an unrelated dataset satisfied the check while the genuinely destroyed shard vanished from
+every ledger, `verify_chain()` reported clean, and `seal_shard` would re-seal it fresh under
+another universe. **Row-count equality is not evidence of identity and must NEVER authorize
+recovery.** Therefore, for this era:
+
+- any missing, truncated, or tampered suffix keeps EVERY vault predicate fail-closed;
+- a reconstructed suffix is accepted ONLY if it can be proven against pre-existing trusted
+  commitments; matching row count alone is never sufficient;
+- operator attestation cannot substitute for missing identity evidence;
+- no affected shard becomes fresh, sealable, assignable, or `historical_oos` merely because the
+  reconstructed ledger now verifies internally;
+- if completeness cannot be proven, the affected vault/tranche stays BLOCKED.
+
+Graded recovery returns only under a FUTURE named revision built on a real identity commitment —
+and that commitment must NOT be a mere SET of dataset ids: it must preserve enough to prove the
+exact historical suffix (at minimum ordered row/event identities, preferably a canonical
+checkpoint/manifest or Merkle-style commitment tied to the ledger chain). That migration is not
+designed ad hoc inside a fix. **Safety wins over degraded availability: unknown or unprovable
+exposure history means the vault is unavailable, never "fresh".**
 
 **Traps.** Truncating the tail ⇒ all exposure predicates fail closed · mutating an interior row ⇒
 fail closed · replacing the ledger with a last-known-good prefix ⇒ still fail closed when a later
@@ -863,7 +898,8 @@ boundary by its `observed_through`.
 | TR-22 exposure registry | A spec registered after a logged serving of its validation window is auto-classed `historical_exposed_diagnostic`; the registry's r2 initialization marks every playbook-corpus and legacy-tick window exposed |
 | TR-23 sealed-verdict ownership (r6 §8.1) | A caller-asserted `passed` boolean is impossible/refused · mutating any evaluation input changes the artifact hash and invalidates the transition · a rule unregistered, or changed after assignment, fails closed · re-running the evaluator on identical inputs yields a byte-identical artifact and verdict · a second sealed evaluation for the same (`family_root_id`, shard) is refused · a failed verdict travels in every later export bundle |
 | TR-24 lineage boundary (r6 §8.2) | A KILLED sibling of the same `family_root_id` with a later `observed_through` than the survivor pushes `proposed_confirmation_boundary` past it (lineage knowledge cannot be laundered through candidate selection) · a deferred feature with `anchor_at < observed_through` moves the boundary by its `observed_through` · the final Referee boundary is never earlier than either the proposed or the registration boundary |
-| TR-25 vault-ledger integrity (r6 §7.8) | Tail truncation ⇒ every exposure predicate fails closed · interior-row mutation ⇒ fails closed · a last-known-good prefix still fails closed when a committed checkpoint proves later history existed · a hash-pinned reconstruction restores the exact prior exposure state · an unverifiable recovery never makes an affected shard fresh again (`exposure_unknown`, permanently sealed-OOS-ineligible) |
+| TR-25 vault-ledger integrity (r6 §7.8) | Tail truncation ⇒ every exposure predicate fails closed · interior-row mutation ⇒ fails closed · a last-known-good prefix still fails closed when a committed checkpoint proves later history existed · a hash-pinned reconstruction restores the exact prior exposure state · an unverifiable recovery never makes an affected shard fresh again — **under r8 that means the recovery is REFUSED and the tranche stays blocked** (the `exposure_unknown` state this row originally named was deleted with r8's graded-resume branch; see TR-29) |
+| TR-29 recovery is halt-only (r8 §7.8) | The demonstrated attack: seal `d-1`/`d-2`/`d-3`, destroy the row containing `d-3`, present a SAME-LENGTH reconstructed suffix containing an unrelated `d-fake` ⇒ recovery REFUSES, and `d-3` never becomes sealable again under another universe · same row count with REORDERED identities ⇒ refuse · same row count with a SUBSTITUTED identity ⇒ refuse · same final-row count but a missing earlier exposure ⇒ refuse · a cleanly internally re-chained forged suffix is NOT proof of historical completeness · operator attestation never substitutes for missing identity evidence |
 | TR-27 nonced rule commitment (r7 §7.2) | One ledger-tracked shard exposed while untracked pool members remain withheld ⇒ rule contents hidden · ALL tracked shards exposed but one untracked ORIGINAL-pool member still withheld ⇒ still hidden · after the final pool member is released ⇒ `symbol_rule` + `date_rule` + nonce reveal and recompute EXACTLY to the registered `rule_commitment` · a plausible-rule dictionary attack against the served commitment cannot verify guesses without the nonce · no other API/UI/MCP surface serves the symbol or date axes pre-release |
 | TR-28 coarse pre-release volumes (r7 §7.1) | A one-symbol-day run while withheld ⇒ no exact trade/quote/byte count appears on ANY surface · a multi-shard pool ⇒ coarse bucket labels only, never rounded numbers · expose one shard and re-query ⇒ the remaining withheld counts cannot be solved exactly from the before/after response pair (differencing resistance) · buckets never narrow as the pool shrinks · the final ORIGINAL-pool member released ⇒ exact totals may be served |
 | TR-26 depletion revealing quote (r6 §3) | Price-change termination: `available_at` equals the first CHANGED-price quote, not the last same-price one · bound termination: `available_at` equals the bound-hitting quote · truncating immediately BEFORE the revealing quote makes the depletion value non-existent/unavailable, and including it makes the value appear deterministically |

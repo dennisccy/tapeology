@@ -1,0 +1,46 @@
+{
+  "phase": "goal-rapid-microscope-iter-13",
+  "status": "complete",
+  "current_step": "closure_passed",
+  "updated_at": "2026-08-19T15:44:17.063033Z",
+  "started_at": "2026-08-19T10:37:26.023055Z",
+  "cli": "claude",
+  "blockers": [],
+  "note": "FIX PASS (attempt 2) implementing the owner ruling escalated by the review's CRITICAL: spec revision r8 -- recovery is HALT-ONLY this era. Deleted recover_shard_ledger's graded/union-marking resume branch and the STATE_EXPOSURE_UNKNOWN lifecycle value it was the sole writer of; the function now has exactly two outcomes (hash-attested proof resumes the exact prior state; everything else halts with the corrupt file byte-untouched, every predicate and lifecycle transition still raising VaultLedgerCorruptionError, and an immutable recovery_halted incident row recording why the proof failed). _serialize_shard's reveal test became a positive whitelist (assigned/exposed) so an unrecognised state serves only the opaque projection. Return contract is now {ok, resumed}; exposure_unknown_dataset_ids is gone. Zero on-disk format change (the ruling's stop sign), no identity-commitment migration designed (explicitly deferred to a future named revision). TR-29's six owner-enumerated traps implemented and green, each asserting the count equality explicitly so no refusal passes for the trivial reason of a short suffix; three of them also prove the TRUE reconstruction still completes against the same untouched file. Attacking the fix by execution found and closed TWO further laundering paths on the proven-complete side: an empty reconstruction used to 'prove' a wiped ledger against a zero-row anchor (every sealed shard became fresh and re-sealable -- observed), and a caller-supplied verify_result understating the damage used to certify a tampered prefix as complete (returned ok:True and wrote a recovery_completed attestation -- observed). Both closed inside the same proof (non-empty candidate + whole-chain internal consistency re-derived via the existing _rehash_suffix primitive, spec 7.8's own consistency step), both regression-tested; both only narrow the resume door. blueprint.md records the RETRACTION of iter-12's exposure_unknown value-space extension. Frozen rails re-verified: fingerprint 08e471b10130e1e2, config.py diff empty, six referee_*.py byte-untouched, MCP EXPECTED_TOOLS still 22, zero frontend files, real .data unchanged (18 datasets, no micro_vault dir).",
+  "changed_files": [
+    "apps/backend/app/research/vault.py",
+    "apps/backend/app/research/micro_routes.py",
+    "apps/backend/tests/test_vault.py",
+    "apps/backend/tests/test_tick_recorder.py",
+    "runs/goal-session-rapid-microscope/state/blueprint.md",
+    "docs/handoffs/goal-rapid-microscope-iter-13-dev.md",
+    "reports/phase-goal-rapid-microscope-iter-13-implementation-summary.md",
+    "runs/goal-rapid-microscope-iter-13/status.json"
+  ],
+  "tests_run": true,
+  "test_summary": {
+    "command": "cd apps/backend && .venv/bin/python -m pytest tests/ -q --junitxml=<file>",
+    "collected": 3227,
+    "passed": 3219,
+    "skipped": 8,
+    "failed": 0,
+    "errors": 0,
+    "exit_code": 0,
+    "duration_s": 589,
+    "counts_source": "JUnit XML attributes (tests/failures/errors/skipped), cross-checked against REAL_EXIT_CODE=0",
+    "baseline": {
+      "collected": 3218,
+      "passed": 3210,
+      "skipped": 8,
+      "failed": 0,
+      "source": "dispatch-stated baseline (the FAILED attempt-1 run)"
+    },
+    "delta": "+9 collected / +9 passed / 0 skipped / 0 failed -- exactly the 9 tests this fix pass adds (6 TR-29 traps + 2 self-attack probe regressions + 1 serialization-whitelist test), 0 regressions",
+    "module": "tests/test_vault.py alone: 73 passed / 0 failed (was 64)"
+  },
+  "expected_behavior_changes": "r8 deletes behaviour attempt 1 had just shipped, so 10 existing recovery tests in test_vault.py changed. The material one is test_tc5_a_wrong_nonempty_reconstruction_is_also_refused_never_treated_as_proven: it previously asserted the graded resume (resumed:True, ledger rewritten, exposure_unknown_dataset_ids == [d-1, d-2]) and now asserts a refusal PLUS strictly more (the count matched the anchor exactly and bought nothing; the file is byte-untouched; build_vault_state still raises; the halted record shows count-match-with-hash-mismatch) -- its name already said 'is also refused'. The other changes are the two-key return-shape update and the renamed forensic fields. No test deleted, no assertion weakened, no frozen guard test edited.",
+  "browser_checks_run": true,
+  "qa_report_file": "reports/qa/goal-rapid-microscope-iter-13-qa.md",
+  "qa_verdict": "PASS",
+  "next_action": "finalize"
+}

@@ -963,3 +963,110 @@ deferred together, not split.
 (zero call sites either way); a future iteration that wires real production callers for
 `seal_shard`/`assign_shard`/`expose_shard` (J-06 step 4's eventual scope) is the natural place to
 revisit both halves together.
+
+## 2026-08-19 — OWNER RULING → spec revision r8 "recovery is halt-only this era"
+
+Escalated from the iteration-13 REVIEW (verdict FAIL, one CRITICAL proven by execution against the
+real `vault` module); answered by the owner directly. Recorded in `docs/rapid-validation-spec.md` r8
+(header + §7.8 rewrite + TR-29) and `docs/goal.md` (trap range TR-1…TR-28 → TR-1…TR-29).
+
+**The proven attack** (`vault.py:1612`, `every_anchor_row_named` checked ROW COUNT only): seal
+`d-1`/`d-2`/`d-3` → destroy `d-3`'s row (anchor untouched at `row_count=3`) → hand
+`recover_shard_ledger` a SAME-LENGTH suffix naming an unrelated `d-fake` → result
+`{"ok": False, "resumed": True, exposure_unknown: [d-1, d-2, d-fake]}`, with `d-3` in NO ledger at
+all, `verify_chain()` reporting `ok: True`, and `seal_shard(dataset_id="d-3", universe_id="u2")`
+succeeding — resealing it fresh as if it had never existed. Root cause: the tail anchor stores a row
+count plus the final row's hash and NO per-row identity, so counting can never prove identity.
+
+**Ruling — option 3, "halt now, commitment later":**
+- **DELETE the union-marking / degraded-resume branch** for this era. §7.8 is halt-only.
+- **Row-count equality is not evidence of identity and must never authorize recovery.**
+- Any missing, truncated or tampered suffix keeps EVERY vault predicate fail-closed; a reconstructed
+  suffix is accepted only if provable against pre-existing trusted commitments; operator attestation
+  cannot substitute for missing identity evidence; no affected shard becomes fresh, sealable,
+  assignable or `historical_oos` merely because the reconstructed ledger now verifies internally; if
+  completeness cannot be proven the vault/tranche stays BLOCKED.
+- **Graded recovery returns only under a FUTURE named revision** built on a real identity
+  commitment — and that commitment must NOT be a mere SET of dataset ids: at minimum ordered
+  row/event identities, preferably a canonical checkpoint/manifest or Merkle-style commitment tied
+  to the ledger chain. **Do not design that migration ad hoc inside this fix.**
+- Owner's governing sentence: **for this era, safety wins over degraded availability — unknown or
+  unprovable exposure history means the vault is unavailable, never "fresh".**
+
+**TR-29 traps** (the owner enumerated these): the demonstrated d-fake attack (refuse; `d-3` never
+sealable again under another universe) · same count REORDERED identities ⇒ refuse · same count
+SUBSTITUTED identity ⇒ refuse · same final-row count but a missing earlier exposure ⇒ refuse · a
+cleanly internally re-chained FORGED suffix is not proof of historical completeness.
+
+## 2026-08-19 — PUMP note: iteration-13 audit residuals carried forward
+
+The iteration-13 independent auditor (PASS_WITH_GAPS) found and FIXED a third laundering path on the
+**proven-complete** side that r8's ruling did not reach — `micro_chain_ledger.append_row` writes the
+row before the anchor, and its own comment wrongly calls the gap "benign — never falsely short". With
+the anchor lagging one row, a BYTE-GENUINE reconstruction of the anchor-length history satisfied every
+conjunct and `rewrite_from_recovery` truncated the surplus away, re-sealing a genuinely sealed shard.
+No attacker required: a power loss inside `append_row` plus an honest operator reproduces it. Fixed
+with a fifth conjunct (`len(candidate_rows) >= preserved_row_count`) — a pure additional REFUSAL, so
+it does not resurrect count equality as evidence — plus a non-vacuity regression test.
+
+Carried items, none blocking, all for the next planner:
+1. **B2 (deferred by r8, but schedule it):** removing the ledger AND its anchor together makes
+   `verify_chain()` return `ok: True` over an empty ledger, and every sealed shard becomes re-sealable.
+   r8 explicitly defers the identity commitment that would close this. The auditor's judgement, which
+   the pump endorses: this is **the strongest argument for scheduling the identity-commitment revision
+   BEFORE J-06 step 4** (the credentialed recording tranche) rather than after. Note the dev's
+   disclosure understates it — it needs two `rm`s, not a "self-consistent forgery".
+2. Trap inventory is **24 of 29** (the iteration-13 DoD's "23 of 28" is stale — TR-29 landed mid-iteration).
+3. TR-29's sixth trap does not explicitly assert `attempted_row_count == anchor_row_count`; it satisfies
+   it by construction today (3==3), so it is not vacuous now, but a shortened suffix would make it so.
+4. `state/golden-gaps` was auto-deleted by the replay lane for the THIRD time in this project. J-07 still
+   has no golden replay script — correctly, since `demo_runner.normalize_url()` rewrites localhost URLs
+   onto the frontend base and no frontend proxy exists for `/research/*` — but the disclosure that said
+   so keeps vanishing. Worth a durable fix in the harness rather than re-writing the file each round.
+5. `docs/rapid-validation-spec.md`'s TR-25 row cited the deleted `exposure_unknown` state; the pump
+   corrected it in place (the row now points at TR-29 and states the r8 halt-only outcome).
+
+## iter-13 — goal-evaluator
+
+**Ambiguity:** the merged results table reports UT-J-01…UT-J-05 as PASS and cites
+`reports/qa/goal-rapid-microscope-iter-13-evidence/J-0{1..5}-verify.png`, but none of those five
+files exists on disk (iters 11 and 12 both wrote theirs). Methodology A.3's "no citation ⇒ `unknown`"
+rail is written for journeys whose status CHANGED; A.6 (durability) and A.7 (capture defect ≠ product
+failure) point the other way for stable-passing journeys. Nothing states which governs a stable
+journey whose fresh capture was promised, reported, and then not written.
+**We chose:** keep J-02…J-05 `passing` with `evidence_makeup: true` and `last_evidence_path` left on
+the iter-12 files that DO exist, rather than downgrading four journeys to `unknown`. Grounds
+established by me, not from any report: (a) the only product files changed this iteration are
+`vault.py` and one docstring in `micro_routes.py` — every one of those journeys' own modules
+(`micro_observer.py`, `micro_snapshots.py`, `micro_join.py`, `scout.py`, `scout_ledger.py`,
+`walkforward.py`) is byte-unchanged, so A.6 keeps the iter-12 captures valid; (b) my own full-suite
+run (3228 collected / 3220 passed / 8 skipped / 0 failed, exit 0) covers each journey's test module;
+(c) J-05 is the one that genuinely reaches the changed module (`walkforward.py` calls
+`vault.currently_sealed_dataset_ids`) and is covered by that same run. J-01 is NOT scored this way —
+it got a genuine fresh capture this iteration (UT-06/07/08) plus my own re-derivation of its numbers
+against the owner's real store.
+**Reversible:** yes — the make-up capture rides the next iteration as a passenger task, and a failure
+there re-opens all four immediately.
+
+## iter-13 — goal-evaluator (second)
+
+**Ambiguity:** whether ESCALATE is available when the decision tree's literal clause does not fire.
+Tree C.4's three triggers are "the same journey failed 2+ consecutive iterations" (J-08 has never been
+ATTEMPTED, only never built), "the review lane failed and the pipeline proceeded fail-open" (the
+review DID fail, but the pipeline correctly halted, escalated to the owner, obtained ruling r8, and
+rebuilt — the opposite of fail-open), and "this LEAN iteration surfaced cross-cutting ambiguity"
+(this iteration was full). Read strictly, first-match-wins lands on C.5 → CONTINUE.
+**We chose:** ESCALATE, and I am recording that this is a deliberate departure from the tree's literal
+text rather than pretending a clause fired. Grounds: the verdict line is the ONLY mechanically binding
+grant of full depth in this engine — iteration 13's own phase spec says so verbatim ("Full trigger 3 —
+iteration 12's own verdict line was ESCALATE ... the arbiter cannot demote it"), and this session has
+the counter-example on record: iteration 11's evaluator asked for full depth in PROSE, the arbiter
+downgraded iteration 12 to lean, and no auditor ran on a round that shipped safety-critical vault
+machinery. The next iteration builds J-08's Validation Vault / Scout / Walk-Forward panels, which are
+governed by the era's "one opaque research pool" anti-goal (critical) — a panel listing either side
+per-shard is a breach by construction. In this session the independent auditor is the only lane that
+has ever caught this fault class, now five times (iters 2, 4, 5, 7, 13), each time AFTER review and QA
+had both passed the same code. Cost of being wrong: one extra audit lane. Cost of being right and
+having chosen CONTINUE: an unaudited iteration over the era's most confidentiality-sensitive surface.
+**Reversible:** yes — ESCALATE only sets the next iteration's depth; it halts nothing, and a later
+evaluator can return to lean once J-08's surfaces are built and browser-verified.
