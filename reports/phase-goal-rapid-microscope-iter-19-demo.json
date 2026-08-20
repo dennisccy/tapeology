@@ -1,0 +1,206 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-rapid-microscope-iter-19",
+  "base_url": "http://localhost:3301",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the Desk page",
+      "narration": "The Desk page shows your research work: data readiness, a running ledger of ideas you have tested, how they held up over time, and whether any idea graduated. Let's see it.",
+      "point_out": "The page heading 'Playbook Signals' appears at the top. Below are seven collapsible sections showing your research state.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "goto",
+        "url": "/desk"
+      },
+      "expect": {
+        "text": "Playbook Signals"
+      }
+    },
+    {
+      "n": 2,
+      "title": "Expand Microscope Readiness",
+      "narration": "This section shows how much data you have on hand: the symbol-dates covered, the daily minutes, and a table of past recordings with their quality score in the 'Fallback frac' column.",
+      "point_out": "The section opens. You see a summary table of corpus totals and below it a table with columns including 'Fallback frac', showing data quality for each recording.",
+      "journey": "J-02",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "css": "[data-testid='desk-section-expand-microReadiness']"
+        }
+      },
+      "expect": {
+        "text": "Fallback frac"
+      }
+    },
+    {
+      "n": 3,
+      "title": "Expand Scout Ledger",
+      "narration": "The Scout Ledger holds every quick idea you have tested: the screening results, whether each passed or failed, and integrity proof. The ledger is chain-verified so you can trust the record is complete.",
+      "point_out": "The section opens. You see 'Ledger chain verification:' followed by 'ok' or an error message, confirming the record is intact and unbroken.",
+      "journey": "J-04",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "css": "[data-testid='desk-section-expand-scoutLedger']"
+        }
+      },
+      "expect": {
+        "text": "Ledger chain verification:"
+      }
+    },
+    {
+      "n": 4,
+      "title": "Expand Walk-Forward",
+      "narration": "This section shows how your ideas hold up when tested forward over time, fold by fold. It also has chain verification to prove the fold records are genuine and unbroken.",
+      "point_out": "The section opens. You see 'Ledger chain verification:' confirming the walk-forward record is complete.",
+      "journey": "J-05",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "css": "[data-testid='desk-section-expand-walkForward']"
+        }
+      },
+      "expect": {
+        "text": "Ledger chain verification:"
+      }
+    },
+    {
+      "n": 5,
+      "title": "Navigate to the Cockpit",
+      "narration": "The Cockpit is your live market workspace. It shows a real-time tape of orders and quotes, watched price charts, and a control panel showing your current read of market pressure for each tracked symbol.",
+      "point_out": "The Cockpit loads. You see 'No ticker watched' because we have not asked it to track any symbol yet.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "goto",
+        "url": "/"
+      },
+      "expect": {
+        "text": "No ticker watched"
+      }
+    },
+    {
+      "n": 6,
+      "title": "Add a ticker to watch",
+      "narration": "Type a symbol name into the Ticker field. This tells the Cockpit to stream live market data for that symbol.",
+      "point_out": "The ticker field is filled and ready for the next step.",
+      "journey": "",
+      "new": false,
+      "verified": false,
+      "section": "full_tour",
+      "action": {
+        "type": "fill",
+        "target": {
+          "label": "Ticker"
+        },
+        "text": "SIM-BUYER"
+      }
+    },
+    {
+      "n": 7,
+      "title": "Click Watch",
+      "narration": "Clicking Watch activates the live tape reader for this symbol. It begins flowing market data through your pressure algorithm in real time.",
+      "point_out": "A panel labeled 'Buyer Control' appears, showing that the tape reader is live and has generated its first pressure reading.",
+      "journey": "J-10",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "role": "button",
+          "name": "Watch"
+        }
+      },
+      "expect": {
+        "text": "Buyer Control"
+      }
+    },
+    {
+      "n": 8,
+      "title": "Navigate to the Structure page",
+      "narration": "The Structure page is a support-resistance wall map. It shows where the real price levels are on a chart—the exact points where supply or demand is so concentrated that they stand out. Enter a symbol and a date, and it computes and displays the map for that exact moment.",
+      "point_out": "The Structure page loads. You see the heading 'Tradable Map' and fields ready for a symbol and date.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "goto",
+        "url": "/structure"
+      },
+      "expect": {
+        "text": "Tradable Map"
+      }
+    },
+    {
+      "n": 9,
+      "title": "Enter symbol and date",
+      "narration": "Enter AAPL as the symbol and 2026-06-22 16:00:00 (Eastern Time) as the date to load the structure map for that exact moment in time.",
+      "point_out": "Both fields are filled in.",
+      "journey": "",
+      "new": false,
+      "verified": false,
+      "section": "full_tour",
+      "action": {
+        "type": "fill",
+        "target": {
+          "label": "Structure symbol"
+        },
+        "text": "AAPL"
+      }
+    },
+    {
+      "n": 10,
+      "title": "Enter the as-of date",
+      "narration": "This date tells the Structure page exactly when to measure the wall.",
+      "point_out": "The date field is filled.",
+      "journey": "",
+      "new": false,
+      "verified": false,
+      "section": "full_tour",
+      "action": {
+        "type": "fill",
+        "target": {
+          "css": "[data-testid='structure-as-of-input']"
+        },
+        "text": "2026-06-22 16:00:00"
+      }
+    },
+    {
+      "n": 11,
+      "title": "Load the structure map",
+      "narration": "Click Load to compute and display the support-resistance band for this symbol and date. This is the real AAPL wall at that exact moment—the exact levels where supply and demand meet.",
+      "point_out": "The map appears. You see the resistance band labeled '300.11–302.2', the real wall example that has been shipped and verified in every iteration.",
+      "journey": "J-10",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "css": "[data-testid='structure-load-button']"
+        }
+      },
+      "expect": {
+        "text": "300.11–302.2"
+      }
+    }
+  ]
+}

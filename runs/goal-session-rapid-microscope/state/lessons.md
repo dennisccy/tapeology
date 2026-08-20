@@ -319,3 +319,35 @@ those rows verify only that `/desk` renders. The tell was in the artifacts: all 
 screenshots share one md5, read their scripts — the checks are probably measuring the same nothing.
 **Applies to:** any iteration or evaluator relying on `regression-replay-results.md` /
 `auditor-regression-replay-results.md` rows as journey re-verification.
+
+## iter-19 — 2026-08-20T16:35:00Z
+
+**Verdict:** CONTINUE
+**Lesson:** A determinism ("same input, same output") comparison over a SATURATED statistic is
+blind by construction, and the standard mutation-proof will never reveal it. In
+`test_micro_deterministic_rerun.py`'s TC-2, the fixture screened `_planted_effect_anchors()` at
+`effect=3.0`, which saturates the 2,000-draw block-permutation null in `scout.py:141`, pinning
+`p_screen` to the floor `1/2001` in every run — so replacing `scout.scout_stream` with an unseeded
+`random.Random()` left the whole compared payload byte-identical and all eight landed tests green
+(I reproduced this myself in the real file, then restored it md5-identical). TC-4-style
+mutation-proofs cannot catch it because they perturb the comparison's INPUT, not the COMPUTATION;
+the mutation that discriminates is the one applied to the SEED LINEAGE. Rule for any future
+determinism check: pick a fixture whose statistic lands strictly INSIDE the null distribution, and
+mutation-proof the seeded stream itself, not just the comparator.
+**Applies to:** any iteration adding a determinism / byte-identity / "reruns match" assertion, and
+any change touching `scout.py`, `walkforward.py`, or `micro_snapshots.py` seeded streams.
+
+## iter-19 (second) — 2026-08-20T16:35:00Z
+
+**Verdict:** CONTINUE
+**Lesson:** J-07 "Graduation" can NEVER have a stored golden replay script with the current
+harness, so the SPEED-23 nudge (and the iter-19 audit's §5 recommendation to "author its golden
+script") is chasing something impossible. Three independent reasons, all verified:
+`demo_runner.normalize_url()` (`incredible_auto_dev/scripts/automation/lib/demo_runner.py:39-57`)
+rewrites ANY localhost URL onto the FRONTEND base, so a step targeting `:8301` silently lands on
+`:3301`; there is no frontend rewrite/proxy for `/research/*`; and `/desk` renders no graduation
+content at all (`grep -c graduation apps/frontend/app/desk/page.tsx` returns 0). Its LLM lane is a
+design consequence, not an oversight — which also means J-07 is the journey most likely to be shed
+by a wall-clock trim, because the LLM lane is the expensive one.
+**Applies to:** any iteration planning J-07 verification, reacting to a `state/golden-gaps` nudge,
+or considering harness work to make backend-only journeys replayable.

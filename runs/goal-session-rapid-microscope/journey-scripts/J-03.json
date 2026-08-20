@@ -4,6 +4,7 @@
   "name": "Structure × flow — the join that never looks ahead",
   "default_timeout_ms": 10000,
   "steps": [
-    {"n": 1, "journey": "J-03", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Index Reconciliation"}}
+    {"n": 1, "journey": "J-03", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Playbook Signals"}},
+    {"n": 2, "journey": "J-03", "action": {"type": "click", "target": {"testid": "desk-section-expand-microReadiness"}}, "expect": {"text": "Joinable corpus — withheld (excluded)"}}
   ]
 }

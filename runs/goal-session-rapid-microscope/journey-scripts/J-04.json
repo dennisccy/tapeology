@@ -4,6 +4,7 @@
   "name": "The Scout and the ledger — every trial on the record",
   "default_timeout_ms": 10000,
   "steps": [
-    {"n": 1, "journey": "J-04", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Screen Runs"}}
+    {"n": 1, "journey": "J-04", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Playbook Signals"}},
+    {"n": 2, "journey": "J-04", "action": {"type": "click", "target": {"testid": "desk-section-expand-scoutLedger"}}, "expect": {"text": "Ledger chain verification:"}}
   ]
 }

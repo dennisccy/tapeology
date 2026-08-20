@@ -1193,3 +1193,104 @@ explaining why J-07 has no replay script SURVIVED this round for the first time 
 small win for the framework people; and this is the seventh round in which I have written "escalate"
 purely to stop the machine cutting the independent checker for time. Tell the machine that request
 cannot be cut, and I can go back to plain "continue".
+
+## Iteration 19 — goal-rapid-microscope-iter-19
+
+**Date:** 2026-08-20T16:35:00Z
+**Verdict:** CONTINUE
+**Depth dispatched:** full (forced by my round-18 verdict line; the independent checker ran and
+earned its place an eighth time — see below)
+**Journey deltas:**
+- Newly passing: **J-10 "The kept product stands"** — partial → PASSING. Its last missing piece, the
+  repeat-run check, landed and is genuinely sound. This is the first newly-passing journey in this
+  session since round 12.
+- Newly failing: none
+- Regressed: none
+- Re-verified this round, and for four of them it MEANS something for the first time: J-01, J-02,
+  J-03, J-04, J-05, J-08 passing, J-06 partial. Last round I refused to refresh J-02–J-05's
+  verification stamps because their stored checks could not fail. This round is exactly the fix, so
+  I have refreshed all of them.
+- NOT verified: J-07 "Graduation" — the clock cut it (row reads DEFERRED-BUDGET, "not run this
+  iteration"). It keeps its passing status and its stamp stays at round 18, deliberately not
+  refreshed. It is the only journey with no fresh proof and it blocks the finish line.
+- J-09 "The pilot studies" failing — out of scope for the seventh round running; I confirmed it
+  unbuilt on disk rather than assuming.
+- Anti-goal violations: no critical ones, introduced or open. THREE older minor items CLOSED, all
+  three proved closed by me. TWO NEW minor items opened, one of which is my own finding that no lane
+  raised. Six stay open, all decided, none waiting on you except the economic-floor ruling.
+
+**Reasoning:** I took nothing on trust. I ran the whole test set myself: 3,281 passed, 8 skipped, 0
+failures, 0 errors, clean exit in 676.64s — 18 more than the round started with, none lost. (Use
+3,281; the quality report's 3,279 was correct only before the checker added two tests.) I checked the
+frozen parts by hand: the fingerprint prints 08e471b10130e1e2, all six judge files hash byte-identical
+to the era's opening record, and no product file changed at all — I confirmed the product diff is
+literally empty. I swept the test folder for safety-test labels myself and found TR-1 through TR-30
+with no gap, and I record a trap for future readers: TR-17 exists ONLY as three lettered parts
+(TR-17a/b/c), so a plain "TR-17" search reports a false hole — my own first sweep fell into it, and
+past rounds' "exactly 30, no gap" claims were right for a reason nobody wrote down.
+
+The round's real work is done and I proved it the hard way. I broke the shipped program twice. Ripping
+the seeded random source out of the Scout turned exactly two tests red, with the reported figure
+genuinely moving (0.2164 versus 0.2374). Injecting a random value into the snapshot builder turned two
+more red. Then I put both files back and confirmed they were byte-identical. I also opened the pictures
+rather than reading the rows: the cockpit is genuinely alive with moving candles and a changing tape
+state; the structure page really draws AAPL's band map for 22 June with the 300.10 and 302.20 walls;
+every shipped Desk section renders, including all three Referee sections — the Registry really shows
+the fingerprint on screen — and the Validation Vault with a real shard row and both chain checks ok.
+
+The finding that matters most is not mine. The round's headline promise is "the same work always gives
+the same answer". As the coder delivered it, the Scout half of that promise COULD NOT SEE the thing it
+was meant to guard: the practice data used a signal so strong that the answer was pinned to its floor
+in every run, so tearing out the seeded random source entirely left the compared result identical. The
+review passed it and the quality check passed it. The independent checker found it by RUNNING the code
+and closed it with two new tests. I did not take that on trust either — I made the same break myself
+and watched all eight of the coder's original tests stay green while only the checker's two new ones
+failed. That is the eleventh escape past review and quality check in this session. The reusable lesson,
+which I have recorded: a sameness check over a saturated number is blind by construction, and the
+usual style of "prove the test can fail" will never reveal it, because it disturbs what goes INTO the
+comparison rather than the computation itself.
+
+Three older complaints are closed and I proved each one. My own last-round finding — four stored
+checks that could not fail — is fixed: each now opens its own section and asserts a real field from
+it, I confirmed the change only ADDS steps, and I confirmed from the source that a section's contents
+are truly removed from the page when collapsed, so those strings cannot appear unless the click
+really worked. Reports claiming a data store they never checked are fixed: the launcher now writes a
+permanent record of which store the server was started against, and the browser report cites it by
+name and says plainly it was not the real store. And the plan heading that silently switched off two
+checking lanes last round is fixed: this plan says "yes" with the reason written out, and both lanes
+genuinely ran.
+
+Two honest limits. First, J-07 "Graduation" was not checked by anyone this round, yet the quality
+report still ticked its box using the words "the full set EXISTS AND CAN BE EXECUTED" — certifying
+coverage no lane provided. That is the fifth round running where a lane other than the checker
+certified something it never checked. Second, and my own finding: the picture for the backend-failure
+check does not show what its row describes — it is a mostly empty frame. The claim itself is sound
+(its checks were on the page's contents, not the picture, and I confirmed the behaviour in the source
+myself), but that check is the live proof that two of the new assertions can fail, and that proof now
+rests on everything except its own photograph.
+
+**Next-step recommendation:** Do ONE CHEAP EVIDENCE-ONLY ROUND whose single job is to re-check J-07
+"Graduation" with a fresh browser pass. That is genuinely the only machine work left in this era.
+Two things it must NOT do. It must not try to write a stored replay script for J-07: the checker
+suggested it, but I checked and it is impossible today — the replay tool rewrites any address onto
+the website's own port, the website has no pass-through for the research addresses, and the Desk page
+carries no graduation content at all (I searched: zero mentions). And it must not be a heavy round —
+a heavy round is what ran out of clock and caused the skip, there is no new code for the checker to
+examine, and repeating it risks skipping J-07 a third time. One thing repairs itself: the bookkeeping
+file listing journeys with no stored script was deleted this round, but I read the harness code and it
+rebuilds automatically the moment J-07 passes again.
+
+I am ALSO ending, deliberately, a run of seven rounds in which I wrote "escalate" purely to stop the
+machine cutting the independent checker for time. I am not doing it an eighth time, and the reason is
+specific rather than fatigue: there is no new code next round for the checker to check, and the heavy
+round is itself what caused this round's skip. Escalating now would work against the one thing that
+still needs doing.
+
+Finally, the plain truth about where this era stands. After J-07 is re-checked, NINE of ten journeys
+are green and the remaining work cannot move without you. Two things wait on your decision: (1) where
+a candidate's pre-registered money floor and evidence label should come from — until you answer, the
+sealed judge keeps the hole you already ruled must close before any sealed result counts, and J-09
+"The pilot studies" cannot honestly start because that judge would grade it; and (2) whether to
+authorise the operator recording of real market tape for J-06 "The recorder and the Vault", or to
+change what the goal asks of it. If neither is answered, the next round after the J-07 re-check will
+have nothing productive left and I will have to call this stalled.

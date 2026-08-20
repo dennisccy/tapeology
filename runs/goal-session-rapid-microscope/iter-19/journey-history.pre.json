@@ -4,67 +4,67 @@
       "id": "J-01",
       "name": "The era transition stands — the corpus truth on the record",
       "status": "passing",
-      "last_verified_iter": "goal-rapid-microscope-iter-19",
-      "last_passing_iter": "goal-rapid-microscope-iter-19",
+      "last_verified_iter": "goal-rapid-microscope-iter-18",
+      "last_passing_iter": "goal-rapid-microscope-iter-18",
       "first_seen_iter": "goal-rapid-microscope-iter-0",
-      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-19-evidence/J-01-verify.png",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-18-evidence/J-01-verify.png",
       "spec_hash": "1791ebcd14c10fa789e1048509f8f8af20a7696fe11a7de4bf946b446d4fbb52",
-      "note": "iter-19: re-verified by the replay lane (UT-J-01 PASS). Its step-2 assertion (\"hand_assigned\" inside the expanded Microscope Readiness section) is genuinely discriminating -- CollapsibleSection.tsx:57-61 mounts the body ONLY when open, so the string cannot be present while collapsed (evaluator verified from source; UT-09 proved the unmount live). Stamp refreshed."
+      "note": "iter-18: RE-VERIFIED. The pipeline's own browser/replay lanes NEVER RAN this round (spec metadata 'Frontend Present: no' vs a DoD naming browser-qa-agent twice; status.json browser_checks_run:false); the independent auditor executed the replay lane itself and persisted its evidence to reports/qa/goal-rapid-microscope-iter-18-evidence/ (see auditor-regression-replay-results.md, UT-J-01 PASS). The evaluator OPENED J-01-verify.png: it shows the Microscope Readiness Corpus Totals table (Distinct symbol-days 2, Distinct datasets 3, RTH minutes covered 1.75, Session-equivalents 0.0045, Referee tick-gate 150) -- the journey's own acceptance surface, not merely a page that loaded. J-01's golden script is 2-step and asserts 'hand_assigned' inside microReadiness, i.e. it is journey-relevant (unlike J-02..J-05's, see their notes)."
     },
     "J-02": {
       "id": "J-02",
       "name": "The micro observer — one pass, prefix-honest, benchmarked",
       "status": "passing",
-      "last_verified_iter": "goal-rapid-microscope-iter-19",
-      "last_passing_iter": "goal-rapid-microscope-iter-19",
+      "last_verified_iter": "goal-rapid-microscope-iter-16",
+      "last_passing_iter": "goal-rapid-microscope-iter-16",
       "first_seen_iter": "goal-rapid-microscope-iter-0",
-      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-19-evidence/J-02-verify.png",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-18-evidence/J-02-verify.png",
       "spec_hash": "01f4f43564cba7431118d4a504b9dbeb20f1a994fdb52be5ceded15529d8b27a",
-      "note": "iter-19: FIRST re-verification in this era that actually means something. The iter-18 evaluator's own finding -- this script was a single step asserting the unrelated pre-existing heading \"Top-up Runs\", so it could not fail while /desk rendered -- is CLOSED this round: step 1 now asserts \"Playbook Signals\" and a NEW step 2 expands desk-section-expand-microReadiness and asserts the \"Fallback frac\" column header (per-shard fallback_frac, the disclosure J-02's own Vision text names). Evaluator verified the diff is strictly additive, confirmed from source that the body mounts only when open, and saw the header rendered in the UT-06 capture. Stamp refreshed."
+      "note": "iter-18: status CARRIED on evidence durability, NOT refreshed. Its owning module is byte-unchanged this round (the only product files touched are micro_sealed_evaluation.py + its test + a QA-only seed script + the QA rig launcher; `git status --porcelain` on micro_observer.py/micro_join.py/scout.py/walkforward.py is empty). last_verified_iter is DELIBERATELY left at its prior value because this round's replay row for it is NON-DISCRIMINATING: the evaluator read the stored golden script and it is a SINGLE step -- goto /desk, expect 'Top-up Runs' -- which is a pre-existing Era-B Desk section heading with nothing to do with the micro observer. It cannot fail while /desk renders, so it re-verifies page reachability, not the journey. Screenshots J-02/J-03/J-04/J-05-verify.png are BYTE-IDENTICAL to each other (md5 ae1bc7b887fd3ddbb7c325c1b3d89835) -- the same top-of-/desk view -- which is the visible symptom of the same fact. Recorded as an iter-18 open minor item; a passenger task to make these four scripts discriminating is in the next-step recommendation."
     },
     "J-03": {
       "id": "J-03",
       "name": "Structure x flow — the join that never looks ahead",
       "status": "passing",
-      "last_verified_iter": "goal-rapid-microscope-iter-19",
-      "last_passing_iter": "goal-rapid-microscope-iter-19",
+      "last_verified_iter": "goal-rapid-microscope-iter-16",
+      "last_passing_iter": "goal-rapid-microscope-iter-16",
       "first_seen_iter": "goal-rapid-microscope-iter-0",
-      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-19-evidence/J-03-verify.png",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-18-evidence/J-03-verify.png",
       "spec_hash": "a671f63835247f7fca66a41a2dc48ec4fe3e83fe0bda85d3703ef385cb20de83",
-      "note": "iter-19: same closure as J-02 -- the old single step asserted the unrelated heading \"Index Reconciliation\". New step 2 expands microReadiness and asserts \"Joinable corpus -- withheld (excluded)\", the one already-rendered joinable_corpus field (iter-10 Disclosure sub-fields row). Evaluator saw it rendered (=0) in the UT-06 capture. Stamp refreshed."
+      "note": "iter-18: status CARRIED on evidence durability, NOT refreshed. Its owning module is byte-unchanged this round (the only product files touched are micro_sealed_evaluation.py + its test + a QA-only seed script + the QA rig launcher; `git status --porcelain` on micro_observer.py/micro_join.py/scout.py/walkforward.py is empty). last_verified_iter is DELIBERATELY left at its prior value because this round's replay row for it is NON-DISCRIMINATING: the evaluator read the stored golden script and it is a SINGLE step -- goto /desk, expect 'Index Reconciliation' -- which is a pre-existing Era-B Desk section heading with nothing to do with the structure x flow join. It cannot fail while /desk renders, so it re-verifies page reachability, not the journey. Screenshots J-02/J-03/J-04/J-05-verify.png are BYTE-IDENTICAL to each other (md5 ae1bc7b887fd3ddbb7c325c1b3d89835) -- the same top-of-/desk view -- which is the visible symptom of the same fact. Recorded as an iter-18 open minor item; a passenger task to make these four scripts discriminating is in the next-step recommendation."
     },
     "J-04": {
       "id": "J-04",
       "name": "The Scout and the ledger — every trial on the record",
       "status": "passing",
-      "last_verified_iter": "goal-rapid-microscope-iter-19",
-      "last_passing_iter": "goal-rapid-microscope-iter-19",
+      "last_verified_iter": "goal-rapid-microscope-iter-17",
+      "last_passing_iter": "goal-rapid-microscope-iter-17",
       "first_seen_iter": "goal-rapid-microscope-iter-0",
-      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-19-evidence/J-04-verify.png",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-18-evidence/J-04-verify.png",
       "spec_hash": "d188d138b6c84c4ff7302bf60f5da2f95b247b58a6cd7c42874d740801bc19d0",
-      "note": "iter-19: same closure -- old step asserted the unrelated heading \"Screen Runs\". New step 2 expands desk-section-expand-scoutLedger and asserts \"Ledger chain verification:\", which page.tsx:6268 renders ONLY in the success branch (scoutResult.ok && data !== null); the failure branch renders UnavailablePanel. UT-10 proved the negative LIVE: with /research/desk/micro/scout blocked, the scout-ledger-unavailable panel rendered and the string matched 0 times. Stamp refreshed."
+      "note": "iter-18: status CARRIED on evidence durability, NOT refreshed. Its owning module is byte-unchanged this round (the only product files touched are micro_sealed_evaluation.py + its test + a QA-only seed script + the QA rig launcher; `git status --porcelain` on micro_observer.py/micro_join.py/scout.py/walkforward.py is empty). last_verified_iter is DELIBERATELY left at its prior value because this round's replay row for it is NON-DISCRIMINATING: the evaluator read the stored golden script and it is a SINGLE step -- goto /desk, expect 'Screen Runs' -- which is a pre-existing Era-B Desk section heading with nothing to do with the Scout and its ledger. It cannot fail while /desk renders, so it re-verifies page reachability, not the journey. Screenshots J-02/J-03/J-04/J-05-verify.png are BYTE-IDENTICAL to each other (md5 ae1bc7b887fd3ddbb7c325c1b3d89835) -- the same top-of-/desk view -- which is the visible symptom of the same fact. Recorded as an iter-18 open minor item; a passenger task to make these four scripts discriminating is in the next-step recommendation."
     },
     "J-05": {
       "id": "J-05",
       "name": "The walk-forward engine — chronology, fences, and the diagnostic run",
       "status": "passing",
-      "last_verified_iter": "goal-rapid-microscope-iter-19",
-      "last_passing_iter": "goal-rapid-microscope-iter-19",
+      "last_verified_iter": "goal-rapid-microscope-iter-17",
+      "last_passing_iter": "goal-rapid-microscope-iter-17",
       "first_seen_iter": "goal-rapid-microscope-iter-0",
-      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-19-evidence/J-05-verify.png",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-18-evidence/J-05-verify.png",
       "spec_hash": "1b84144912ebd9de2f4731f2209f6f7354ac8e563f633f14825644d2f838fa1e",
-      "note": "iter-19: same closure -- old step asserted only the shared \"Playbook Signals\" heading. New step 2 expands desk-section-expand-walkForward and asserts \"Ledger chain verification:\" from GET /research/desk/micro/walkforward, same success-branch-only structure (page.tsx:6495 vs UnavailablePanel at :6487-6491). Stamp refreshed. Residual (audit T3, recorded not fixed): J-04 and J-05 assert the SAME literal string, so a swapped testid between the two scripts would not be caught by the text alone."
+      "note": "iter-18: status CARRIED on evidence durability, NOT refreshed. Its owning module is byte-unchanged this round (the only product files touched are micro_sealed_evaluation.py + its test + a QA-only seed script + the QA rig launcher; `git status --porcelain` on micro_observer.py/micro_join.py/scout.py/walkforward.py is empty). last_verified_iter is DELIBERATELY left at its prior value because this round's replay row for it is NON-DISCRIMINATING: the evaluator read the stored golden script and it is a SINGLE step -- goto /desk, expect 'Playbook Signals' -- which is a pre-existing Era-B Desk section heading with nothing to do with the walk-forward engine. It cannot fail while /desk renders, so it re-verifies page reachability, not the journey. Screenshots J-02/J-03/J-04/J-05-verify.png are BYTE-IDENTICAL to each other (md5 ae1bc7b887fd3ddbb7c325c1b3d89835) -- the same top-of-/desk view -- which is the visible symptom of the same fact. Recorded as an iter-18 open minor item; a passenger task to make these four scripts discriminating is in the next-step recommendation."
     },
     "J-06": {
       "id": "J-06",
       "name": "The recorder and the Vault — new tape, sealed at birth",
       "status": "partial",
-      "last_verified_iter": "goal-rapid-microscope-iter-19",
+      "last_verified_iter": "goal-rapid-microscope-iter-14",
       "last_passing_iter": null,
       "first_seen_iter": "goal-rapid-microscope-iter-0",
-      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-19-evidence/J-06-verify.png",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-18-evidence/J-06-verify.png",
       "spec_hash": "436653d6b7824775afe28e19de9266a60c63c3a69f3b9eda09d9dddfb0cfaae1",
-      "note": "iter-19: shipped portion re-verified by the replay lane (UT-J-06 PASS; step 2 expands microReadiness and asserts \"No integrity errors.\"). vault.py and tick_recorder.py are byte-untouched this iteration (evaluator confirmed: git diff <snapshot>..HEAD -- apps/backend/app apps/frontend is EMPTY). Still `partial` for ONE unchanged reason: step 4 is an operator-attended act -- recording real Alpaca tape to the spec 7.6 minimums -- which every iteration spec since iter-13 has forbidden. HUMAN-OWNED BLOCKER."
+      "note": "iter-18: still PARTIAL, stamp deliberately NOT refreshed. vault.py and the recorder are byte-unchanged this round. The auditor's replay ran J-06's golden script (2 steps: goto /desk, expand microReadiness, expect 'No integrity errors.') and it PASSED, but that asserts the readiness section's integrity line, not J-06's own subject. The journey's step 4 -- an operator run of the recorder against real Alpaca historical trades+quotes to the spec 7.6 minimums (>=30 symbol-days, >=8 panel symbols, >=10 dates over >=6 weeks) -- is a HUMAN-OWNED act and is explicitly forbidden by this session's standing instruction ('do NOT record real tape'), so no iteration can advance it without the owner."
     },
     "J-07": {
       "id": "J-07",
@@ -75,41 +75,40 @@
       "first_seen_iter": "goal-rapid-microscope-iter-0",
       "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-18-evidence/J-07-graduation-seeded.png",
       "spec_hash": "6bd325e2c1511b9d2745bdcd612a12d2142f32498a7aa85055d31209c9e46b28",
-      "note": "iter-19: NOT VERIFIED THIS ITERATION -- merged results row UT-J-07 reads DEFERRED-BUDGET (\"not run this iteration\"), the wall-clock trimmer (SPEED-15 rung 2) cut it. Per the DEFERRED-BUDGET rail the journey KEEPS its prior recorded status and is never scored regressed/failing/unknown on that row alone; last_verified_iter is deliberately LEFT at iter-18 and the spec_hash is carried forward unchanged. Its iter-18 evidence also remains valid on its own under evidence durability: micro_graduation.py is byte-unchanged since (product diff this iteration is EMPTY), and iter-18 verified it with a capture that could genuinely have failed. J-07 is the ONLY journey with no fresh evidence, it sits in the Required-still-passing set, and it MECHANICALLY BLOCKS GOAL_ACHIEVED until re-verified. evidence_makeup=true schedules the verify-only make-up ride. NOTE its lane is the LLM browser-qa agent BY DESIGN, not an authoring oversight: demo_runner.normalize_url() rewrites any localhost URL onto the FRONTEND base (:3301), there is no frontend proxy for /research/*, and /desk renders NO graduation content at all (evaluator grepped: 0 hits) -- so a golden script for J-07 is structurally impossible today. The audit's suggestion to author one is not actionable without harness work first.",
-      "evidence_makeup": true
+      "note": "iter-18: RE-VERIFIED, and for the FIRST TIME this era with a check that could actually have failed. Iterations 15-17 photographed an empty body ({'families': [], 'message': 'No candidates ledgered.'}) that would look identical whether the module worked or was broken (the iter-17 audit's E2 and the iter-17 evaluator's own assumption entry both said so). This round's QA-only seed (apps/backend/scripts/seed_micro_graduation_iter18_fixture.py, scoped to the throwaway rig root) plants a real dataset + snapshot, a real seal->assign->expose vault shard, and a REAL evaluate_sealed_verdict call. The evaluator OPENED J-07-graduation-seeded.png: families length 1, family_root_id 240dd966c1aceca2, verdict 'pass', n 30, rule_id SEALED_PASS_RULE_V1, rule_version 1, floors_applied {min_observations: 30, min_signal_sessions: 'not_applicable_single_shard', min_symbols: 'not_applicable_single_shard'}, chain_verification ok:true. The evaluator then RE-RAN the seed himself into a private scratch root and reproduced the identical row, and computed sealed_pass_rule_hash() fresh: 8aaea80b53c56805a396a3f8456ae79702e6527b8b4c9aeb5f009a54ff58d115 -- byte-identical to the hash in the served body. The real store is untouched: apps/backend/.data has no micro_graduation and no micro_vault directory at all."
     },
     "J-08": {
       "id": "J-08",
       "name": "The surface and MCP v6 — the funnel is visible",
       "status": "passing",
-      "last_verified_iter": "goal-rapid-microscope-iter-19",
-      "last_passing_iter": "goal-rapid-microscope-iter-19",
+      "last_verified_iter": "goal-rapid-microscope-iter-18",
+      "last_passing_iter": "goal-rapid-microscope-iter-18",
       "first_seen_iter": "goal-rapid-microscope-iter-0",
-      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-19-evidence/J-08-verify.png",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-18-evidence/J-08-verify.png",
       "spec_hash": "037874a8933089ff99b53568d5aedac2843043741d83fa4958759ba898145572",
-      "note": "iter-19: re-verified by the replay lane (UT-J-08 PASS, 5 steps across four sections). Its iter-18 refreshed Validation Vault assertion (\"iter18-qa-universe\") is genuinely discriminating and the evaluator OPENED the render: the vault table shows the shard row vshard-01545ee5... / iter18-qa-universe / size bucket ~10^0 / checksum commitment, with both shard and universe ledger chain verifications reading ok."
+      "note": "iter-18: PASSING, but it was genuinely FAILING mid-round and no pipeline lane noticed. This round's QA seed puts a real vault shard into the SHARED browser-QA rig (the launcher start_scoped_qa_backend.sh execs qa_playbook_iter7_fixture_scoped_backend.sh, which the seed was appended to), so the rig's vault went 0 -> 1 shards and J-08.json step 5's assertion 'No shards recorded.' stopped being true. The auditor reproduced the FAIL, then replaced that one assertion with 'iter18-qa-universe' -- the seeded shard's universe_id, rendered at apps/frontend/app/desk/page.tsx:6770-6772 inside the Validation Vault shards table only. The evaluator checked this is an assertion REFRESH, not a weakening: (a) the iteration-18 spec's own NOTES pre-authorised exactly this ('the assertion is revisited in whichever future iteration first makes that endpoint's honest state non-empty'); (b) the new string requires a RENDERED SHARD ROW where the old one only required a rendered empty state, i.e. strictly more discriminating; (c) the evaluator re-ran the seed himself and confirmed universe_id is the fixed literal 'iter18-qa-universe' on all three seal/assign/expose rows; (d) `git diff` on the journey-scripts directory is exactly two changed lines, one per file, and no product code was changed to make anything pass. CAVEAT recorded honestly: J-08-verify.png is a viewport capture that ends just above the vault table, so the image does not itself show the asserted string -- the DOM assertion in the replay runner is what verified it."
     },
     "J-09": {
       "id": "J-09",
       "name": "The pilot studies — three predeclared questions, honest answers",
       "status": "failing",
-      "last_verified_iter": "goal-rapid-microscope-iter-19",
+      "last_verified_iter": "goal-rapid-microscope-iter-18",
       "last_passing_iter": null,
       "first_seen_iter": "goal-rapid-microscope-iter-0",
       "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-15-evidence/UT-05-result.png",
       "spec_hash": "7dd99ef032e14d2c86d69962f917efb8840d2496fa07765e9488264ecbd8a58a",
-      "note": "iter-19: still FAILING and still unbuilt -- the evaluator confirmed it on disk rather than assuming (no pilot-study module exists under apps/backend/app/research/). Out of scope for the SEVENTH consecutive iteration, and legitimately so: its three studies would be graded by the sealed judge whose economic-floor hole is still open, and the iter-19 spec puts it OUT OF SCOPE pending the owner ruling. HUMAN-OWNED BLOCKER: it cannot start until the owner rules on where a candidate's pre-registered economic floor and evidence label come from (docs/rapid-validation-spec.md still carries no revision after r9 -- evaluator re-confirmed by grep)."
+      "note": "iter-18: still FAILING and still NEVER ATTEMPTED -- every phase spec 13..18 has placed it explicitly out of scope, and iteration 18's OUT OF SCOPE repeats the standing instruction 'do not start J-09 yet'. The evaluator confirmed it unbuilt on disk rather than assuming: there is no pilot-studies module under apps/backend/app/research/ and `grep -rln 'pilot_stud|pilot study|micro_pilot' apps/backend/app/` returns nothing. Its one named blocking safety test (TR-30) landed THIS round, but the iteration-18 audit found the same exploit class still live one condition over (caller-supplied econ_floor), which the auditor recommends closing before J-09 starts."
     },
     "J-10": {
       "id": "J-10",
       "name": "The kept product stands — traps armed, sentinel green",
-      "status": "passing",
-      "last_verified_iter": "goal-rapid-microscope-iter-19",
-      "last_passing_iter": "goal-rapid-microscope-iter-19",
+      "status": "partial",
+      "last_verified_iter": "goal-rapid-microscope-iter-18",
+      "last_passing_iter": null,
       "first_seen_iter": "goal-rapid-microscope-iter-0",
-      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-19-evidence/UT-06-result.png",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-18-evidence/J-10-verify.png",
       "spec_hash": "eabb7f30a96a8241a6652e7f6346073a4a302a6269b57e918b8b3720f97b762f",
-      "note": "iter-19: partial -> PASSING. The last gap (step 2, the deterministic-rerun check) is closed, and the evaluator proved every acceptance clause personally rather than reading a report. (1) Trap suite complete: own sweep of the test folder found TR-1..TR-30 with no gap -- NOTE TR-17 exists only as lettered sub-traps TR-17a/b/c, so a bare \\bTR-[0-9]+\\b regex falsely reports a hole (the evaluator's first sweep did). (2) Deterministic rerun: ran the module (10 passed) and then broke the SHIPPED code twice -- replacing scout.scout_stream with an unseeded random.Random() made exactly TC-2b and TC-4d fail with p_screen genuinely diverging (0.2164 vs 0.2374), and injecting a random field into micro_snapshots.build_snapshot_rows made TC-1 and TC-4a fail; both files were then restored and confirmed md5-identical. (3) Full suite run by the evaluator: 3,281 passed / 8 skipped / 0 failures / 0 errors in 676.64s -- 18 above the iter-18 baseline of 3,263, none lost (this matches the AUDIT's count; the QA report's 3,279 was stale, taken before the auditor added 2 tests). (4) config_fingerprint() printed 08e471b10130e1e2. (5) All six referee_*.py SHA-256s match the iteration-0 baseline byte-for-byte. (6) Sentinel surfaces opened as images, not read as rows: cockpit / genuinely alive (live candles, Buyer Control, moving quote/features), /structure drawing AAPL's tradable map as-of 2026-06-22 with the 300.10/302.20 bands, and every shipped /desk section including all three Referee sections (Registry showing \"config fingerprint 08e471b10130e1e2\", Adjudications, Runs) and the Validation Vault."
+      "note": "iter-18: still PARTIAL, but with ONE named gap left instead of two. Step 1 is now COMPLETE: the evaluator swept apps/backend/tests/ himself for trap labels and counted exactly 30 distinct TR numbers, TR-1..TR-30 with no gap (TR-17 appears as TR-17a/b/c). He also proved TR-30 can fail, by mutating the SHIPPED production file twice: (M1) SEALED_MIN_OBSERVATIONS 30 -> 1 turned SIX tests red; (M2) neutering the `if \"floors\" in candidate_spec` refusal turned THREE tests red -- then restored the file byte-identical (md5 a4b0ef21a49a0330eb5adc0dde9017f9 before and after). Step 3 (sentinel) is green: J-10's 15-step golden script covers cockpit / (live tape 'Buyer Control'), /structure (Tradable Map band '300.11-302.2') and all eight /desk sections including the fingerprint line, and it PASSED end to end after the B1 fix; the evaluator opened J-10-verify.png and it shows the Referee Adjudications and Referee Runs sections rendered with a clean console. Step 2 -- the deterministic-rerun check (byte-identical snapshot/screen/fold outputs over unchanged stores) -- was explicitly OUT OF SCOPE this round and remains the ONLY thing standing between J-10 and passing. Like J-08, J-10.json step 12's empty-state assertion was refreshed to 'iter18-qa-universe' by the auditor for the same reason and under the same pre-authorised policy."
     }
   },
   "anti_goal_violations": [
@@ -314,9 +313,7 @@
       "anti_goal": "Constraints — 'T-10 Evidence honesty. No screenshot => unknown, never passing; operator acts are reported run-or-not-run' (supporting the critical 'Deterministic and reproducible' / record-integrity rails)",
       "severity": "minor",
       "evidence": "NEW AND OPEN — the audit's E1, which the evaluator settled from the filesystem himself rather than taking either lane's word. reports/qa/goal-rapid-microscope-iter-17-qa.md asserts 'Backend data store: Using default (real) store, not QA fixture (TAPEOLOGY_DATASET_DIR not set)' and lists 'registered fold spec found in store'. That is false for BOTH browser runs this round. The evaluator confirmed the rig at /home/dennis-chan/.cache/iad/iad.goal-rapid-m-d1ead7e7.2777839/tapeology-store-scope-qa/rig (created 09:25, i.e. before the 09:26-09:30 browser run) holds exactly 2 datasets and NO micro_walkforward directory, which matches every number the run reported (UT-03 '2 dataset options', UT-04 'Distinct datasets 2', UT-06 'No fold specs registered.'), while the real store apps/backend/.data/micro_walkforward/walkforward_ledger.jsonl does carry a fold spec dated 2026-08-17. Running against the rig is SANCTIONED — the iteration-17 phase spec's own testing requirement says 'browser-verified via the store-scoped rig' — so there is no product defect and no deviation from the plan; the defect is the QA report's false environment claim, which overstates the regression signal of J-10's sentinel and of the J-01/J-04/J-05/J-08 replays. Compounding it (audit T2): J-08.json step 4 carries the SAME environment-dependent empty-state assertion the dev correctly diagnosed as stale in J-10.json step 11 — J-08 passed only because it ran against the rig. This is the third round in which a non-audit lane has certified something it did not actually check (iterations 14 and 15 were the others). CLOSES WHEN: the QA lane reports the SERVER PROCESS's store rather than its own shell environment, and the era decides once whether golden scripts may assert empty-state copy at all. || ITERATION 18: did NOT recur, but only because no browser run happened at all - the QA lane skipped it (see the new iteration-18 item, which supersedes this one in scope). The spec's own NOTES asked the lanes to name the store; that request was moot. QA's one true store statement this round ('zero registered vault universes and sealed shards in production store') the evaluator verified independently. Stays OPEN.",
-      "resolved": true,
-      "resolved_iter": "goal-rapid-microscope-iter-19",
-      "resolution": "CLOSED by iter-19. The QA launcher (apps/backend/scripts/qa_playbook_iter7_fixture_scoped_backend.sh) now writes a durable fixed-path manifest, reports/qa-scoped-backend-store-manifest.md, recording the resolved TAPEOLOGY_* store roots and a launch timestamp from the SAME _TAPEOLOGY_SCOPED_VARS array the stderr echo uses, so the two cannot silently diverge. The browser-QA report now CITES it by path (ui-test-results.llm.md:25-31: launched_at_utc 2026-08-20T13:34:48Z, TAPEOLOGY_DATASET_DIR=.../tapeology-store-scope-qa/rig/datasets) and states outright that 'no statement in this report should be read as real data store.' No report this round asserts a store it did not check. Evaluator opened the manifest and the citation. Residual (audit R1, non-blocking): the QA report's own Notes 4 states the store CLASS correctly but without citing the manifest."
+      "resolved": false
     },
     {
       "iter": "goal-rapid-microscope-iter-18",
@@ -330,42 +327,15 @@
       "anti_goal": "Constraints - 'T-10 Evidence honesty. No screenshot => unknown, never passing; operator acts are reported run-or-not-run' (supporting the critical 'Deterministic and reproducible' / record-integrity rails)",
       "severity": "minor",
       "evidence": "NEW AND OPEN - the audit's P1, which the evaluator confirmed from the artifacts himself. The iteration-18 spec's metadata says 'Frontend Present: no' while the SAME spec's TESTING REQUIREMENTS says 'Browser: J-07 ..., J-10 ...' and its DEFINITION OF DONE names browser-qa-agent TWICE (items 4 and 5). The pipeline resolved the contradiction by skipping: runs/goal-rapid-microscope-iter-18/status.json records browser_checks_run:false, all five UI-lane artifacts are one-line 'N/A - Backend-only phase' stubs, and reports/phase-goal-rapid-microscope-iter-18-ui-test-results.md reads 'Browser QA Verdict: SKIPPED' with no journey rows at all. Yet reports/qa/goal-rapid-microscope-iter-18-qa.md returns PASS (and takes its suite count 'Per dev handoff' rather than running it), and reports/reviews/goal-rapid-microscope-iter-18-review.md returns definition_of_done: complete. That gap is EXACTLY what let this round's one real regression (the J-08/J-10 golden-assertion break) ship unnoticed; the independent auditor executed both lanes itself and persisted the evidence. This is the FOURTH consecutive round in which a lane other than the auditor certified something it never checked (iter-15 quality lane, iter-16 replay-script lint-only, iter-17 wrong-store claim, iter-18 this). FIX (not a code change): the decomposer must set 'Frontend Present: yes' in any spec whose DoD names browser-qa-agent, and the QA lane must not return PASS while a DoD verification lane is skipped.",
-      "resolved": true,
-      "resolved_iter": "goal-rapid-microscope-iter-19",
-      "resolution": "CLOSED by iter-19. The iteration-19 spec sets 'Frontend Present: yes' explicitly, with a written rationale naming iter-18's lesson ('Frontend Present: no silently skips the browser+replay lanes at ANY depth'), even though zero .tsx files changed. Both lanes genuinely ran: the merged results file carries 13 executed rows (7 replay + 6 live browser checks). Evaluator verified the metadata line and the executed rows."
+      "resolved": false
     },
     {
       "iter": "goal-rapid-microscope-iter-18",
       "anti_goal": "Constraints - 'T-10 Evidence honesty' / 'Guard tests are extended, never edited' (supporting the critical 'Deterministic and reproducible' / record-integrity rails)",
       "severity": "minor",
       "evidence": "NEW AND OPEN - the EVALUATOR'S OWN finding this round, not the auditor's, and it is pre-existing rather than introduced here. Four of the era's stored golden replay scripts are regression checks that cannot fail. runs/goal-session-rapid-microscope/journey-scripts/J-02.json, J-03.json, J-04.json and J-05.json each contain exactly ONE step: goto /desk, expect 'Top-up Runs' / 'Index Reconciliation' / 'Screen Runs' / 'Playbook Signals' respectively. All four asserted strings are pre-existing Era-B Desk section headings (apps/frontend/app/desk/page.tsx:217, :227, :329, :3976) with nothing to do with the micro observer, the structure x flow join, the Scout ledger or the walk-forward engine. scripts/automation/lib/demo_runner.py captures no console errors either (`grep -n 'console|pageerror|page.on'` returns nothing), so these rows verify only that /desk still renders. The visible symptom: J-02/J-03/J-04/J-05-verify.png are BYTE-IDENTICAL to one another (md5 ae1bc7b887fd3ddbb7c325c1b3d89835), the same top-of-/desk view. Consequence for the record: every 'the replay lane re-verified J-02..J-05' line in iterations 15-18 is weaker than it reads. No status was changed on this basis - those four journeys' owning modules are byte-unchanged, so their earlier real evidence still stands under evidence durability - but their last_verified_iter stamps were deliberately NOT refreshed this round. FIX: extend the four scripts with a journey-relevant assertion each, as a passenger task, never a round of its own.",
-      "resolved": true,
-      "resolved_iter": "goal-rapid-microscope-iter-19",
-      "resolution": "CLOSED by iter-19 -- this was the iteration-18 evaluator's OWN finding and this round is precisely its fix. J-02/J-03/J-04/J-05 each gained a step 2 that expands its own already-registered section and asserts a real section-scoped field, replacing four assertions on unrelated pre-existing Desk headings that could not fail while /desk rendered at all. Evaluator checked the change is strictly ADDITIVE (git diff on journey-scripts/ is 4 files, +8/-4, one replaced step-1 string plus one new step each -- no assertion weakened), confirmed from source that CollapsibleSection.tsx:57-61 mounts the body only when open (so the strings are absent while collapsed, not merely CSS-hidden), and that both 'Ledger chain verification:' sites are success-branch-only. UT-09 proved the unmount live and UT-10 proved the error branch renders different text."
-    },
-    {
-      "iter": "goal-rapid-microscope-iter-19",
-      "anti_goal": "Deterministic and seeded -- every random draw uses a recorded named seed via per-row streams; identical requests reproduce byte-identical results. (critical)",
-      "severity": "minor",
-      "evidence": "OPENED AND CLOSED INSIDE THIS ITERATION; recorded because review and QA both passed it. As landed by the developer, the Scout half of the new determinism check was BLIND to the seeded permutation stream -- the exact rail this critical anti-goal names. The fixture screened _planted_effect_anchors() at effect=3.0, which saturates the 2,000-draw block-permutation null, pinning p_screen to the floor 1/2001 in every run, so replacing scout.scout_stream with an unseeded random.Random() left the compared payload byte-identical. Found by the independent auditor's own mutation lane (audit B1) and fixed additively in-round with test_tc2b_... (effect=0.0, p strictly inside the null) and test_tc4d_... (a mutation-proof applied to the SEED LINEAGE itself). The EVALUATOR reproduced both halves independently: with scout_stream unseeded, the 8 originally-landed tests ALL still passed and only the auditor's 2 new tests failed, p_screen diverging 0.2164 vs 0.2374; scout.py was then restored md5-identical (ee4beefb991cb14773d949fc8b291e1d) and all 10 pass. This is the ELEVENTH defect in this session to clear both review and QA and be caught only by the independent audit lane.",
-      "resolved": true,
-      "resolved_iter": "goal-rapid-microscope-iter-19",
-      "resolution": "Fixed in-round; evaluator independently confirmed the fix discriminates and that the pre-fix checks did not. Standing lesson recorded: a determinism comparison over a SATURATED statistic is stream-blind by construction, and a TC-4-style mutation-proof cannot reveal it because it perturbs the comparison's INPUT rather than the computation."
-    },
-    {
-      "iter": "goal-rapid-microscope-iter-19",
-      "anti_goal": "Constraints -- 'T-10 Evidence honesty. No screenshot => unknown, never passing; operator acts are reported run-honestly.'",
-      "severity": "minor",
-      "evidence": "NEW AND OPEN. J-07 'Graduation' sits in this iteration's Required-still-passing set but was NOT verified by any lane: the merged results file's Deferred table reads UT-J-07 | DEFERRED-BUDGET | 'not run this iteration' (SPEED-15 rung 2 wall-clock trim), and the ux-regression reviewer was shed for the same reason (rung 3b). Despite that, reports/qa/goal-rapid-microscope-iter-19-qa.md ticks its Definition of Done box for 'Required-still-passing journeys J-01-J-08 remain green' using the hedge 'full 8-journey golden replay set EXISTS AND CAN BE EXECUTED' -- certifying coverage that no lane actually provided, for a journey that was never run. This is the FIFTH consecutive round in which a lane other than the independent auditor certified something it never checked (iters 15, 16, 17, 18, 19). Second-order effect the auditor traced (T1): runs/goal-session-rapid-microscope/state/golden-gaps, whose entire content was 'J-07', is DELETED in the working tree -- evaluator confirmed with git status (' D ...golden-gaps') and by reading replay-lane.sh:522-537, which rebuilds that file only from journeys carrying a PASS row and removes it when that set is empty. J-07 was not in the PASS set because it was never run. The file is therefore SELF-HEALING: re-verifying J-07 to a PASS restores it automatically, with no developer edit.",
-      "resolved": false
-    },
-    {
-      "iter": "goal-rapid-microscope-iter-19",
-      "anti_goal": "Constraints -- 'T-10 Evidence honesty. No screenshot => unknown, never passing.'",
-      "severity": "minor",
-      "evidence": "NEW AND OPEN -- the EVALUATOR'S OWN finding this round, raised by no lane. The screenshot for UT-10 (reports/qa/goal-rapid-microscope-iter-19-evidence/UT-10-result.png) does NOT show the state its results row describes: the row reports the scout-ledger-unavailable panel rendering 'Backend unreachable -- is the API running?', but the image is a mostly-empty dark viewport showing only the Desk nav bar and an unrelated Playbook panel at the bottom edge. A capture/scroll defect, NOT a product failure: the row's own checks are DOM-level rather than pixel-level (data-testid present in the captured HTML; grep for 'Ledger chain verification' returned 0 matches), and the evaluator independently confirmed the claim from source (apps/frontend/app/desk/page.tsx:6258-6272 renders UnavailablePanel on the failure branch and the asserted string only on the success branch). It matters because UT-10 is the live discrimination proof for J-04's and J-05's new assertions; that proof now rests on the row's DOM checks, UT-09's live unmount proof, and the evaluator's own source read rather than on its own picture.",
       "resolved": false
     }
   ],
-  "updated_at": "2026-08-20T15:38:39Z"
+  "updated_at": "2026-08-20T11:45:52.615841Z"
 }

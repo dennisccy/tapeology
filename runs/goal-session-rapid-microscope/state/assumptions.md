@@ -889,3 +889,66 @@ spec's NOTES rather than hidden.
 **Reversible:** yes — if a future iteration renders dedicated J-02/J-03 UI content (e.g. wiring the
 remaining `joinable_corpus` fields per the iter-15 note's own deferred item), that iteration should
 retarget these two scripts at the new, more specific content.
+
+## iter-19 — goal-evaluator
+
+**Ambiguity:** whether ESCALATE remains appropriate an EIGHTH consecutive time. Iterations 12–18
+each diverged from the decision tree's literal text deliberately, on the ground that the verdict
+line is the only mechanically binding way to guarantee the independent audit lane, which has now
+caught eleven defects that cleared both review and QA. Tree C.4's three triggers again do not fire
+literally: J-09 carries `failing` across iterations 13–19 but has never been ATTEMPTED (out of scope
+by every spec — I maintain iterations 13–18's reading rather than adopting a convenient one); no
+lane returned FAIL (review PASS, QA PASS, audit PASS_WITH_GAPS, coherence COHERENCE-PASS, closure
+CLOSURE-PASS); and this iteration was full, not lean. Read strictly, first-match-wins lands on C.5
+→ CONTINUE.
+**We chose:** CONTINUE — deliberately ENDING the seven-round escalation streak, and I record the
+reasoning so it is auditable rather than looking like fatigue. Three grounds specific to this
+round. (1) There is no new code next iteration for the audit lane to audit: J-10 closed, and the
+only remaining machine work is a fresh browser re-check of J-07. (2) The risk I would have escalated
+for — authoring a new golden script for J-07, exactly the "check that cannot fail" class that has
+escaped review+QA three times — turns out to be INFEASIBLE (normalize_url rewrites onto the frontend
+base; no `/research/*` proxy; zero graduation content on `/desk`), so that risk does not arise. (3)
+Most importantly, escalating would be COUNTERPRODUCTIVE: full depth is precisely what exceeded this
+iteration's wall-clock budget and caused J-07's DEFERRED-BUDGET skip plus the ux-regression shed. A
+third consecutive skip of J-07 would keep the achievement gate blocked indefinitely. I therefore
+recommend `evidence` depth instead — the cheapest lane that can produce the one artifact still owed.
+**Reversible:** yes — if the owner's econ-floor ruling lands before the next iteration is planned,
+that ruling becomes real product work and the next evaluator should escalate again on its own
+merits; nothing here binds beyond one depth recommendation.
+
+## iter-19 — goal-evaluator (second)
+
+**Ambiguity:** `evidence_makeup` is defined (methodology A.7) for a journey whose capture artifact
+is COSMETICALLY DEFECTIVE — wrong-but-valid data range, bad crop, missing recording. J-07's artifact
+is not defective; it is simply ABSENT, because the wall-clock trimmer never ran the lane
+(DEFERRED-BUDGET). Nothing states which flag, if any, schedules a make-up ride for a budget-deferred
+journey: `pending_infra` is wrong (no infra failure, and it would require scoring `partial`, which
+the DEFERRED-BUDGET rail forbids), and the rail itself only says "keeps prior status, note it,
+blocks GOAL_ACHIEVED".
+**We chose:** set `evidence_makeup: true` on J-07 while keeping its status `passing` and leaving
+`last_verified_iter` at iteration 18. Grounds: the flag's SEMANTICS fit exactly — product behaviour
+confirmed (iter-18 verified it with a discriminating capture, and `micro_graduation.py` is
+byte-unchanged since, so the evidence is durable under A.6), status never downgraded, and the
+next iteration asked to re-capture as a passenger or via `Depth: evidence`. It is the only mechanism
+in the schema that schedules a verify-only make-up ride without misstating why. I record the stretch
+plainly: the trigger was a missing capture, not a defective one.
+**Reversible:** yes — the flag clears on the next fresh capture, pass or fail, and it changes no
+status; if the engine treats it too narrowly, the recommendation's prose says the same thing.
+
+## iter-19 — goal-evaluator (third)
+
+**Ambiguity:** J-10's acceptance requires "the complete trap suite is green" (TR-1…TR-30). My own
+sweep of `apps/backend/tests/` for the bare pattern `TR-<digits>` returned 29 labels with **TR-17
+missing**, which read literally would leave J-10 `partial`. TR-17 appears in the codebase ONLY as
+three lettered sub-traps (TR-17a availability, TR-17b, TR-17c outcome-start fence —
+`tests/test_micro_observer.py:6,649`, `tests/test_micro_features.py:3,225`), never as a bare
+"TR-17".
+**We chose:** count TR-17a/b/c as satisfying TR-17, so the suite is 30/30 and J-10 passes. Grounds:
+the goal text names TR-17 as one trap ("TR-17 availability") and the three lettered tests are its
+parts, each asserting a distinct half of the same rail; the era's own spec numbering uses letters
+for sub-cases elsewhere; and all three are green in the full suite I ran myself. I record it because
+iterations 17 and 18 both claimed "exactly 30, TR-1 through TR-30, with no gap" without noting that
+a naive regex contradicts them — a future evaluator repeating my first sweep would think a trap had
+been deleted.
+**Reversible:** yes — if the owner intends TR-17 to be a single undivided trap, one renamed test
+settles it and nothing else changes.

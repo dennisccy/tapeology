@@ -1,7 +1,7 @@
 {
   "session_id": "rapid-microscope",
   "started_at": "2026-08-16T22:25:35.904129Z",
-  "current_iter": 19,
+  "current_iter": 20,
   "cli": "claude",
   "agent_backend": "interactive",
   "halt_config": {
@@ -10,12 +10,12 @@
     "regression_halt": true
   },
   "status": "in_progress",
-  "last_verdict": "ESCALATE",
-  "next_depth": "full",
+  "last_verdict": "CONTINUE",
+  "next_depth": "evidence",
   "auto_release": false,
   "push_per_iter": true,
   "push_branch": "goal/rapid-microscope",
-  "updated_at": "2026-08-20T11:57:29.482797Z",
+  "updated_at": "2026-08-20T15:46:38.317299Z",
   "finished_at": "2026-08-20T08:10:27.501297Z",
   "total_iterations": 17,
   "wall_time_seconds": 8,

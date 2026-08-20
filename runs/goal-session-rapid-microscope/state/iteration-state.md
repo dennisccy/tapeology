@@ -1,40 +1,40 @@
 # Iteration State — rapid-microscope
 
-**After iteration:** 18 · **Date:** 2026-08-20 · **Verdict:** ESCALATE
+**After iteration:** 19 · **Date:** 2026-08-20 · **Verdict:** CONTINUE
 
 ## Journeys
 
-7 passing (J-01 J-02 J-03 J-04 J-05 J-07 J-08) · 2 partial (J-06 J-10) · 1 failing (J-09) — 10 total
+8 passing (J-01 J-02 J-03 J-04 J-05 J-07 J-08 J-10) · 1 partial (J-06) · 1 failing (J-09) — 10 total.
+J-10 NEWLY passing. J-07 passing but NOT re-checked this round (UT-J-07 = DEFERRED-BUDGET);
+`evidence_makeup: true`, and it mechanically BLOCKS GOAL_ACHIEVED until one fresh browser pass lands.
 
 ## Active blockers
 
-- **J-09 gated on an owner decision (human).** The sealed judge still takes its ECONOMIC floor and
-  evidence label from the caller (`micro_sealed_evaluation.py:316`, `:407-408`): `floor_bps=0.0`
-  turns a 0.001 bps effect into a permanent "pass" — the same exploit class TR-30 just closed on
-  condition 1. Needs a ruling on where a candidate's pre-registered floor/evidence class come from
-  (the candidate-registration ledger deferred since iter-12). NOT a halt: zero production callers,
-  no sealed row in the real store, champion still `v1`.
-- **J-06 step 4 is operator-owned (human):** a real Alpaca recording to spec §7.6 minimums; the
-  standing instruction still says do NOT record real tape.
-- **J-10's only remaining gap (dev, unblocked):** its step-2 deterministic-rerun check.
-- **Spec-metadata bug (decomposer):** `Frontend Present: no` while the DoD names `browser-qa-agent`
-  disables the browser AND replay lanes at ANY depth. The next spec must say `Frontend Present: yes`.
+- **J-07 re-verification** (owner: dev/engine — CHEAP; the ONLY machine work left). One fresh
+  browser-QA pass. Its LLM lane is BY DESIGN (`normalize_url()` rewrites localhost onto the frontend
+  base, no `/research/*` proxy, zero graduation content on `/desk`) — DO NOT author a golden for it.
+  `state/golden-gaps` was deleted but SELF-HEALS (`replay-lane.sh:522-537`) once J-07 passes.
+- **Sealed judge's economic floor / evidence-label sourcing** (owner: HUMAN) — no revision after r9 in
+  `docs/rapid-validation-spec.md`. Blocks J-09 entirely.
+- **J-06 step 4, real Alpaca tranche recording** (owner: HUMAN operator) — forbidden by every spec
+  since iter-13; J-06 cannot pass until authorised or the goal is amended.
 
 ## Last 2 verdicts
 
-- iter 18: ESCALATE — TR-30 landed and is mutation-proved, but the UI lanes never ran, QA/review
-  passed anyway, and only the auditor caught the round's own regression (10th such escape).
-- iter 17: ESCALATE — audit proved by execution that condition 1 read caller floors; owner ruled r9.
+- iter 19: CONTINUE — J-10 closed (determinism check landed, mutation-proved; evaluator broke the
+  shipped code twice and restored it md5-identical; suite 3,281 passed / 8 skipped / 0 failures, run
+  by the evaluator). Escalation streak deliberately ENDED: no new code next round.
+- iter 18: ESCALATE — TR-30 landed, but browser+replay lanes never ran and a real regression shipped
+  invisibly to every lane except the auditor.
 
 ## Do not redo
 
-- **TR-30 is DONE and proved** — `SEALED_MIN_OBSERVATIONS=30` pinned (`micro_sealed_evaluation.py:131`),
-  `_resolved_floors` deleted, `floors` key refused at `:332`, breadth = `not_applicable_single_shard`.
-  Evaluator mutations: 30→1 = 6 tests red; refusal neutered = 3 tests red.
-- **Trap suite is 30/30** (TR-1…TR-30; TR-17 appears as TR-17a/b/c). Do not re-count or re-add.
-- **B3/B4 fixtures already exist** from iter-17 (`test_micro_accessor.py:357`,
-  `test_micro_observer.py:273`) — do not duplicate.
-- **J-08.json / J-10.json empty-state assertions already refreshed** to `iter18-qa-universe` by the
-  iter-18 auditor under that spec's pre-authorised policy. Do not revert.
-- **J-07 has no golden script by design** (`state/golden-gaps` = `J-07`); no origin fence in
-  `micro_sealed_evaluation.py` (iter-17); `SEALED_PASS_RULE_V1` keeps its name/version 1 (spec r9).
+- **J-10 is DONE** — traps 30/30 (TR-17 exists only as TR-17a/b/c; a bare "TR-17" grep false-alarms),
+  determinism module mutation-proved, fingerprint `08e471b10130e1e2`, six referee SHAs match iter 0.
+- **J-02–J-05 golden scripts FIXED** (`journey-scripts/J-0{2,3,4,5}.json`) — each expands its own
+  section and asserts a real field; the iter-18 "cannot-fail checks" finding is CLOSED.
+- **QA store provenance CLOSED** — `reports/qa-scoped-backend-store-manifest.md`; just CITE it.
+- **`Frontend Present: yes` is settled** — keep it whenever the DoD names browser-qa.
+- **Do NOT record real tape; do NOT start J-09** — both human-blocked (see Active blockers).
+- **Do NOT touch** `micro_sealed_evaluation.py` `econ_floor`, TR-1…TR-30, or J-08/J-10's
+  `iter18-qa-universe` vault assertions.
