@@ -1335,3 +1335,51 @@ on the sibling code path — which is why it rides as a named passenger rather t
 **Reversible:** yes — if a future edit reintroduces the "one event early" stamp on the unavailable
 path, or if any caller ever needs the exact-instant exposure boundary, either re-opens as
 IMPORTANT immediately.
+
+## iter-17 — goal-decomposer
+
+**Ambiguity:** the carried escalation context explicitly asked for a decision on
+`micro_accessor.py:34-37`'s stale docstring (which describes a `walkforward.py` origin-fenced read
+path that has zero production callers): "Decide whether to correct the docstring or wire the fence,
+and say which." Neither `docs/rapid-validation-spec.md` nor the r6 owner ruling says which; both are
+silent on whether TR-23's new sealed-shard evaluator should become the fence's first live caller.
+**We chose:** correct the docstring; do not wire the fence. Grounds: TR-23's shard read is a
+POST-exposure, whole-shard outcome recomputation over an already-`exposed` vault shard — not a
+rolling-origin walk-forward fold — so architecturally it matches the SAME `origin=None` UNFENCED
+pattern `micro_join.py`/`scout.py` already use for whole-corpus reads (a third such caller), not the
+fenced pattern the stale docstring claims exists. Wiring a live origin fence into `walkforward.py`
+for its own sake, unasked, would be exactly the "silent, unrequested behavior change smuggled into"
+an unrelated round that this very module's own docstring already warns against (T-1: implement from
+the spec, never invent). The docstring correction is zero-risk, evaluator-named, and closes the
+iteration-16 coherence audit's flagged documentation defect without expanding this round's blast
+radius.
+**Reversible:** yes — if a future round genuinely needs an origin-fenced read of vault/snapshot data
+(e.g. a rolling-origin sealed-shard variant), wiring the fence then is a clean, additive change; the
+docstring can be corrected again to describe the new live caller at that time.
+
+## iter-17 — goal-decomposer (second)
+
+**Ambiguity:** the r6 §8.2 owner ruling requires `lineage_data_frontier = max(observed_through)`
+across every evidence item a `family_root_id` lineage ever touched, but direct code inspection
+(confirmed by grep) shows NO ledger row anywhere in this codebase — not scout trial rows, not
+walk-forward fold rows, not the pre-r6 sealed-evaluation rows — carries a field literally named
+`observed_through`. The spec text does not say how to derive it from the fields that DO exist
+(`registered_at` on both scout trials and fold specs, `validation_revealed_at` on Mode-A folds,
+`evaluated_at` on sealed evaluations), and the owner ruling explicitly REJECTS the one naive reading
+already tried ("the dev's 'latest timestamp on surviving evidence rows' is REJECTED") without
+specifying the correct substitute.
+**We chose:** direct the developer (in the iteration-17 spec, not invent it here myself) to derive
+each evidence item's "evidence consumed" instant from that item's OWN already-recorded timestamp
+field — never fabricate a new `observed_through` value — and, for TR-23's new evaluation artifact
+specifically, to stamp its own recomputed outcome's true `observed_through` (a value the evaluator
+already computes internally per §8.1 step 4, since it recomputes from canonical snapshot machinery).
+If any evidence-item type genuinely has no defensible field to stand in for this, the spec directs a
+drop + named gap in the dev handoff + owner-ruling flag, per this era's own standing T-1 discipline,
+rather than inventing a timestamp. Grounds: this reuses only data already on record (no schema
+change to `walkforward_ledger.py`, explicitly OUT OF SCOPE per that module's own established
+precedent), and it gives the developer a concrete, safe default without me pre-committing to an
+implementation I cannot verify field-by-field from the decomposer seat.
+**Reversible:** yes — if the developer's investigation finds a specific evidence-item type cannot
+supply a defensible instant this way, that gap surfaces in the dev handoff and becomes this round's
+(or the next round's) owner-ruling escalation, exactly as the spec text directs; nothing here
+forecloses a future, more precise formula.

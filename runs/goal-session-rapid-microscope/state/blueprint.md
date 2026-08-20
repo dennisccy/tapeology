@@ -57,7 +57,7 @@ recompute or re-fetch it from anywhere else. **New rows this era** (transcribed 
 | Fold specs, folds, sequences, decay view | new `app/research/walkforward.py` + its ledger | `GET /research/desk/micro/walkforward`, `POST/GET/POST-cancel /research/desk/micro/walkforward/compute`, `GET .../walkforward/runs` |
 | Vault shards, universes, exposure ledger | new `app/research/vault.py` | `GET /research/desk/micro/vault` |
 | Recorder job + tranche progress/runs | new `app/research/tick_recorder.py` | `POST/GET/POST-cancel /research/desk/micro/recorder/compute`, `GET .../recorder/runs` |
-| Graduation states + export bundles | new `app/research/micro_graduation.py` | `GET /research/desk/micro/graduation` |
+| Graduation states + export bundles | `app/research/micro_graduation.py` (+ new `micro_sealed_evaluation.py` — the SOLE scientific owner of the sealed-shard evaluation verdict sub-computation, r6 §8.1; `micro_graduation.py` stays persistence/transition machinery only, never inventing the verdict — see iter-17 note) | `GET /research/desk/micro/graduation` |
 
 **Disclosure sub-fields** (registered iter-10 — housekeeping only, no new owner, no new endpoint;
 these three were already shipped by iter-9's r4 fix round and flagged WARN by iter-9's coherence
@@ -231,3 +231,24 @@ from its one endpoint, read verbatim by UI/MCP/reports.
      `classify_evidence_class`) are pre-existing and equally unserved directly; this iteration
      only adds their formal, explicitly-labeled trap-suite test coverage. No new page, route, MCP
      tool, or nav-skeleton change; no reapproval file written. -->
+
+<!-- iter-17 note (r6 §8.1/§8.2 closure, TR-23/TR-24): the Graduation row's Owner column above now
+     names `micro_sealed_evaluation.py` as the sole scientific owner of the sealed-shard evaluation
+     VERDICT sub-computation -- an in-place ownership clarification, not a new row, matching this
+     file's own iter-3 (`micro_join.py` contributing to the readiness row) and iter-11 (`sealed_
+     tranche` semantics broadening) note precedent for sub-owner edits that don't change a row's
+     shape or serving path. Before this iteration, `micro_graduation.py`'s `record_sealed_
+     evaluation` accepted a caller-supplied `passed: bool` directly (its own module docstring
+     called this "a disclosed T-1 interpretation call," made because the statistical machinery to
+     compute a real verdict did not exist in this codebase yet). The r6 owner ruling
+     (2026-08-18, `assumptions.md` lines 757-814) named the new owner module explicitly and defined
+     `SEALED_PASS_RULE_V1` before any implementation, reusing the ALREADY-pinned §1 per-fold floors
+     -- no new numeric constant. `micro_graduation.py` stays the persistence/transition layer; the
+     ONE serving endpoint stays exactly `GET /research/desk/micro/graduation`, unchanged. This
+     iteration also rewrites `_proposed_confirmation_boundary` into the r6 §8.2 lineage-wide
+     formula (still inside `micro_graduation.py`, still the same owner, still the same endpoint --
+     no ownership change for that half, only a correctness rewrite of an already-owned
+     sub-computation). Zero behavioural change against the real store: production still has zero
+     sealed shards and zero registered vault universes, so neither sub-computation has ever run
+     against real data. No new page, route, MCP tool, or nav-skeleton change; no reapproval file
+     written. -->
