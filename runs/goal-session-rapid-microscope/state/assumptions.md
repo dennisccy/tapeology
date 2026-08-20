@@ -843,3 +843,49 @@ recommendation pairs the escalation with an explicit instruction to set `Fronten
 **Reversible:** yes — ESCALATE only sets the next iteration's depth; it halts nothing. It has a
 visible end: once the decomposer's `Frontend Present` rule is fixed and the QA lane stops returning
 PASS over skipped verification lanes, a later evaluator can return to plain CONTINUE.
+
+## iter-19 — goal-decomposer
+
+**Ambiguity:** iteration 18's evaluator recommendation item 1 says the sealed judge's economic
+floor / evidence-label sourcing "needs one decision from you first... and if you have not answered
+when the round starts it should build the rest and leave this waiting rather than guess." Nothing
+states what "build the rest" means concretely when no ruling has landed — whether to build
+surrounding infrastructure (e.g. a candidate-registration ledger) speculatively ahead of the
+ruling, or to leave the entire item untouched.
+**We chose:** leave the entire item untouched this iteration — no candidate-registration-ledger
+scaffolding, no `econ_floor`/evidence-label code change of any kind. Grounds: (a) I confirmed via
+`grep` that `docs/rapid-validation-spec.md` carries no revision after r9 (2026-08-20) as of this
+iteration's authoring, so the decision this item is gated on has not landed; (b) this session's own
+priority rubric (rule 6) says not to re-plan work the evaluator marked human-blocked; (c) building
+speculative infrastructure ahead of an unmade ruling risks building the WRONG shape (the ruling
+could specify a schema, an ownership module, or a deferral — guessing any of them is exactly the
+"invention" T-1 forbids for an unspecified spec constant); (d) J-10's step 2 (the deterministic-
+rerun check) is explicitly unblocked and sufficient on its own to move J-10 from partial to
+passing, so there is no need to touch item 1 to make progress this round.
+**Reversible:** yes — the moment a revision after r9 lands in `docs/rapid-validation-spec.md`, that
+ruling becomes the next iteration's primary target, per iteration 18's own framing.
+
+## iter-19 — goal-decomposer (second)
+
+**Ambiguity:** iteration 18's evaluator recommendation item 3 asks to make J-02–J-05's golden
+replay scripts "able to fail" as a passenger. Neither J-02 (the micro observer) nor J-03
+(structure×flow join) has a dedicated `/desk` UI section of its own — the blueprint's Information
+Architecture table says both surface only indirectly "via Microscope Readiness," and per the
+iter-15 blueprint note, `joinable_corpus`'s own total/playbook_signal_count/band_touch_count/
+by_setup_id fields stay unrendered. Nothing states what a "discriminating" assertion should be for
+a journey with no section of its own to click into.
+**We chose:** for J-02, assert the "Fallback frac" column header inside the already-registered
+Legacy Tick Shards table (tied to the aggressor classifier's fallback fraction, which J-02's own
+Vision text names as a first-class per-window disclosure); for J-03, assert the "Joinable corpus —
+withheld (excluded)" label (the one already-rendered `joinable_corpus` field, per the iter-10
+Disclosure sub-fields table) — both inside the Microscope Readiness section, both distinct from
+the strings J-01/J-08/J-10 already assert there. Grounds: these are the ONLY real, already-shipped,
+already-registered pieces of DOM text on `/desk` that are topically tied to each journey's own
+subject; inventing a NEW rendered field to make the check more on-topic would be frontend feature
+work outside a "passenger, never a round of its own" item. The residual limitation (neither
+assertion proves the observer's or the join's actual COMPUTATION is correct — that discrimination
+already lives in the mutation-proved backend unit suite) is named explicitly in the iteration
+spec's NOTES rather than hidden.
+**Reversible:** yes — if a future iteration renders dedicated J-02/J-03 UI content (e.g. wiring the
+remaining `joinable_corpus` fields per the iter-15 note's own deferred item), that iteration should
+retarget these two scripts at the new, more specific content.

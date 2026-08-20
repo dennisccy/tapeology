@@ -273,3 +273,16 @@ from its one endpoint, read verbatim by UI/MCP/reports.
      only against the QA-only seeding fixture this iteration adds to make J-07's browser proof
      discriminating (`runs/goal-session-rapid-microscope/state/assumptions.md` has the full
      reasoning for the fixture's scope). -->
+
+<!-- iter-19 note: no Data Contract or Information Architecture change. This iteration is
+     test/harness-only -- a new deterministic-rerun backend test module (no served value), and a
+     deepening of the four "cannot-fail" golden replay scripts (J-02.json..J-05.json) so each
+     asserts an ALREADY-registered field from its OWN already-registered section instead of an
+     unrelated pre-existing Desk heading: "Fallback frac" (per-shard fallback_frac, era-baseline
+     readiness row), "Joinable corpus -- withheld (excluded)" (joinable_corpus.withheld_excluded,
+     iter-10 Disclosure sub-fields table), and "Ledger chain verification:" for both Scout
+     (chain_verification, era-baseline scout row) and Walk-Forward (chain_verification, era-baseline
+     walkforward row). No new row, no new endpoint, no second computation path, no nav-skeleton
+     change; no reapproval file written. The QA-launcher store-manifest addition
+     (`apps/backend/scripts/qa_playbook_iter7_fixture_scoped_backend.sh`) is internal tooling, not
+     a served product value -- no Data Contract row. -->
