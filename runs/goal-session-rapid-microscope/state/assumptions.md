@@ -736,3 +736,27 @@ mandatory before any sealed result may count.
 **Reversible:** yes — ESCALATE only sets the next iteration's depth; it halts nothing. TR-30 has a
 visible end: once the trap suite reaches 30/30 and is mutation-proved, a later evaluator can return
 to plain CONTINUE.
+
+## iter-18 — goal-decomposer
+
+**Ambiguity:** the iteration-17 evaluator's next-step recommendation asked to "decide once for the
+era whether stored replay scripts may assert 'empty' wording at all" — J-08's and J-10's golden
+scripts both assert a specific honest-empty-state string that only holds against the throwaway
+store; nothing in `docs/rapid-validation-spec.md` or this session's prior rulings states whether a
+golden script may assert current-honest-but-eventually-stale copy, or must avoid asserting on
+copy that a later iteration (J-06's tranche, J-09's pilot studies) will make false.
+**We chose:** yes, stored replay scripts may assert an honest current empty-state string, under
+three conditions recorded in iteration 18's spec (`docs/phases/goal-rapid-microscope-iter-18.md`
+NOTES): (a) the wording must be copied verbatim from the endpoint's actual current copy, never
+invented; (b) the artifact recording any run of that script must name which store it ran against
+(closing the iteration-17 evaluator's separate "which store did the quality lane use" finding at
+the same time); (c) the assertion must be revisited in whichever future iteration first makes that
+endpoint's honest state non-empty, not left to rot indefinitely. Grounds: the alternative (banning
+empty-state assertions entirely) would leave J-08's and J-10's scripts asserting nothing about a
+large fraction of their own sections' honest current behavior, which is a bigger loss of
+regression coverage than the risk of one future iteration needing to touch the script when real
+data finally lands — and "revisit when the state changes" is already this session's standing
+discipline for every other frozen/pinned value (fingerprint, referee hashes, tool count).
+**Reversible:** yes — if a future iteration finds a script's empty-state assertion silently wrong
+(copy drift, not real-state drift), that iteration corrects the string and this note stands as the
+policy that made the correction necessary rather than optional.

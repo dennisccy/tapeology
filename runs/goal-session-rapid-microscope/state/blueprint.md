@@ -252,3 +252,24 @@ from its one endpoint, read verbatim by UI/MCP/reports.
      sealed shards and zero registered vault universes, so neither sub-computation has ever run
      against real data. No new page, route, MCP tool, or nav-skeleton change; no reapproval file
      written. -->
+
+<!-- iter-18 note (r9 §8.1 closure, TR-30): the Graduation row's already-registered sub-owner
+     `micro_sealed_evaluation.py` (named iter-17) has its condition-1 RULE corrected, not its
+     ownership -- no row change. The 2026-08-20 owner ruling (spec revision r9) proved the
+     iter-17-shipped rule let a candidate spec supply its own sufficiency floors (`floors={1,1,1}`
+     + one observation ⇒ permanent "pass"), and separately proved the naive fix (pinning the
+     iter-17-reused walk-forward per-fold floors of 8 sessions / 2 symbols) was ALSO wrong because
+     a sealed shard is one symbol-day (spec §7.3) and can never carry that breadth. r9 resolves
+     this by giving the sealed stage its OWN pinned floor, `SEALED_MIN_OBSERVATIONS = 30` (spec §1,
+     owned by `micro_sealed_evaluation.py`, never a `Config` field), refusing ANY caller-supplied
+     floor outright, and recording session/symbol breadth as the literal string
+     `not_applicable_single_shard` rather than a number. The serving endpoint stays exactly
+     `GET /research/desk/micro/graduation`, unchanged; the owner module stays
+     `micro_sealed_evaluation.py`, unchanged; `SEALED_PASS_RULE_V1`'s NAME and VERSION stay
+     unchanged (spec: "frozen; r9 replaces condition 1"). No new field, no new page, route, MCP
+     tool, or nav-skeleton change; no reapproval file written. Zero behavioural change against the
+     real store: production still has zero registered vault universes and zero sealed shards
+     (re-confirmed this iteration), so the corrected rule has still never run against real data --
+     only against the QA-only seeding fixture this iteration adds to make J-07's browser proof
+     discriminating (`runs/goal-session-rapid-microscope/state/assumptions.md` has the full
+     reasoning for the fixture's scope). -->
