@@ -1012,3 +1012,64 @@ review+QA. I also state plainly that this round itself was CLEAN — the escalat
 not a complaint about iteration 20.
 **Reversible:** yes — ESCALATE only sets the next iteration's depth; it halts nothing. Once J-09 is
 built and audited, a later evaluator returns to plain CONTINUE on its own merits.
+
+## iter-21 — goal-decomposer
+
+**Ambiguity:** whether goal.md J-09 step 1's "predeclare... in priority order" binds the SCREENING
+(Scout-run) order, or only the order the three frozen specs are written/registered in source. The
+era's own Success Criteria explicitly permits deferring "up to two of the three pilot studies"
+under scope pressure, which is in tension with a strict reading that all three must be screened
+together in stated order.
+**We chose:** freeze all three specs in stated priority order (1 range-wall failed aggression, 2
+delta divergence, 3 capitulation exhaustion) in source this iteration, but take only Study 2
+(delta divergence at level tests) through a full Scout screen + walk-forward floor check to a
+recorded ledger decision. Grounds: Study 2's formula (`divergence_at_level()`,
+`DIVERGENCE_TRAILING_SECONDS`, `DIVERGENCE_DELTA_VOLUME_FRACTION`) is already 100% coded and
+spec-frozen, so it carries the LEAST T-1 invention risk of the three; Studies 1 and 3, while also
+buildable from already-frozen primitives (`failed_aggression_score`, `refill_consistent`), need
+additional co-occurrence/stratification design the developer has not yet built. Deferring them is
+explicitly sanctioned by the Success Criteria's own scope-pressure order.
+**Reversible:** yes — a later iteration screens Studies 1 and 3 in either order; nothing about
+Study 2's already-recorded decision changes when that happens.
+
+## iter-21 — goal-decomposer (second)
+
+**Ambiguity:** `docs/rapid-validation-spec.md` §10 point 7 (r5 owner ruling, ordered iter-9) says
+the "seal-unaware `strategy_trade_readiness`" caveat sentence must be served "wherever that metric
+is served." Its only current serving surface is `referee_evidence.py`'s `strategy_trade_readiness`
+function, consumed exclusively by the byte-frozen `GET /research/desk/referee/evidence` route
+behind the shipped, unchanged Referee Registry `/desk` section. Foundation invariant #5 says every
+shipped `/desk` section "keeps working exactly as shipped... no shipped section, column, or
+behavior changes," and `referee_*.py` modules must stay byte-identical this whole era. Nothing
+states how to reconcile a spec-level disclosure requirement against a section/module the era
+otherwise freezes.
+**We chose:** split the item. Built this iteration: the guard/source-scan proving zero
+Rapid-Microscope-module (`micro_*.py`/`scout*.py`/`walkforward*.py`/`vault.py`) callers of
+`strategy_trade_readiness`/`referee_evidence` — this is unambiguous, touches nothing frozen, and
+directly satisfies the spec clause "no Scout, walk-forward, vault, graduation, or readiness-floor
+decision may consume it." Dropped this iteration (T-1: ambiguous or unimplementable ⇒ drop,
+record, surface for a ruling): the UI-caveat half, because its only current surface would require
+either editing the byte-frozen `referee_evidence.py` or changing the shipped Referee Registry
+section's rendered content — either reading breaches a separate *(critical)* rail, and zero
+Rapid-Microscope surface currently consumes the value at all (confirmed via grep), so there is no
+non-frozen surface to attach the caveat to yet.
+**Reversible:** yes — if a future iteration wires `strategy_trade_readiness` into any NEW
+(non-frozen) Rapid-Microscope surface, that surface must carry the caveat from day one; if the
+owner rules that additive disclosure text beside a shipped section does not breach invariant #5,
+that ruling unblocks building the dropped half directly.
+
+## iter-21 — goal-decomposer (third)
+
+**Ambiguity:** J-09's acceptance text says three ledgered study families "EXIST with predeclared
+specs" (present tense) — unclear whether this requires a real production Scout-ledger write, or is
+satisfied by frozen, versioned, reviewable source-code specs (the same pattern J-04's
+`default_fixture_grid()` has always used, where the real production ledger stays empty and J-10's
+own golden script still asserts "No candidates ledgered." even after J-04 shipped).
+**We chose:** the source-code-frozen reading, matching J-04/J-05/J-06's own established
+precedent — real production Scout/fold runs are an explicit future operator act, not something the
+goal-mode agent triggers against the live `.data/` store. This keeps J-10's golden script assertion
+intact and avoids an unplanned, unreviewed production write the same round it registers permanent
+hash-chained ledger rows.
+**Reversible:** yes — the moment the owner runs the pilot grid for real (operator act, like J-06's
+tranche recording), the production ledger reflects it and J-10's assertion updates in the SAME
+disciplined way any future Scout run would require.

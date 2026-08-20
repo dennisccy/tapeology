@@ -295,3 +295,32 @@ from its one endpoint, read verbatim by UI/MCP/reports.
      the iter-19 lesson: `normalize_url()` rewrites localhost onto the frontend base, no
      `/research/*` proxy, zero graduation content on `/desk`). No new row, no new endpoint, no
      second computation path, no nav-skeleton change; no reapproval file written. -->
+
+<!-- iter-21 note: J-09 "pilot studies" foundation. TWO shared-infrastructure additions, BOTH
+     already-reserved by earlier notes/docstrings: (1) `scout.py`'s `extract_anchors` gains its
+     `structure_context.kind == "playbook_signal"`/`"band_touch"` read paths (the module's own
+     docstring has named these "J-09's scope" since era baseline), joining anchors via the
+     ALREADY-registered `micro_join.py` `join_playbook_signal`/`join_band_touch`; (2) a new
+     band-touch enumerator in `micro_join.py` walks the ALREADY-registered
+     `desk_playbook_context.BandMapResolver` band map against a dataset's own trade timeline to
+     produce ordered per-wall touch instants -- no new wall detection, no new band-map
+     computation, reading the SAME resolver verbatim. This MATERIALIZES the
+     `joinable_corpus.band_touch_count` sub-field (registered as a placeholder,
+     `{"status": "not_enumerated", "count": None}`, since iter-4) into its real enumerated int --
+     same field name and owner (`micro_readiness.py`, fed by `micro_join.py`), same endpoint
+     (`GET /research/desk/micro/readiness`), no shape change beyond the sentinel resolving to a
+     real value -- matching this file's own iter-11/iter-12 "semantics broadening, not shape
+     change" precedent. The three pilot-study candidate specs (range-wall failed aggression, delta
+     divergence at level tests, capitulation exhaustion) are NEW ROWS in the ALREADY-registered
+     "Scout trials, kills, denominators, screens" / "Fold specs, folds, sequences, decay view"
+     Data Contract rows above (same owners `scout.py`/`scout_ledger.py`/`walkforward.py`, same
+     endpoints) -- not a new row of their own, exactly like every prior Scout family. This
+     iteration screens only the delta-divergence request through to a recorded ledger decision
+     (on a committed fixture, not the real production store); the other two exist frozen in source
+     but unscreened, explicitly deferred (Success Criteria's own "up to two of three deferrable"
+     permission). The `POST /research/desk/micro/scout/compute` request body gains an additive,
+     default-omitted grid selector so the pilot grid can be triggered beside the unchanged default
+     grid -- a request parameter, not a displayed value, so it carries no Data Contract row either
+     (matching the `observer=` kwarg precedent). No new page, route, or MCP tool; the MCP
+     `desk_scout`/`desk_walkforward` proxies stay byte-identical GET wrappers and pick up any new
+     rows for free. No nav-skeleton change; no reapproval file written. -->
