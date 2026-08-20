@@ -286,3 +286,12 @@ from its one endpoint, read verbatim by UI/MCP/reports.
      change; no reapproval file written. The QA-launcher store-manifest addition
      (`apps/backend/scripts/qa_playbook_iter7_fixture_scoped_backend.sh`) is internal tooling, not
      a served product value -- no Data Contract row. -->
+
+<!-- iter-20 note: evidence-only round (Depth: evidence), zero product diff. Re-captured J-07's
+     already-registered Graduation evidence (the "Graduation states + export bundles" Data
+     Contract row, `GET /research/desk/micro/graduation`, owners `micro_sealed_evaluation.py` /
+     `micro_graduation.py`, both unchanged) via a fresh direct-to-backend browser-qa-agent
+     navigation against the scoped QA rig (no stored golden script -- structurally impossible per
+     the iter-19 lesson: `normalize_url()` rewrites localhost onto the frontend base, no
+     `/research/*` proxy, zero graduation content on `/desk`). No new row, no new endpoint, no
+     second computation path, no nav-skeleton change; no reapproval file written. -->
