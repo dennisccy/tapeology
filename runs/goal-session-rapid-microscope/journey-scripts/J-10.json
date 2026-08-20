@@ -15,7 +15,7 @@
     {"n": 9, "journey": "J-10", "action": {"type": "click", "target": {"testid": "desk-section-expand-microReadiness"}}, "expect": {"text": "Distinct symbol-days"}},
     {"n": 10, "journey": "J-10", "action": {"type": "click", "target": {"testid": "desk-section-expand-scoutLedger"}}, "expect": {"text": "No candidates ledgered."}},
     {"n": 11, "journey": "J-10", "action": {"type": "click", "target": {"testid": "desk-section-expand-walkForward"}}, "expect": {"text": "No fold specs registered."}},
-    {"n": 12, "journey": "J-10", "action": {"type": "click", "target": {"testid": "desk-section-expand-validationVault"}}, "expect": {"text": "No shards recorded."}},
+    {"n": 12, "journey": "J-10", "action": {"type": "click", "target": {"testid": "desk-section-expand-validationVault"}}, "expect": {"text": "iter18-qa-universe"}},
     {"n": 13, "journey": "J-10", "action": {"type": "click", "target": {"testid": "desk-section-expand-refereeRegistry"}}, "expect": {"text": "config fingerprint 08e471b10130e1e2"}},
     {"n": 14, "journey": "J-10", "action": {"type": "click", "target": {"testid": "desk-section-expand-refereeAdjudications"}}, "expect": {"text": "No hypotheses registered."}},
     {"n": 15, "journey": "J-10", "action": {"type": "click", "target": {"testid": "desk-section-expand-refereeRuns"}}, "expect": {"text": "No evaluation runs recorded yet."}}

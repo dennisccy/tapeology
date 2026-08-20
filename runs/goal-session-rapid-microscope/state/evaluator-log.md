@@ -1084,3 +1084,112 @@ tape, and do not start J-09 "The pilot studies" yet. Nothing waits on your answe
 help if you agree with it: this is the sixth round in which I have written "escalate" purely to stop
 the machine cutting the independent checker for time. Tell the machine that request cannot be cut,
 and I can go back to plain "continue".
+
+## Iteration 18 — goal-rapid-microscope-iter-18
+
+**Date:** 2026-08-20T13:05:00Z
+**Verdict:** ESCALATE
+**Depth dispatched:** full (the independent checker genuinely ran — my round-17 verdict line forced
+it, and it earned its place a seventh time; see below)
+**Journey deltas:**
+- Newly passing: none
+- Newly failing: none
+- Regressed: none
+- Changed content (status unchanged): J-10 "The kept product stands" partial — its FIRST step is now
+  COMPLETE. The safety-test set reached 30 of 30 by MY OWN sweep of the test folder, and for the
+  first time I proved by hand that the new one can actually fail. Exactly ONE named gap now stands
+  between J-10 and a pass: the repeat-run check (its step 2), deliberately out of scope this round.
+  J-07 "Graduation" passing — RE-CHECKED this round with a picture that could genuinely have failed,
+  which is new: rounds 15, 16 and 17 all photographed an empty answer that would have looked
+  identical whether the program worked or was broken.
+- Broken and repaired inside the round: J-08 "The surface and MCP v6" and J-10 were both genuinely
+  FAILING partway through this round, and no pipeline lane noticed. This round's own test-data
+  helper put a real record into the shared test rig, so two stored checks that looked for "nothing
+  recorded yet" stopped being true. The independent checker found it, reproduced the failure, and
+  repaired the two checks. Both end the round passing, with a check that asks for MORE than the one
+  it replaced.
+- Not re-verified (stamps deliberately NOT refreshed): J-02, J-03, J-04, J-05 passing — see the
+  finding below; their stored checks cannot fail, so I would not let this round's green rows count
+  as re-verification. Their programs are byte-unchanged, so their earlier real proof still stands.
+  J-06 "The recorder and the Vault" partial — vault.py untouched; its own remaining step is an
+  operator act you have forbidden.
+- J-09 "The pilot studies" failing — out of scope for the sixth round running, and I confirmed it
+  unbuilt on the disk myself rather than assuming.
+- Anti-goal violations: no critical ones, introduced or open. ONE older item CLOSED — the round's
+  whole purpose, and I proved the closure myself rather than accepting it. THREE NEW minor items
+  opened, one of which is my own finding that no other lane raised. One older item HALF discharged.
+  Seven items stay open in total, all decided, none waiting on you.
+
+**Reasoning:** I took nothing on trust. I ran the whole test set myself: 3,271 passed, 8 skipped, 0
+failures, 0 errors, clean exit — I counted the progress marks by machine rather than reading anyone's
+summary line, and it is 8 more tests than the round started with, none lost. I checked the frozen
+parts by hand: the settings fingerprint prints 08e471b10130e1e2, all six judge files are byte-
+identical to the era's opening commit, the tool list is still 26, and not one website file changed.
+I swept the test folder for safety-test labels myself and counted exactly 30, TR-1 through TR-30,
+with no gap.
+
+The round's real work is genuinely done and I proved it the hard way. I broke the shipped program
+twice. First I lowered the pinned "thirty readings" number to one: six tests went red. Then I
+switched off the refusal that rejects a number handed in from outside: three more went red — and
+even then the program still would not have produced a "pass" from a single reading, because the
+floor itself is no longer reachable from outside at all. I then put the file back and confirmed it
+was byte-identical. I also re-ran the round's new test-data helper myself into a private scratch
+folder and got the identical permanent record, and I computed the rule's fingerprint fresh: it
+matches the one in the photographed answer, character for character. So the claim that the sealed
+judge now owns its own minimum is proved, not asserted.
+
+Now the part that matters more. This round is the first in the session where the browser lane and
+the replay lane did not run AT ALL. The round's own plan carried a contradiction — its heading said
+"no frontend", while its own finished-when list named the browser lane twice — and the machine
+resolved it by skipping. The quality report still said "pass", and the review still said "definition
+of done: complete", for two items whose only checking lane was the one that was skipped. That gap is
+precisely what let the breakage above ship: the round's own test-data helper writes into the SHARED
+test rig, so it changed what every journey that rig serves would see. The checker executed both
+lanes by hand afterwards and eight of eight journeys pass. I want the plain lesson recorded: a
+change to a shared test rig is a change to every journey that rig serves.
+
+I also found one thing myself that no lane raised, and it weakens several past rounds' wording,
+including my own. Four of this era's stored replay checks — for J-02 "The micro observer", J-03
+"Structure x flow", J-04 "The Scout and the ledger" and J-05 "The walk-forward engine" — are each a
+SINGLE step: open the Desk page and look for one heading. The four headings are "Top-up Runs",
+"Index Reconciliation", "Screen Runs" and "Playbook Signals" — all old sections from an earlier era
+with nothing whatsoever to do with those four subjects. I confirmed the runner records no browser
+errors either. So those checks cannot fail while the Desk page renders at all. The giveaway was
+visible in the pictures: all four journeys' screenshots are byte-identical to one another, the same
+view of the top of the same page. I did not downgrade any of the four — their own programs are
+untouched, so their earlier genuine proof still stands — but I refused to refresh their verification
+stamps on the strength of a check that cannot fail, and I have written the finding into the record
+so no future round quotes "the replay lane re-verified J-02 to J-05" as if it meant something.
+
+One honest limit on this round's good news. The checker proved by running the code that the SAME
+exploit the whole round set out to kill is still alive one condition over: the money floor is still
+handed in by the caller, and a floor of zero turns a near-zero result into a permanent "pass". I
+verified the surrounding facts myself before deciding not to halt: nothing in the shipped product
+calls that judge (only comments and the test helper do), your real data store has no graduation
+folder and no vault folder at all, and the champion pointer still reads v1. Your own r9 text puts
+that floor out of this round's scope, and the checker correctly refused to invent an answer, because
+closing it properly needs a decision only you can make.
+
+**Next-step recommendation:** Do the next round as a FULL round with the independent checker, AND
+make sure its plan says "Frontend Present: yes". Both halves matter: full depth alone would not have
+helped this round, because the plan's own "no frontend" heading is what switched off the two lanes
+that would have caught the breakage. That is why my verdict line says "escalate" and not "continue":
+in this session a request written only in prose has been cut for time twice, and only the verdict
+line is honoured. Five things, in order: (1) finish the job your ruling started — the sealed judge
+must own the money floor and the evidence label too, not just the sample size; this needs one
+decision from you first, namely where a candidate's pre-registered money floor and evidence label
+are supposed to come from, and if you have not answered when the round starts it should build the
+rest and leave this waiting rather than guess; (2) do J-10's last piece, the repeat-run check —
+run the same work twice over unchanged stored data and prove the outputs are identical; it is the
+ONLY thing left before J-10 passes and it needs nobody's permission; (3) make those four stored
+checks able to fail, as a passenger, never a round of its own; (4) tell the quality lane it may not
+report "pass" when a required check did not run, and to report the running server's data store
+rather than its own shell — this is the fourth round running where a lane other than the checker
+certified something it never checked; (5) record the rig rule as standing practice: re-run the
+replay set whenever a round changes the shared test rig. Do NOT record real tape, and do not start
+J-09 "The pilot studies" yet — its answers would be graded by the same judge that still has the
+money-floor hole. Nothing waits on your answer except item 1. Two process notes: the small file
+explaining why J-07 has no replay script SURVIVED this round for the first time in five rounds — a
+small win for the framework people; and this is the seventh round in which I have written "escalate"
+purely to stop the machine cutting the independent checker for time. Tell the machine that request
+cannot be cut, and I can go back to plain "continue".

@@ -8,6 +8,6 @@
     {"n": 2, "journey": "J-08", "action": {"type": "click", "target": {"testid": "desk-section-expand-microReadiness"}}, "expect": {"text": "Sealed Tranche (Aggregate Only)"}},
     {"n": 3, "journey": "J-08", "action": {"type": "click", "target": {"testid": "desk-section-expand-scoutLedger"}}, "expect": {"text": "No candidates ledgered."}},
     {"n": 4, "journey": "J-08", "action": {"type": "click", "target": {"testid": "desk-section-expand-walkForward"}}, "expect": {"text": "No walk-forward sequences run."}},
-    {"n": 5, "journey": "J-08", "action": {"type": "click", "target": {"testid": "desk-section-expand-validationVault"}}, "expect": {"text": "No shards recorded."}}
+    {"n": 5, "journey": "J-08", "action": {"type": "click", "target": {"testid": "desk-section-expand-validationVault"}}, "expect": {"text": "iter18-qa-universe"}}
   ]
 }

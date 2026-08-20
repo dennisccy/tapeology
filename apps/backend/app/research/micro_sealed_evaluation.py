@@ -43,32 +43,33 @@ verdict):**
    sealed_evaluations_for_family`` (single source of truth: the persisted row, never a second
    in-memory copy this function hands back as if it were authoritative).
 
-**``SEALED_PASS_RULE_V1`` introduces NO new numeric constant** (spec section 8.1, r6 owner ruling
-point 1): it reuses ``walkforward.WF_FOLD_MIN_OBSERVATIONS``/``_SIGNAL_SESSIONS``/``_SYMBOLS``
-(the SAME per-fold sufficiency floors a walk-forward fold already enforces, via the SAME
-``summarize_fold_observations`` function) and the family's OWN pre-registered spec section 5.5
-economic floor (``candidate_spec["econ_floor"]`` -- never a second, independently-tuned floor).
-``rule_id``/``rule_version`` are IDENTITY metadata (mirroring ``walkforward.WF_SURVIVOR_RULE_V1``'s
-own "the rule's own name IS its identity" convention), not tunable thresholds.
-
-**Condition 1's floors are the section-1 defaults, but a candidate spec MAY NARROW them --
-disclosed, unresolved, OWNER-OWED (rule T-1; iteration-17 audit finding B1).**
-``summarize_fold_observations`` honours a per-spec ``floors`` override key-by-key (the
-``evaluate_mode_b_fold(floors=...)`` precedent this module reuses verbatim), so a candidate spec
-carrying its own ``floors`` -- not the section-1 constants ``sealed_pass_rule_hash()`` embeds --
-decides condition 1. This module does NOT silently pin the override away, because pinning it makes
-a PASS verdict structurally UNREACHABLE: a vault shard is ONE symbol-day (spec section 7.3's own
+**``SEALED_PASS_RULE_V1`` condition 1 is evaluator-owned and sealed-specific (spec section 8.1,
+r9 owner ruling 2026-08-20, TR-30) -- it introduces exactly ONE new pinned numeric constant,
+``SEALED_MIN_OBSERVATIONS`` (spec section 1), owned by THIS module alone.** The r6-era rule this
+replaces reused ``walkforward.WF_FOLD_MIN_OBSERVATIONS``/``_SIGNAL_SESSIONS``/``_SYMBOLS`` verbatim
+-- but the iteration-17 audit PROVED by execution that reusing those floors let a candidate spec's
+own ``floors`` override certify a permanent ``pass`` off a single observation (a spec carrying
+``floors={1,1,1}`` plus one observation produced ``verdict: "pass"`` under a ``rule_hash``
+certifying 30/8/2 the run never applied), and separately proved that mechanically PINNING those
+same floors was ALSO wrong: a vault shard is ONE symbol-day (spec section 7.3's own
 ``f"{symbol}:{YYYY-MM-DD}"`` seal key), so a single shard can never carry
 ``WF_FOLD_MIN_SIGNAL_SESSIONS`` = 8 signal-bearing SESSIONS or ``WF_FOLD_MIN_SYMBOLS`` = 2 SYMBOLS,
-and every evaluation would return ``insufficient`` forever (verified: pinning the floors turns all
-four of this module's own PASS/FAIL fixtures into ``insufficient``). Spec section 8.1 condition 1
-and section 7.3/7.4 are therefore in genuine tension over what "the shard's recomputed
-observations" spans -- ONE shard, or the family's whole exposed tranche -- and under rule T-1 that
-is an OWNER RULING, never a dev or auditor invention. Until it is ruled, the floors ACTUALLY
-applied are recorded verbatim on every persisted artifact as ``floors_applied``: spec section 8.1
-requires the artifact to be "sufficient to reproduce the verdict", and condition 1 is NOT
-reproducible from ``n``/``n_sessions``/``n_symbols`` alone -- so a narrowed floor can never be
-silent in a permanent verdict or in any later export bundle.
+making PASS structurally unreachable. **The owner resolved the section-8.1-vs-7.3 contradiction by
+separating the two stages scientifically rather than changing the sealing unit: the walk-forward
+stage owns BREADTH (``WF_SURVIVOR_RULE_V1`` already establishes it before a candidate reaches the
+sealed stage at all); the sealed stage owns UNTOUCHED REPLICATION on one hidden symbol-day.**
+Session and symbol breadth are therefore computed for DISCLOSURE only (``n_sessions``/``n_symbols``
+on the artifact) but never compared against any numeric floor at shard scope, and are recorded on
+the floor-labeled artifact fields as the literal string ``"not_applicable_single_shard"`` --
+never silently ``1``. **No sufficiency value may ever be sourced from the candidate or caller
+spec**: any ``candidate_spec`` carrying a ``floors`` key (the exact override mechanism this rule
+retires) is refused outright, BEFORE any verdict is derived (``SealedEvaluationRefusedError`` --
+mirrors the step-2/step-4 fail-closed ordering elsewhere in this sequence). The family's OWN
+pre-registered spec section 5.5 economic floor (``candidate_spec["econ_floor"]``) is unaffected by
+r9 -- it was never a per-fold breadth floor and stays exactly as it was. ``rule_id``/``rule_version``
+stay IDENTITY metadata (mirroring ``walkforward.WF_SURVIVOR_RULE_V1``'s own "the rule's own name IS
+its identity" convention) -- r9 replaces condition 1's CONTENT, never the rule's name or version
+(spec: "frozen; r9 replaces condition 1").
 
 **The rule-identity-at-assignment interpretation call (T-1, disclosed).** Spec condition 4 needs
 "the evaluation rule id/version/hash recorded AT ASSIGNMENT" to compare against "the one applied" --
@@ -106,6 +107,8 @@ from .micro_graduation import (
 __all__ = [
     "SEALED_PASS_RULE_V1",
     "SEALED_PASS_RULE_VERSION",
+    "SEALED_MIN_OBSERVATIONS",
+    "SEALED_BREADTH_NOT_APPLICABLE",
     "SEALED_VERDICT_PASS",
     "SEALED_VERDICT_FAIL",
     "SEALED_VERDICT_INSUFFICIENT",
@@ -121,6 +124,16 @@ __all__ = [
 
 SEALED_PASS_RULE_V1 = "SEALED_PASS_RULE_V1"
 SEALED_PASS_RULE_VERSION = 1
+
+# === spec section 1 (r9) -- the ONE sufficiency floor at sealed-shard scope. Pinned HERE, this
+# module's own constant, mirroring (never importing) ``walkforward.WF_FOLD_MIN_OBSERVATIONS``'s
+# pattern; never a ``Config`` field; never sourced from a candidate or caller spec. ===================
+SEALED_MIN_OBSERVATIONS = 30
+
+# session/symbol breadth are STRUCTURALLY inapplicable at shard scope (one shard = one symbol x one
+# session-date, spec section 7.3) -- this literal string, never a silent ``1``, is what the artifact's
+# floor-labeled breadth fields record (TC-4).
+SEALED_BREADTH_NOT_APPLICABLE = "not_applicable_single_shard"
 
 # The tri-state verdict vocabulary (spec section 8.1 point 1) -- OWNED here (the scientific answer's
 # own module), never redefined a second time elsewhere. ``micro_graduation.py`` compares against the
@@ -160,16 +173,21 @@ def _iso_utc_now() -> str:
 
 def sealed_pass_parameters() -> dict:
     """Every constant ``SEALED_PASS_RULE_V1`` depends on, embedded verbatim (the
-    ``walkforward.walkforward_parameters``/``scout.scout_parameters`` pattern) -- introduces NO new
-    numeric value (module docstring): the three floors are IMPORTED from ``walkforward.py``, never
-    re-declared. Hashed into ``sealed_pass_rule_hash()``, which a candidate spec must carry
-    (recorded before assignment) for condition 4's rule-identity check."""
+    ``walkforward.walkforward_parameters``/``scout.scout_parameters`` pattern) -- (r9) condition 1
+    is now SEALED-SPECIFIC: ``SEALED_MIN_OBSERVATIONS`` is this module's own pinned constant (never
+    imported from ``walkforward.py``), and the fixed breadth policy
+    (``SEALED_BREADTH_NOT_APPLICABLE``) is embedded too, so a future change to either one also
+    changes ``sealed_pass_rule_hash()``. The walk-forward per-fold breadth floors
+    (``WF_FOLD_MIN_SIGNAL_SESSIONS``/``WF_FOLD_MIN_SYMBOLS``) are DELIBERATELY absent -- they no
+    longer govern condition 1 at all (breadth is the walk-forward stage's own province). Hashed
+    into ``sealed_pass_rule_hash()``, which a candidate spec must carry (recorded before
+    assignment) for condition 4's rule-identity check."""
     return {
         "sealed_pass_rule_id": SEALED_PASS_RULE_V1,
         "sealed_pass_rule_version": SEALED_PASS_RULE_VERSION,
-        "wf_fold_min_observations": wf.WF_FOLD_MIN_OBSERVATIONS,
-        "wf_fold_min_signal_sessions": wf.WF_FOLD_MIN_SIGNAL_SESSIONS,
-        "wf_fold_min_symbols": wf.WF_FOLD_MIN_SYMBOLS,
+        "sealed_min_observations": SEALED_MIN_OBSERVATIONS,
+        "min_signal_sessions": SEALED_BREADTH_NOT_APPLICABLE,
+        "min_symbols": SEALED_BREADTH_NOT_APPLICABLE,
         "required_evidence_class": REQUIRED_EVIDENCE_CLASS,
         "required_process_label": REQUIRED_PROCESS_LABEL,
     }
@@ -200,18 +218,19 @@ def _expected_sign(sidedness: str) -> str:
     return "positive" if sidedness == "long" else "negative"
 
 
-def _resolved_floors(candidate_spec: dict) -> dict:
-    """The three per-fold sufficiency floors condition 1 ACTUALLY applies -- the section-1 pinned
-    constants, EXCEPT wherever the candidate's own registered spec carries a ``floors`` override
-    (which ``walkforward.summarize_fold_observations`` honours key-by-key; see the module
-    docstring's own T-1 disclosure for why this module surfaces that rather than pinning it away).
-    Returned fully RESOLVED, never the caller's partial dict, so the ``floors_applied`` field on
-    the persisted artifact is self-contained."""
-    override = candidate_spec.get("floors") or {}
+def _sealed_floors() -> dict:
+    """(r9) The per-fold floors dict this module hands to
+    ``walkforward.summarize_fold_observations`` -- FIXED, never candidate- or caller-controlled
+    (the exact mechanism r9 retires; there is no override parameter anywhere in this function's
+    signature, unlike the retired ``_resolved_floors(candidate_spec)`` it replaces). Only the
+    observation count is gated, at ``SEALED_MIN_OBSERVATIONS``; session/symbol breadth are pinned
+    to ``0`` so ``summarize_fold_observations``'s own per-fold status can never fail on breadth at
+    shard scope -- breadth is the walk-forward stage's province (spec section 8.1 condition 1's own
+    rationale), not this one's."""
     return {
-        "wf_fold_min_observations": override.get("wf_fold_min_observations", wf.WF_FOLD_MIN_OBSERVATIONS),
-        "wf_fold_min_signal_sessions": override.get("wf_fold_min_signal_sessions", wf.WF_FOLD_MIN_SIGNAL_SESSIONS),
-        "wf_fold_min_symbols": override.get("wf_fold_min_symbols", wf.WF_FOLD_MIN_SYMBOLS),
+        "wf_fold_min_observations": SEALED_MIN_OBSERVATIONS,
+        "wf_fold_min_signal_sessions": 0,
+        "wf_fold_min_symbols": 0,
     }
 
 
@@ -305,6 +324,19 @@ def evaluate_sealed_verdict(
             "evaluation is attempted",
         )
 
+    # --- step 2 (r9 sufficiency-ownership half, TR-30): a candidate_spec carrying a 'floors'
+    # override -- the exact caller-controlled mechanism r9 retires -- is refused OUTRIGHT, before
+    # any verdict is derived and before the shard/accessor read below. No sufficiency value may
+    # ever be sourced from the candidate or caller spec (spec section 8.1 condition 1): the sealed
+    # evaluator alone owns SEALED_MIN_OBSERVATIONS and the fixed breadth policy. -------------------
+    if "floors" in candidate_spec:
+        raise SealedEvaluationRefusedError(
+            family_root_id, dataset_id,
+            f"candidate_spec carries a 'floors' override ({candidate_spec['floors']!r}) -- refused "
+            "(spec section 8.1 condition 1, r9/TR-30): sealed-shard sufficiency is evaluator-owned; "
+            "no caller-supplied floor, threshold, or equivalent override is ever honoured",
+        )
+
     # --- step 2 (rule identity half): the rule recorded on the spec BEFORE assignment must be
     # byte-identical to the one this evaluator is ABOUT to apply -- a mismatch fails CLOSED, never
     # a computed verdict (TC-3). Checked BEFORE any shard read, so a rule change is caught even if
@@ -360,9 +392,9 @@ def evaluate_sealed_verdict(
 
     # --- step 4: RECOMPUTE via the canonical statistical core, never trust a caller-computed
     # effect -- summarize_fold_observations is the SAME function walk-forward folds themselves
-    # consult (never reimplemented; the per-fold sufficiency floors ARE SEALED_PASS_RULE_V1
-    # condition 1, reused verbatim, no new constant). ------------------------------------------------
-    floors = _resolved_floors(candidate_spec)
+    # consult (never reimplemented). (r9) The floors handed in are FIXED and evaluator-owned
+    # (SEALED_PASS_RULE_V1 condition 1's own sealed-specific rule, never the candidate spec's). -----
+    floors = _sealed_floors()
     summary = wf.summarize_fold_observations(observations, floors)
 
     evaluated_at_value = evaluated_at if evaluated_at is not None else _iso_utc_now()
@@ -389,11 +421,20 @@ def evaluate_sealed_verdict(
         "process_label": candidate_spec.get("process_label"),
         "outcome_basis": candidate_spec.get("outcome_basis", "mid"),
         "n": summary["n"],
+        # (r9) disclosure-only counts -- informational, never compared against a numeric floor at
+        # shard scope (see floors_applied below for the floor-labeled fields TC-4 targets).
         "n_sessions": summary["n_sessions"],
         "n_symbols": summary["n_symbols"],
-        # spec section 8.1: the artifact must be "sufficient to reproduce the verdict" -- condition 1
-        # is not reproducible from n/n_sessions/n_symbols alone (module docstring's T-1 disclosure).
-        "floors_applied": floors,
+        # spec section 8.1: the artifact must be "sufficient to reproduce the verdict". (r9) The
+        # ONLY sufficiency floor at shard scope is SEALED_MIN_OBSERVATIONS; session/symbol breadth
+        # are recorded as the literal string SEALED_BREADTH_NOT_APPLICABLE -- never a silent 1 --
+        # because they are structurally inapplicable to a one-symbol-day shard, never because they
+        # were unmet (TC-4).
+        "floors_applied": {
+            "min_observations": SEALED_MIN_OBSERVATIONS,
+            "min_signal_sessions": SEALED_BREADTH_NOT_APPLICABLE,
+            "min_symbols": SEALED_BREADTH_NOT_APPLICABLE,
+        },
         "effect": summary["effect"],
         "sign": summary["sign"],
         "missing": summary["missing"],

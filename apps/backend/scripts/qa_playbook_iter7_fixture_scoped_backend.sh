@@ -52,6 +52,14 @@
 # long-standing rule ("use a fresh root whenever the seeded composition changed") applies to this
 # extension exactly as it would to detector logic.
 #
+# goal-rapid-microscope-iter-18 extends this file once more, again in place: after the tick-dataset
+# fixtures above stage, it also runs seed_micro_graduation_iter18_fixture.py (a plain dataset +
+# vault-shard + real evaluate_sealed_verdict() call, never a hand-rolled JSON blob) so J-07's own
+# GET /research/desk/micro/graduation finally photographs a real, non-empty, discriminating
+# families entry on this rig instead of the honest-but-non-discriminating empty state every prior
+# browser pass recorded. Uses a symbol (PGQA) distinct from the PG tick fixtures above so the two
+# seed steps' datasets never collide.
+#
 # Usage:
 #   bash apps/backend/scripts/qa_playbook_iter7_fixture_scoped_backend.sh [root_dir] [port]
 #
@@ -106,6 +114,11 @@ export TAPEOLOGY_DATASET_INDEX_DB="$DATASET_INDEX_DB"
 export TAPEOLOGY_JOURNAL_DB="$JOURNAL_DB"
 
 "$BACKEND_DIR/.venv/bin/python" "$SCRIPT_DIR/seed_playbook_iter8_replay_rig.py" "$ROOT"
+
+# goal-rapid-microscope-iter-18 (J-07): seed ONE real, discriminating graduation family through the
+# now-fixed (r9/TR-30) evaluate_sealed_verdict() -- see seed_micro_graduation_iter18_fixture.py's
+# own docstring for the full seven-step sequence this exercises for real.
+"$BACKEND_DIR/.venv/bin/python" "$SCRIPT_DIR/seed_micro_graduation_iter18_fixture.py" "$ROOT"
 
 echo "[playbook-iter8-replay-fixture-scoped-backend] root=$ROOT port=$PORT" >&2
 for var in TAPEOLOGY_BAR_DIR TAPEOLOGY_DESK_UNIVERSE_DIR TAPEOLOGY_DESK_PLAYBOOK_DIR \

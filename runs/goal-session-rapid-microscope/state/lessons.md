@@ -278,3 +278,44 @@ survivor/sequence rules, `scout.py`'s kill rules, and any future Referee-facing 
 a spec clause is unsatisfiable at the unit the code actually operates on (here, §8.1's 8-session /
 2-symbol floors against §7.3's one-symbol-day shard), that is an owner ruling, not a fix — the
 auditor's refusal to improvise was correct and produced spec revision r9 the same day.
+
+## iter-18 — 2026-08-20T13:05:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** A change to a SHARED QA seeding rig is a change to every journey that rig serves.
+This round appended `seed_micro_graduation_iter18_fixture.py` to
+`apps/backend/scripts/qa_playbook_iter7_fixture_scoped_backend.sh` — the one launcher every
+browser/replay pass in this era drives — purely to make J-07's proof discriminating. It took the
+rig's vault from 0 shards to 1, which silently falsified the `"No shards recorded."` assertion in
+BOTH `journey-scripts/J-08.json` (step 5) and `J-10.json` (step 12). Neither was noticed until the
+independent auditor ran the replay lane by hand. Rule: when a round writes into the browser rig,
+re-run the FULL replay set before calling it done.
+**Applies to:** any iteration touching `apps/backend/scripts/qa_playbook_iter7_fixture_scoped_backend.sh`,
+`start_scoped_qa_backend.sh`, or any seed script under `apps/backend/scripts/seed_*`.
+
+## iter-18 — 2026-08-20T13:06:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** `Frontend Present: no` in a spec whose DEFINITION OF DONE names `browser-qa-agent` is a
+self-cancelling spec: the metadata switches off the UI chain (all five artifacts become one-line
+"N/A" stubs, `ui-test-results.md` becomes `Browser QA Verdict: SKIPPED` with zero journey rows,
+`status.json` records `browser_checks_run: false`), and the DoD items that name that lane then pass
+review and QA with nothing behind them. Full depth does NOT protect against this — a full iteration
+with `Frontend Present: no` skips the same lanes. The decomposer must set `Frontend Present: yes`
+whenever the DoD names a browser check, even for a backend-only code change.
+**Applies to:** every goal-decomposer writing a spec; every evaluator reading a `SKIPPED`
+`ui-test-results.md` (read the auditor's evidence directory instead of concluding "not tested").
+
+## iter-18 — 2026-08-20T13:07:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** A golden replay script whose only step is `goto /desk` + expect one unrelated section
+heading is a regression check that cannot fail. `journey-scripts/J-02/J-03/J-04/J-05.json` each
+assert `"Top-up Runs"` / `"Index Reconciliation"` / `"Screen Runs"` / `"Playbook Signals"` — all
+pre-existing Era-B Desk headings, none related to the micro observer, the structure×flow join, the
+Scout ledger or the walk-forward engine. `demo_runner.py` captures no console errors either, so
+those rows verify only that `/desk` renders. The tell was in the artifacts: all four journeys'
+`-verify.png` files are byte-identical (same md5). Diagnostic to reuse: when N journeys' replay
+screenshots share one md5, read their scripts — the checks are probably measuring the same nothing.
+**Applies to:** any iteration or evaluator relying on `regression-replay-results.md` /
+`auditor-regression-replay-results.md` rows as journey re-verification.
