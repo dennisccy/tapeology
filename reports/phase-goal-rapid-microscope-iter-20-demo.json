@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-rapid-microscope-iter-20",
+  "base_url": "http://localhost:3301",
+  "not_yet": true,
+  "default_timeout_ms": 8000,
+  "steps": []
+}

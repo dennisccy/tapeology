@@ -351,3 +351,34 @@ design consequence, not an oversight — which also means J-07 is the journey mo
 by a wall-clock trim, because the LLM lane is the expensive one.
 **Applies to:** any iteration planning J-07 verification, reacting to a `state/golden-gaps` nudge,
 or considering harness work to make backend-only journeys replayable.
+
+## iter-20 — 2026-08-20T17:35:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** A "human-blocked" label, once written into `iteration-state.md`'s Active blockers, is
+copied forward by every later round and stops being questioned. J-09 carried "blocked entirely by
+the sealed judge's econ-floor ruling" for two rounds; re-testing it against the goal text took ten
+minutes and it did not survive — J-09's own acceptance says no study output feeds any gate or
+certificate, `grep -rn evaluate_sealed_verdict apps/backend/app/` finds zero production callers,
+the legacy 12 symbol-days are permanently `exploratory` so "evidence classes never mix" bars them
+from the sealed judge by construction, and the Scout derives its OWN economic floor from measured
+spreads (`scout.py:1016-1021`, `ECON_FLOOR_SPREAD_MULTIPLE * family_median_spread_bps`) rather than
+taking a caller's. Re-derive an inherited blocker before deferring a journey on it a third time.
+**Applies to:** any evaluator or decomposer about to defer a journey because a prior round's
+`iteration-state.md` lists it as human-blocked — especially when the same journey has been deferred
+3+ consecutive iterations without ever being attempted.
+
+## iter-20 — 2026-08-20T17:36:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** The depth-recommendation line is NOT symmetric. `run-goal.sh:2440-2451` treats an
+evaluator recommendation of `lean`/`evidence` as BINDING (that is why iteration 19's `evidence` ask
+was honoured verbatim), but a recommendation of `full` falls through to the legacy allowlist at
+`:2478-2494`, which grants full depth only for a prior ESCALATE/REGRESSION verdict, a prior
+coherence FAIL, a machine-parseable `Full trigger:` line in the next spec, or a due hardening
+cadence — and this session runs with the cadence disabled at 0. So a `CONTINUE` + "Depth
+Recommendation: full" is silently demoted to lean unless the decomposer happens to write the
+trigger line. Iterations 12–18 were empirically right that only the verdict line reliably buys the
+independent audit lane; the mechanism, not folklore, is the reason.
+**Applies to:** any evaluator choosing between CONTINUE-with-full and ESCALATE when the next
+iteration's work genuinely warrants the audit lane.
