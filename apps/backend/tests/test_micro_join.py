@@ -32,7 +32,7 @@ from app.research import desk_playbook as desk_playbook_module
 from app.research import desk_playbook_context as desk_playbook_context_module
 from app.research import micro_join
 from app.research import vault
-from app.research.datasets import DatasetStore
+from app.research.datasets import DatasetStore, parse_utc_epoch
 from app.research.desk_playbook import PlaybookStore, playbook_parameters
 from app.research.desk_playbook_context import BandMapResolver
 from app.research.micro_snapshots import read_snapshot_rows, resolve_micro_snapshots_dir, run_snapshot_build_and_record
@@ -380,6 +380,170 @@ def test_tc2_an_uncached_band_map_is_an_honest_absence_never_a_fabricated_wall(p
     assert result["band_map"] is None
     assert result["feature_at_trigger"] is None
     assert result["outcomes"] == []
+
+
+# --- TC-3 (goal-rapid-microscope-iter-21, J-09): the band-touch enumerator, a hand-derived oracle ---
+#
+# A fully synthetic dataset (never the PG fixture -- the "hand-derived oracle fixture" testing style
+# ``scout.py``'s own module docstring names) so every touch instant is chosen, never reverse-
+# engineered from real prints. ``enumerate_band_touches`` reads RAW dataset events
+# (``DatasetStore.load_events``, an existing store reader -- never a snapshot), so no snapshot build
+# is needed here at all.
+
+_TOUCH_BAND = {"side": "resistance", "price_low": 149.00, "price_high": 149.02}
+
+
+def _plant_touch_timeline(store: DatasetStore, *, symbol: str = "TQE") -> dict:
+    """A trade price sequence crossing ``_TOUCH_BAND`` at exactly 3 known instants (t=1.0, 4.0,
+    6.0), fully exiting the band between each (the ``setups.py`` ``_touches`` "re-arm only once
+    fully exited" rule, mirrored for a TRADE price rather than a bar range -- module docstring)."""
+    events = [
+        QuoteEvent(symbol, 0.0, 148.98, 149.03, 100, 100),
+        TradeEvent(symbol, 0.0, 148.90, 10, Side.SELL),  # outside (below) -- armed stays True
+        TradeEvent(symbol, 1.0, 149.01, 10, Side.BUY),  # TOUCH #1
+        TradeEvent(symbol, 2.0, 149.01, 10, Side.BUY),  # still inside -- no new touch
+        TradeEvent(symbol, 3.0, 148.90, 10, Side.SELL),  # exits below -- re-arms
+        TradeEvent(symbol, 4.0, 149.015, 10, Side.BUY),  # TOUCH #2
+        TradeEvent(symbol, 5.0, 149.05, 10, Side.BUY),  # exits above -- re-arms
+        TradeEvent(symbol, 6.0, 149.00, 10, Side.BUY),  # TOUCH #3 (the price_low boundary, inclusive)
+        TradeEvent(symbol, 7.0, 149.019, 10, Side.BUY),  # still inside -- no new touch
+    ]
+    meta = store.record(
+        symbol=symbol, source="fixture", source_kind="fixture", source_id=f"{symbol}-touch-fixture",
+        split="train", window_start_utc="2026-06-09T13:00:00Z", window_end_utc="2026-06-09T13:01:00Z",
+        data_feed="sip", epoch_anchor=0.0, events=events,
+    )
+    return meta
+
+
+def test_tc3_enumerate_band_touches_returns_exactly_3_ordered_touch_records(tmp_path):
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    meta = _plant_touch_timeline(dataset_store)
+    resolver = _resolver(tmp_path)
+    window_start_epoch = parse_utc_epoch(meta["window_start_utc"])
+    resolver._cache.publish(
+        resolver.map_key("TQE", window_start_epoch), {"basis_day": "2026-06-08", "bands": [_TOUCH_BAND]}
+    )
+
+    touches = micro_join.enumerate_band_touches(meta, dataset_store, resolver)
+
+    assert [t["as_of_epoch"] for t in touches] == [1.0, 4.0, 6.0]
+    assert all(t["symbol"] == "TQE" for t in touches)
+    band_id = touches[0]["band_id"]
+    assert all(t["band_id"] == band_id for t in touches)  # the SAME wall, every touch
+    assert isinstance(band_id, str) and band_id  # a stable, non-empty identifier
+
+
+def test_tc3_enumerate_band_touches_is_an_honest_empty_list_when_no_band_map_resolves(tmp_path):
+    """An unresolved band map (``compute=False``, nothing published) is an honest empty list --
+    never a fabricated touch."""
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    meta = _plant_touch_timeline(dataset_store, symbol="ZUX")
+    resolver = _resolver(tmp_path)  # nothing published -- a genuine miss
+
+    touches = micro_join.enumerate_band_touches(meta, dataset_store, resolver)
+
+    assert touches == []
+
+
+def test_tc3_enumerate_band_touches_is_an_honest_empty_list_when_the_map_has_no_bands(tmp_path):
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    meta = _plant_touch_timeline(dataset_store, symbol="VYP")
+    resolver = _resolver(tmp_path)
+    window_start_epoch = parse_utc_epoch(meta["window_start_utc"])
+    resolver._cache.publish(
+        resolver.map_key("VYP", window_start_epoch), {"basis_day": "2026-06-08", "bands": []}
+    )
+
+    touches = micro_join.enumerate_band_touches(meta, dataset_store, resolver)
+
+    assert touches == []
+
+
+def test_tc3_two_bands_arm_and_touch_independently(tmp_path):
+    """A trade inside BOTH bands at once touches both; a later trade re-arms only the band it has
+    fully exited."""
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    symbol = "DBW"
+    events = [
+        QuoteEvent(symbol, 0.0, 100.98, 101.03, 100, 100),
+        TradeEvent(symbol, 0.0, 101.01, 10, Side.BUY),  # inside BOTH bands -> 2 touches at t=0
+        TradeEvent(symbol, 1.0, 101.01, 10, Side.BUY),  # still inside both -- no new touches
+        TradeEvent(symbol, 2.0, 101.005, 10, Side.SELL),  # exits the narrow band [101.006,101.02]
+        # ... but stays inside the wide one [101.00, 101.05] -- only the narrow band re-arms
+        TradeEvent(symbol, 3.0, 101.01, 10, Side.BUY),  # re-touches the narrow band only
+    ]
+    meta = dataset_store.record(
+        symbol=symbol, source="fixture", source_kind="fixture", source_id=f"{symbol}-touch-fixture",
+        split="train", window_start_utc="2026-06-09T13:00:00Z", window_end_utc="2026-06-09T13:01:00Z",
+        data_feed="sip", epoch_anchor=0.0, events=events,
+    )
+    wide_band = {"side": "resistance", "price_low": 101.00, "price_high": 101.05}
+    narrow_band = {"side": "resistance", "price_low": 101.006, "price_high": 101.02}
+    resolver = _resolver(tmp_path)
+    window_start_epoch = parse_utc_epoch(meta["window_start_utc"])
+    resolver._cache.publish(
+        resolver.map_key(symbol, window_start_epoch),
+        {"basis_day": "2026-06-08", "bands": [wide_band, narrow_band]},
+    )
+
+    touches = micro_join.enumerate_band_touches(meta, dataset_store, resolver)
+
+    by_band: dict[str, list[float]] = {}
+    for t in touches:
+        by_band.setdefault(t["band_id"], []).append(t["as_of_epoch"])
+    assert len(by_band) == 2
+    counts = sorted(len(v) for v in by_band.values())
+    assert counts == [1, 2]  # the wide band touches once (never re-armed); the narrow one twice
+
+
+# --- TC-9 (goal-rapid-microscope-iter-21, J-09): joinable_corpus_counts materializes the real int --
+
+
+def test_tc9_joinable_corpus_counts_materializes_band_touch_count_with_a_resolver(tmp_path):
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    meta = _plant_touch_timeline(dataset_store)
+    playbook_store = PlaybookStore(tmp_path / "playbook")
+    resolver = _resolver(tmp_path)
+    window_start_epoch = parse_utc_epoch(meta["window_start_utc"])
+    resolver._cache.publish(
+        resolver.map_key("TQE", window_start_epoch), {"basis_day": "2026-06-08", "bands": [_TOUCH_BAND]}
+    )
+
+    counts = micro_join.joinable_corpus_counts(dataset_store, playbook_store, resolver=resolver)
+
+    assert counts["band_touch_count"] == {"status": micro_join.BAND_TOUCH_STATUS_ENUMERATED, "count": 3}
+
+
+def test_tc9_joinable_corpus_counts_omitting_resolver_still_serves_the_sentinel(tmp_path):
+    """Byte-identical to every pre-J-09 caller when ``resolver`` is omitted (module docstring)."""
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    _plant_touch_timeline(dataset_store)
+    playbook_store = PlaybookStore(tmp_path / "playbook")
+
+    counts = micro_join.joinable_corpus_counts(dataset_store, playbook_store)
+
+    assert counts["band_touch_count"] == {"status": micro_join.BAND_TOUCH_STATUS_NOT_ENUMERATED, "count": None}
+
+
+def test_tc9_joinable_corpus_counts_excludes_a_withheld_shard_from_band_touch_count(tmp_path):
+    """The SAME withheld-excluded ``records`` the playbook loop already reads -- a sealed shard's
+    events are never read for the band-touch count either (the era's *(critical)* anti-goal: no
+    exploratory read of a sealed shard)."""
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    sealed_meta = _plant_touch_timeline(dataset_store)
+    playbook_store = PlaybookStore(tmp_path / "playbook")
+    resolver = _resolver(tmp_path)
+    window_start_epoch = parse_utc_epoch(sealed_meta["window_start_utc"])
+    resolver._cache.publish(
+        resolver.map_key("TQE", window_start_epoch), {"basis_day": "2026-06-08", "bands": [_TOUCH_BAND]}
+    )
+    _seal(dataset_store, sealed_meta)
+
+    counts = micro_join.joinable_corpus_counts(dataset_store, playbook_store, resolver=resolver)
+
+    assert counts["band_touch_count"] == {"status": micro_join.BAND_TOUCH_STATUS_ENUMERATED, "count": 0}
+    assert counts["withheld_excluded"] == 1
 
 
 # --- joinable_corpus_counts (micro_readiness.py's new field; TC-5's own computation) -----------------

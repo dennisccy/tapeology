@@ -43,6 +43,7 @@ from .bar_index import BarIndex
 from .bars import BarStore
 from .datasets import DatasetStore
 from .desk_playbook import PlaybookStore
+from .desk_playbook_context import BandMapResolver
 from .desk_routes import get_playbook_store, get_universe_store
 from .desk_universe import UniverseStore
 from .micro_accessor import ExposureRegistry, resolve_micro_exposure_registry_dir
@@ -85,6 +86,7 @@ def get_micro_readiness(
     dataset_store: DatasetStore = Depends(get_dataset_store),
     cache: MicroReadinessCache = Depends(get_micro_readiness_cache),
     playbook_store: PlaybookStore = Depends(get_playbook_store),
+    bar_store: BarStore = Depends(get_bar_store),
 ) -> dict:
     """J-01's corpus-truth fold: the honest per-shard inventory, corpus totals beside the
     referee's tick-gate figure, and the three pilot studies' floor table -- see
@@ -95,9 +97,21 @@ def get_micro_readiness(
 
     J-03: ``playbook_store`` is the EXISTING ``desk_routes.get_playbook_store`` dependency,
     reused verbatim (never a second, redefined provider) -- it feeds the ``joinable_corpus``
-    field, computed by ``micro_join.joinable_corpus_counts``."""
+    field, computed by ``micro_join.joinable_corpus_counts``.
+
+    J-09: ``resolver`` is constructed HERE, per request, from the EXISTING ``routes.get_bar_store``
+    dependency plus ``CONFIG`` -- the ``desk_routes.py`` ``GET .../playbook/{id}/context`` route's
+    OWN construction call, verbatim (``BandMapResolver(bar_store, CONFIG)`` defaults to
+    ``compute=False``, so this GET never computes a tradable map it does not already hold -- T-8).
+    It materializes ``joinable_corpus.band_touch_count`` from the ``not_enumerated`` sentinel to a
+    real int (``micro_join.py``'s own docstring); nothing else in this payload changes shape."""
+    resolver = BandMapResolver(bar_store, CONFIG)
     return build_readiness(
-        dataset_store, cache, dataset_dir=CONFIG.dataset_dir_resolved(), playbook_store=playbook_store
+        dataset_store,
+        cache,
+        dataset_dir=CONFIG.dataset_dir_resolved(),
+        playbook_store=playbook_store,
+        resolver=resolver,
     )
 
 
@@ -237,17 +251,61 @@ def get_scout(ledger_dir: str = Depends(get_scout_ledger_dir)) -> dict:
     }
 
 
+def get_micro_exposure_registry_dir() -> str:
+    """The exposure registry's directory -- ``TAPEOLOGY_MICRO_EXPOSURE_REGISTRY_DIR`` if set, else
+    a SIBLING of the config-owned dataset directory (``micro_accessor.resolve_micro_exposure_
+    registry_dir`` -- see that function's own docstring). Shared by every J-05 caller that logs or
+    reads exposure state, not owned exclusively by this route file."""
+    return resolve_micro_exposure_registry_dir(CONFIG.dataset_dir_resolved())
+
+
+class ScoutComputeRequest(BaseModel):
+    """Body for ``POST /research/desk/micro/scout/compute`` (J-09, additive). ``grid`` defaults to
+    ``None`` -- omitted (or the body omitted entirely, same as every pre-J-09 caller), this route's
+    behavior stays byte-identical: the unchanged default reference grid.
+    ``scout.GRID_SELECTOR_DELTA_DIVERGENCE_PILOT`` runs ONLY the ONE J-09 pilot candidate this era
+    screens (Studies 1/3 stay frozen-in-source only -- structurally unreachable through this
+    route)."""
+
+    grid: str | None = None
+
+
 @router.post("/scout/compute")
 def trigger_scout_compute(
+    body: ScoutComputeRequest | None = None,
     dataset_store: DatasetStore = Depends(get_dataset_store),
     snapshots_dir: str = Depends(get_micro_snapshots_dir),
     ledger_dir: str = Depends(get_scout_ledger_dir),
+    bar_store: BarStore = Depends(get_bar_store),
+    exposure_registry_dir: str = Depends(get_micro_exposure_registry_dir),
     manager: ScoutComputeManager = Depends(get_scout_compute_manager),
 ) -> dict:
     """Start a Scout screening run over the bounded reference candidate grid (ensuring
     prerequisite snapshots exist first -- reuse-or-build), or refuse (single-flight) if one is
-    already running."""
-    result = manager.trigger(dataset_store, CONFIG, snapshots_dir, ledger_dir)
+    already running.
+
+    J-09: ``body.grid`` selects ``ScoutComputeManager.trigger``'s own ``grid_selector`` -- see
+    that method's docstring. ``bar_store`` is an ADDITIVE dependency (the SAME
+    ``routes.get_bar_store`` the readiness route now also uses); constructing the
+    ``BandMapResolver`` it feeds is CONDITIONAL on a non-default selector -- this is a POST,
+    operator-triggered act (never a page-load GET), so the construction cost only lands on the
+    request that actually asks for it.
+
+    iter-21 audit fix B1: the pilot selector also carries the ``ExposureRegistry`` its walk-forward
+    floor check needs, so the operator-reachable run RECORDS that decision (a second ledger row
+    under the same ``candidate_id``) exactly as goal.md IN SCOPE item 6 requires -- previously that
+    stage existed in source but ran only inside a unit test."""
+    grid_selector = body.grid if body is not None else None
+    resolver = BandMapResolver(bar_store, CONFIG) if grid_selector is not None else None
+    # iter-21 audit fix B1: the pilot run's walk-forward floor-check stage reads the SAME durable
+    # exposure registry `POST /walkforward/compute` already depends on (never a second, differently
+    # rooted one). Constructed ONLY for a non-default selector -- the default grid's request path is
+    # byte-identical to before this fix.
+    exposure_registry = ExposureRegistry(exposure_registry_dir) if grid_selector is not None else None
+    result = manager.trigger(
+        dataset_store, CONFIG, snapshots_dir, ledger_dir,
+        grid_selector=grid_selector, resolver=resolver, exposure_registry=exposure_registry,
+    )
     if result["state"] == "refused":
         return result
     return {"state": result["state"], "run_id": result["run_id"]}
@@ -292,14 +350,6 @@ def get_walkforward_ledger_dir() -> str:
     SIBLING of the config-owned dataset directory (``walkforward.resolve_walkforward_ledger_dir``
     -- see that function's own docstring)."""
     return wf.resolve_walkforward_ledger_dir(CONFIG.dataset_dir_resolved())
-
-
-def get_micro_exposure_registry_dir() -> str:
-    """The exposure registry's directory -- ``TAPEOLOGY_MICRO_EXPOSURE_REGISTRY_DIR`` if set, else
-    a SIBLING of the config-owned dataset directory (``micro_accessor.resolve_micro_exposure_
-    registry_dir`` -- see that function's own docstring). Shared by every J-05 caller that logs or
-    reads exposure state, not owned exclusively by this route file."""
-    return resolve_micro_exposure_registry_dir(CONFIG.dataset_dir_resolved())
 
 
 # The single in-flight (or last-terminal) walk-forward job for THIS process -- the same

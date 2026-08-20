@@ -4,10 +4,10 @@
       "id": "J-01",
       "name": "The era transition stands — the corpus truth on the record",
       "status": "passing",
-      "last_verified_iter": "goal-rapid-microscope-iter-19",
-      "last_passing_iter": "goal-rapid-microscope-iter-19",
+      "last_verified_iter": "goal-rapid-microscope-iter-21",
+      "last_passing_iter": "goal-rapid-microscope-iter-21",
       "first_seen_iter": "goal-rapid-microscope-iter-0",
-      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-19-evidence/J-01-verify.png",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-21-evidence/J-01-verify.png",
       "spec_hash": "1791ebcd14c10fa789e1048509f8f8af20a7696fe11a7de4bf946b446d4fbb52",
       "note": "iter-19: re-verified by the replay lane (UT-J-01 PASS). Its step-2 assertion (\"hand_assigned\" inside the expanded Microscope Readiness section) is genuinely discriminating -- CollapsibleSection.tsx:57-61 mounts the body ONLY when open, so the string cannot be present while collapsed (evaluator verified from source; UT-09 proved the unmount live). Stamp refreshed."
     },
@@ -15,10 +15,10 @@
       "id": "J-02",
       "name": "The micro observer — one pass, prefix-honest, benchmarked",
       "status": "passing",
-      "last_verified_iter": "goal-rapid-microscope-iter-19",
-      "last_passing_iter": "goal-rapid-microscope-iter-19",
+      "last_verified_iter": "goal-rapid-microscope-iter-21",
+      "last_passing_iter": "goal-rapid-microscope-iter-21",
       "first_seen_iter": "goal-rapid-microscope-iter-0",
-      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-19-evidence/J-02-verify.png",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-21-evidence/J-02-verify.png",
       "spec_hash": "01f4f43564cba7431118d4a504b9dbeb20f1a994fdb52be5ceded15529d8b27a",
       "note": "iter-19: FIRST re-verification in this era that actually means something. The iter-18 evaluator's own finding -- this script was a single step asserting the unrelated pre-existing heading \"Top-up Runs\", so it could not fail while /desk rendered -- is CLOSED this round: step 1 now asserts \"Playbook Signals\" and a NEW step 2 expands desk-section-expand-microReadiness and asserts the \"Fallback frac\" column header (per-shard fallback_frac, the disclosure J-02's own Vision text names). Evaluator verified the diff is strictly additive, confirmed from source that the body mounts only when open, and saw the header rendered in the UT-06 capture. Stamp refreshed."
     },
@@ -26,10 +26,10 @@
       "id": "J-03",
       "name": "Structure x flow — the join that never looks ahead",
       "status": "passing",
-      "last_verified_iter": "goal-rapid-microscope-iter-19",
-      "last_passing_iter": "goal-rapid-microscope-iter-19",
+      "last_verified_iter": "goal-rapid-microscope-iter-21",
+      "last_passing_iter": "goal-rapid-microscope-iter-21",
       "first_seen_iter": "goal-rapid-microscope-iter-0",
-      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-19-evidence/J-03-verify.png",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-21-evidence/J-03-verify.png",
       "spec_hash": "a671f63835247f7fca66a41a2dc48ec4fe3e83fe0bda85d3703ef385cb20de83",
       "note": "iter-19: same closure as J-02 -- the old single step asserted the unrelated heading \"Index Reconciliation\". New step 2 expands microReadiness and asserts \"Joinable corpus -- withheld (excluded)\", the one already-rendered joinable_corpus field (iter-10 Disclosure sub-fields row). Evaluator saw it rendered (=0) in the UT-06 capture. Stamp refreshed."
     },
@@ -37,10 +37,10 @@
       "id": "J-04",
       "name": "The Scout and the ledger — every trial on the record",
       "status": "passing",
-      "last_verified_iter": "goal-rapid-microscope-iter-19",
-      "last_passing_iter": "goal-rapid-microscope-iter-19",
+      "last_verified_iter": "goal-rapid-microscope-iter-21",
+      "last_passing_iter": "goal-rapid-microscope-iter-21",
       "first_seen_iter": "goal-rapid-microscope-iter-0",
-      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-19-evidence/J-04-verify.png",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-21-evidence/J-04-verify.png",
       "spec_hash": "d188d138b6c84c4ff7302bf60f5da2f95b247b58a6cd7c42874d740801bc19d0",
       "note": "iter-19: same closure -- old step asserted the unrelated heading \"Screen Runs\". New step 2 expands desk-section-expand-scoutLedger and asserts \"Ledger chain verification:\", which page.tsx:6268 renders ONLY in the success branch (scoutResult.ok && data !== null); the failure branch renders UnavailablePanel. UT-10 proved the negative LIVE: with /research/desk/micro/scout blocked, the scout-ledger-unavailable panel rendered and the string matched 0 times. Stamp refreshed."
     },
@@ -48,10 +48,10 @@
       "id": "J-05",
       "name": "The walk-forward engine — chronology, fences, and the diagnostic run",
       "status": "passing",
-      "last_verified_iter": "goal-rapid-microscope-iter-19",
-      "last_passing_iter": "goal-rapid-microscope-iter-19",
+      "last_verified_iter": "goal-rapid-microscope-iter-21",
+      "last_passing_iter": "goal-rapid-microscope-iter-21",
       "first_seen_iter": "goal-rapid-microscope-iter-0",
-      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-19-evidence/J-05-verify.png",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-21-evidence/J-05-verify.png",
       "spec_hash": "1b84144912ebd9de2f4731f2209f6f7354ac8e563f633f14825644d2f838fa1e",
       "note": "iter-19: same closure -- old step asserted only the shared \"Playbook Signals\" heading. New step 2 expands desk-section-expand-walkForward and asserts \"Ledger chain verification:\" from GET /research/desk/micro/walkforward, same success-branch-only structure (page.tsx:6495 vs UnavailablePanel at :6487-6491). Stamp refreshed. Residual (audit T3, recorded not fixed): J-04 and J-05 assert the SAME literal string, so a swapped testid between the two scripts would not be caught by the text alone."
     },
@@ -59,10 +59,10 @@
       "id": "J-06",
       "name": "The recorder and the Vault — new tape, sealed at birth",
       "status": "partial",
-      "last_verified_iter": "goal-rapid-microscope-iter-19",
+      "last_verified_iter": "goal-rapid-microscope-iter-21",
       "last_passing_iter": null,
       "first_seen_iter": "goal-rapid-microscope-iter-0",
-      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-19-evidence/J-06-verify.png",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-21-evidence/J-06-verify.png",
       "spec_hash": "436653d6b7824775afe28e19de9266a60c63c3a69f3b9eda09d9dddfb0cfaae1",
       "note": "iter-19: shipped portion re-verified by the replay lane (UT-J-06 PASS; step 2 expands microReadiness and asserts \"No integrity errors.\"). vault.py and tick_recorder.py are byte-untouched this iteration (evaluator confirmed: git diff <snapshot>..HEAD -- apps/backend/app apps/frontend is EMPTY). Still `partial` for ONE unchanged reason: step 4 is an operator-attended act -- recording real Alpaca tape to the spec 7.6 minimums -- which every iteration spec since iter-13 has forbidden. HUMAN-OWNED BLOCKER."
     },
@@ -81,21 +81,21 @@
       "id": "J-08",
       "name": "The surface and MCP v6 — the funnel is visible",
       "status": "passing",
-      "last_verified_iter": "goal-rapid-microscope-iter-20",
-      "last_passing_iter": "goal-rapid-microscope-iter-20",
+      "last_verified_iter": "goal-rapid-microscope-iter-21",
+      "last_passing_iter": "goal-rapid-microscope-iter-21",
       "first_seen_iter": "goal-rapid-microscope-iter-0",
-      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-20-evidence/J-08-verify.png",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-21-evidence/J-08-verify.png",
       "spec_hash": "037874a8933089ff99b53568d5aedac2843043741d83fa4958759ba898145572",
       "note": "iter-19: re-verified by the replay lane (UT-J-08 PASS, 5 steps across four sections). Its iter-18 refreshed Validation Vault assertion (\"iter18-qa-universe\") is genuinely discriminating and the evaluator OPENED the render: the vault table shows the shard row vshard-01545ee5... / iter18-qa-universe / size bucket ~10^0 / checksum commitment, with both shard and universe ledger chain verifications reading ok."
     },
     "J-09": {
       "id": "J-09",
       "name": "The pilot studies — three predeclared questions, honest answers",
-      "status": "failing",
-      "last_verified_iter": "goal-rapid-microscope-iter-19",
+      "status": "partial",
+      "last_verified_iter": "goal-rapid-microscope-iter-21",
       "last_passing_iter": null,
       "first_seen_iter": "goal-rapid-microscope-iter-0",
-      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-15-evidence/UT-05-result.png",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-21-evidence/UT-03-result.png",
       "spec_hash": "7dd99ef032e14d2c86d69962f917efb8840d2496fa07765e9488264ecbd8a58a",
       "note": "iter-19: still FAILING and still unbuilt -- the evaluator confirmed it on disk rather than assuming (no pilot-study module exists under apps/backend/app/research/). Out of scope for the SEVENTH consecutive iteration, and legitimately so: its three studies would be graded by the sealed judge whose economic-floor hole is still open, and the iter-19 spec puts it OUT OF SCOPE pending the owner ruling. HUMAN-OWNED BLOCKER: it cannot start until the owner rules on where a candidate's pre-registered economic floor and evidence label come from (docs/rapid-validation-spec.md still carries no revision after r9 -- evaluator re-confirmed by grep)."
     },
@@ -103,10 +103,10 @@
       "id": "J-10",
       "name": "The kept product stands — traps armed, sentinel green",
       "status": "passing",
-      "last_verified_iter": "goal-rapid-microscope-iter-20",
-      "last_passing_iter": "goal-rapid-microscope-iter-20",
+      "last_verified_iter": "goal-rapid-microscope-iter-21",
+      "last_passing_iter": "goal-rapid-microscope-iter-21",
       "first_seen_iter": "goal-rapid-microscope-iter-0",
-      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-20-evidence/J-10-verify.png",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-21-evidence/J-10-verify.png",
       "spec_hash": "eabb7f30a96a8241a6652e7f6346073a4a302a6269b57e918b8b3720f97b762f",
       "note": "iter-19: partial -> PASSING. The last gap (step 2, the deterministic-rerun check) is closed, and the evaluator proved every acceptance clause personally rather than reading a report. (1) Trap suite complete: own sweep of the test folder found TR-1..TR-30 with no gap -- NOTE TR-17 exists only as lettered sub-traps TR-17a/b/c, so a bare \\bTR-[0-9]+\\b regex falsely reports a hole (the evaluator's first sweep did). (2) Deterministic rerun: ran the module (10 passed) and then broke the SHIPPED code twice -- replacing scout.scout_stream with an unseeded random.Random() made exactly TC-2b and TC-4d fail with p_screen genuinely diverging (0.2164 vs 0.2374), and injecting a random field into micro_snapshots.build_snapshot_rows made TC-1 and TC-4a fail; both files were then restored and confirmed md5-identical. (3) Full suite run by the evaluator: 3,281 passed / 8 skipped / 0 failures / 0 errors in 676.64s -- 18 above the iter-18 baseline of 3,263, none lost (this matches the AUDIT's count; the QA report's 3,279 was stale, taken before the auditor added 2 tests). (4) config_fingerprint() printed 08e471b10130e1e2. (5) All six referee_*.py SHA-256s match the iteration-0 baseline byte-for-byte. (6) Sentinel surfaces opened as images, not read as rows: cockpit / genuinely alive (live candles, Buyer Control, moving quote/features), /structure drawing AAPL's tradable map as-of 2026-06-22 with the 300.10/302.20 bands, and every shipped /desk section including all three Referee sections (Registry showing \"config fingerprint 08e471b10130e1e2\", Adjudications, Runs) and the Validation Vault."
     }
@@ -291,8 +291,8 @@
       "iter": "goal-rapid-microscope-iter-16",
       "anti_goal": "Constraints -- 'T-10 Evidence honesty. No screenshot => unknown, never passing; operator acts are reported run-or-not-run' (supporting the critical 'Deterministic and reproducible' / record-integrity rails)",
       "severity": "minor",
-      "evidence": "NEW AND OPEN. runs/goal-session-rapid-microscope/journey-scripts/J-10.json was REWRITTEN this round, LINTED ONLY, and never executed -- in the very round where J-10 is the target journey. The evaluator verified all of this himself. (a) `git status --porcelain` shows it as a 7th modified TRACKED file, absent from runs/goal-rapid-microscope-iter-16/status.json's changed_files, so the reviewer's 'exactly the 6 files touched' and QA's 'Changed files: Exactly 6 files changed -- PASS' are both false certifications of a count. (b) `git diff HEAD` on the file shows steps 9-10 -- expand Playbook Evidence expecting 'Built from signature:' and fill the playbook date input expecting 'recorded signals, none hidden', BOTH data-bearing assertions over real playbook evidence -- deleted and replaced by four empty-state assertions; default_timeout_ms 10000->20000; the /structure as-of 17:00:00->16:00:00. (c) reports/phase-goal-rapid-microscope-iter-16-regression-replay-results.md contains NO J-10 row at all, whereas iteration 15's recorded UT-J-10 PASS. MINOR, not critical: nothing was fabricated and no acceptance was claimed without evidence -- the LLM browser lane independently live-confirmed every one of the new expect strings with screenshots the evaluator opened (UT-02/03/06/07/08/09), and the coherence auditor read the diff and judged the widening legitimate. It is the STORED ASSET's status that is honestly `unknown`, plus a bookkeeping gap that made a behaviour-bearing file invisible to two certifying lanes. Same shape as iteration 14's 'a lane graded a check as passed when that check did not run'. FIX (round 17 passenger): run `demo_runner.py --mode verify --journeys J-10`; if it passes, restore the two deleted Playbook Evidence steps and re-run -- both target strings still exist in page.tsx and iteration 15's executed replay proves they held one round ago; if they no longer hold, that is itself a finding to record, not to drop. Also add journey scripts to status.json's changed_files. || ITERATION 17: HALF DISCHARGED, STILL OPEN. J-10.json was genuinely RUN through demo_runner.py --mode verify for the first time this era. It FAILED at step 11 (Walk-Forward expecting 'No fold specs registered.') because the real store carries a fold spec playbook_setups_diagnostic_v1 registered 2026-08-17, three days before this round — pre-existing data drift, not a regression. Dev, reviewer and auditor each confirmed that independently, and the script was correctly left byte-unchanged rather than edited to pass: the evaluator confirmed `git status --porcelain runs/goal-session-rapid-microscope/journey-scripts/` is EMPTY. Still owed: the two Playbook Evidence data-bearing assertions dropped in iteration 16 are not restored, and the harness still does not count replay scripts among a round's changed files (a framework-level ask, not product scope). || ITERATION 18: the 'never executed' HALF IS NOW DISCHARGED - the auditor ran J-10.json end to end this round and all 15 steps passed (the evaluator opened J-10-verify.png). The other half is NOT: the two data-bearing playbook-evidence assertions deleted in iteration 16 ('Built from signature:' and 'recorded signals, none hidden') are still absent from the script, which now runs steps 9-15 over micro and referee sections only. Stays OPEN on that half. || ITERATION 20: not addressed — an evidence-depth round with zero product diff and no script change (git status on runs/goal-session-rapid-microscope/journey-scripts/ is EMPTY, confirmed by the evaluator). The two data-bearing Playbook Evidence assertions dropped in iteration 16 are still absent. Stays OPEN.",
-      "resolved": false
+      "evidence": "NEW AND OPEN. runs/goal-session-rapid-microscope/journey-scripts/J-10.json was REWRITTEN this round, LINTED ONLY, and never executed -- in the very round where J-10 is the target journey. The evaluator verified all of this himself. (a) `git status --porcelain` shows it as a 7th modified TRACKED file, absent from runs/goal-rapid-microscope-iter-16/status.json's changed_files, so the reviewer's 'exactly the 6 files touched' and QA's 'Changed files: Exactly 6 files changed -- PASS' are both false certifications of a count. (b) `git diff HEAD` on the file shows steps 9-10 -- expand Playbook Evidence expecting 'Built from signature:' and fill the playbook date input expecting 'recorded signals, none hidden', BOTH data-bearing assertions over real playbook evidence -- deleted and replaced by four empty-state assertions; default_timeout_ms 10000->20000; the /structure as-of 17:00:00->16:00:00. (c) reports/phase-goal-rapid-microscope-iter-16-regression-replay-results.md contains NO J-10 row at all, whereas iteration 15's recorded UT-J-10 PASS. MINOR, not critical: nothing was fabricated and no acceptance was claimed without evidence -- the LLM browser lane independently live-confirmed every one of the new expect strings with screenshots the evaluator opened (UT-02/03/06/07/08/09), and the coherence auditor read the diff and judged the widening legitimate. It is the STORED ASSET's status that is honestly `unknown`, plus a bookkeeping gap that made a behaviour-bearing file invisible to two certifying lanes. Same shape as iteration 14's 'a lane graded a check as passed when that check did not run'. FIX (round 17 passenger): run `demo_runner.py --mode verify --journeys J-10`; if it passes, restore the two deleted Playbook Evidence steps and re-run -- both target strings still exist in page.tsx and iteration 15's executed replay proves they held one round ago; if they no longer hold, that is itself a finding to record, not to drop. Also add journey scripts to status.json's changed_files. || ITERATION 17: HALF DISCHARGED, STILL OPEN. J-10.json was genuinely RUN through demo_runner.py --mode verify for the first time this era. It FAILED at step 11 (Walk-Forward expecting 'No fold specs registered.') because the real store carries a fold spec playbook_setups_diagnostic_v1 registered 2026-08-17, three days before this round — pre-existing data drift, not a regression. Dev, reviewer and auditor each confirmed that independently, and the script was correctly left byte-unchanged rather than edited to pass: the evaluator confirmed `git status --porcelain runs/goal-session-rapid-microscope/journey-scripts/` is EMPTY. Still owed: the two Playbook Evidence data-bearing assertions dropped in iteration 16 are not restored, and the harness still does not count replay scripts among a round's changed files (a framework-level ask, not product scope). || ITERATION 18: the 'never executed' HALF IS NOW DISCHARGED - the auditor ran J-10.json end to end this round and all 15 steps passed (the evaluator opened J-10-verify.png). The other half is NOT: the two data-bearing playbook-evidence assertions deleted in iteration 16 ('Built from signature:' and 'recorded signals, none hidden') are still absent from the script, which now runs steps 9-15 over micro and referee sections only. Stays OPEN on that half. || ITERATION 20: not addressed — an evidence-depth round with zero product diff and no script change (git status on runs/goal-session-rapid-microscope/journey-scripts/ is EMPTY, confirmed by the evaluator). The two data-bearing Playbook Evidence assertions dropped in iteration 16 are still absent. Stays OPEN. || CLOSED iteration-21, proved by the evaluator: J-10.json steps 9-10 are restored VERBATIM ('desk-section-expand-playbookEvidence' -> 'Built from signature:'; fill 'desk-playbook-date-input' 2026-06-22 -> 'recorded signals, none hidden') and, unlike iteration 16, the script was EXECUTED twice: the deterministic golden replay (UT-J-10 PASS, reports/qa/goal-rapid-microscope-iter-21-evidence/J-10-verify.png, opened by the evaluator) and a full hand replay of all 17 steps by the browser lane (UT-08 PASS, observed 'Built from signature: 4478fd73a536cc80' and '4 recorded signals, none hidden').",
+      "resolved": true
     },
     {
       "iter": "goal-rapid-microscope-iter-16",
@@ -362,9 +362,37 @@
       "iter": "goal-rapid-microscope-iter-19",
       "anti_goal": "Constraints -- 'T-10 Evidence honesty. No screenshot => unknown, never passing.'",
       "severity": "minor",
-      "evidence": "NEW AND OPEN -- the EVALUATOR'S OWN finding this round, raised by no lane. The screenshot for UT-10 (reports/qa/goal-rapid-microscope-iter-19-evidence/UT-10-result.png) does NOT show the state its results row describes: the row reports the scout-ledger-unavailable panel rendering 'Backend unreachable -- is the API running?', but the image is a mostly-empty dark viewport showing only the Desk nav bar and an unrelated Playbook panel at the bottom edge. A capture/scroll defect, NOT a product failure: the row's own checks are DOM-level rather than pixel-level (data-testid present in the captured HTML; grep for 'Ledger chain verification' returned 0 matches), and the evaluator independently confirmed the claim from source (apps/frontend/app/desk/page.tsx:6258-6272 renders UnavailablePanel on the failure branch and the asserted string only on the success branch). It matters because UT-10 is the live discrimination proof for J-04's and J-05's new assertions; that proof now rests on the row's DOM checks, UT-09's live unmount proof, and the evaluator's own source read rather than on its own picture. || ITERATION 20: not addressed. This round dispatched only J-07 to the LLM browser lane plus the J-08/J-10 replay pair, so the UT-10 backend-failure check was not re-run and no fresh capture exists. Stays OPEN; re-capture whenever that lane next runs.",
+      "evidence": "NEW AND OPEN -- the EVALUATOR'S OWN finding this round, raised by no lane. The screenshot for UT-10 (reports/qa/goal-rapid-microscope-iter-19-evidence/UT-10-result.png) does NOT show the state its results row describes: the row reports the scout-ledger-unavailable panel rendering 'Backend unreachable -- is the API running?', but the image is a mostly-empty dark viewport showing only the Desk nav bar and an unrelated Playbook panel at the bottom edge. A capture/scroll defect, NOT a product failure: the row's own checks are DOM-level rather than pixel-level (data-testid present in the captured HTML; grep for 'Ledger chain verification' returned 0 matches), and the evaluator independently confirmed the claim from source (apps/frontend/app/desk/page.tsx:6258-6272 renders UnavailablePanel on the failure branch and the asserted string only on the success branch). It matters because UT-10 is the live discrimination proof for J-04's and J-05's new assertions; that proof now rests on the row's DOM checks, UT-09's live unmount proof, and the evaluator's own source read rather than on its own picture. || ITERATION 20: not addressed. This round dispatched only J-07 to the LLM browser lane plus the J-08/J-10 replay pair, so the UT-10 backend-failure check was not re-run and no fresh capture exists. Stays OPEN; re-capture whenever that lane next runs. || CLOSED iteration-21, proved by the evaluator opening the image: UT-06-result.png is a genuine 855x75 tight element capture of data-testid='scout-ledger-unavailable' showing the real panel text 'Backend unreachable - is the API running?' / 'Nothing cached and nothing fabricated is shown in its place.' - no longer a mostly-empty frame.",
+      "resolved": true
+    },
+    {
+      "iter": "goal-rapid-microscope-iter-21",
+      "anti_goal": "Frozen foundations - the ... JSON BarStore, and every KEPT surface's behaviour stay byte-identical. New work is additive and versioned beside them. *(critical)* - read here as the SHIPPED Microscope Readiness section's observable behaviour, which now stalls.",
+      "severity": "minor",
+      "evidence": "NEW AND OPEN. Audit finding B2, measured twice by the auditor against the operator's real 18-dataset store: apps/backend/app/research/micro_routes.py:108 now constructs a BandMapResolver on EVERY GET /research/desk/micro/readiness, and micro_join.py:639-643 calls enumerate_band_touches per dataset -> DatasetStore.load_events (a full ~50 MB JSON parse) with NO cache -> 22.33 s / 22.53 s per request, 5 of 18 datasets resolving a map today and growing with each operator-warmed tradability map. /desk issues this GET on page load (apps/frontend/lib/api.ts:2170, no client timeout), so the shipped panel spins ~22 s. The sibling fold in the same builder already solves this correctly via the checksum-keyed durable MicroReadinessCache (micro_readiness.py:414-418). Left UNFIXED deliberately: the auditor judged a naive cache a silent-wrong-data risk (a stale 0-touch answer after an operator warms a new map) and routed it to a follow-up with a real invalidation contract. Not observable on the scoped QA rig (no band map resolves there; band_touch_count renders 0), so no lane's screenshots show it. Severity minor: values served are correct and no rail is broken - only latency on the operator's own machine. CLOSES when the per-dataset touch count is durably cached on (dataset checksum, resolver map key), published only on a resolved map.",
+      "resolved": false
+    },
+    {
+      "iter": "goal-rapid-microscope-iter-21",
+      "anti_goal": "Constraints - a spec'd flow must be genuinely reachable, not test-only; 'T-10 Evidence honesty. No screenshot => unknown, never passing.'",
+      "severity": "minor",
+      "evidence": "OPENED AND CODE-FIXED IN-ROUND, EVIDENCE STILL OWED. The walk-forward floor-check decision (scout.register_screen_and_walkforward_check, walkforward.scout_candidate_walkforward_floor_check) had ZERO non-test callers: the route, the CLI and ScoutComputeManager.trigger all went through register_and_screen_candidate only. Found independently by the browser lane (UT-04 FAIL, reports/phase-goal-rapid-microscope-iter-21-ui-test-results.md) and the auditor (B1). The auditor fixed it (run_scout_grid_and_record gains exposure_registry; the pilot selector REQUIRES it; route + CLI supply it) and added a route-level regression test. The evaluator did NOT take that on trust: forced exposure_registry=None back into ScoutComputeManager's worker and test_iter21_audit_b1_pilot_route_records_the_walkforward_floor_check_row went RED (1 failed, 1 passed), then restored scout.py byte-identically (sha256 cc32e4917d01da43b7fd3896433fb26f979bf56b853be66751023df33fc54229). RESIDUAL, why this stays open: the audit's own fix is the ONLY lane that has checked the audit's own fix - no browser pass re-ran UT-04 after it, so the second ledger row has never been seen on screen. CLOSES when UT-04 (or its successor) is re-run green with a screenshot.",
+      "resolved": false
+    },
+    {
+      "iter": "goal-rapid-microscope-iter-21",
+      "anti_goal": "Constraints - 'T-10 Evidence honesty. No screenshot => unknown, never passing; operator acts are reported run-or-not-run' - a lane may not certify what it did not check.",
+      "severity": "minor",
+      "evidence": "NEW AND OPEN. Three separate over-claims, all in reports/qa/goal-rapid-microscope-iter-21-qa.md, raised by the auditor (Q1) and re-checked by the evaluator: (a) it ticks \"Floor-check decision ('insufficient_n') recorded in ledger as expected\" and prints a scout row whose decision is killed_insufficient_n - that is the SCREEN's own insufficient-n kill, not the walk-forward floor check, which produced no row anywhere at the time (see the companion iter-21 item); (b) it states 'only 1 of 18 real datasets has a band map today' where the auditor measured 5; (c) it returns an overall PASS while the merged browser verdict for the SAME iteration is FAIL. Compounding framework gap, confirmed by the evaluator: reports/phase-goal-rapid-microscope-iter-21-closure-verdict.md returns CLOSURE-PASS while the merged browser verdict is FAIL - closure_gate.py checks the UX-regression verdict but never the browser verdict, so a FAILING checking lane does not gate a round. CLOSES when the QA lane stops certifying unchecked coverage AND a FAIL browser verdict blocks closure.",
+      "resolved": false
+    },
+    {
+      "iter": "goal-rapid-microscope-iter-21",
+      "anti_goal": "Deterministic and seeded / record integrity - identical requests reproduce byte-identical results; and the iteration-18 rule 'a change to a shared test rig is a change to every journey that rig serves'.",
+      "severity": "minor",
+      "evidence": "NEW AND OPEN - the evaluator's own finding, raised by no lane. This round's own browser tests UT-03 (pilot grid) and UT-07 (default Run Screen) POSTed to the scoped QA backend and wrote 7 candidate rows into its Scout ledger (verified directly: /home/dennis-chan/.cache/iad/iad.goal-rapid-m-963167b0.2777839/tapeology-store-scope-qa/rig/micro_scout/ledger.jsonl, 7 lines, families cumulative_delta, failed_aggression_score, quote_imbalance and divergence_at_level_bearish__band_touch). J-08.json step 3 and J-10.json step 12 BOTH assert the empty state 'No candidates ledgered.' The replay + LLM lanes were saved only by sequencing (the test plan ran fresh-ledger tests first, 20:01-20:09, before the ledger-populating ones at 20:13-20:15). The DEMO lane was NOT covered by that sequencing: it ran last at 20:37 and its step 03 soft-assert 'No candidates ledgered' did not appear and was 'recorded anyway' (reports/phase-goal-rapid-microscope-iter-21-demo-results.md). No cross-iteration damage: each engine run gets a fresh TMPDIR rig root (iter-20 used iad.goal-rapid-m-33532ec4, iter-21 iad.goal-rapid-m-963167b0), so the pollution dies with the run. CLOSES when the rig-mutation rule covers EVERY lane that reads the rig (replay, browser-qa AND demo), or those two empty-state assertions are made order-independent.",
       "resolved": false
     }
   ],
-  "updated_at": "2026-08-20T16:29:33Z"
+  "updated_at": "2026-08-20T22:05:00Z"
 }

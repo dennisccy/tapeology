@@ -1073,3 +1073,70 @@ hash-chained ledger rows.
 **Reversible:** yes — the moment the owner runs the pilot grid for real (operator act, like J-06's
 tranche recording), the production ledger reflects it and J-10's assertion updates in the SAME
 disciplined way any future Scout run would require.
+
+## iter-21 — goal-evaluator
+
+**Ambiguity:** J-09's acceptance says "three ledgered study families exist with predeclared specs
+whose registration timestamps precede their first outcome read ... each serves its screen with
+evidence class, denominators, ... and the economic column; each carries a recorded decision".
+Iteration 21's decomposer logged a reading in which frozen, versioned, reviewable SOURCE specs
+satisfy "ledgered study families EXIST" (matching `default_fixture_grid()`'s J-04 precedent), which
+would let one screened study plus two source-only specs count as satisfying step 1.
+**We chose:** I do NOT extend that reading to the journey's PASS bar. "Ledgered" plainly means a
+row in the ledger, and the phrase "EACH serves its screen ... EACH carries a recorded decision" is
+per-study, so with one of three screened J-09 is `partial`, not `passing`. I accept the
+decomposer's reading only for its narrow purpose — that writing the three specs in source, in the
+stated priority order, before any outcome was read, is a legitimate way to satisfy the
+predeclaration ORDER requirement without a production ledger write. The iteration spec's own DoD
+already set the bar at "J-09 passes as at least `partial`", so nothing rides on this beyond making
+the reason explicit for the next round.
+**Reversible:** yes — the moment Studies 1 and 3 are screened to recorded decisions, the two
+readings converge and J-09 passes on either.
+
+## iter-21 — goal-evaluator (second)
+
+**Ambiguity:** whether ESCALATE is available when the decision tree's literal clauses do not fire.
+Tree C.4's three triggers again do not fire literally: "the same journey failed 2+ consecutive
+iterations" (J-09 carried `failing` across iterations 13–20 but was never ATTEMPTED, and this
+iteration it IMPROVED to `partial`); "the review lane failed and the pipeline proceeded fail-open"
+(the REVIEW lane returned PASS_WITH_NOTES — it was the BROWSER-QA lane that returned FAIL); "this
+LEAN iteration surfaced cross-cutting ambiguity" (this iteration was `full`). Read strictly,
+first-match-wins lands on C.5 → CONTINUE.
+**We chose:** ESCALATE, recorded as a deliberate departure from the tree's literal text rather than
+a pretence that a clause fired. Three grounds, each specific to this round and each checked by me
+rather than inherited. (1) The fail-open trigger fires in SUBSTANCE: the merged browser verdict is
+FAIL (UT-04) and the round still finalized with `CLOSURE-PASS` — I read `closure_gate.py`'s own
+cross-reference block and it checks the UX-regression verdict and artifact presence but never the
+browser verdict, so a failing checking lane cannot gate a round. The methodology's A.5 signal is
+the same shape with the lanes swapped. (2) Non-self-verification: the ONLY lane that repaired UT-04
+is the audit lane, and no other lane has checked its edit; I re-proved the fix non-vacuously myself
+this round, but next round's new work (two permanent hash-chained study decisions, plus a durable
+cache whose naive form the auditor itself named a silent-wrong-data risk) would ship unaudited.
+(3) Mechanically decisive, and NEW this round: I read `run-goal.sh`'s depth arbiter (the ladder at
+~:2420-2455) and rung 3 is `budget-breached && PRIOR_VERDICT == CONTINUE → lean`. This iteration
+demonstrably exceeded its wall-clock budget (`ux-regression.md` = `UX-REGRESSION-SKIPPED`, trim rung
+3b; UT-J-07 = `DEFERRED-BUDGET`, trim rung 2), and the marker is written AFTER my verdict
+(`run-goal.sh:2877`) — so a CONTINUE here does not merely risk a lean round, it GUARANTEES one,
+while rung 1 (`prior-verdict-ESCALATE`) grants full ahead of it. The choice is "full vs certainly
+lean", not "full vs probably full". I pair the escalation with an explicit instruction to keep the
+round SMALL so the clock does not defer J-07 a third time.
+**Reversible:** yes — ESCALATE only sets the next iteration's depth; it halts nothing, and once
+Studies 1/3 are audited a later evaluator returns to plain CONTINUE on its own merits.
+
+## iter-21 — goal-evaluator (third)
+
+**Ambiguity:** how to score J-07 "Graduation", whose merged results row reads `DEFERRED-BUDGET`
+(not tested). The rail says it keeps its prior status; iteration 19 faced the same situation and
+chose `evidence_makeup: true` to schedule a make-up ride, stretching a flag defined for a
+*defective* capture to cover an *absent* one.
+**We chose:** J-07 stays `passing` with `last_verified_iter` left at iteration 20, and I set NO
+flag. Grounds: unlike iteration 19, J-07 already TOOK its make-up ride — iteration 20 produced a
+fresh, discriminating capture — and `apps/backend/app/research/micro_graduation.py` is absent from
+this iteration's 12-file diff, so under evidence durability (methodology A.6) the iteration-20
+proof remains valid and nothing is owed except a routine re-check. Adding `evidence_makeup` would
+misstate the situation as a capture defect. The deterministic achievement gate still blocks
+GOAL_ACHIEVED on the deferred row, which is the correct and sufficient consequence, and my
+recommendation names the re-check explicitly so it is not silently dropped a third time.
+**Reversible:** yes — if the next round defers J-07 again, the next evaluator should treat repeated
+budget-deferral of the same journey as a structural problem rather than carrying the status forward
+a fourth time.

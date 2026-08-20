@@ -382,3 +382,40 @@ trigger line. Iterations 12–18 were empirically right that only the verdict li
 independent audit lane; the mechanism, not folklore, is the reason.
 **Applies to:** any evaluator choosing between CONTINUE-with-full and ESCALATE when the next
 iteration's work genuinely warrants the audit lane.
+
+## iter-21 — 2026-08-20T22:10:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** A spec'd flow can pass review AND QA while being reachable by NOTHING but a unit test.
+`register_screen_and_walkforward_check` / `walkforward.scout_candidate_walkforward_floor_check`
+had zero non-test callers — `ScoutComputeManager.trigger` → `run_scout_grid_and_record` only ever
+called `register_and_screen_candidate` — so the ledger row the spec promised could never be
+produced by the route, the CLI, or the UI. The cheap detector is one grep per new public entry
+point: `grep -rn "<new_function>" app/ tests/` and require at least one hit under `app/`.
+**Applies to:** any iteration that adds a new orchestration/entry-point function whose only
+exercise is a pytest fixture — especially `scout.py`, `walkforward.py`, `vault.py`, and anything
+whose acceptance says "recorded in the ledger" or "rendered in section X".
+
+## iter-21 (second) — 2026-08-20T22:10:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** The iter-18 rig rule ("a change to the shared QA rig is a change to every journey it
+serves") was applied to the replay + browser lanes only, and the DEMO lane — which runs last, after
+the ledger-populating browser tests — was forgotten: its step-03 `No candidates ledgered` assert
+failed and was "recorded anyway". Any lane that reads the scoped rig must be inside the sequencing
+rule, or the empty-state asserts (`J-08.json` step 3, `J-10.json` step 12) must be made
+order-independent.
+**Applies to:** any iteration whose browser tests POST to `/research/desk/micro/scout/compute` (or
+any other rig-mutating endpoint) — check `reports/phase-*-demo-results.md` soft notes before
+believing the round was clean.
+
+## iter-21 (third) — 2026-08-20T22:10:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** A merged **browser-QA verdict of FAIL does not gate the round** — `closure_gate.py`
+cross-checks the UX-regression verdict and artifact presence but never the browser verdict, so
+iteration 21 closed `CLOSURE-PASS` with a live UT-04 FAIL. Only the auditor turned that FAIL into a
+fix. Do not read `CLOSURE-PASS` as "every lane agreed"; open
+`reports/phase-<iter>-ui-test-results.md` and read its verdict line directly.
+**Applies to:** every evaluator, every iteration; and to any framework change touching
+`scripts/automation/lib/closure_gate.py`.

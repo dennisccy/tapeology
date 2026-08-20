@@ -71,6 +71,7 @@ import os
 import sqlite3
 from datetime import date, datetime, time, timezone
 from pathlib import Path
+from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
 from ..providers.base import Event, QuoteEvent, TradeEvent
@@ -78,6 +79,9 @@ from .datasets import DatasetStore
 from .micro_join import BAND_TOUCH_STATUS_NOT_ENUMERATED, joinable_corpus_counts
 from .referee_evidence import REFEREE_TICK_GATE_SYMBOL_DAYS
 from . import vault
+
+if TYPE_CHECKING:  # pragma: no cover -- type-checking only, never a runtime import (no cycle risk)
+    from .desk_playbook_context import BandMapResolver
 
 __all__ = [
     "WF_TRAIN_MIN_SESSIONS",
@@ -290,7 +294,12 @@ class MicroReadinessCache:
 
 
 def build_readiness(
-    store: DatasetStore, cache: MicroReadinessCache, *, dataset_dir: str, playbook_store=None
+    store: DatasetStore,
+    cache: MicroReadinessCache,
+    *,
+    dataset_dir: str,
+    playbook_store=None,
+    resolver: "BandMapResolver | None" = None,
 ) -> dict:
     """The whole ``GET /research/desk/micro/readiness`` body -- a pure aggregation over
     ``DatasetStore.list()``'s already-verified records (module docstring). Deterministic and
@@ -302,6 +311,15 @@ def build_readiness(
     ``None`` -- callers that do not pass one (every pre-J-03 test in this file) get the honest
     ``joinable_corpus`` zero rather than an error, since "no playbook evidence was even checked"
     is a true statement in that case, never a fabricated one.
+
+    ``resolver`` (J-09, ``desk_playbook_context.BandMapResolver``) is likewise OPTIONAL, defaulting
+    to ``None`` -- passed straight through to ``micro_join.joinable_corpus_counts`` (never
+    constructed here; this module owns no ``BarStore``/``Config`` wiring of its own -- the caller,
+    ``micro_routes.py``, already holds both). Omitting it (every pre-J-09 test) keeps
+    ``band_touch_count`` at its honest ``not_enumerated`` sentinel; supplying one materializes the
+    real enumerated int (``micro_join.py``'s own docstring). Only consulted when ``playbook_store``
+    is also given -- the ``playbook_store is None`` branch below already answers "nothing was
+    checked" honestly for BOTH counts at once, never a mixed state.
 
     **Sealed-tranche AGGREGATES only (iter-9, spec section 7.5 point 4, r3; widened iteration 11,
     point 7, r5).** A dataset that is part of an UNRESOLVED registered-universe pool gets NO
@@ -472,7 +490,7 @@ def build_readiness(
             "withheld_excluded": 0,
         }
     else:
-        joinable_corpus = joinable_corpus_counts(store, playbook_store)
+        joinable_corpus = joinable_corpus_counts(store, playbook_store, resolver=resolver)
 
     sealed_tranche = {
         "shard_count": sealed_shard_count,

@@ -1,40 +1,28 @@
 # Iteration State — rapid-microscope
 
-**After iteration:** 20 · **Date:** 2026-08-20 · **Verdict:** ESCALATE
+**After iteration:** 21 · **Date:** 2026-08-20 · **Verdict:** ESCALATE
 
 ## Journeys
 
-8 passing (J-01 J-02 J-03 J-04 J-05 J-07 J-08 J-10) · 1 partial (J-06) · 1 failing (J-09) — 10 total.
-J-07 RE-VERIFIED with a fresh discriminating capture; `evidence_makeup` CLEARED; no status changed. Suite 3,281 passed / 8 skipped / 0 failed (evaluator ran it; product diff was EMPTY).
+8 passing (J-01 J-02 J-03 J-04 J-05 J-07 J-08 J-10) · 2 partial (J-06, **J-09 — was failing**) — 10 total.
+J-09 failing→partial: study 2 of 3 screened + ledgered (`killed_insufficient_n`). J-07 NOT tested (`DEFERRED-BUDGET`, keeps its iter-20 stamp). Suite 3,316 pass / 8 skip / 0 fail (evaluator ran it).
 
 ## Active blockers
 
-- **J-09 "The pilot studies" is NOT human-blocked — the iter-18/19 claim was re-tested and fails**
-  (owner: dev). Its acceptance says no study output feeds any gate/certificate; zero production
-  callers of `evaluate_sealed_verdict`; the legacy 12 symbol-days are permanently `exploratory`, so
-  "evidence classes never mix" bars them from the sealed judge; the Scout derives its OWN econ floor
-  (`scout.py:1016-1021`). BUILD IT NEXT — if a real dependency turns up, WRITE IT IN THE SPEC.
-- **Sealed judge's econ floor / evidence-label sourcing** (HUMAN — no revision after r9 in
-  `docs/rapid-validation-spec.md`) and **J-06 step 4, real Alpaca tranche recording** (HUMAN
-  operator — forbidden by every spec since iter-13). Both stay untouched.
+- **J-09 needs Studies 1 + 3 screened** on the SAME committed hermetic fixture study 2 used (`scout.pilot_study_candidate_grid`: `PILOT_STUDY_RANGE_WALL_FAILED_AGGRESSION` / `PILOT_STUDY_CAPITULATION_EXHAUSTION`) → recorded decisions; `insufficient_n` / `no survivor` are passing answers. Study 1 also needs two-feature (`failed_aggression_score` × `refill_consistent`) co-occurrence, named unbuilt in the grid's own comment. Owner: dev.
+- **UT-04 evidence owed** (dev): the auditor's own B1 fix (`run_scout_grid_and_record` gains `exposure_registry`) is the only lane that has checked itself. Photograph the second ledger row (`stage: walkforward_floor_check`) or J-09 stays `partial`.
+- **/desk readiness GET costs 22.3 s** on the real store (auditor B2, unfixed by design): `micro_routes.py:108` + `micro_join.py:639-643` re-parse every dataset per request. Fix = durable cache keyed `(dataset checksum, resolver map key)`, publish ONLY on a resolved map, never memoize a miss; mirror `MicroReadinessCache` (`micro_readiness.py:414-418`). Shed THIS first if the clock bites — never the two re-verifications.
+- **HUMAN, unchanged:** sealed judge's econ-floor / evidence-label sourcing (no spec revision after r9); J-06 step 4 real Alpaca tranche recording.
 
 ## Last 2 verdicts
 
+- iter 21: ESCALATE — J-09 partial; a FAIL browser verdict (UT-04) still closed the round (`closure_gate.py` never reads it) and only the auditor fixed it. Budget was breached, so CONTINUE would FORCE lean (`run-goal.sh` arbiter rung 3). **Keep the next round SMALL.**
 - iter 20: ESCALATE — clean evidence-only round; J-07's owed capture landed and is discriminating.
-  Escalated FORWARD-looking: only the verdict line mechanically buys the audit lane
-  (`run-goal.sh:2478-2494`, cadence disabled), and J-09 is the era's biggest new-code round.
-- iter 19: CONTINUE — J-10 closed; escalation streak ended because that round had no new code.
 
 ## Do not redo
 
-- **J-07 RE-VERIFIED** (`reports/qa/goal-rapid-microscope-iter-20-evidence/J-07-graduation.png`; rule
-  hash re-derived from source; `state/golden-gaps` self-healed). Do NOT author a J-07 golden script —
-  structurally impossible (iter-19). **J-10 DONE** — traps 30/30 (TR-17 exists only as TR-17a/b/c).
-- **Frozen foundations re-proved iter-20** — fingerprint `08e471b10130e1e2`, six referee SHAs match
-  iter-0 6/6, MCP `TOOL_NAMES` == 26. Re-check only; never re-derive.
-- **QA store provenance CLOSED** — cite `reports/qa-scoped-backend-store-manifest.md`. Keep
-  **`Frontend Present: yes`** whenever the DoD names browser-qa.
-- **Do NOT** touch `econ_floor`, TR-1…TR-30, or J-08/J-10's `iter18-qa-universe` vault assertions.
-- **Passengers, never their own round:** restore J-10.json's two dropped Playbook-Evidence assertions
-  (iter-16); re-capture the UT-10 backend-failure screenshot (iter-19); build the r5-point-3
-  Referee-readiness disclosure + guard (ordered iter-9, unbuilt 11 rounds, unblocked).
+- **DONE iter-21, proved by the evaluator:** J-10.json steps 9-10 restored AND executed twice (UT-08 + golden replay); UT-10 element capture re-taken (UT-06, real panel text); guard/source-scan for zero micro/scout/walkforward/vault callers of `strategy_trade_readiness`.
+- **Frozen foundations re-proved iter-21** — fingerprint `08e471b10130e1e2`, zero `referee_*.py` modified, MCP tools == 26, TR-1…TR-30 green (TR-17 exists only as TR-17a/b/c).
+- **The "defer up to two of three studies" allowance is SPENT** — a third deferral is not available.
+- **Do NOT** run the pilot grid against the real `.data/` store (quadratic divergence anchor extraction, uncancellable mid-candidate — auditor B3, deferred); do NOT author a J-07 golden script (impossible, iter-19); do NOT touch `econ_floor`, `referee_*`, or the `iter18-qa-universe` vault assertions.
+- **Rig rule now covers the DEMO lane too:** rig-mutating browser tests (POST `/scout/compute`) invalidate `J-08.json` step 3 / `J-10.json` step 12 "No candidates ledgered." for every later lane.

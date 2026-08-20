@@ -7,14 +7,20 @@ economic-relevance column. Registers candidates through ``scout_ledger.py``'s ha
 the two production-boundary rules that module deliberately does NOT (module docstring there):
 ``SCOUT_MAX_VARIANTS_PER_FAMILY`` (TC-9) and the TR-9 registration-ordering refusal (TC-7).
 
-**This iteration's registered grid is generic, never study-specific.** ``structure_context.kind ==
-"none"`` throughout: every trade-anchored snapshot row is an eligible anchor, with no playbook-
-signal or band-touch conditioning. A pilot-study-specific mechanism (range-wall failed aggression,
-delta divergence, capitulation exhaustion) is J-09's own scope (goal.md OUT OF SCOPE); this module
-only builds and proves the generic screening machinery, and runs it on a bounded FIXTURE grid.
-``extract_anchors`` therefore refuses (a typed error, never a silent skip) any
-``structure_context.kind`` other than ``"none"`` -- there is no read path wired for the other two
-values yet.
+**``default_fixture_grid`` stays generic, never study-specific.** ``structure_context.kind ==
+"none"`` throughout its own registered grid: every trade-anchored snapshot row is an eligible
+anchor, with no playbook-signal or band-touch conditioning -- this era's OPERATOR-run production
+grid (the CLI, ``ScoutComputeManager``'s default trigger) is unchanged by J-09.
+
+**J-09 wires the other two ``structure_context.kind`` values, in a SEPARATE, frozen
+``pilot_study_candidate_grid``.** ``extract_anchors`` now supports ``"band_touch"`` (via
+``micro_join.enumerate_band_touches`` + ``micro_join.join_band_touch``) and ``"playbook_signal"``
+(via ``micro_join.join_playbook_signal``) -- ``ScoutUnsupportedStructureContextError`` still guards
+any FUTURE, genuinely-unsupported value (there is none today: the closed
+``STRUCTURE_CONTEXT_KINDS`` set is now fully wired). Only ONE of the three predeclared pilot-study
+candidates (delta divergence at level tests) is taken through ``register_and_screen_candidate``
+this iteration -- the other two exist frozen-in-source only (goal.md OUT OF SCOPE, explicitly
+deferred per the era's own scope-pressure order).
 
 **Read-side law: no second outcome implementation.** Anchor extraction reads snapshot rows through
 ``micro_accessor.MicroAccessor`` (J-05 re-point, unfenced -- TR-3's import-ban; after
@@ -70,7 +76,7 @@ import threading
 import uuid
 from collections import Counter
 from datetime import datetime, timezone
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 from zoneinfo import ZoneInfo
 
 import numpy as np
@@ -78,6 +84,7 @@ import numpy as np
 from ..config import CONFIG, Config
 from . import micro_features as mf
 from . import micro_join as mj
+from . import walkforward as wf
 from .datasets import DatasetNotFound, DatasetStore, parse_utc_epoch
 from .micro_accessor import MicroAccessor
 from .micro_snapshots import (
@@ -99,6 +106,11 @@ from .scout_ledger import (
     distinct_variant_count,
     resolve_scout_ledger_dir,
 )
+
+if TYPE_CHECKING:  # pragma: no cover -- type-checking only, never a runtime import (no cycle risk)
+    from .desk_playbook import PlaybookStore
+    from .desk_playbook_context import BandMapResolver
+    from .micro_accessor import ExposureRegistry
 
 __all__ = [
     "SCOUT_BLOCK_PERMUTATIONS",
@@ -129,7 +141,10 @@ __all__ = [
     "screen_candidate",
     "register_and_screen_candidate",
     "default_fixture_grid",
+    "pilot_study_candidate_grid",
+    "GRID_SELECTOR_DELTA_DIVERGENCE_PILOT",
     "run_scout_grid_and_record",
+    "register_screen_and_walkforward_check",
     "list_scout_families",
     "ScoutComputeManager",
     "main",
@@ -193,6 +208,15 @@ FEATURE_FAMILY_OF: dict[str, str] = {
     "microprice": "F-LIQUIDITY",
     "spread_change_20t": "F-LIQUIDITY",
     "spread_change_100t": "F-LIQUIDITY",
+    # J-09 Study 2 (delta divergence at level tests): spec section 3's own F-FLOW bullet names
+    # `divergence_at_level` right beside `cumulative_delta` ("Divergence-at-level (Card 9.1,
+    # amended r2)") -- the SAME family, never a fourth invented one. `_extract_divergence_anchors`
+    # below is this feature's dedicated PAIRED-TOUCH extraction path (module docstring's own
+    # dispatch); its `feature_value` is `1.0`/`0.0` (never a fabricated third state) for
+    # `divergence_at_level(...)["bearish_divergence"] is True`/`False`, reusing the EXISTING
+    # threshold-transform membership check (`op="ge", value=1.0`) rather than inventing a second
+    # "boolean" transform kind.
+    "divergence_at_level_bearish": "F-FLOW",
 }
 
 # spec section 3/5.4: F-FLOW and F-RESPONSE are derived from the engine's aggressor SIDE
@@ -238,10 +262,10 @@ class ScoutUnsupportedHorizonError(Exception):
 
 
 class ScoutUnsupportedStructureContextError(Exception):
-    """``structure_context.kind`` names a value ``extract_anchors`` has no read path for this
-    iteration -- ``"playbook_signal"``/``"band_touch"``-conditioned candidates are J-09's
-    pilot-study-specific scope (goal.md OUT OF SCOPE); this iteration's registered grid uses
-    ``"none"`` only (module docstring)."""
+    """``structure_context.kind`` names a value ``extract_anchors`` has no read path for -- as of
+    J-09, this can only fire for a value outside the closed ``STRUCTURE_CONTEXT_KINDS`` set itself
+    (``"none"``/``"band_touch"``/``"playbook_signal"`` are all wired -- module docstring); kept as
+    the guard against any FUTURE addition to that set arriving with no extraction path yet."""
 
 
 def scout_stream(
@@ -356,35 +380,23 @@ def _cached_dataset_rows(
     return dataset_meta, rows
 
 
-def extract_anchors(
-    *,
-    feature_name: str,
-    structure_context_kind: str,
-    horizon_key: str,
-    sidedness: str | None,
-    corpus_manifest: list[dict],
-    dataset_store: DatasetStore,
-    snapshots_dir: str,
-    config: Config,
-    rows_cache: dict[str, list[dict]] | None = None,
-) -> list[dict]:
-    """One row per eligible trade-anchored snapshot row across ``corpus_manifest`` (spec section
-    5.1's own field -- a list of ``{"dataset_id": ...}`` entries): ``{dataset_id, symbol,
-    session_date, anchor_at, trade_index, feature_value, outcome_value, tod_bucket,
-    fallback_frac}``. Never triggers a snapshot build (T-8: reads never compute) -- a dataset with
-    no currently-valid snapshot is an honest skip, not a fabricated row (TR-7's own "rebuild, never
-    serve stale", applied to a reader that never rebuilds at all). ``rows_cache`` is the
-    ``_cached_dataset_rows`` opt-in (see that function's own docstring) -- ``None`` by default,
-    every existing call site's exact prior behavior."""
-    if structure_context_kind != "none":
-        raise ScoutUnsupportedStructureContextError(
-            f"structure_context.kind={structure_context_kind!r} has no anchor-extraction path "
-            "this iteration -- pilot-study-specific joins (playbook_signal/band_touch) are J-09's "
-            "scope (goal.md OUT OF SCOPE); J-04 registers structure_context.kind='none' "
-            "candidates only"
-        )
-    horizon_kind, horizon_value = HORIZON_KEYS[horizon_key]
+def _outcome_at_horizon(outcomes: list[dict], horizon_kind: str, horizon_value: int) -> dict | None:
+    """Picks the ONE entry matching ``(horizon_kind, horizon_value)`` out of an already-computed
+    closed outcome set (``micro_join.join_band_touch``/``join_playbook_signal``'s own ``outcomes``
+    list, built by ``_outcome_rows_after``) -- a LOOKUP, never a recompute (the read-side law: this
+    module adds no new outcome math, module docstring)."""
+    for outcome in outcomes:
+        if outcome["horizon_kind"] == horizon_kind and outcome["horizon_value"] == horizon_value:
+            return outcome
+    return None
 
+
+def _extract_none_anchors(
+    *, feature_name, horizon_kind, horizon_value, sidedness, corpus_manifest, dataset_store,
+    snapshots_dir, config, rows_cache,
+) -> list[dict]:
+    """``structure_context.kind == "none"`` -- every trade-anchored snapshot row is an eligible
+    anchor (the ORIGINAL J-04 body, unmodified)."""
     anchors: list[dict] = []
     for entry in corpus_manifest:
         dataset_id = entry["dataset_id"]
@@ -429,6 +441,316 @@ def extract_anchors(
                 }
             )
     return anchors
+
+
+def _extract_band_touch_anchors(
+    *, feature_name, horizon_kind, horizon_value, sidedness, corpus_manifest, dataset_store,
+    snapshots_dir, config, rows_cache, resolver,
+) -> list[dict]:
+    """``structure_context.kind == "band_touch"``, GENERIC single-touch path (J-09): every
+    enumerated wall touch (``micro_join.enumerate_band_touches``) is one candidate anchor, joined
+    via ``micro_join.join_band_touch`` (the SAME join primitive J-03 already proved -- no second
+    join implementation). ``feature_name == "divergence_at_level_bearish"`` dispatches to
+    ``_extract_divergence_anchors`` instead (that feature needs a PAIR of consecutive touches on
+    the same band, never a single-touch row -- spec section 3's own formula)."""
+    if feature_name == _DIVERGENCE_FEATURE_NAME:
+        return _extract_divergence_anchors(
+            corpus_manifest=corpus_manifest, dataset_store=dataset_store, snapshots_dir=snapshots_dir,
+            config=config, rows_cache=rows_cache, resolver=resolver, horizon_kind=horizon_kind,
+            horizon_value=horizon_value, sidedness=sidedness,
+        )
+    anchors: list[dict] = []
+    for entry in corpus_manifest:
+        dataset_id = entry["dataset_id"]
+        dataset_meta, _rows = _cached_dataset_rows(
+            dataset_id, dataset_store, snapshots_dir, config, rows_cache
+        )
+        if dataset_meta is None:
+            continue  # honest absence -- never a compute-on-read (T-8)
+        touches = mj.enumerate_band_touches(dataset_meta, dataset_store, resolver)
+        for touch in touches:
+            joined = mj.join_band_touch(touch, resolver, dataset_store, snapshots_dir, config)
+            if joined["status"] != mj.JOIN_STATUS_JOINED:
+                continue  # honest miss (no covering snapshot, no row before the touch)
+            feature_at_trigger = joined["feature_at_trigger"]
+            feature_value = feature_at_trigger.get(feature_name)
+            if feature_value is None:
+                continue
+            outcome = _outcome_at_horizon(joined["outcomes"], horizon_kind, horizon_value)
+            if outcome is None or outcome["mid"]["unmeasured"] or outcome["mid"]["truncated"]:
+                continue
+            anchors.append(
+                {
+                    "dataset_id": dataset_id,
+                    "symbol": touch["symbol"],
+                    "session_date": _session_date_for_dataset(dataset_meta),
+                    "anchor_at": feature_at_trigger["anchor_at"],
+                    "trade_index": feature_at_trigger["trade_index"],
+                    "feature_value": feature_value,
+                    "outcome_value": outcome["mid"]["value"],
+                    "tod_bucket": tod_bucket_for_epoch(touch["as_of_epoch"]),
+                    "fallback_frac": feature_at_trigger.get("fallback_frac_20t"),
+                }
+            )
+    return anchors
+
+
+def _windowed_trade_volumes(
+    trade_rows: list[dict], end_logical_ts: float, *, window_seconds: float, max_windows: int
+) -> list[float]:
+    """The trailing, NON-OVERLAPPING, WHOLE ``window_seconds``-long trade-volume windows ending at
+    ``end_logical_ts`` (spec section 3's "trailing-120s volume ... over the session-prefix baseline
+    windows" -- the SAME window length as the divergence trailing window itself,
+    ``BURST_BASELINE_TRAILING_WINDOWS`` of them at most). Only WHOLE windows that fit entirely
+    within the dataset's own recorded prefix (before ``end_logical_ts``) are ever counted -- the
+    caller (``divergence_delta_threshold``) already treats fewer than 5 as undefined, so this never
+    zero-pads a thin prefix into a false floor-clearing count."""
+    if not trade_rows:
+        return []
+    earliest_ts = trade_rows[0]["anchor_at"]
+    available_windows = int((end_logical_ts - earliest_ts) // window_seconds)
+    n_windows = max(0, min(max_windows, available_windows))
+    volumes: list[float] = []
+    window_end = end_logical_ts
+    for _ in range(n_windows):
+        window_start = window_end - window_seconds
+        volume = sum(
+            row["size"] for row in trade_rows if window_start <= row["anchor_at"] < window_end
+        )
+        volumes.append(float(volume))
+        window_end = window_start
+    return volumes
+
+
+def _extract_divergence_anchors(
+    *, corpus_manifest, dataset_store, snapshots_dir, config, rows_cache, resolver, horizon_kind,
+    horizon_value, sidedness,
+) -> list[dict]:
+    """Study 2's own PAIRED-touch anchor path (spec section 3, Card 9.1 amended r2): for every pair
+    of CONSECUTIVE touches (tau1 < tau2) of the SAME band within one dataset, reuses
+    ``micro_features.divergence_at_level`` VERBATIM over that pair's own cumulative-delta readings
+    (read straight off the two touches' own snapshot rows -- never recomputed) plus a trailing
+    ``(anchor_at, mid)`` price history and the session-prefix baseline trade-volume windows this
+    function builds (``_windowed_trade_volumes``) -- new plumbing this iteration wires (the
+    formula itself is 100% pre-coded; only its inputs were unbuilt, per the phase spec's own
+    BACKGROUND). ``feature_value`` is ``1.0``/``0.0`` for ``bearish_divergence`` True/False, ``None``
+    (excluded, never fabricated) when the formula itself is undefined (too little price/volume
+    history). The outcome is measured FROM tau2 (``available_at = tau2`` -- spec section 3's own
+    line), the later touch that fixes when the comparison could first be made."""
+    anchors: list[dict] = []
+    for entry in corpus_manifest:
+        dataset_id = entry["dataset_id"]
+        dataset_meta, rows = _cached_dataset_rows(
+            dataset_id, dataset_store, snapshots_dir, config, rows_cache
+        )
+        if dataset_meta is None:
+            continue
+        touches = mj.enumerate_band_touches(dataset_meta, dataset_store, resolver)
+        by_band: dict[str, list[dict]] = {}
+        for touch in touches:
+            by_band.setdefault(touch["band_id"], []).append(touch)
+
+        trade_rows = [r for r in rows if not r.get("close_out")]
+        session_end_ts = _session_end_logical_ts(dataset_meta)
+        session_date = _session_date_for_dataset(dataset_meta)
+        epoch_anchor = dataset_meta.get("epoch_anchor") or 0.0
+
+        for band_touches in by_band.values():
+            for tau1_touch, tau2_touch in zip(band_touches, band_touches[1:]):
+                tau1_logical = tau1_touch["as_of_epoch"] - epoch_anchor
+                tau2_logical = tau2_touch["as_of_epoch"] - epoch_anchor
+                tau1_row = mj.feature_row_at_trigger(rows, tau1_logical)
+                tau2_row = mj.feature_row_at_trigger(rows, tau2_logical)
+                if tau1_row is None or tau2_row is None:
+                    continue
+                cum_delta_tau1 = tau1_row.get("cumulative_delta")
+                cum_delta_tau2 = tau2_row.get("cumulative_delta")
+                if cum_delta_tau1 is None or cum_delta_tau2 is None:
+                    continue
+                price_history = [
+                    (row["anchor_at"], row["mid"])
+                    for row in trade_rows
+                    if tau1_logical - mf.DIVERGENCE_TRAILING_SECONDS <= row["anchor_at"] <= tau2_logical
+                    and row.get("mid") is not None
+                ]
+                baseline_volumes = _windowed_trade_volumes(
+                    trade_rows, tau1_logical,
+                    window_seconds=mf.DIVERGENCE_TRAILING_SECONDS,
+                    max_windows=mf.BURST_BASELINE_TRAILING_WINDOWS,
+                )
+                divergence = mf.divergence_at_level(
+                    price_history=price_history, tau1=tau1_logical, tau2=tau2_logical,
+                    cum_delta_at_tau1=cum_delta_tau1, cum_delta_at_tau2=cum_delta_tau2,
+                    baseline_volumes=baseline_volumes,
+                )
+                bearish = divergence["bearish_divergence"]
+                if bearish is None:
+                    continue  # undefined (thin price/volume history) -- excluded, never fabricated
+                feature_value = 1.0 if bearish else 0.0
+
+                tau2_pos = trade_rows.index(tau2_row)
+                outcome = mj.outcome_row_at_single_horizon(
+                    trade_rows, tau2_pos, horizon_kind, horizon_value, session_end_ts,
+                    side=sidedness,
+                )
+                if outcome is None or outcome["mid"]["unmeasured"] or outcome["mid"]["truncated"]:
+                    continue
+                anchors.append(
+                    {
+                        "dataset_id": dataset_id,
+                        "symbol": tau2_touch["symbol"],
+                        "session_date": session_date,
+                        "anchor_at": tau2_row["anchor_at"],
+                        "trade_index": tau2_row["trade_index"],
+                        "feature_value": feature_value,
+                        "outcome_value": outcome["mid"]["value"],
+                        "tod_bucket": tod_bucket_for_epoch(epoch_anchor + tau2_row["anchor_at"]),
+                        "fallback_frac": tau2_row.get("fallback_frac_20t"),
+                    }
+                )
+    return anchors
+
+
+def _signal_in_dataset_window(signal: dict, dataset_meta: dict) -> bool:
+    """A small technical window-containment check, mirroring ``micro_join._covering_dataset``'s OWN
+    ``(symbol, window)`` match -- re-implemented locally (rather than imported) because it is
+    scoped to ONE already-known dataset, not a store-wide search; the same class of judgment call
+    ``micro_join.py``'s own docstring already documents for mirroring rather than importing a
+    sibling module's small technical helper."""
+    symbol = signal.get("symbol")
+    trigger_ts = signal.get("trigger_ts")
+    if not symbol or not trigger_ts or symbol != dataset_meta["symbol"]:
+        return False
+    trigger_epoch = parse_utc_epoch(trigger_ts)
+    return (
+        parse_utc_epoch(dataset_meta["window_start_utc"])
+        <= trigger_epoch
+        <= parse_utc_epoch(dataset_meta["window_end_utc"])
+    )
+
+
+def _extract_playbook_signal_anchors(
+    *, feature_name, horizon_kind, horizon_value, sidedness, corpus_manifest, dataset_store,
+    snapshots_dir, config, rows_cache, playbook_store, setup_id,
+) -> list[dict]:
+    """``structure_context.kind == "playbook_signal"`` (J-09): every recorded playbook signal whose
+    ``(symbol, trigger_ts)`` falls inside a dataset already in ``corpus_manifest`` is one candidate
+    anchor, joined via ``micro_join.join_playbook_signal`` (the SAME join primitive J-03 already
+    proved). ``setup_id`` (``None`` by default) narrows to signals carrying that exact value verbatim
+    (Study 3's own ``setup_id="capitulation"`` -- goal.md's stated frozen field) -- omitted, every
+    recorded setup is eligible."""
+    playbook_records, _errors = playbook_store.list()
+    all_signals = [
+        signal
+        for record in playbook_records
+        for signal in (record.get("signals") or [])
+        if setup_id is None or signal.get("setup_id") == setup_id
+    ]
+    anchors: list[dict] = []
+    for entry in corpus_manifest:
+        dataset_id = entry["dataset_id"]
+        dataset_meta, _rows = _cached_dataset_rows(
+            dataset_id, dataset_store, snapshots_dir, config, rows_cache
+        )
+        if dataset_meta is None:
+            continue
+        for signal in all_signals:
+            if not _signal_in_dataset_window(signal, dataset_meta):
+                continue
+            joined = mj.join_playbook_signal(signal, dataset_store, snapshots_dir, config)
+            if joined["status"] != mj.JOIN_STATUS_JOINED:
+                continue
+            feature_at_trigger = joined["feature_at_trigger"]
+            feature_value = feature_at_trigger.get(feature_name)
+            if feature_value is None:
+                continue
+            outcome = _outcome_at_horizon(joined["outcomes"], horizon_kind, horizon_value)
+            if outcome is None or outcome["mid"]["unmeasured"] or outcome["mid"]["truncated"]:
+                continue
+            trigger_epoch = parse_utc_epoch(signal["trigger_ts"])
+            anchors.append(
+                {
+                    "dataset_id": dataset_id,
+                    "symbol": signal.get("symbol"),
+                    "session_date": _session_date_for_dataset(dataset_meta),
+                    "anchor_at": feature_at_trigger["anchor_at"],
+                    "trade_index": feature_at_trigger["trade_index"],
+                    "feature_value": feature_value,
+                    "outcome_value": outcome["mid"]["value"],
+                    "tod_bucket": tod_bucket_for_epoch(trigger_epoch),
+                    "fallback_frac": feature_at_trigger.get("fallback_frac_20t"),
+                }
+            )
+    return anchors
+
+
+_DIVERGENCE_FEATURE_NAME = "divergence_at_level_bearish"
+
+
+def extract_anchors(
+    *,
+    feature_name: str,
+    structure_context_kind: str,
+    horizon_key: str,
+    sidedness: str | None,
+    corpus_manifest: list[dict],
+    dataset_store: DatasetStore,
+    snapshots_dir: str,
+    config: Config,
+    rows_cache: dict[str, list[dict]] | None = None,
+    resolver: "BandMapResolver | None" = None,
+    playbook_store: "PlaybookStore | None" = None,
+    setup_id: str | None = None,
+) -> list[dict]:
+    """One row per eligible anchor across ``corpus_manifest`` (spec section 5.1's own field -- a
+    list of ``{"dataset_id": ...}`` entries): ``{dataset_id, symbol, session_date, anchor_at,
+    trade_index, feature_value, outcome_value, tod_bucket, fallback_frac}``. Dispatches on
+    ``structure_context_kind`` -- ``"none"`` (every trade-anchored snapshot row), ``"band_touch"``
+    (every enumerated wall touch, or a paired-touch divergence row -- see
+    ``_extract_band_touch_anchors``), ``"playbook_signal"`` (every recorded signal, optionally
+    narrowed by ``setup_id``) -- to the matching private helper above, each of which reuses
+    ``micro_join.py``'s own join primitives (no second join implementation, module docstring).
+    Never triggers a snapshot build (T-8: reads never compute) -- a dataset with no currently-valid
+    snapshot is an honest skip, not a fabricated row. ``rows_cache`` is the ``_cached_dataset_rows``
+    opt-in -- ``None`` by default, every pre-J-09 call site's exact prior behavior.
+
+    ``resolver`` is REQUIRED for ``structure_context_kind == "band_touch"`` (a band map cannot be
+    resolved without one); ``playbook_store`` is REQUIRED for ``"playbook_signal"`` -- both raise a
+    clear ``ValueError`` rather than an opaque ``AttributeError`` when omitted."""
+    if structure_context_kind not in STRUCTURE_CONTEXT_KINDS:
+        raise ScoutUnsupportedStructureContextError(
+            f"structure_context.kind={structure_context_kind!r} is outside the closed "
+            f"STRUCTURE_CONTEXT_KINDS set {STRUCTURE_CONTEXT_KINDS!r} -- refused, no read path "
+            "could ever exist for an undeclared kind"
+        )
+    horizon_kind, horizon_value = HORIZON_KEYS[horizon_key]
+
+    if structure_context_kind == "band_touch":
+        if resolver is None:
+            raise ValueError(
+                "extract_anchors: structure_context_kind='band_touch' requires a resolver"
+            )
+        return _extract_band_touch_anchors(
+            feature_name=feature_name, horizon_kind=horizon_kind, horizon_value=horizon_value,
+            sidedness=sidedness, corpus_manifest=corpus_manifest, dataset_store=dataset_store,
+            snapshots_dir=snapshots_dir, config=config, rows_cache=rows_cache, resolver=resolver,
+        )
+    if structure_context_kind == "playbook_signal":
+        if playbook_store is None:
+            raise ValueError(
+                "extract_anchors: structure_context_kind='playbook_signal' requires a playbook_store"
+            )
+        return _extract_playbook_signal_anchors(
+            feature_name=feature_name, horizon_kind=horizon_kind, horizon_value=horizon_value,
+            sidedness=sidedness, corpus_manifest=corpus_manifest, dataset_store=dataset_store,
+            snapshots_dir=snapshots_dir, config=config, rows_cache=rows_cache,
+            playbook_store=playbook_store, setup_id=setup_id,
+        )
+    return _extract_none_anchors(
+        feature_name=feature_name, horizon_kind=horizon_kind, horizon_value=horizon_value,
+        sidedness=sidedness, corpus_manifest=corpus_manifest, dataset_store=dataset_store,
+        snapshots_dir=snapshots_dir, config=config, rows_cache=rows_cache,
+    )
 
 
 def _family_median_spread_bps(
@@ -995,12 +1317,22 @@ def build_candidate_spec_fields(
     family_median_spread_bps: float,
     corpus_manifest: list[dict],
     grid_version: int,
+    setup_id: str | None = None,
 ) -> dict:
     """Assembles the FROZEN candidate-spec fields (spec section 5.1) -- everything ``compute_spec_
     hash`` hashes, deliberately excluding any wall-clock-derived value (that function's own
     docstring: two separate registration acts of the identical candidate definition, e.g. the
     manager run and the CLI run of the same grid, TC-11, must compute the identical
-    ``spec_hash``)."""
+    ``spec_hash``).
+
+    ``setup_id`` (J-09, default ``None``) is additive: it lands in ``structure_context`` ONLY when
+    given (Study 3's own ``structure_context.kind="playbook_signal"``, ``setup_id="capitulation"``
+    -- goal.md's stated frozen field) -- every ``structure_context.kind="none"``/``"band_touch"``
+    candidate (every pre-J-09 spec) omits the key entirely, so its ``spec_hash``/``candidate_id``
+    stay byte-identical to before this parameter existed (TC-4's own distinct-``family_root_id``
+    proof does not depend on this key's presence -- ``family_root_id`` is computed from
+    ``feature_family_name``/``structure_context_kind``/``outcome_horizon_family`` alone, never from
+    ``setup_id``)."""
     if structure_context_kind not in STRUCTURE_CONTEXT_KINDS:
         raise ValueError(f"unknown structure_context.kind {structure_context_kind!r}")
     if horizon_key not in HORIZON_KEYS:
@@ -1020,11 +1352,14 @@ def build_candidate_spec_fields(
         "floor_bps": floor_bps,
         "proxy_sentence": ECON_PROXY_SENTENCE,
     }
+    structure_context: dict = {"kind": structure_context_kind}
+    if setup_id is not None:
+        structure_context["setup_id"] = setup_id
     spec_fields = {
         "family_id": family_id,
         "family_root_id": family_root_id,
         "feature": {"name": feature_name, "transform": transform, "params": params},
-        "structure_context": {"kind": structure_context_kind},
+        "structure_context": structure_context,
         "outcome": {"horizon_key": horizon_key, "sidedness": sidedness},
         "fitting_rule": fitting_rule,
         "econ_floor": econ_floor,
@@ -1055,12 +1390,21 @@ def register_and_screen_candidate(
     family_median_spread_bps: float | None = None,
     rows_cache: dict[str, list[dict]] | None = None,
     withheld_excluded: int = 0,
+    resolver: "BandMapResolver | None" = None,
+    playbook_store: "PlaybookStore | None" = None,
+    setup_id: str | None = None,
 ) -> dict:
     """The ONE production entry point: builds the frozen spec, enforces TR-9 (ordering) and the
     24-variant grid bound BEFORE any outcome is read or any ledger row is written, extracts
     anchors, runs the screen, and appends the combined row. Both ``ScoutComputeManager``'s worker
     and the CLI's ``main()`` call this SAME function for every grid entry -- no second
     implementation of the screen (TC-11).
+
+    ``resolver``/``playbook_store``/``setup_id`` (J-09, all default ``None``) are threaded straight
+    through to ``extract_anchors``/``build_candidate_spec_fields`` -- REQUIRED only when
+    ``structure_context_kind`` is ``"band_touch"``/``"playbook_signal"`` respectively (that
+    function's own ``ValueError`` guards the omission); every pre-J-09 caller
+    (``structure_context_kind="none"``) is unaffected.
 
     ``registered_at``/``econ_floor_computed_at``/``family_median_spread_bps`` default to ``None``,
     meaning "compute honestly right now" -- the econ floor's median spread is read from the
@@ -1110,6 +1454,7 @@ def register_and_screen_candidate(
         family_median_spread_bps=family_median_spread_bps,
         corpus_manifest=corpus_manifest,
         grid_version=grid_version,
+        setup_id=setup_id,
     )
     family_id = spec_fields["family_id"]
     family_rows = ledger.rows_for_family(family_id)
@@ -1131,6 +1476,9 @@ def register_and_screen_candidate(
         snapshots_dir=snapshots_dir,
         config=config,
         rows_cache=rows_cache,
+        resolver=resolver,
+        playbook_store=playbook_store,
+        setup_id=setup_id,
     )
     result = screen_candidate(
         feature_name=feature_name,
@@ -1232,6 +1580,94 @@ def default_fixture_grid(dataset_store: DatasetStore, *, grid_version: int = 1) 
     return requests
 
 
+# === J-09: the three predeclared pilot-study candidate requests, frozen-in-source, in goal.md's
+# own stated priority order (Study 1, 2, 3) -- module docstring. Only Study 2 (delta divergence) is
+# taken through ``register_and_screen_candidate`` this iteration (below); Studies 1 and 3 exist
+# here, reviewable and unit-tested for shape (TC-4), but deliberately UNSCREENED (goal.md OUT OF
+# SCOPE, TC-7) -- named, not silently dropped, in the dev handoff.
+
+PILOT_STUDY_RANGE_WALL_FAILED_AGGRESSION = "range_wall_failed_aggression"
+PILOT_STUDY_DELTA_DIVERGENCE_LEVEL_TESTS = "delta_divergence_level_tests"
+PILOT_STUDY_CAPITULATION_EXHAUSTION = "capitulation_exhaustion"
+
+# ``ScoutComputeManager.trigger``/``main``'s own additive grid-selector value (below) -- the ONLY
+# pilot-grid value either accepts, so Studies 1/3 are structurally unreachable through the compute
+# manager or the CLI this iteration (goal.md OUT OF SCOPE).
+GRID_SELECTOR_DELTA_DIVERGENCE_PILOT = "delta_divergence_pilot"
+
+
+def pilot_study_candidate_grid(
+    dataset_store: DatasetStore, *, grid_version: int = 1
+) -> dict[str, dict]:
+    """The three predeclared pilot-study candidate-registration requests, keyed by
+    ``micro_readiness.PILOT_STUDY_IDS``'s own study-id vocabulary (never a second, independently-
+    spelled id list -- ``PILOT_STUDY_RANGE_WALL_FAILED_AGGRESSION``/``..._DELTA_DIVERGENCE_LEVEL_
+    TESTS``/``..._CAPITULATION_EXHAUSTION`` above are the SAME three strings that module's own
+    ``PILOT_STUDY_IDS`` tuple already carries -- a value-level coincidence this function does not
+    import to avoid, since ``micro_readiness.py`` predates and does not depend on ``scout.py``).
+    Each value is a raw kwargs dict for ``register_and_screen_candidate`` -- the SAME shape
+    ``default_fixture_grid``'s own entries carry -- with ``feature``/``structure_context``/
+    ``outcome``/``econ_floor`` (via ``build_candidate_spec_fields``, called downstream) fully
+    constructed regardless of whether this iteration ever screens it (TC-4).
+
+    Every candidate shares the withheld-excluded, currently-registered corpus manifest
+    (``exclude_withheld`` -- the SAME r4 discipline ``default_fixture_grid`` already applies) so a
+    sealed shard is never silently folded into a pilot study's own evidence pool."""
+    records, _errors = dataset_store.list()
+    kept, withheld_excluded = exclude_withheld(records, dataset_store)
+    corpus_manifest = [{"dataset_id": r["id"], "checksum": r["checksum"]} for r in kept]
+
+    range_wall_failed_aggression = {
+        "feature_name": "failed_aggression_score",
+        "transform": "threshold",
+        "params": {"op": "ge", "value": 0.5},
+        "structure_context_kind": "band_touch",
+        "horizon_key": "trades_20",
+        "sidedness": None,
+        "fitting_rule": None,
+        "corpus_manifest": corpus_manifest,
+        "grid_version": grid_version,
+        "withheld_excluded": withheld_excluded,
+        # goal.md's own framing: this study's eventual real screen additionally examines
+        # opposite-side `refill_consistent` (F-LIQUIDITY) co-occurrence at the SAME touch -- a
+        # joint two-feature condition `register_and_screen_candidate`'s single-feature threshold
+        # membership does not express yet (T-1: genuinely unbuilt, never invented here). This
+        # frozen request carries `failed_aggression_score` alone, reviewable today; the
+        # co-occurrence disclosure is added when that joint-condition machinery is built, a future
+        # iteration's own scope.
+    }
+    delta_divergence_level_tests = {
+        "feature_name": _DIVERGENCE_FEATURE_NAME,
+        "transform": "threshold",
+        "params": {"op": "ge", "value": 1.0},  # candidate iff bearish_divergence is True (1.0)
+        "structure_context_kind": "band_touch",
+        "horizon_key": "trades_20",
+        "sidedness": None,
+        "fitting_rule": None,
+        "corpus_manifest": corpus_manifest,
+        "grid_version": grid_version,
+        "withheld_excluded": withheld_excluded,
+    }
+    capitulation_exhaustion = {
+        "feature_name": "failed_aggression_score",
+        "transform": "threshold",
+        "params": {"op": "ge", "value": 0.7},
+        "structure_context_kind": "playbook_signal",
+        "horizon_key": "trades_20",
+        "sidedness": None,
+        "fitting_rule": None,
+        "corpus_manifest": corpus_manifest,
+        "grid_version": grid_version,
+        "withheld_excluded": withheld_excluded,
+        "setup_id": "capitulation",
+    }
+    return {
+        PILOT_STUDY_RANGE_WALL_FAILED_AGGRESSION: range_wall_failed_aggression,
+        PILOT_STUDY_DELTA_DIVERGENCE_LEVEL_TESTS: delta_divergence_level_tests,
+        PILOT_STUDY_CAPITULATION_EXHAUSTION: capitulation_exhaustion,
+    }
+
+
 def run_scout_grid_and_record(
     grid: list[dict],
     ledger: ScoutLedger,
@@ -1241,6 +1677,7 @@ def run_scout_grid_and_record(
     *,
     progress: Callable[[str], None] | None = None,
     should_abort: Callable[[], bool] | None = None,
+    exposure_registry: "ExposureRegistry | None" = None,
 ) -> list[dict]:
     """Registers and screens every request in ``grid``, in order, through the ONE production entry
     point (``register_and_screen_candidate``) -- both the manager and the CLI call this SAME
@@ -1253,21 +1690,140 @@ def run_scout_grid_and_record(
     era's own ``default_fixture_grid`` shares an identical ``corpus_manifest``, so this turns what
     would be 2 x len(grid) full re-parses of the snapshot corpus into exactly one per dataset for
     the WHOLE run (measured on the real 18-dataset/~3.8M-row corpus to be the difference between a
-    sub-minute run and one that never finishes)."""
+    sub-minute run and one that never finishes).
+
+    ``exposure_registry`` (iter-21 audit fix B1, default ``None``): ``None`` is the unchanged
+    screen-only path every pre-J-09 caller (and the default reference grid) takes -- exactly ONE
+    ledger row per request. Given one, each request runs through
+    ``register_screen_and_walkforward_check`` instead, so the walk-forward floor-check decision
+    goal.md IN SCOPE item 6 requires is actually RECORDED by the operator-reachable run (the CLI
+    ``--grid delta_divergence_pilot`` / ``POST /scout/compute {"grid": ...}`` path) rather than only
+    by the hermetic unit test -- the browser lane's own UT-04 finding. The returned list still
+    carries ONE row per request (the SCREEN row), so every existing caller's shape is unchanged;
+    the floor-check row is read from the ledger, where it belongs."""
     rows_cache: dict[str, list[dict]] = {}
     results: list[dict] = []
     for request in grid:
         if should_abort is not None and should_abort():
             break
-        row = register_and_screen_candidate(
-            ledger=ledger, dataset_store=dataset_store, snapshots_dir=snapshots_dir, config=config,
-            rows_cache=rows_cache,
-            **request,
-        )
+        if exposure_registry is None:
+            row = register_and_screen_candidate(
+                ledger=ledger, dataset_store=dataset_store, snapshots_dir=snapshots_dir,
+                config=config, rows_cache=rows_cache,
+                **request,
+            )
+        else:
+            row = register_screen_and_walkforward_check(
+                ledger=ledger, dataset_store=dataset_store, snapshots_dir=snapshots_dir,
+                config=config, exposure_registry=exposure_registry, rows_cache=rows_cache,
+                **request,
+            )["screen_row"]
         results.append(row)
         if progress is not None:
             progress(row["candidate_id"])
     return results
+
+
+# === J-09: screen ONE candidate through register_and_screen_candidate, THEN run the walk-forward
+# floor check for it (goal.md IN SCOPE items 5-6) -- never calls evaluate_mode_b_fold below floor.
+# ======================================================================================================
+
+
+def register_screen_and_walkforward_check(
+    *,
+    ledger: ScoutLedger,
+    dataset_store: DatasetStore,
+    snapshots_dir: str,
+    config: Config,
+    exposure_registry: "ExposureRegistry",
+    feature_name: str,
+    transform: str,
+    params: dict,
+    structure_context_kind: str,
+    horizon_key: str,
+    corpus_manifest: list[dict],
+    grid_version: int = 1,
+    sidedness: str | None = None,
+    fitting_rule: str | None = None,
+    resolver: "BandMapResolver | None" = None,
+    playbook_store: "PlaybookStore | None" = None,
+    setup_id: str | None = None,
+    rows_cache: dict[str, list[dict]] | None = None,
+    withheld_excluded: int = 0,
+) -> dict:
+    """Registers+screens ONE candidate (``register_and_screen_candidate``, unmodified -- no second
+    screening implementation), THEN runs its walk-forward floor check
+    (``walkforward.scout_candidate_walkforward_floor_check``) against its OWN anchor corpus and
+    appends the resulting decision as a SECOND ledger row under the SAME ``candidate_id``
+    (``scout_ledger.py``'s own "append-only, a later stage's outcome is a NEW row, never an edit"
+    precedent -- the module docstring's "superseded" example, applied here to a walk-forward
+    stage rather than a supersession). Source-level guard-tested to NEVER call the fold-evaluation
+    function walk-forward folds are actually SCORED through -- this function only decides whether
+    that call would be legitimate; today's real and fixture corpora both carry zero
+    ``historical_oos`` sessions, so the floor check always refuses (goal.md IN SCOPE item 6,
+    TC-6).
+
+    Anchors are re-extracted (a second ``extract_anchors`` call, mirroring the screen's own) to
+    build the ``{session_date, symbol, value}`` observation list the floor check needs -- cheap on
+    the small, committed fixture this candidate runs against (never the real production corpus this
+    iteration, goal.md OUT OF SCOPE), so this is NOT the ``rows_cache``-sharing perf path
+    ``run_scout_grid_and_record``'s own docstring protects.
+
+    Returns ``{"screen_row": ..., "walkforward_row": ...}`` -- both rows verbatim as ledgered."""
+    screen_row = register_and_screen_candidate(
+        ledger=ledger, dataset_store=dataset_store, snapshots_dir=snapshots_dir, config=config,
+        feature_name=feature_name, transform=transform, params=params,
+        structure_context_kind=structure_context_kind, horizon_key=horizon_key,
+        corpus_manifest=corpus_manifest, grid_version=grid_version, sidedness=sidedness,
+        fitting_rule=fitting_rule, resolver=resolver, playbook_store=playbook_store,
+        setup_id=setup_id, rows_cache=rows_cache, withheld_excluded=withheld_excluded,
+    )
+    anchors = extract_anchors(
+        feature_name=feature_name, structure_context_kind=structure_context_kind,
+        horizon_key=horizon_key, sidedness=sidedness, corpus_manifest=corpus_manifest,
+        dataset_store=dataset_store, snapshots_dir=snapshots_dir, config=config,
+        rows_cache=rows_cache, resolver=resolver, playbook_store=playbook_store, setup_id=setup_id,
+    )
+    observations = [
+        {"session_date": a["session_date"], "symbol": a["symbol"], "value": a["outcome_value"]}
+        for a in anchors
+    ]
+    floor_result = wf.scout_candidate_walkforward_floor_check(
+        exposure_registry,
+        corpus_id=wf.TICK_LEGACY_CORPUS_ID,
+        observations=observations,
+        registered_at=screen_row["registered_at"],
+    )
+    if floor_result["status"] == "sufficient":
+        decision = SCOUT_DECISION_SURVIVE
+        notes = (
+            f"walk-forward floor cleared: {floor_result['oos_session_count']} historical_oos "
+            "session(s)"
+        )
+    else:
+        decision = "killed_insufficient_n"
+        notes = (
+            f"walk-forward floor refused: {floor_result['oos_session_count']} historical_oos "
+            f"session(s); missing={floor_result['missing']!r}"
+        )
+    walkforward_row = ledger.append_row(
+        {
+            "family_id": screen_row["family_id"],
+            "family_root_id": screen_row["family_root_id"],
+            "candidate_id": screen_row["candidate_id"],
+            "spec_hash": screen_row["spec_hash"],
+            "stage": "walkforward_floor_check",
+            "registered_at": screen_row["registered_at"],
+            "decision": decision,
+            "reason": decision,
+            "notes": notes,
+            "screen_result": None,
+            "walkforward_floor_check": floor_result,
+            "superseded_by": None,
+            "withheld_excluded": 0,
+        }
+    )
+    return {"screen_row": screen_row, "walkforward_row": walkforward_row}
 
 
 def list_scout_families(ledger: ScoutLedger) -> list[dict]:
@@ -1341,15 +1897,63 @@ class ScoutComputeManager:
         snapshots_dir: str,
         ledger_dir: str,
         grid_version: int = 1,
+        grid_selector: str | None = None,
+        resolver: "BandMapResolver | None" = None,
+        exposure_registry: "ExposureRegistry | None" = None,
     ) -> dict:
         """Start a NEW screening run over ``default_fixture_grid`` (ensuring snapshots exist first,
         reuse-or-build), or -- if one is already ``"running"`` -- refuse (single-flight,
-        process-wide)."""
+        process-wide).
+
+        ``grid_selector`` (J-09, default ``None``): ``None`` is BYTE-IDENTICAL to every pre-J-09
+        call (the unchanged default grid). ``GRID_SELECTOR_DELTA_DIVERGENCE_PILOT`` selects a
+        ONE-ELEMENT grid -- the SAME frozen delta-divergence request
+        ``pilot_study_candidate_grid`` carries, with ``resolver`` (REQUIRED, a plain ``ValueError``
+        when omitted) attached -- so the pilot candidate is CLI/manager-runnable beside the default
+        grid, never a second endpoint. Studies 1 and 3 are structurally UNREACHABLE through this
+        selector (goal.md OUT OF SCOPE): no other pilot-grid value exists here.
+
+        ``exposure_registry`` (iter-21 audit fix B1) is REQUIRED beside ``resolver`` for the pilot
+        selector and IGNORED for the default grid: it is what lets the pilot run record its
+        walk-forward floor-check decision as a second ledger row under the SAME ``candidate_id``
+        (goal.md IN SCOPE item 6), instead of leaving that stage reachable only from a unit test."""
+        if grid_selector is not None and grid_selector != GRID_SELECTOR_DELTA_DIVERGENCE_PILOT:
+            raise ValueError(f"ScoutComputeManager.trigger: unknown grid_selector {grid_selector!r}")
+        if grid_selector == GRID_SELECTOR_DELTA_DIVERGENCE_PILOT and resolver is None:
+            raise ValueError(
+                "ScoutComputeManager.trigger: grid_selector="
+                f"{GRID_SELECTOR_DELTA_DIVERGENCE_PILOT!r} requires a resolver"
+            )
+        # iter-21 audit fix B1: the pilot run RECORDS its walk-forward floor-check decision
+        # (goal.md IN SCOPE item 6) -- so the registry that decides `historical_oos` eligibility is
+        # as REQUIRED here as the resolver is, never an optional extra a caller could forget and
+        # silently get a screen-only run back.
+        if grid_selector == GRID_SELECTOR_DELTA_DIVERGENCE_PILOT and exposure_registry is None:
+            raise ValueError(
+                "ScoutComputeManager.trigger: grid_selector="
+                f"{GRID_SELECTOR_DELTA_DIVERGENCE_PILOT!r} requires an exposure_registry"
+            )
         with self._lock:
             if self._snapshot["state"] == "running":
                 return {"state": "refused", "reason": "already_running"}
 
-            grid = default_fixture_grid(dataset_store, grid_version=grid_version)
+            if grid_selector == GRID_SELECTOR_DELTA_DIVERGENCE_PILOT:
+                request = dict(
+                    pilot_study_candidate_grid(dataset_store, grid_version=grid_version)[
+                        PILOT_STUDY_DELTA_DIVERGENCE_LEVEL_TESTS
+                    ]
+                )
+                request["resolver"] = resolver
+                grid = [request]
+            else:
+                grid = default_fixture_grid(dataset_store, grid_version=grid_version)
+            # The DEFAULT grid stays screen-only, byte-identical to every pre-J-09 run (one ledger
+            # row per candidate); only the pilot selector carries the floor-check stage.
+            floor_check_registry = (
+                exposure_registry
+                if grid_selector == GRID_SELECTOR_DELTA_DIVERGENCE_PILOT
+                else None
+            )
             run_id = uuid.uuid4().hex
             self._run_id = run_id
             cancel_event = threading.Event()
@@ -1389,6 +1993,7 @@ class ScoutComputeManager:
                 run_scout_grid_and_record(
                     grid, ledger, dataset_store, snapshots_dir, config,
                     progress=_publish, should_abort=cancel_event.is_set,
+                    exposure_registry=floor_check_registry,
                 )
             except Exception as exc:  # noqa: BLE001 -- surfaced verbatim, never swallowed
                 self._resolve_terminal(run_id, ledger_dir, "failed", error=str(exc))
@@ -1453,16 +2058,23 @@ def _cli_progress_printer() -> Callable[[str], None]:
 
 
 def main() -> int:
-    """``python -m app.research.scout [--grid-version N]`` -- registers and screens this era's
-    bounded reference candidate grid against the operator's REAL dataset/snapshot/ledger
-    directories, synchronously, in-process (the ``micro_snapshots`` CLI-warmer precedent),
-    persisting through the SAME ledger ``GET /research/desk/micro/scout`` serves."""
+    """``python -m app.research.scout [--grid-version N] [--grid {default,delta_divergence_pilot}]``
+    -- registers and screens this era's bounded reference candidate grid against the operator's
+    REAL dataset/snapshot/ledger directories, synchronously, in-process (the ``micro_snapshots``
+    CLI-warmer precedent), persisting through the SAME ledger ``GET /research/desk/micro/scout``
+    serves. ``--grid`` (J-09, default ``default``) mirrors ``ScoutComputeManager.trigger``'s own
+    ``grid_selector`` -- omitted, byte-identical to every pre-J-09 invocation."""
     parser = argparse.ArgumentParser(
         description="Scout screening CLI warmer -- registers and screens the era's bounded "
         "reference candidate grid, ensuring prerequisite snapshots exist first."
     )
     parser.add_argument(
         "--grid-version", type=int, default=1, help="the grid_version to stamp on this run's rows."
+    )
+    parser.add_argument(
+        "--grid", choices=("default", GRID_SELECTOR_DELTA_DIVERGENCE_PILOT), default="default",
+        help="'default' (unchanged) or 'delta_divergence_pilot' (the ONE J-09 pilot candidate "
+        "this era screens -- Studies 1/3 stay frozen-in-source only, never reachable here).",
     )
     args = parser.parse_args()
 
@@ -1473,9 +2085,31 @@ def main() -> int:
 
     run_snapshot_build_and_record(dataset_store, config, snapshots_dir, None)
     ledger = ScoutLedger(ledger_dir)
-    grid = default_fixture_grid(dataset_store, grid_version=args.grid_version)
+    exposure_registry = None
+    if args.grid == GRID_SELECTOR_DELTA_DIVERGENCE_PILOT:
+        from .bars import BarStore
+        from .desk_playbook_context import BandMapResolver
+        from .micro_accessor import ExposureRegistry, resolve_micro_exposure_registry_dir
+
+        resolver = BandMapResolver(BarStore(config.bar_dir_resolved()), config)
+        # iter-21 audit fix B1: the SAME durable registry `POST /walkforward/compute` already reads
+        # (`resolve_micro_exposure_registry_dir` -- never a second, differently-rooted one), so the
+        # pilot run's floor check reads the operator's real exposure state.
+        exposure_registry = ExposureRegistry(
+            resolve_micro_exposure_registry_dir(config.dataset_dir_resolved())
+        )
+        request = dict(
+            pilot_study_candidate_grid(dataset_store, grid_version=args.grid_version)[
+                PILOT_STUDY_DELTA_DIVERGENCE_LEVEL_TESTS
+            ]
+        )
+        request["resolver"] = resolver
+        grid = [request]
+    else:
+        grid = default_fixture_grid(dataset_store, grid_version=args.grid_version)
     results = run_scout_grid_and_record(
-        grid, ledger, dataset_store, snapshots_dir, config, progress=_cli_progress_printer()
+        grid, ledger, dataset_store, snapshots_dir, config, progress=_cli_progress_printer(),
+        exposure_registry=exposure_registry,
     )
     print(f"scout screen complete: {len(results)} candidate(s) processed; ledger={ledger_dir}")
     return 0

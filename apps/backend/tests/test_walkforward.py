@@ -1616,3 +1616,83 @@ def test_t3_a_sealed_shards_date_IS_still_seeded_when_an_unsealed_sibling_shares
     # the date IS seeded -- through the UNSEALED sibling's own contribution, not the sealed shard's
     assert {r["window"] for r in tick_rows} == {"2026-06-09"}
     assert len(tick_rows) == 1  # exactly one entry: a date is seeded once, whoever contributed it
+
+
+# === TC-6 (goal-rapid-microscope-iter-21, J-09): scout_candidate_walkforward_floor_check ============
+#
+# A DISTINCT numbering scope from this file's own earlier "TC-6" (a prior iteration's own
+# has_any_exposure_entries guard test) -- disambiguated by the docs/phases/goal-rapid-microscope-
+# iter-21.md reference in this section's own name, the same convention test_micro_join.py's own
+# module docstring already documents for cross-iteration TC collisions.
+
+
+def _observations(*, session_dates: list[str], symbol: str = "DVA", value: float = 1.0) -> list[dict]:
+    return [{"session_date": s, "symbol": symbol, "value": value} for s in session_dates]
+
+
+def test_iter21_tc6_a_fresh_never_initialized_registry_counts_zero_oos_sessions(tmp_path):
+    """A fresh, never-r2-initialized registry is read CONSERVATIVELY -- zero oos sessions, never
+    the opposite (module docstring: an uninitialized registry's own ``is_exposed_before`` always
+    answers ``False``, which would otherwise let an already-published legacy corpus masquerade as
+    fresh out-of-sample evidence)."""
+    registry = ExposureRegistry(str(tmp_path / "exposure"))
+    observations = _observations(session_dates=[f"2026-06-{d:02d}" for d in range(1, 10)])
+
+    result = wf.scout_candidate_walkforward_floor_check(
+        registry, corpus_id="a-never-seen-corpus", observations=observations,
+        registered_at="2026-08-20T00:00:00.000000Z",
+    )
+
+    assert result["status"] == "insufficient_n"
+    assert result["oos_session_count"] == 0
+    assert result["required_sessions"] == wf.WF_TRAIN_MIN_SESSIONS + wf.WF_TEST_MIN_SESSIONS
+    assert "oos_sessions" in result["missing"]
+    assert "WF_TRAIN_MIN_SESSIONS" in result["missing"]["oos_sessions"]
+
+
+def test_iter21_tc6_a_session_exposed_before_registered_at_is_excluded_from_the_oos_count(tmp_path):
+    registry = ExposureRegistry(str(tmp_path / "exposure"))
+    registry.log_exposure(
+        corpus_id="c1", window="2026-06-01", surface="test", logged_at="2026-08-01T00:00:00.000000Z"
+    )
+    observations = _observations(session_dates=["2026-06-01", "2026-06-02"])
+
+    result = wf.scout_candidate_walkforward_floor_check(
+        registry, corpus_id="c1", observations=observations, registered_at="2026-08-20T00:00:00.000000Z",
+    )
+
+    assert result["oos_session_count"] == 1  # only 2026-06-02 -- 2026-06-01 was already exposed
+    assert result["status"] == "insufficient_n"  # 1 session is still far below the floor
+
+
+def test_iter21_tc6_enough_never_exposed_sessions_and_observations_clears_the_floor(tmp_path):
+    """The floor CAN clear -- proves this is a genuine floor, not a function that always refuses
+    regardless of its own inputs. The registry IS r2-initialized for ``corpus_id`` (a dummy entry
+    on an UNRELATED window, so ``has_any_exposure_entries`` is true and the per-session check
+    genuinely runs) but carries no entry for any of this test's own 60 sessions -- none of them
+    was ever exposed."""
+    registry = ExposureRegistry(str(tmp_path / "exposure"))
+    registry.log_exposure(
+        corpus_id="c2", window="1999-01-01", surface="test", logged_at="2020-01-01T00:00:00.000000Z"
+    )
+    session_dates = [f"2026-{m:02d}-{d:02d}" for m in range(1, 7) for d in range(1, 11)]  # 60 dates
+    observations = []
+    for i, session_date in enumerate(session_dates):
+        symbol = "DVA" if i % 2 == 0 else "DVB"  # WF_FOLD_MIN_SYMBOLS(2) needs >= 2 symbols
+        observations.append({"session_date": session_date, "symbol": symbol, "value": float(i)})
+
+    result = wf.scout_candidate_walkforward_floor_check(
+        registry, corpus_id="c2", observations=observations, registered_at="2026-08-20T00:00:00.000000Z",
+    )
+
+    assert result["status"] == "sufficient"
+    assert result["missing"] == {}
+    assert result["oos_session_count"] == len(session_dates)
+
+
+def test_iter21_tc6_never_calls_the_fold_evaluation_function():
+    """A source-level guard (the ``test_the_banned_plain_shuffle_null_is_never_imported_or_called_
+    by_a_production_path`` precedent, ``test_scout.py``)."""
+    import inspect
+
+    assert "evaluate_mode_b_fold" not in inspect.getsource(wf.scout_candidate_walkforward_floor_check)

@@ -6011,6 +6011,20 @@ function MicroReadinessSection({
                   {readiness.joinable_corpus.withheld_excluded}
                 </td>
               </tr>
+              {/* J-09: the real materialized int (or the honest not_enumerated state) -- never a
+                  bare number a reader could mistake for a real zero (micro_join.py's own typed
+                  band_touch_count contract, served verbatim). */}
+              <tr>
+                <td className="px-1.5 py-1 text-slate-500">Joinable corpus — band touches</td>
+                <td
+                  data-testid="micro-readiness-band-touch-count"
+                  className="px-1.5 py-1 text-right font-mono text-slate-300"
+                >
+                  {readiness.joinable_corpus.band_touch_count.status === "enumerated"
+                    ? readiness.joinable_corpus.band_touch_count.count
+                    : "not enumerated"}
+                </td>
+              </tr>
             </tbody>
           </table>
         </div>
@@ -6319,6 +6333,15 @@ function ScoutLedgerSection({
                           </td>
                           <td className="px-1.5 py-1 text-slate-300">
                             {trial.feature?.name ?? "—"} / {trial.feature?.transform ?? "—"}
+                            {/* J-09: structure_context.kind rendered generically -- "none" (the
+                                shipped J-04 default grid) shows nothing extra, byte-identical to
+                                before this iteration; "band_touch"/"playbook_signal" candidates
+                                (this iteration's new anchor-extraction paths) show their kind
+                                inline, inside the EXISTING Feature cell -- no new column/heading
+                                (T-11). */}
+                            {trial.structure_context?.kind && trial.structure_context.kind !== "none" ? (
+                              <span className="ml-1 text-slate-500">({trial.structure_context.kind})</span>
+                            ) : null}
                           </td>
                           <td className="px-1.5 py-1 text-slate-400">{trial.outcome?.horizon_key ?? "—"}</td>
                           <td className="whitespace-nowrap px-1.5 py-1 font-mono text-slate-400">

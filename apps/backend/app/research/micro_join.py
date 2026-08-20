@@ -49,6 +49,15 @@ not-yet-a-number band-touch state): numerically identical to before this fix, si
 ``0`` always contributed nothing to the sum either (TC-16). Defining an actual touch enumeration
 stays J-09's job; when it lands, this becomes ``{"status": "enumerated", "count": <int>}``.
 
+**J-09 materializes it (this iteration).** ``joinable_corpus_counts`` gains an OPTIONAL, keyword-
+only ``resolver`` (default ``None``, byte-identical to before for every existing caller that omits
+it -- the ``playbook_store`` optionality precedent): when given, ``band_touch_count`` becomes the
+REAL ``{"status": "enumerated", "count": <int>}`` -- the sum of ``enumerate_band_touches`` across
+every withheld-excluded dataset already in ``records`` (the SAME denominator ``playbook_signal_
+count`` already reads, never a second corpus enumeration); when omitted, the honest ``not_
+enumerated`` sentinel is unchanged. ``total`` stays ``playbook_signal_count`` alone either way
+(this field has never summed the band-touch state, materialized or not -- TC-16 unaffected).
+
 **A corrupt playbook record surfaces honestly, never a silent undercount (iter-4 passenger fix).**
 ``playbook_store.list()`` returns ``(records, errors)`` (the SAME shape ``DatasetStore.list()``
 serves, and the shape every reader of it already surfaces at ITS own call site --
@@ -83,6 +92,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Sequence
 
 from . import micro_features as mf
+from ..providers.base import TradeEvent
 from .datasets import DatasetStore, parse_utc_epoch
 from .micro_accessor import MicroAccessor
 # ``exclude_withheld``: spec section 7.5 point 6 (r4) -- the ONE withholding predicate every
@@ -102,6 +112,7 @@ __all__ = [
     "JOIN_STATUS_NO_ROW_BEFORE_TRIGGER",
     "JOIN_STATUS_NO_BAND_CONTEXT",
     "BAND_TOUCH_STATUS_NOT_ENUMERATED",
+    "BAND_TOUCH_STATUS_ENUMERATED",
     "find_covering_dataset",
     "find_covering_snapshot",
     "feature_row_at_trigger",
@@ -110,6 +121,7 @@ __all__ = [
     "outcome_row_at_single_horizon",
     "join_playbook_signal",
     "join_band_touch",
+    "enumerate_band_touches",
     "joinable_corpus_counts",
 ]
 
@@ -490,12 +502,78 @@ def join_band_touch(
     return {**core, "symbol": symbol, "as_of_epoch": as_of_epoch, "band_map": band_map}
 
 
+# --- the band-touch enumerator (J-09, goal.md Key Capability 5's own primitive) --------------------
+
+
+def _band_id(band: dict) -> str:
+    """A stable identifier for ONE band, from its own ``(side, price_low, price_high)`` identity --
+    the SAME two price bounds ``setups.py``'s own ``_event_id`` precedent hashes beside its call's
+    symbol/session/touch_ts (that module's own docstring) -- never ``quality_score``/``class``/
+    ``members``, which can shift between two computes of the IDENTICAL wall (a re-ranked
+    ``quality_score`` after a bar backfill, say) without changing WHICH wall it is."""
+    return f"{band['side']}:{band['price_low']!r}:{band['price_high']!r}"
+
+
+def enumerate_band_touches(
+    dataset_meta: dict, dataset_store: DatasetStore, resolver: "BandMapResolver"
+) -> list[dict]:
+    """Ordered per-wall touch instants -- ``{"symbol", "as_of_epoch", "band_id"}`` -- across ONE
+    dataset's own recorded trade timeline (spec section 3's structural join primitive; goal.md Key
+    Capability 5). The band map is resolved ONCE, at the dataset's own window start (module
+    docstring: a recorded RTH window never spans an ET midnight, so one basis session covers every
+    trade in it) -- ``resolver.resolve(...)`` is READ-ONLY (``compute=False`` at the caller's own
+    construction, per goal.md's own framing); an unresolvable map is an honest empty list, never a
+    fabricated touch (TC-3).
+
+    Reads the dataset's OWN raw event stream (``DatasetStore.load_events`` -- an existing,
+    already-sanctioned store reader, the SAME call ``micro_readiness.py``'s own ``fallback_frac``
+    fold already makes; TR-3's accessor fence governs SNAPSHOT/vault reads, not this) rather than a
+    built snapshot's feature rows -- deliberately, so this enumeration NEVER requires a snapshot to
+    already exist (the ``joinable_corpus_counts`` docstring's own "never requires a snapshot to
+    already be BUILT" law, extended here from playbook signals to band touches). The expensive
+    event load only happens AFTER the band map resolves (a durable-cache hit or an honest miss) --
+    the common case today (most symbol/dates have no operator-warmed tradability map) pays only the
+    cheap resolver lookup, never a multi-million-row parse for nothing.
+
+    A touch mirrors ``setups.py``'s own ``_touches`` "first touch, re-arm only once fully exited"
+    rule (that function's own docstring), applied here to a TRADE PRICE against one band's
+    ``[price_low, price_high]`` instead of a bar's own ``[low, high]`` range: each band arms/re-arms
+    INDEPENDENTLY, so one trade can touch several bands at once, and a later trade only re-arms the
+    bands it has fully exited."""
+    symbol = dataset_meta.get("symbol")
+    if not symbol:
+        return []
+    band_map = resolver.resolve(symbol, parse_utc_epoch(dataset_meta["window_start_utc"]))
+    if band_map is None:
+        return []
+    bands = band_map.get("bands") or []
+    if not bands:
+        return []
+    epoch_anchor = dataset_meta.get("epoch_anchor") or 0.0
+    armed = [True] * len(bands)
+    touches: list[dict] = []
+    for event in dataset_store.load_events(dataset_meta["id"]):
+        if not isinstance(event, TradeEvent):
+            continue
+        absolute_epoch = epoch_anchor + event.timestamp
+        for i, band in enumerate(bands):
+            inside = band["price_low"] <= event.price <= band["price_high"]
+            if inside and armed[i]:
+                touches.append(
+                    {"symbol": symbol, "as_of_epoch": absolute_epoch, "band_id": _band_id(band)}
+                )
+                armed[i] = False
+            elif not inside:
+                armed[i] = True
+    return touches
+
+
 # --- the honest joinable-corpus count (micro_readiness.py's new field) -----------------------------
 
-# The closed vocabulary for band_touch_count's "not enumerated" state (iter-4 passenger fix) -- see
-# the module docstring. A future J-09 caller wiring a real touch enumeration in adds a sibling
-# "enumerated" status; this iteration serves only the honest absence.
+# The closed vocabulary for band_touch_count's status (iter-4 passenger fix; J-09 adds the
+# "enumerated" sibling the iter-4 docstring already predicted -- see the module docstring).
 BAND_TOUCH_STATUS_NOT_ENUMERATED = "not_enumerated"
+BAND_TOUCH_STATUS_ENUMERATED = "enumerated"
 
 
 def _band_touch_not_enumerated() -> dict:
@@ -505,7 +583,9 @@ def _band_touch_not_enumerated() -> dict:
     return {"status": BAND_TOUCH_STATUS_NOT_ENUMERATED, "count": None}
 
 
-def joinable_corpus_counts(dataset_store: DatasetStore, playbook_store) -> dict:
+def joinable_corpus_counts(
+    dataset_store: DatasetStore, playbook_store, *, resolver: "BandMapResolver | None" = None
+) -> dict:
     """``total``/``playbook_signal_count``/``band_touch_count``/``by_setup_id``/
     ``playbook_integrity_errors`` -- every recorded playbook signal whose ``(symbol, trigger_ts)``
     falls inside a recorded tick dataset's own window (module docstring's dataset-window match),
@@ -549,13 +629,25 @@ def joinable_corpus_counts(dataset_store: DatasetStore, playbook_store) -> dict:
             setup_id = signal.get("setup_id") or "unknown"
             by_setup_id[setup_id] = by_setup_id.get(setup_id, 0) + 1
 
+    # J-09: materialized ONLY when a resolver is supplied (module docstring) -- summed over the
+    # SAME withheld-excluded `records` the playbook loop above already reads, so a sealed shard is
+    # excluded from this count the identical way it is excluded from `playbook_signal_count`
+    # (never a second, differently-scoped corpus).
+    if resolver is None:
+        band_touch_count = _band_touch_not_enumerated()
+    else:
+        total_band_touches = sum(
+            len(enumerate_band_touches(meta, dataset_store, resolver)) for meta in records
+        )
+        band_touch_count = {"status": BAND_TOUCH_STATUS_ENUMERATED, "count": total_band_touches}
+
     return {
         # `playbook_signal_count` alone -- `band_touch_count` is no longer a plain number to sum
         # (module docstring); numerically identical to the pre-fix total, since the prior bare `0`
         # always contributed nothing to the sum either (TC-16).
         "total": total_playbook,
         "playbook_signal_count": total_playbook,
-        "band_touch_count": _band_touch_not_enumerated(),
+        "band_touch_count": band_touch_count,
         "by_setup_id": by_setup_id,
         "playbook_integrity_errors": playbook_errors,
         # Spec section 7.5 point 6 (r4): the count of registered datasets whose windows were NOT

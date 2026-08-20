@@ -154,6 +154,7 @@ __all__ = [
     "playbook_observations",
     "run_diagnostic_walkforward",
     "run_tick_family_fold_request",
+    "scout_candidate_walkforward_floor_check",
     "main",
 ]
 
@@ -1129,6 +1130,73 @@ def run_tick_family_fold_request(ledger: WalkForwardLedger, config: Config) -> d
         # above-floor run happened to see and silently replayed as fact forever. The honest home
         # for a per-run number is this per-run body.
         "withheld_excluded": withheld_excluded,
+    }
+
+
+def scout_candidate_walkforward_floor_check(
+    exposure_registry: ExposureRegistry,
+    *,
+    corpus_id: str,
+    observations: list[dict],
+    registered_at: str,
+) -> dict:
+    """Whether a Scout candidate's own anchor corpus (goal.md J-09) clears the floor for ONE
+    walk-forward fold BEFORE any fold is ever evaluated -- the SAME typed-refusal-BEFORE-any-
+    evaluation discipline ``run_tick_family_fold_request`` established for the diagnostic run's own
+    corpus-wide session count (iter-8), applied here to ONE candidate's own ``{session_date,
+    symbol, value}`` observations (the exact shape ``playbook_observations`` and
+    ``summarize_fold_observations`` already share) instead of a corpus-wide inventory.
+
+    **Class law, applied at the floor boundary (spec section 6.7).** Only sessions NOT already
+    exposed before ``registered_at`` count toward this floor -- a session the exposure registry
+    already marks exposed contributes ZERO oos observations, exactly the "evidence classes never
+    mix" rail (a diagnostic-class observation must never sneak into a class-2 floor count) applied
+    BEFORE the fold-evaluation function could ever be reached, not merely after. When
+    ``corpus_id`` has NO exposure entries at all (the registry was never r2-initialized for it in
+    this process), this function reads that as "nothing is yet PROVEN either exposed or unexposed"
+    and counts ZERO oos sessions -- never the opposite (an uninitialized registry's ``is_exposed_before``
+    always answers ``False``, which would otherwise let an already-published legacy corpus masquerade
+    as fresh out-of-sample evidence; the anti-goal this guards is worse than the false-negative
+    this conservative default trades for it).
+
+    Reuses ``summarize_fold_observations``'s own ``WF_FOLD_MIN_OBSERVATIONS``/``WF_FOLD_MIN_SIGNAL_
+    SESSIONS`` floors verbatim (no second floor arithmetic) plus a session-COUNT floor
+    (``WF_TRAIN_MIN_SESSIONS + WF_TEST_MIN_SESSIONS`` -- the SAME pair ``micro_readiness.py``'s own
+    ``study_floors`` table already reads for "enough sessions for even one fold to exist"). Returns
+    ``{"status": "sufficient"|"insufficient_n", "oos_session_count", "oos_observation_count",
+    "required_sessions", "missing"}`` -- ``missing`` is empty iff ``status == "sufficient"``.
+    Source-level guard-tested to NEVER call the fold-evaluation function walk-forward folds are
+    actually SCORED through -- this function only decides whether that call would be legitimate
+    (T-8, applied to a floor rather than a compute)."""
+    all_sessions = sorted({o["session_date"] for o in observations})
+    if not has_any_exposure_entries(exposure_registry, corpus_id):
+        oos_sessions: list[str] = []
+    else:
+        oos_sessions = [
+            s for s in all_sessions
+            if not exposure_registry.is_exposed_before(corpus_id=corpus_id, window=s, instant=registered_at)
+        ]
+    oos_observations = [o for o in observations if o["session_date"] in set(oos_sessions)]
+
+    floors = {
+        "wf_fold_min_observations": WF_FOLD_MIN_OBSERVATIONS,
+        "wf_fold_min_signal_sessions": WF_FOLD_MIN_SIGNAL_SESSIONS,
+    }
+    summary = summarize_fold_observations(oos_observations, floors)
+    missing = dict(summary["missing"])
+    required_sessions = WF_TRAIN_MIN_SESSIONS + WF_TEST_MIN_SESSIONS
+    if len(oos_sessions) < required_sessions:
+        missing["oos_sessions"] = (
+            f"{len(oos_sessions)} < {required_sessions} "
+            "(WF_TRAIN_MIN_SESSIONS + WF_TEST_MIN_SESSIONS)"
+        )
+    status = "insufficient_n" if missing else "sufficient"
+    return {
+        "status": status,
+        "oos_session_count": len(oos_sessions),
+        "oos_observation_count": summary["n"],
+        "required_sessions": required_sessions,
+        "missing": missing,
     }
 
 

@@ -25,7 +25,7 @@ from app.main import app
 from app.engine.aggressor import classify_aggressor
 from app.providers.base import QuoteEvent, Side, TradeEvent
 from app.research import micro_readiness as micro_readiness_module
-from app.research.datasets import DatasetStore
+from app.research.datasets import DatasetStore, parse_utc_epoch
 from app.research.micro_readiness import (
     EXPOSURE_STATE_EXPLORATORY,
     PILOT_STUDY_IDS,
@@ -36,12 +36,15 @@ from app.research.micro_readiness import (
     build_readiness,
     resolve_micro_readiness_cache_db_path,
 )
+from app.research.bars import BarStore
 from app.research.desk_playbook import PlaybookStore, playbook_parameters
+from app.research.desk_playbook_context import BandMapResolver
 from app.research.desk_routes import get_playbook_store
-from app.research.micro_join import joinable_corpus_counts
+from app.research.micro_join import BAND_TOUCH_STATUS_ENUMERATED, joinable_corpus_counts
 from app.research.micro_routes import get_micro_readiness_cache
 from app.research.referee_evidence import REFEREE_TICK_GATE_SYMBOL_DAYS
-from app.research.routes import get_dataset_store
+from app.research.routes import get_bar_store, get_dataset_store
+from app.research.tradability_cache import TradabilityCache, resolve_tradability_cache_db_path
 from app.research import vault
 
 _ET = ZoneInfo("America/New_York")
@@ -92,14 +95,21 @@ def client(tmp_path):
     # tmp_path-scoped, empty-by-default one, so this fixture's existing hermeticity contract is
     # unaffected (never the real, ambient .data/playbook directory).
     playbook_store = PlaybookStore(tmp_path / "playbook")
+    # J-09: the route now also depends on a bar store (the resolver that materializes
+    # `band_touch_count` -- `BandMapResolver.__init__` unconditionally lists it) -- a
+    # tmp_path-scoped, empty-by-default one, the SAME hermeticity discipline as the playbook store
+    # above, never the real, ambient `.data/bars` directory.
+    bar_store = BarStore(tmp_path / "bars")
     app.dependency_overrides[get_dataset_store] = lambda: dataset_store
     app.dependency_overrides[get_micro_readiness_cache] = lambda: cache
     app.dependency_overrides[get_playbook_store] = lambda: playbook_store
+    app.dependency_overrides[get_bar_store] = lambda: bar_store
     with TestClient(app) as c:
         yield c, dataset_store, cache
     app.dependency_overrides.pop(get_dataset_store, None)
     app.dependency_overrides.pop(get_micro_readiness_cache, None)
     app.dependency_overrides.pop(get_playbook_store, None)
+    app.dependency_overrides.pop(get_bar_store, None)
 
 
 # --- _quote_rule_decides: cross-validated against classify_aggressor's own OBSERVABLE behavior ------
@@ -544,9 +554,11 @@ def test_joinable_corpus_is_served_through_the_route_and_is_non_negative_and_nev
     assert first == second
     for key in ("total", "playbook_signal_count"):
         assert isinstance(first[key], int) and first[key] >= 0
-    # band_touch_count is a typed "not enumerated" state, never a bare int (iter-4 passenger fix,
-    # TC-15) -- distinguishable from a real zero count.
-    assert first["band_touch_count"] == {"status": "not_enumerated", "count": None}
+    # band_touch_count is a typed state, never a bare int (iter-4 passenger fix, TC-15) --
+    # distinguishable from a real count read straight off the field. J-09 materializes the ROUTE's
+    # own value (this fixture's tmp_path-scoped bar store carries no tradable map, so an honest
+    # real zero, never the pre-J-09 sentinel -- see the dedicated TC-15 block below).
+    assert first["band_touch_count"] == {"status": BAND_TOUCH_STATUS_ENUMERATED, "count": 0}
     assert first["playbook_signal_count"] == 1  # only the in-window signal counts
     assert first["by_setup_id"] == {"jbe": 1}
 
@@ -569,20 +581,79 @@ def test_real_corpus_readiness_still_serves_an_honest_zero_joinable_corpus_witho
 
 
 # --- TC-15 (iter-4 passenger fix, docs/phases/goal-rapid-microscope-iter-4.md): band_touch_count is
-# a typed "not enumerated" state on THIS route, never a bare zero a reader could mistake for a real
-# count ------------------------------------------------------------------------------------------
+# a typed state on THIS route, never a bare int a reader could mistake for something else. J-09
+# (docs/phases/goal-rapid-microscope-iter-21.md, TC-9) materializes the route's OWN value: it now
+# ALWAYS constructs a resolver (`micro_routes.get_micro_readiness`'s own docstring), so this route's
+# served state is `enumerated` from this iteration forward -- `build_readiness` called DIRECTLY
+# without a `resolver` (every other caller in this file) still serves the honest `not_enumerated`
+# sentinel unchanged (`micro_join.py`'s own "byte-identical when omitted" contract). ---------------
 
 
-def test_tc15_readiness_route_serves_band_touch_count_as_a_typed_not_enumerated_state(client):
+def test_tc15_readiness_route_serves_band_touch_count_as_a_typed_enumerated_state(client):
     c, _store, _cache = client
     resp = c.get("/research/desk/micro/readiness")
     assert resp.status_code == 200
     band_touch = resp.json()["joinable_corpus"]["band_touch_count"]
     assert not isinstance(band_touch, int)
-    assert band_touch == {"status": "not_enumerated", "count": None}
+    # No dataset planted in this test's own tmp_path corpus, and no tradable map exists in its
+    # tmp_path-scoped bar store either -- an honest, real ZERO (never the pre-J-09 sentinel).
+    assert band_touch == {"status": BAND_TOUCH_STATUS_ENUMERATED, "count": 0}
+
+
+# --- TC-9 (goal-rapid-microscope-iter-21, J-09): a 3-known-touch fixture, through the LIVE route --
+
+
+def _plant_touch_dataset(store: DatasetStore, *, symbol: str = "TQR") -> dict:
+    """A trade price sequence crossing a `[149.00, 149.02]` band at exactly 3 known instants
+    (t=1.0, 4.0, 6.0) -- the SAME hand-derived oracle pattern `test_micro_join.py`'s own TC-3
+    tests use, transcribed here so this route-level test can plant it directly (`_plant_dataset`
+    above uses a fixed, unrelated 3-event fixture built for the `fallback_frac` tests)."""
+    events = [
+        QuoteEvent(symbol, 0.0, 148.98, 149.03, 100, 100),
+        TradeEvent(symbol, 0.0, 148.90, 10, Side.SELL),
+        TradeEvent(symbol, 1.0, 149.01, 10, Side.BUY),
+        TradeEvent(symbol, 2.0, 149.01, 10, Side.BUY),
+        TradeEvent(symbol, 3.0, 148.90, 10, Side.SELL),
+        TradeEvent(symbol, 4.0, 149.015, 10, Side.BUY),
+        TradeEvent(symbol, 5.0, 149.05, 10, Side.BUY),
+        TradeEvent(symbol, 6.0, 149.00, 10, Side.BUY),
+        TradeEvent(symbol, 7.0, 149.019, 10, Side.BUY),
+    ]
+    return store.record(
+        symbol=symbol, source="fixture", source_kind="fixture", source_id=f"{symbol}-touch-fixture",
+        split="train", window_start_utc="2026-06-09T13:00:00Z", window_end_utc="2026-06-09T13:01:00Z",
+        data_feed="sip", epoch_anchor=0.0, events=events,
+    )
+
+
+def test_tc9_readiness_route_serves_the_real_band_touch_count_on_a_3_known_touch_fixture(client):
+    """TC-9, verbatim: given a fixture with 3 known wall touches, ``GET /research/desk/micro/
+    readiness`` serves ``joinable_corpus.band_touch_count == 3``, not the ``not_enumerated``
+    sentinel. Publishes the band map into the SAME on-disk cache the route's own internally
+    constructed ``BandMapResolver`` reads (``resolve_tradability_cache_db_path`` over the
+    ``client`` fixture's own overridden ``bar_store``) -- never a second, in-process-only
+    resolver the route could not possibly see."""
+    c, store, _cache = client
+    meta = _plant_touch_dataset(store)
+    bar_store = app.dependency_overrides[get_bar_store]()  # the SAME override the route resolves
+    route_cache = TradabilityCache(resolve_tradability_cache_db_path(str(bar_store.root)))
+    resolver = BandMapResolver(bar_store, CONFIG, cache=route_cache)
+    window_start_epoch = parse_utc_epoch(meta["window_start_utc"])
+    resolver._cache.publish(
+        resolver.map_key("TQR", window_start_epoch),
+        {"basis_day": "2026-06-08", "bands": [{"side": "resistance", "price_low": 149.00, "price_high": 149.02}]},
+    )
+
+    resp = c.get("/research/desk/micro/readiness")
+    assert resp.status_code == 200
+    band_touch = resp.json()["joinable_corpus"]["band_touch_count"]
+    assert band_touch == {"status": "enumerated", "count": 3}
 
 
 def test_tc15_real_corpus_readiness_also_serves_the_typed_band_touch_count(real_readiness):
+    """``real_readiness`` (module-scoped) calls ``build_readiness`` DIRECTLY, with no ``resolver``
+    -- byte-identical to every pre-J-09 caller (module docstring's own "omitting it keeps the
+    sentinel" contract), independent of what the LIVE route now serves."""
     band_touch = real_readiness["joinable_corpus"]["band_touch_count"]
     assert not isinstance(band_touch, int)
     assert band_touch["status"] == "not_enumerated"

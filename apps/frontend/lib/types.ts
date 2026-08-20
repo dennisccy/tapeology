@@ -2516,7 +2516,10 @@ export interface MicroReadinessStudyFloor {
 // its own return statement) -- were fetched but silently dropped by this interface until now. Only
 // `joinable_corpus.withheld_excluded` and every `sealed_tranche` field are rendered this iteration
 // (aggregate-only, spec section 7.5); `total`/`playbook_signal_count`/`band_touch_count`/
-// `by_setup_id`/`playbook_integrity_errors` stay typed/fetched but UNRENDERED (a future J-09 home).
+// `by_setup_id`/`playbook_integrity_errors` stay typed/fetched but UNRENDERED.
+// goal-rapid-microscope-iter-21 (J-09): `band_touch_count` is now rendered too (the "future J-09
+// home" this comment used to name) -- the real materialized int, or the honest typed
+// `not_enumerated` state, never a bare number a reader could mistake for a real zero.
 export interface MicroReadinessJoinableCorpus {
   total: number;
   playbook_signal_count: number;
@@ -2566,7 +2569,10 @@ export interface ScoutTrialRow {
   candidate_id: string;
   spec_hash: string;
   feature: { name: string; transform: string; params: Record<string, unknown> };
-  structure_context: { kind: string };
+  // J-09: `setup_id` is additive and OPTIONAL -- present only on a "playbook_signal"-kind
+  // candidate whose frozen spec names one verbatim (e.g. Study 3's "capitulation"); absent
+  // everywhere else, byte-identical to the pre-J-09 `{ kind: string }` shape.
+  structure_context: { kind: string; setup_id?: string };
   outcome: { horizon_key: string; sidedness: string | null };
   fitting_rule: string | null;
   econ_floor: Record<string, unknown>;

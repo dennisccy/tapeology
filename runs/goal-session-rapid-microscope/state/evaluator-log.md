@@ -1381,3 +1381,99 @@ check, whose round-19 photograph does not show what its row describes; (3) build
 guard you ordered back in round 9 for the stale Referee readiness count — unbuilt for eleven rounds
 and needing nobody's permission. Still do NOT record real market tape, and still do not touch the
 sealed judge's money floor. Those two remain the only things genuinely waiting on you.
+
+## Iteration 21 — goal-rapid-microscope-iter-21
+
+**Date:** 2026-08-20T22:10:00Z
+**Verdict:** ESCALATE
+**Depth dispatched:** full (forced by my round-20 verdict line; the independent checker ran and
+earned its place a ninth time — see below)
+**Journey deltas:**
+- Newly passing: none.
+- **Status changed: J-09 "The pilot studies" failing → PARTIAL.** The first real movement on J-09
+  in nine rounds. One of its three studies has genuinely been run and answered.
+- Newly failing: none. Regressed: none.
+- Re-verified this round with their own stored checks, all green: J-01, J-02, J-03, J-04, J-05,
+  J-08, J-10 passing; J-06 partial (its remaining step is an operator act you have forbidden).
+  I opened two of the pictures myself as spot checks (J-04, J-10) and both hold.
+- NOT verified: J-07 "Graduation" — the clock cut it again (row reads DEFERRED-BUDGET, "not run
+  this iteration"). It keeps its passing status and its round-20 stamp. Nothing it depends on
+  changed this round, so its earlier real proof still stands, but it is the one journey with no
+  fresh look and it blocks the finish line.
+- Anti-goal violations: no critical ones, introduced or open. TWO older minor items CLOSED, both
+  proved closed by me. FOUR NEW minor items opened, one of which is my own finding that no lane
+  raised. Seven stay open, none waiting on you except the money-floor ruling.
+
+**Reasoning:** I took nothing on trust. I ran the whole test set myself: 3,316 passed, 8 skipped, 0
+failures, 0 errors, clean exit in 649.25s — 35 more than the round started with, none lost, and the
+same number the independent checker reported after its own repair, which is how a claim like that
+should reproduce. I checked the frozen parts by hand: the settings fingerprint prints
+08e471b10130e1e2, no judge file is modified at all, the tool list still reads exactly 26, and my own
+sweep of the test folder finds the safety tests TR-1 through TR-30 with no gap (TR-17 again exists
+only as its three lettered parts — the trap I recorded last round).
+
+The round's real work is genuinely done and I proved it by looking. I opened the picture and read
+the row off the screen rather than off a report: the Scout Ledger really shows a new family
+"divergence_at_level_bearish__band_touch__trades_20", one variant tried, one candidate, and its
+answer recorded as "killed for insufficient data". That is a study conditioned on a wall in the
+price map — something the product could not express at all before this round. The readiness panel
+really prints "Joinable corpus — band touches: 0" where it used to print a "not counted yet"
+placeholder; zero is the honest answer on the practice rig, and the independent checker reproduced
+the real figure of 8,247 against your actual store. The backend-failure picture I complained about
+two rounds ago has been re-taken properly: it is now a tight crop of the panel itself showing
+"Backend unreachable — is the API running?" and "Nothing cached and nothing fabricated is shown in
+its place." And the two data-bearing checks dropped from J-10's stored script five rounds ago are
+back, and this time the script was actually RUN, twice — by the stored replay and by a full
+seventeen-step hand replay. Those are the two older complaints I am closing.
+
+The finding that matters most is not mine, and it is the ninth time in this era the independent
+checker has caught something after both the review and the quality check passed the same code. The
+round promised a second ledger line recording whether a study clears the walk-forward bar. That
+line existed in the source and could be produced by NOTHING except a test — not the page, not the
+address, not the command line. The browser lane found it (its UT-04 check failed) and the checker
+found it separately, then repaired it so the operator-reachable path really produces the line. I did
+not take the repair on trust either: I put the old wiring back by hand, watched the checker's new
+test go red, and then restored the file and confirmed it byte-identical. So the repair is proved.
+What is NOT proved is the thing that matters to you: nobody has re-opened the page since. The
+checker's own repair is the only lane that has checked the checker's own repair, and there is no
+picture of the fixed line. I therefore refused to call J-09 anything better than partial.
+
+Three honest limits, in order of how much they should bother you. First, and this is the one you
+would actually feel: the Desk's readiness panel now takes a measured twenty-two seconds to load
+against your real store, every single time, because the new wall-touch count re-reads every dataset
+from scratch on each page load with nothing remembered. The checker measured it twice and
+deliberately did NOT patch it, and I agree with that call — a careless fix would remember "no
+touches" from a stale key and quietly serve you a wrong number, which is worse than being slow.
+Second, the quality report again ticked a box for the one thing the browser lane had just failed,
+quoted the wrong row as its proof, and returned "pass" while the browser verdict for the same round
+read "fail" — and the round still closed, because the closing gate reads the layout reviewer's
+verdict but never the browser's. That is a hole in the machine, not just a careless report. Third,
+my own finding, raised by no lane: this round's own browser tests wrote seven records into the
+shared practice rig, and the demo lane, which runs last, then failed its "nothing recorded yet" step
+and recorded it anyway. The stored checks escaped only because the plan happened to sequence them
+first. No damage carries between rounds — I checked, each run gets a fresh rig — but the rule this
+session wrote three rounds ago covered two lanes and forgot the third.
+
+**Next-step recommendation:** Do the next round as a FULL round with the independent checker, and
+keep it SMALL. Four things, in order: (1) finish J-09 — run the two remaining studies, range-wall
+failed aggression and capitulation exhaustion, on the same practice data the first one used, through
+to a recorded answer each; "not enough evidence" is a perfectly good answer, and this is the only
+thing between you and nine of ten journeys green; (2) re-open the page and photograph the
+walk-forward eligibility line the checker built — no picture, no pass; (3) re-check J-07
+"Graduation", which nobody tested this round; (4) fix the twenty-two-second wait by remembering each
+dataset's wall-touch count on disk, keyed to that dataset's own checksum AND its wall map, and only
+ever remembering a real answer, never "none". If the clock bites, drop item 4, never items 2 and 3.
+Named as deliberately NOT next round's work so nobody quietly does it: making the divergence search
+fast enough for real tape, turning an unknown grid name into a polite error instead of a crash, and
+a one-line note correcting which address serves the eligibility row.
+
+I am writing "escalate" rather than "continue" for a reason I checked in the machine's own code
+this round rather than inheriting: this round ran over its time budget, and the engine's depth rule
+(run-goal.sh, the arbiter ladder) says that a budget overrun plus a plain "continue" FORCES the next
+round to be light — no independent checker at all — while an "escalate" verdict grants the heavy
+round outright, ahead of that rule. So on this round the choice is not "full versus probably-full";
+it is "full versus certainly-light". A light round would leave the checker's own unverified repair,
+two permanent study records, and a caching fix with a named wrong-data risk all unexamined. That is
+why I am spending the escalation here, and why I am also asking for the round to be kept small so
+the clock does not eat J-07 a third time. Still do NOT record real market tape, and still do not
+touch the sealed judge's money floor — those two remain the only things genuinely waiting on you.

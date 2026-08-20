@@ -1,0 +1,166 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-rapid-microscope-iter-21",
+  "base_url": "http://localhost:3301",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the Desk",
+      "narration": "The Playbook Signals hub loads, bringing together the Rapid Microscope's core research surface. This iteration unveils new materialized data and structure-aware candidate anchors.",
+      "point_out": "The 'Playbook Signals' heading and fully-rendered page confirm the frontend is connected.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "goto",
+        "url": "/desk"
+      },
+      "expect": {
+        "text": "Playbook Signals"
+      }
+    },
+    {
+      "n": 2,
+      "title": "Expand Microscope Readiness",
+      "narration": "The Microscope Readiness section opens to show corpus statistics. A new row appears this iteration: the materialized band-touch count, showing how many times the dataset's trades touched recorded price walls.",
+      "point_out": "The 'Joinable corpus — band touches' row now displays a real enumerated count (not a placeholder), immediately below the 'withheld (excluded)' row.",
+      "journey": "",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "role": "button",
+          "name": "Microscope Readiness"
+        }
+      },
+      "expect": {
+        "text": "band touches"
+      }
+    },
+    {
+      "n": 3,
+      "title": "Review Scout Ledger (before pilot trigger)",
+      "narration": "The Scout Ledger section shows the ledger of screened candidates. On a fresh backend with no pilot-grid run yet, it displays the 'No candidates ledgered' state — the honest empty state before any structured research begins.",
+      "point_out": "Scout Ledger expands and shows 'No candidates ledgered' and the ledger chain verification status.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "role": "button",
+          "name": "Scout Ledger"
+        }
+      },
+      "expect": {
+        "text": "No candidates ledgered"
+      }
+    },
+    {
+      "n": 4,
+      "title": "Expand Walk-Forward section",
+      "narration": "The Walk-Forward section displays fold specifications and floor-check decisions. Like Scout Ledger on a fresh backend, it shows the empty state before pilot-grid results are recorded.",
+      "point_out": "Walk-Forward section expands, showing no fold specs or results yet on this clean backend.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "role": "button",
+          "name": "Walk-Forward"
+        }
+      },
+      "expect": {
+        "text": "No fold specs registered"
+      }
+    },
+    {
+      "n": 5,
+      "title": "View Validation Vault",
+      "narration": "The Validation Vault section displays the registered dataset universe and its shards. This section remains stable and unchanged from prior iterations.",
+      "point_out": "The Validation Vault section shows the registered test universe and any shards within it.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "role": "button",
+          "name": "Validation Vault"
+        }
+      },
+      "expect": {
+        "text": "iter18-qa-universe"
+      }
+    },
+    {
+      "n": 6,
+      "title": "Expand Playbook Evidence section",
+      "narration": "Playbook Evidence shows any recorded playbook signals for a given date. Enter a date to see the evidence of recorded signals for that trading day.",
+      "point_out": "Playbook Evidence section header is visible with a date input field.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "role": "button",
+          "name": "Playbook Evidence"
+        }
+      },
+      "expect": {
+        "text": "Built from signature"
+      }
+    },
+    {
+      "n": 7,
+      "title": "Enter a date to view playbook signals",
+      "narration": "Fill in the date field with a known trading date from the seeded fixture data to reveal any recorded playbook signals for that day.",
+      "point_out": "After filling the date, the 'recorded signals, none hidden' message confirms the query completed and the result is shown honestly.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "fill",
+        "target": {
+          "role": "textbox",
+          "name": "desk-playbook-date-input"
+        },
+        "text": "2026-06-22"
+      },
+      "expect": {
+        "text": "recorded signals, none hidden"
+      }
+    },
+    {
+      "n": 8,
+      "title": "Confirm Referee Registry shows current configuration",
+      "narration": "The Referee Registry section displays the configuration fingerprint and any registered referee rules. It remains unchanged and frozen this iteration.",
+      "point_out": "Referee Registry section opens and shows the configuration fingerprint '08e471b10130e1e2', confirming this iteration's stable, audited state.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "role": "button",
+          "name": "Referee Registry"
+        }
+      },
+      "expect": {
+        "text": "config fingerprint 08e471b10130e1e2"
+      }
+    }
+  ]
+}
