@@ -324,3 +324,19 @@ from its one endpoint, read verbatim by UI/MCP/reports.
      (matching the `observer=` kwarg precedent). No new page, route, or MCP tool; the MCP
      `desk_scout`/`desk_walkforward` proxies stay byte-identical GET wrappers and pick up any new
      rows for free. No nav-skeleton change; no reapproval file written. -->
+
+<!-- iter-22 note: J-09 finish. Studies 1 (range-wall failed aggression) and 3 (capitulation
+     exhaustion) -- previously frozen-in-source-only (iter-21) -- are now screened to recorded
+     ledger decisions plus walk-forward floor-check rows, exactly like Study 2 (delta divergence)
+     already was. Both are NEW ROWS inside the ALREADY-registered "Scout trials, kills,
+     denominators, screens" / "Fold specs, folds, sequences, decay view" Data Contract rows above
+     (same owners `scout.py`/`scout_ledger.py`/`walkforward.py`, same endpoints
+     `GET /research/desk/micro/scout` / `GET /research/desk/micro/walkforward`) -- not a new row
+     of their own, exactly matching this file's own iter-21 note precedent for Study 2. The two
+     new additive `POST /scout/compute` grid-selector values (mirroring
+     `GRID_SELECTOR_DELTA_DIVERGENCE_PILOT`'s existing shape) are request parameters, not
+     displayed values, so they carry no Data Contract row (matching the `observer=` kwarg
+     precedent). Study 1's screen stays single-feature (`failed_aggression_score` alone) this
+     iteration -- the two-feature `refill_consistent` co-occurrence machinery goal.md's prose
+     describes remains genuinely unbuilt (T-1), unchanged from iter-21's own disclosed deferral.
+     No new page, route, MCP tool, or nav-skeleton change; no reapproval file written. -->

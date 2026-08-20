@@ -1140,3 +1140,26 @@ recommendation names the re-check explicitly so it is not silently dropped a thi
 **Reversible:** yes — if the next round defers J-07 again, the next evaluator should treat repeated
 budget-deferral of the same journey as a structural problem rather than carrying the status forward
 a fourth time.
+
+## iter-22 — goal-decomposer
+
+**Ambiguity:** whether J-09 Study 1's "run each through the Scout... to a recorded answer" (goal.md
+step 2) requires building the two-feature `failed_aggression_score` × opposite-side
+`refill_consistent` co-occurrence signature goal.md's own prose describes for the eventual real
+screen, or is satisfied by screening the already-frozen single-feature request
+(`failed_aggression_score >= 0.5` alone) iter-21 registered and left explicitly unbuilt-but-honest
+("T-1: genuinely unbuilt, never invented here... the co-occurrence disclosure is added when that
+joint-condition machinery is built, a future iteration's own scope").
+**We chose:** screen Study 1 on its already-frozen single-feature request this iteration, without
+inventing the co-occurrence machinery. Grounds: (a) J-09's own acceptance criterion asks only that
+"each serves its screen ... each carries a recorded decision in the closed vocabulary" — it does not
+require the co-occurrence signature specifically; (b) `docs/rapid-validation-spec.md`'s own law is
+"ambiguous or unimplementable ⇒ DROP the procedure ... never improvise" — inventing an unspecified
+two-feature joint-condition rule this round would be exactly the improvisation the spec forbids,
+and the iter-17 lesson on threshold/rule modules ("check specifically whether the fixture's numbers
+coincide anywhere the assertion depends on them") argues for extra caution before adding any new
+threshold-shaped machinery under time pressure; (c) iter-21's own decomposer already reasoned this
+exact deferral through and recorded it as reversible, future scope, not a defect.
+**Reversible:** yes — a later iteration can extend Study 1's request to the real two-feature
+co-occurrence condition and re-screen it as a NEW candidate variant (a new row, never an edit to
+this iteration's recorded decision, per the ledger's own append-only discipline).
