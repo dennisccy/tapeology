@@ -5889,14 +5889,20 @@ function MicroReadinessSection({
   readinessResult: { ok: boolean; data: MicroReadinessResponse | null; error?: string } | null;
 }) {
   if (readinessResult === null) {
-    return <LoadingPanel testid="micro-readiness-loading" />;
+    return (
+      <div data-testid="micro-readiness-section">
+        <LoadingPanel testid="micro-readiness-loading" />
+      </div>
+    );
   }
   if (!readinessResult.ok || readinessResult.data === null) {
     return (
-      <UnavailablePanel
-        testid="micro-readiness-unavailable"
-        message={readinessResult.error ?? "The microscope readiness corpus could not be loaded."}
-      />
+      <div data-testid="micro-readiness-section">
+        <UnavailablePanel
+          testid="micro-readiness-unavailable"
+          message={readinessResult.error ?? "The microscope readiness corpus could not be loaded."}
+        />
+      </div>
     );
   }
   const readiness = readinessResult.data;
@@ -6312,9 +6318,9 @@ function ScoutLedgerSection({
                             {trial.candidate_id}
                           </td>
                           <td className="px-1.5 py-1 text-slate-300">
-                            {trial.feature.name} / {trial.feature.transform}
+                            {trial.feature?.name ?? "—"} / {trial.feature?.transform ?? "—"}
                           </td>
-                          <td className="px-1.5 py-1 text-slate-400">{trial.outcome.horizon_key}</td>
+                          <td className="px-1.5 py-1 text-slate-400">{trial.outcome?.horizon_key ?? "—"}</td>
                           <td className="whitespace-nowrap px-1.5 py-1 font-mono text-slate-400">
                             {formatDateTimeET(trial.registered_at, { seconds: false })}
                           </td>

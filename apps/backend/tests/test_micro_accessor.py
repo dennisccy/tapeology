@@ -103,6 +103,62 @@ def test_tc1_a_dataset_id_that_does_not_exist_raises_dataset_not_found_never_swa
         accessor.read_snapshot_rows("does-not-exist")
 
 
+# === TR-3: the accessor origin-fence -- explicitly-labeled trap-suite entry (spec section 9) ========
+# goal-rapid-microscope-iter-16 (J-10): TR-3 requires three proven clauses. (a) The single-read
+# origin fence is proven by the TC-1 tests directly above -- test_tc1_a_read_at_or_before_origin_
+# succeeds / test_tc1_a_read_strictly_after_origin_raises_a_typed_error_never_empty / test_tc1_
+# origin_equal_to_the_dataset_session_date_is_visible_the_fence_is_inclusive -- folded in
+# unchanged, never re-derived. (b) The multi-session AGGREGATE-boundary proof lives in
+# test_walkforward.py (test_tr3_an_origin_fenced_loop_over_several_sessions_returns_exactly_the_
+# set_le_origin) -- see that file's own TR-3 note for why: direct code inspection found no
+# production call site actually constructs MicroAccessor(origin=...) today (both micro_join.py/
+# scout.py pass origin=None; walkforward.py's build_folds never touches the accessor), so this is
+# a NEW test, not a pointer to existing code, and production edits to micro_accessor.py/
+# walkforward.py are out of scope this round. (c) The import-ban is proven by the TC-3 section
+# below -- test_tc3_no_module_other_than_micro_accessor_imports_read_snapshot_rows / test_tc3_the_
+# guard_also_catches_a_module_qualified_call_that_imports_no_banned_name / test_tc3_micro_join_
+# and_scout_no_longer_import_read_snapshot_rows_directly / test_tc3_import_ban_guard_can_fail_on_a_
+# seeded_violation (its own non-vacuity proof, already existing) -- folded in unchanged. The test
+# immediately below is the ORIGIN-FENCE clause's own non-vacuity mutation-proof (this round's
+# binding rule -- iteration 15's own opaque-pool regression test was proven structurally unable to
+# fail; every new trap this round must prove the opposite). Deliberately unnumbered (no bare
+# "tcN" prefix): this file's own TC-2/TC-3/TC-4 already name OTHER, unrelated concepts (sealed-
+# shard invisibility; the micro_join/scout re-point) under this era's historical per-file
+# numbering, so this round's new tests carry only the globally-unambiguous "tr3"/"tr22"/"tr26"
+# spec-trap tags, never a reused bare TC number.
+
+
+def test_tr3_weakening_the_origin_fence_comparison_makes_the_guarding_assertion_fail_restoring_it_passes(
+    rig, monkeypatch
+):
+    """Deliberately defeat the origin-fence comparison (monkeypatch the session-date resolver so
+    EVERY dataset reports a date at/before any origin -- the exact effect of a comparison that never
+    refuses) and show the read TC-1 requires to be REFUSED instead silently SUCCEEDS, leaking the
+    strictly-after-origin dataset's rows; restore (``monkeypatch.undo()``) and show the refusal
+    fires again, byte-identically to the shipped fence."""
+    dataset_store, snapshots_dir = rig
+    after = _plant_dataset_and_snapshot(
+        dataset_store, snapshots_dir, symbol="LEAK",
+        window_start_utc="2026-06-10T13:00:00Z", window_end_utc="2026-06-10T13:01:00Z",
+    )
+    accessor = ma.MicroAccessor(dataset_store, snapshots_dir, CONFIG, origin="2026-06-09")
+
+    # Sanity: the shipped fence genuinely refuses this read before any mutation.
+    with pytest.raises(ma.MicroAccessorOriginFenceError):
+        accessor.read_snapshot_rows(after["id"])
+
+    # Weaken: defeat the comparison by making the session-date resolver always report a date
+    # at/before the origin -- the exact effect of the defect TR-3 exists to catch.
+    monkeypatch.setattr(ma, "_session_date_for_dataset", lambda dataset_meta: "2000-01-01")
+    leaked_rows = accessor.read_snapshot_rows(after["id"])  # would raise if the fence still worked
+    assert leaked_rows, "the weakened fence leaked the strictly-after-origin dataset's rows"
+
+    # Restore: undo the monkeypatch and prove the fence refuses again, byte-identically.
+    monkeypatch.undo()
+    with pytest.raises(ma.MicroAccessorOriginFenceError):
+        accessor.read_snapshot_rows(after["id"])
+
+
 # === TC-2: sealed-shard invisibility =================================================================
 
 

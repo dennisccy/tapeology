@@ -284,13 +284,22 @@ def _one_ask_depletion(rows: list[dict]) -> dict:
 
 def test_tc10_quote_depletion_resolves_at_a_price_change_attached_to_the_next_trade_row():
     """The VERIFIED-unit half of the contract: the run's own timing facts, and -- because
-    ``quote_size_unit`` is verified -- the share-denominated magnitude itself, served."""
+    ``quote_size_unit`` is verified -- the share-denominated magnitude itself, served.
+
+    goal-rapid-microscope-iter-16 (TR-26, r6 owner ruling 2026-08-18): ``observed_through``/
+    ``available_at`` corrected from the pre-fix ``2.0`` (the LAST same-price quote -- measurement
+    end) to ``3.0`` (the price-CHANGING/REVEALING quote's own instant -- knowledge time). This is
+    the specified behaviour fix itself, not a regression: the spec's own words are "measurement end
+    != knowledge time" (section 3) -- the observer does not actually LEARN the run has ended until
+    it sees the price-changing quote, so THAT instant is when the completion becomes available, even
+    though the run's magnitude (500 - 300 = 200, unaffected) is still measured only over the
+    same-price quotes that preceded it."""
     rows = _non_close_out(_run(_depletion_events(), quote_size_unit="shares"))
     d = _one_ask_depletion(rows)
     assert d["anchor_at"] == 0.0  # the run's own start
-    assert d["observed_through"] == 2.0  # the LAST update still at the old price
-    assert d["available_at"] == 2.0
-    assert d["value"] == pytest.approx(200.0)  # 500 - 300
+    assert d["observed_through"] == 3.0  # the REVEALING price-changing quote (r6) -- was 2.0 pre-fix
+    assert d["available_at"] == 3.0
+    assert d["value"] == pytest.approx(200.0)  # 500 - 300, unaffected by the timestamp fix
     assert d["unavailable"] is False
     assert d["refused"] is False
     assert d["refusal_reason"] is None
@@ -310,8 +319,11 @@ def test_tc7_tr18_quote_depletion_magnitude_is_refused_under_an_unverified_unit(
     assert d["unavailable"] is False  # observed to completion -- refused, not missing
     # the unit-invariant facts are unaffected by the refusal
     assert d["anchor_at"] == 0.0
-    assert d["observed_through"] == 2.0
-    assert d["available_at"] == 2.0
+    # goal-rapid-microscope-iter-16 (TR-26): the same timing fix as TC-10 above -- the revealing
+    # quote's own instant (3.0), not the last same-price quote (was 2.0 pre-fix). The unit gate
+    # only ever governs `value`/`refused`/`refusal_reason`; it does not touch this timestamp.
+    assert d["observed_through"] == 3.0
+    assert d["available_at"] == 3.0
     assert d["price"] == pytest.approx(100.10)
     assert d["updates_observed"] == 2
 
@@ -409,6 +421,164 @@ def test_quote_depletion_that_genuinely_closes_is_still_a_completed_observation(
     d = _one_ask_depletion(rows)
     assert d["unavailable"] is False
     assert d["value"] == pytest.approx(200.0)
+
+
+# === TR-26: quote_depletion's revealing-quote availability (r6, spec section 3) =====================
+# goal-rapid-microscope-iter-16 (J-10): a genuine production bug, fixed here. `_advance_depletion_
+# run`'s price-change-termination branch used to resolve using the OLD run's own last-recorded
+# `observed_through` (the last same-price quote) -- the r6 owner ruling (docs/rapid-validation-
+# spec.md revision header, 2026-08-18) requires the REVEALING price-CHANGING quote's own instant
+# instead ("measurement end != knowledge time"). TC-9 above is the corrected assertion (the fix
+# itself); TC-10 below proves the OTHER termination path (hitting DEPLETION_WINDOW_QUOTES) was
+# already correct and stays that way; TC-11 proves the fix is prefix-honest (TR-1-style) at the
+# exact revealing instant; TC-12 is this trap's own non-vacuity mutation-proof.
+
+
+def _bound_terminated_depletion_events() -> list:
+    """A depletion run that terminates by hitting ``DEPLETION_WINDOW_QUOTES`` (20 same-side,
+    same-price updates) -- NEVER a price change -- the OTHER termination path (spec section 1's own
+    table), already correct before this iteration's fix (the bound-termination branch already
+    stamps ``run["observed_through"] = ts`` on every same-price update, the 20th included, before
+    checking the bound) and untouched by it; this fixture is this iteration's first DEDICATED test
+    of that path."""
+    events = [QuoteEvent(TICKER, 0.0, 100.00, 100.10, 500, 500)]  # run starts: price 100.10, size 500
+    size = 500
+    for i in range(1, mf.DEPLETION_WINDOW_QUOTES + 1):
+        size -= 1  # any same-price update advances the run; the exact size path is not asserted
+        events.append(QuoteEvent(TICKER, float(i), 100.00, 100.10, 500, size))
+    events.append(TradeEvent(TICKER, float(mf.DEPLETION_WINDOW_QUOTES) + 1.0, 100.10, 10, Side.UNKNOWN))
+    return events
+
+
+def test_tc10_bound_terminated_depletion_resolves_at_the_bound_hitting_quotes_own_instant():
+    events = _bound_terminated_depletion_events()
+    rows = _non_close_out(_run(events, quote_size_unit="shares"))
+    d = _one_ask_depletion(rows)
+    assert d["unavailable"] is False
+    assert d["available_at"] == d["observed_through"] == float(mf.DEPLETION_WINDOW_QUOTES)
+    assert d["updates_observed"] == mf.DEPLETION_WINDOW_QUOTES
+
+
+def test_tc11_truncating_strictly_before_the_revealing_quote_leaves_the_run_unresolved():
+    """Truncate the stream strictly BEFORE the price-changing/revealing quote's own instant
+    (``ts=3.0`` in ``_depletion_events()``) -- the run's only termination trigger never arrives, so
+    it must surface as ``unavailable`` (counted, never guessed), exactly like any other deferred
+    construct the session cuts short -- never a value computed as if the window had closed."""
+    events = _depletion_events()
+    truncated = [e for e in events if e.timestamp < 3.0]  # strictly before the revealer
+    rows = _run(truncated, quote_size_unit="shares")
+    depletions = [
+        d for row in rows for d in row["deferred"] if d["kind"] == "quote_depletion" and d["side"] == "ask"
+    ]
+    assert len(depletions) == 1
+    d = depletions[0]
+    assert d["unavailable"] is True
+    assert d["value"] is None
+    assert d["available_at"] == d["observed_through"] == 2.0  # the last event genuinely seen
+
+
+def test_tc11_truncating_at_the_revealing_quote_resolves_the_run_deterministically():
+    """The counter-test: INCLUDING the revealing quote's own instant resolves the run immediately --
+    deterministically, matching the full replay's own value -- even with no trade afterward to carry
+    the completion; the close-out row (``finalize()``) attaches it, proving the resolution does not
+    depend on a LATER trade ever occurring."""
+    events = _depletion_events()
+    truncated = [e for e in events if e.timestamp <= 3.0]  # at/after -> inclusive of the revealer
+    rows = _run(truncated, quote_size_unit="shares")
+    depletions = [
+        d
+        for row in rows
+        for d in row["deferred"]
+        if d["kind"] == "quote_depletion" and d["side"] == "ask" and d["anchor_at"] == 0.0
+    ]
+    assert len(depletions) == 1
+    d = depletions[0]
+    assert d["unavailable"] is False
+    assert d["value"] == pytest.approx(200.0)
+    assert d["available_at"] == d["observed_through"] == 3.0  # the revealing quote itself
+
+
+def _depletion_events_with_a_differently_sized_revealing_quote() -> list:
+    """``_depletion_events()``'s twin, except the REVEALING (price-changing) quote carries a
+    deliberately DIFFERENT size (900) from the run's own last same-price size (300).
+
+    ``_depletion_events()`` cannot tell the two magnitude rules apart: its revealing quote happens
+    to carry ask size 300 -- byte-identical to the run's last same-price size -- so
+    ``start_size - current_size`` computes 200 whether or not the revealing quote's size was
+    (wrongly) folded into the run first."""
+    return [
+        QuoteEvent(TICKER, 0.0, 100.00, 100.10, 500, 500),  # ask run starts: price 100.10, size 500
+        QuoteEvent(TICKER, 1.0, 100.00, 100.10, 500, 400),  # same price, size drops to 400
+        QuoteEvent(TICKER, 2.0, 100.00, 100.10, 500, 300),  # same price, size drops to 300
+        QuoteEvent(TICKER, 3.0, 100.00, 100.20, 500, 900),  # PRICE CHANGE -- and a DIFFERENT size
+        TradeEvent(TICKER, 4.0, 100.20, 10, Side.UNKNOWN),  # first trade at/after resolution
+    ]
+
+
+def test_tr26_the_magnitude_is_measured_over_the_pre_change_run_never_the_revealing_quotes_own_size():
+    """iter-16 audit (TR-26 trap-coverage hole): the r6 ruling moves only the availability STAMP to
+    the revealing quote -- "measurement end != knowledge time". The MAGNITUDE must still be measured
+    over the pre-change run alone (spec section 3; this iteration's own DEFINITION OF DONE: "the
+    depletion MAGNITUDE stays computed from the pre-change run data, unaffected").
+
+    TC-9's ``value == 200.0`` assertion cannot prove that on ``_depletion_events()``: that fixture's
+    revealing quote carries the same size (300) the run already held, so folding the revealing
+    quote's size into the run before resolving leaves ``value`` at 200.0 either way -- verified by
+    mutating ``_advance_depletion_run`` to do exactly that, against which the whole file stayed
+    green. This fixture separates the two rules: measured over the pre-change run alone the
+    magnitude is 500 - 300 = 200; folding the revealing quote's own size (900) in first would make
+    it 500 - 900 = -400 (a nonsensical NEGATIVE depletion), and this test fails."""
+    rows = _non_close_out(_run(_depletion_events_with_a_differently_sized_revealing_quote(), quote_size_unit="shares"))
+    d = _one_ask_depletion(rows)
+    assert d["value"] == pytest.approx(200.0)  # 500 - 300, the pre-change run's own two sizes
+    assert d["value"] != pytest.approx(-400.0)  # 500 - 900, the revealing quote's size folded in
+    # ...and the availability stamp is still the revealing quote's own instant (the r6 fix itself),
+    # so this fixture proves BOTH halves of the ruling at once, on the same run.
+    assert d["anchor_at"] == 0.0
+    assert d["observed_through"] == d["available_at"] == 3.0
+    assert d["unavailable"] is False
+    assert d["updates_observed"] == 2
+
+
+def test_tc12_tr26_reverting_the_fix_makes_the_corrected_assertion_fail_restoring_it_passes(monkeypatch):
+    """Non-vacuity, this round's binding rule (iteration 15's own opaque-pool regression test was
+    proven structurally unable to fail -- every new trap this round must prove the opposite):
+    monkeypatch in the EXACT pre-fix ``_advance_depletion_run`` (stamps the OLD run's own already-
+    stale ``observed_through`` instead of threading the revealing quote's own ``ts`` through) and
+    show the corrected TC-9 assertion (``observed_through == 3.0``) would FAIL against it --
+    reproducing the exact pre-fix wrong value, ``2.0`` -- then restore (``monkeypatch.undo()``) and
+    show it passes again, byte-identically to the shipped fix."""
+    import app.research.micro_observer as mo
+
+    def _pre_fix_advance_depletion_run(self, side, price, size, ts):
+        run = self._depletion_run[side]
+        if run is None or run["price"] != price:
+            if run is not None:
+                self._resolve_depletion(side, run)  # BUG: stamps the OLD run's own stale observed_through
+            self._depletion_run[side] = {
+                "run_start_ts": ts, "price": price, "start_size": size, "current_size": size,
+                "updates_seen": 0, "observed_through": ts,
+            }
+            return
+        run["current_size"] = size
+        run["updates_seen"] += 1
+        run["observed_through"] = ts
+        if run["updates_seen"] >= mf.DEPLETION_WINDOW_QUOTES:
+            self._resolve_depletion(side, run)
+            self._depletion_run[side] = None
+
+    monkeypatch.setattr(mo.MicroObserver, "_advance_depletion_run", _pre_fix_advance_depletion_run)
+    rows = _non_close_out(_run(_depletion_events(), quote_size_unit="shares"))
+    d = _one_ask_depletion(rows)
+    # The exact leaked/incorrect value the pre-fix code produces -- proving the corrected assertion
+    # (observed_through == 3.0) WOULD fail against this reverted code.
+    assert d["observed_through"] == 2.0
+    assert d["observed_through"] != 3.0
+
+    monkeypatch.undo()
+    rows_restored = _non_close_out(_run(_depletion_events(), quote_size_unit="shares"))
+    d_restored = _one_ask_depletion(rows_restored)
+    assert d_restored["observed_through"] == 3.0
 
 
 def test_refill_consistent_only_registers_on_a_confirmed_quote_rule_execution():

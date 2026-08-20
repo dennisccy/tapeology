@@ -586,6 +586,29 @@ def test_desk_page_price_arithmetic_guard_catches_micro_readiness_field_arithmet
     assert _PRICE_ARITHMETIC_PATTERN.search("const label = `${basis.n_records} records`;") is None
 
 
+def test_desk_page_price_arithmetic_guard_catches_sealed_tranche_and_universe_counts_and_withheld_excluded_arithmetic():
+    """goal-rapid-microscope-iter-16 (J-10) TC-15 counter-test: the iteration-15-added
+    ``readiness.sealed_tranche.*``/``universeCounts.*``/``readiness.joinable_corpus.
+    withheld_excluded`` clauses (module docstring above, "iter-15" note) catch arithmetic on their
+    own served numerics -- closing iteration 15's own open MINOR finding that these two clauses had
+    never been proven capable of failing."""
+    seeded_ratio = (
+        "const ratio = readiness.sealed_tranche.shard_count / readiness.sealed_tranche.symbol_days;"
+    )
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_ratio) is not None
+
+    seeded_total = "const total = universeCounts.shard_count + universeCounts.symbol_days;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_total) is not None
+
+    seeded_included = "const included = 1 - readiness.joinable_corpus.withheld_excluded;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_included) is not None
+
+    # And the pattern does NOT over-match: a non-arithmetic render of the same fields is clean.
+    assert _PRICE_ARITHMETIC_PATTERN.search(
+        "const label = `${readiness.sealed_tranche.shard_count} shards`;"
+    ) is None
+
+
 def test_desk_page_price_arithmetic_guard_catches_referee_shortlist_and_discovery_field_arithmetic():
     """goal-referee-iter-8 (J-07) counter-test: the extended guard catches arithmetic on the new
     Referee Registry section's own `candidate.*` (shortlist readiness) and `hyp.discovery.*`

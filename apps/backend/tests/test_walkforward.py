@@ -3,13 +3,20 @@
 chronological walk-forward engine. Test-first contract: TC-6 through TC-19, TC-23 through TC-26 in
 ``docs/phases/goal-rapid-microscope-iter-5.md`` (TC-21/TC-22, the TR-16 end-to-end oracles, live in
 ``test_walkforward_oracles.py`` -- see that file's own module docstring). TC-1/TC-2/TC-3 live in
-``test_micro_accessor.py``; TC-4/TC-5 in ``test_micro_join.py``/``test_scout.py``."""
+``test_micro_accessor.py``; TC-4/TC-5 in ``test_micro_join.py``/``test_scout.py``.
+
+goal-rapid-microscope-iter-16 (J-10): two explicitly-labeled trap-suite entries added, both
+test-file-only (no production edit to this module or ``micro_accessor.py``) -- TR-3's own
+multi-session aggregate-boundary proof (a NEW test; see its own section header below for why) and
+TR-22's own non-vacuity mutation-proof (the existing ``test_tc13_*``/``test_tc14_*`` tests already
+prove both classification directions and the r2 initialization; see that section's own header)."""
 
 from __future__ import annotations
 
 import pytest
 from fastapi.testclient import TestClient
 
+from app.config import CONFIG
 from app.main import app
 from app.providers.base import QuoteEvent, Side, TradeEvent
 from app.research import walkforward as wf
@@ -19,6 +26,8 @@ from app.research.datasets import DatasetStore
 from app.research.micro_accessor import (
     R2_REVISION_INSTANT,
     ExposureRegistry,
+    MicroAccessor,
+    MicroAccessorOriginFenceError,
     has_any_exposure_entries,
     initialize_r2_exposure_registry,
 )
@@ -28,8 +37,10 @@ from app.research.micro_routes import (
     get_walkforward_compute_manager,
     get_walkforward_ledger_dir,
 )
+from app.research.micro_snapshots import resolve_micro_snapshots_dir
 from app.research.desk_routes import get_playbook_store, get_universe_store
 from app.research.routes import get_bar_store
+from tests.test_micro_accessor import _plant_dataset_and_snapshot
 
 
 # === helpers ==========================================================================================
@@ -58,6 +69,55 @@ def _sufficient_fold_row(
 
 def _five_sufficient_oos_rule_process_folds(**overrides) -> list[dict]:
     return [_sufficient_fold_row(fold_index=i, **overrides) for i in range(5)]
+
+
+# === TR-3: the accessor origin-fence -- the aggregate-boundary clause (spec section 9(b)) ===========
+# goal-rapid-microscope-iter-16 (J-10): TC-1 (single-read fence) and the import-ban live in
+# test_micro_accessor.py (that file's own TR-3 header names every clause and test). This is TR-3's
+# OWN multi-session AGGREGATE proof, placed HERE rather than there per this round's own scope note
+# (runs/goal-rapid-microscope-iter-16/plan.md): direct code inspection found no production call
+# site that actually constructs MicroAccessor(origin=...) today -- both micro_join.py and scout.py
+# pass origin=None (the disclosed unfenced mode), and this file's own build_folds is a pure
+# function over session-date strings that never touches the accessor -- so the spec's TC-2
+# framing ("the walk-forward origin-window path, its one existing origin= consumer") describes no
+# real call site to re-point; this is a NEW TEST proving the accessor's own aggregate behaviour
+# directly. No production edit to micro_accessor.py or walkforward.py; no new helper -- reuses
+# test_micro_accessor.py's own _plant_dataset_and_snapshot verbatim (imported, never re-derived).
+
+
+def test_tr3_an_origin_fenced_loop_over_several_sessions_returns_exactly_the_set_le_origin(tmp_path):
+    """Sessions S1=2026-06-08 < T=S2=2026-06-09 < S3=2026-06-10. At origin=T, the accepted set is
+    exactly {S1, S2} (S3 refused); at origin=T+1=S3, exactly {S1, S2, S3} (nothing refused) --
+    boundary-exact BOTH directions (the iter-11 lesson: never prove only the refusal side)."""
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    snapshots_dir = resolve_micro_snapshots_dir(str(tmp_path / "datasets"))
+    s1 = _plant_dataset_and_snapshot(
+        dataset_store, snapshots_dir, symbol="S1",
+        window_start_utc="2026-06-08T13:00:00Z", window_end_utc="2026-06-08T13:01:00Z",
+    )
+    s2 = _plant_dataset_and_snapshot(
+        dataset_store, snapshots_dir, symbol="S2",
+        window_start_utc="2026-06-09T13:00:00Z", window_end_utc="2026-06-09T13:01:00Z",
+    )
+    s3 = _plant_dataset_and_snapshot(
+        dataset_store, snapshots_dir, symbol="S3",
+        window_start_utc="2026-06-10T13:00:00Z", window_end_utc="2026-06-10T13:01:00Z",
+    )
+    datasets = {"S1": s1, "S2": s2, "S3": s3}
+
+    def _accepted_set(origin: str) -> set[str]:
+        accessor = MicroAccessor(dataset_store, snapshots_dir, CONFIG, origin=origin)
+        accepted: set[str] = set()
+        for label, meta in datasets.items():
+            try:
+                accessor.read_snapshot_rows(meta["id"])
+            except MicroAccessorOriginFenceError:
+                continue
+            accepted.add(label)
+        return accepted
+
+    assert _accepted_set("2026-06-09") == {"S1", "S2"}        # origin = T = S2
+    assert _accepted_set("2026-06-10") == {"S1", "S2", "S3"}  # origin = T+1 = S3, nothing refused
 
 
 # === TC-6: fold-spec registration is frozen verbatim; clustering_unit is corpus-size-invariant ======
@@ -316,6 +376,58 @@ def test_tc14_freshly_initialized_registry_reads_every_named_window_exposed_befo
     initialize_r2_exposure_registry(registry, corpus_id="legacy_tick", windows=windows)
     for window in windows:
         assert registry.is_exposed_before(corpus_id="legacy_tick", window=window, instant="2026-08-17T00:00:00.000000Z")
+
+
+# === TR-22: the exposure-registry auto-classification -- explicitly-labeled trap-suite entry ========
+# goal-rapid-microscope-iter-16 (J-10): TR-22 requires three proven clauses -- (a) registered-after-
+# exposure auto-classes historical_exposed_diagnostic, proven above by test_tc13_a_mode_b_spec_
+# registered_after_a_logged_exposure_is_auto_classed_diagnostic; (b) registered-before-any-exposure
+# classes historical_oos, proven above by test_tc13_a_mode_b_spec_registered_before_any_exposure_
+# of_its_window_classes_historical_oos (both directions of the SAME mechanical rule, the iter-11
+# lesson: never prove only one side) -- folded in unchanged, never re-derived; (c) the r2
+# initialization pre-marks every playbook-corpus/legacy-tick window exposed, proven above by
+# test_tc14_freshly_initialized_registry_reads_every_named_window_exposed_before_any_serving_act
+# (this file) and test_tc14_r2_initialization_pre_marks_every_named_window_exposed_before_any_
+# serving_act (test_micro_accessor.py) -- folded in unchanged. The test immediately below is this
+# clause's own non-vacuity mutation-proof (this round's binding rule): a comparison that silently
+# stops detecting prior exposure would let genuinely-exposed/diagnostic-quality evidence
+# auto-classify as fake historical_oos -- the exact class-mixing anti-goal this trap exists to
+# prevent -- so the proof targets `is_exposed_before` directly, never through `evaluate_mode_b_
+# fold`'s own ledger (append_fold_result is idempotent on (sequence_id, fold_index, spec_hash) --
+# calling it twice with the SAME spec/fold would silently replay the FIRST cached row rather than
+# re-run the classification, making a naive non-vacuity test through that path itself vacuous;
+# discovered while writing this test, noted here so a later lane does not repeat the mistake).
+
+
+def test_tr22_mutating_is_exposed_before_to_always_return_false_makes_the_auto_classification_assertion_fail_restoring_it_passes(
+    tmp_path, monkeypatch
+):
+    registry = ExposureRegistry(str(tmp_path / "exposure"))
+    corpus_id = "tr22-non-vacuity-corpus"
+    registry.log_exposure(
+        corpus_id=corpus_id, window="2026-04-05", surface="prior-serving",
+        logged_at="2026-04-06T00:00:00.000000Z",
+    )
+
+    # Weaken: is_exposed_before's strict `<` comparison, mutated to always report "never exposed".
+    monkeypatch.setattr(ExposureRegistry, "is_exposed_before", lambda self, **kwargs: False)
+    leaked = wf.classify_evidence_class(
+        registry, corpus_id=corpus_id, window_sessions=["2026-04-05"],
+        registered_at="2026-04-10T00:00:00.000000Z",  # AFTER the logged exposure entry
+    )
+    # The exact leaked/incorrect value the mutated comparison produces -- proving the guarding
+    # assertion (evidence_class == historical_exposed_diagnostic) WOULD fail against it: genuinely
+    # exposed evidence silently promoted to a fake historical_oos.
+    assert leaked == wf.EVIDENCE_CLASS_HISTORICAL_OOS
+    assert leaked != wf.EVIDENCE_CLASS_HISTORICAL_EXPOSED_DIAGNOSTIC
+
+    # Restore: undo the monkeypatch and prove the correct classification fires again.
+    monkeypatch.undo()
+    restored = wf.classify_evidence_class(
+        registry, corpus_id=corpus_id, window_sessions=["2026-04-05"],
+        registered_at="2026-04-10T00:00:00.000000Z",
+    )
+    assert restored == wf.EVIDENCE_CLASS_HISTORICAL_EXPOSED_DIAGNOSTIC
 
 
 # === TC-15: WF_SURVIVOR_RULE_V1 -- all five conditions, individually violated =========================

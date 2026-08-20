@@ -447,3 +447,34 @@ same picture) — it is script depth, and it should be fixed by deepening the sc
 re-shooting them.
 **Applies to:** any future evaluator reading a green replay table; and the harness owner, when
 J-02–J-05's golden scripts are next touched.
+
+## iter-16 — 2026-08-20T04:35:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** A mutation-proof only proves the ASSERTION can fail — it does not prove the FIXTURE
+can discriminate. TR-26's fix shipped with `_depletion_events()` whose revealing quote carried ask
+size 300, byte-identical to the size the run already held, so `value == 200.0` held under BOTH the
+correct rule (`500 − 300`) and the corrupt one (fold the revealing quote in first). The dev's
+genuine RED→GREEN TDD transcript, the reviewer's own direct mutation of production source, and the
+pump's framing of the round all missed it; only the auditor's `micro_observer.py:646` mutation
+(`run["current_size"] = size`) exposed it — the whole file stayed green. I reproduced it myself:
+under that mutation exactly one test fails (the auditor's new twin-fixture test, with the predicted
+`-400`) and every other test in the file passes. Rule for every future trap: build fixture numbers
+that are deliberately all different, so no assertion can hold for the wrong reason — and check
+specifically whether the fixture's numbers COINCIDE anywhere the assertion depends on them.
+**Applies to:** any iteration adding or amending a TR-N trap test, any fixture whose assertion is
+an arithmetic identity (`a − b == c`), and any round whose acceptance says "X stays unaffected"
+
+## iter-16 (second) — 2026-08-20T04:35:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** A journey's stored golden replay script can be rewritten, linted, and shipped WITHOUT
+ever being executed, and nothing in the pipeline notices: `runs/.../journey-scripts/J-10.json` is a
+tracked file that `status.json`'s `changed_files` does not track, so the reviewer's and QA's
+"exactly 6 files changed" certifications were both computed against a list that structurally cannot
+contain it. In this round the rewrite also silently DROPPED two data-bearing assertions (real
+playbook evidence) in favour of four empty-state ones — replacing "this value is right" with "this
+list is empty" — in the very round where that journey was the target. Check the full
+`git status --porcelain` yourself, not `status.json`, whenever a lane certifies a file count.
+**Applies to:** any iteration whose target journey has a stored golden script; any lane certifying
+"exactly N files changed"; the harness itself (journey scripts belong in `changed_files`)

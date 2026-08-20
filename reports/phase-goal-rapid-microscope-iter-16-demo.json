@@ -1,0 +1,140 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-rapid-microscope-iter-16",
+  "base_url": "http://localhost:3301",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the Desk page",
+      "narration": "The Desk page loads cleanly with all collapsible sections ready. Each section starts collapsed—expand them to view content.",
+      "point_out": "The 'Desk' heading and collapsed section headers are visible, zero console errors.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/desk" },
+      "expect": { "text": "Desk" }
+    },
+    {
+      "n": 2,
+      "title": "Expand Microscope Readiness—shows testid retained in all states",
+      "narration": "Microscope Readiness expands showing 2 tick shards (symbol PG, session 2026-06-09) and corpus totals. This panel's DOM identifier is now retained whether loading, unavailable, or fully loaded.",
+      "point_out": "Shows 'Distinct symbol-days: 1', 'Distinct datasets: 2', and 2 PG rows in Legacy Tick Shards.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Microscope Readiness" } },
+      "expect": { "text": "Distinct symbol-days" }
+    },
+    {
+      "n": 3,
+      "title": "Expand Scout Ledger—shows defensive degradation",
+      "narration": "Scout Ledger expands showing 'No candidates ledgered'—the honest empty state. The table now degrades gracefully: if any row were malformed, only that cell renders a placeholder instead of blanking the entire page.",
+      "point_out": "Shows 'No candidates ledgered' and 'No scout runs recorded yet', and the 'Run Screen' button is visible but not clicked.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Scout Ledger" } },
+      "expect": { "text": "No candidates ledgered" }
+    },
+    {
+      "n": 4,
+      "title": "Expand Walk-Forward section—unaffected regression check",
+      "narration": "Walk-Forward expands showing no fold specs registered. This section is unaffected by this round's work, confirming changes stayed isolated.",
+      "point_out": "Shows 'No fold specs registered' and 'No walk-forward sequences run'.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Walk-Forward" } },
+      "expect": { "text": "No fold specs" }
+    },
+    {
+      "n": 5,
+      "title": "Expand Validation Vault—read-only state unchanged",
+      "narration": "Validation Vault expands showing no shards recorded and no universes registered. This section is read-only by design, and this round did not alter it.",
+      "point_out": "Shows 'No shards recorded' and 'No universes registered'—the correct read-only empty state.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Validation Vault" } },
+      "expect": { "text": "No shards recorded" }
+    },
+    {
+      "n": 6,
+      "title": "Expand Referee Registry—all sections load cleanly",
+      "narration": "Referee Registry (plus Referee Adjudications and Referee Runs) expand without errors, showing real content. All Desk sections remain stable and unaffected.",
+      "point_out": "Referee Registry expands with content and zero console errors, confirming the entire Desk page is resilient.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Referee Registry" } },
+      "expect": { "text": "hypotheses" }
+    },
+    {
+      "n": 7,
+      "title": "Navigate to Structure page",
+      "narration": "The Structure page loads without error. This page is unaffected by this round's work—included to confirm changes stayed isolated.",
+      "point_out": "Structure page loads with Symbol and As-of date input fields ready.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/structure" },
+      "expect": { "text": "Symbol" }
+    },
+    {
+      "n": 8,
+      "title": "Enter AAPL and load Tradable Map",
+      "narration": "Entering AAPL and the as-of date (2026-06-22 16:00:00 ET), then clicking Load, renders the Tradable Map with exactly 10 bands. This confirms the Structure page's data pipeline is unaffected and stable.",
+      "point_out": "The Tradable Map displays 10 band rows (5 resistance, 5 support), with the first resistance at 300.11–302.2 marked round-number.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "fill", "target": { "label": "Symbol" }, "text": "AAPL" },
+      "expect": { "text": "AAPL" }
+    },
+    {
+      "n": 9,
+      "title": "Fill as-of date and load",
+      "narration": "The as-of date field accepts the timestamp. Once submitted, the Tradable Map data loads immediately.",
+      "point_out": "Date field shows '2026-06-22 16:00:00'.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "fill", "target": { "label": "As-of (ET)" }, "text": "2026-06-22 16:00:00" },
+      "expect": { "text": "2026-06-22" }
+    },
+    {
+      "n": 10,
+      "title": "Click Load to render Tradable Map",
+      "narration": "The Load button fetches and displays all 10 Tradable Map bands immediately, confirming the load logic is unaffected.",
+      "point_out": "Tradable Map renders 10 rows, comparison dropdown is present, no error.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "click", "target": { "role": "button", "name": "Load" } },
+      "expect": { "text": "300.11" }
+    },
+    {
+      "n": 11,
+      "title": "Watch Cockpit live tape update",
+      "narration": "The Cockpit page shows the live tape updating for SIM-BUYER in Simulated mode. Chart and tape are unaffected, confirming the round's backend and Desk changes stayed isolated.",
+      "point_out": "Live tape shows 'Buyer Control' with confidence and bid/ask updating between reads, confirming genuine live updates.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "goto", "url": "/" },
+      "expect": { "text": "Cockpit" }
+    }
+  ]
+}

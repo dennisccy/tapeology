@@ -637,6 +637,13 @@ class MicroObserver:
         run = self._depletion_run[side]
         if run is None or run["price"] != price:
             if run is not None:
+                # r6 (spec section 3): a price-change termination is REVEALED by the price-CHANGING
+                # quote itself, not by the run's own last same-price update -- "measurement end !=
+                # knowledge time". The depletion MAGNITUDE stays computed from the pre-change run's
+                # own start_size/current_size (untouched below); only the availability stamp moves
+                # to THIS quote's own instant `ts`, the point at which the observer actually learns
+                # the run has ended (was: the run's own stale `observed_through`, one quote early).
+                run["observed_through"] = ts
                 self._resolve_depletion(side, run)
             self._depletion_run[side] = {
                 "run_start_ts": ts,

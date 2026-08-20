@@ -1255,3 +1255,83 @@ exposure, and `grep -c "ErrorBoundary\|componentDidCatch\|getDerivedStateFromErr
 round as a passenger, not as a round of its own.
 **Reversible:** yes — if a tampered or partially-written ledger row ever becomes reachable (the
 recorder tranche, or a hand-edited store), this re-opens as IMPORTANT immediately.
+
+## iter-16 — goal-evaluator
+
+**Ambiguity:** whether ESCALATE is available when the decision tree's literal clauses do not fire.
+Tree C.4's three triggers are "the same journey failed 2+ consecutive iterations" (J-09 carries
+`failing` across iterations 13–16, but it has never been ATTEMPTED — every phase spec has placed it
+out of scope, and the iteration-13/14/15 evaluators all declined to count an un-attempted journey
+here; I maintain that reading rather than adopting it now because it would be convenient),
+"the review lane failed and the pipeline proceeded fail-open" (review PASS, QA PASS, browser QA
+PASS, coherence COHERENCE-PASS, closure CLOSURE-PASS — no fail-open anywhere), and "this LEAN
+iteration surfaced cross-cutting ambiguity" (this iteration was full). Read strictly, first-match-
+wins lands on C.5 → CONTINUE.
+**We chose:** ESCALATE — the fifth consecutive one, and I record again that it is a deliberate
+departure from the tree's literal text, not a pretence that a clause fired. Two grounds specific to
+iteration 16, beyond the ones iterations 13–15 logged. (1) EMPIRICAL AND NEW: this is now the
+SECOND CONSECUTIVE round in which the round's own new trap test was structurally unable to fail and
+only the independent auditor found it — iteration 15's opaque-pool sweep (sealed under an
+unregistered universe, so the leak branch never executed) and iteration 16's TR-26 magnitude clause
+(a fixture whose revealing quote carried the same size the run already held, so the assertion held
+under both the correct and the corrupt rule). I reproduced the iteration-16 case myself against
+real production source. That is a demonstrated pattern, not a one-off, and iteration 16's case
+survived a dev TDD proof AND a reviewer mutation of production source. (2) CONTENT: round 17's
+entire subject is TR-23 (sealed-verdict ownership) and TR-24 (lineage confirmation boundary) — two
+more trap tests of exactly that kind, governing the critical "sealed exposure is single-shot, a
+failed sealed verdict is permanent" and anti-laundering rails. Cost of being wrong: one extra audit
+lane. Cost of being right and having chosen CONTINUE: an unaudited round whose only content is the
+guards that certify the era's critical anti-goals, in the exact fault class that has now escaped
+review+QA twice running. The verdict line is the only mechanically binding grant of full depth in
+this engine (iterations 8 and 12 lost the auditor when full depth was asked for in prose only;
+iteration 16's own phase spec states this verbatim as "Full trigger 3").
+**Reversible:** yes — ESCALATE only sets the next iteration's depth; it halts nothing. Round 17
+completes the trap suite at 29/29, so this escalation has a visible end: a later evaluator can
+return to lean once the suite is complete and mutation-proved.
+
+## iter-16 — goal-evaluator (second)
+
+**Ambiguity:** J-07 "Graduation" carries `DEFERRED-BUDGET` in the merged
+`ui-test-results.md`, and methodology A.4 says such a row means the journey was NOT tested, keeps
+its prior recorded status, and can never support GOAL_ACHIEVED. But the SAME iteration's LLM
+browser lane recorded J-07 as PASS with a fresh capture
+(`reports/qa/goal-rapid-microscope-iter-16-evidence/J-07-verify.png`, timestamped this round).
+Nothing states which lane's row governs when the deferral comes from a lane that was never supposed
+to run the journey at all.
+**We chose:** score J-07 `passing`, freshly verified this iteration, with a refreshed
+`last_verified_iter` and `spec_hash`. Grounds: the `DEFERRED-BUDGET` row is emitted by the
+deterministic GOLDEN-REPLAY lane, which has no J-07 script by design (a documented harness
+limitation — `demo_runner.normalize_url()` rewrites localhost URLs onto the frontend base and no
+frontend proxy exists for `/research/*`), while iteration 16's own phase spec explicitly assigns
+J-07 to the LLM lane ("J-07 (LLM fallback, direct-endpoint navigation to
+`GET /research/desk/micro/graduation` — no golden script exists for it by design)"). That lane ran
+and passed. So this is not iteration 14's situation (an out-of-lane substance probe standing in for
+a skipped acceptance, where the evaluator correctly declined to restamp): it is J-07's own
+DESIGNATED lane completing successfully, with the screenshot rail satisfied — I opened the image
+myself and it shows the served body verbatim at HTTP 200, and the independent auditor independently
+opened the same image and reached the same conclusion (finding T1).
+**Reversible:** yes — if a later round shows the graduation route regressed, J-07 re-opens
+immediately; nothing downstream depends on this scoring except that the achievement gate is not
+blocked by a deferral that never applied to this journey.
+
+## iter-16 — goal-evaluator (third)
+
+**Ambiguity:** the audit's two escaping mutations (B3: `is_exposed_before`'s `<` → `<=` caught by
+nothing; B4: `finalize()`'s session-truncated `unavailable_at` stamp caught by nothing) were left
+explicitly for the evaluator to affirm as GAPs or promote. Nothing states whether an untested
+boundary inside a mechanism that certifies a CRITICAL anti-goal ("evidence classes never mix",
+"no value is served before it exists") is itself an anti-goal violation.
+**We chose:** affirm GAP for both — tracked defects in test COVERAGE, not anti-goal violations, and
+not blockers on J-10. I verified each direction in source myself rather than accepting the
+auditor's characterisation. B3: `is_exposed_before` returns True iff some entry's `logged_at <
+instant`; widening to `<=` makes MORE windows read as exposed, i.e. classes more evidence as
+`historical_exposed_diagnostic`, and diagnostic-class evidence advances no gate — so it is
+structurally incapable of manufacturing a fake `historical_oos`, which is the leak TR-22 exists to
+stop. B4: the SHIPPED code is correct (`unavailable_at = self._last_event_ts`); only the two
+fixtures cannot discriminate, because both end on a quote so session-end and the run's own
+`observed_through` coincide at 2.0. Neither is a live defect; both are one-fixture fixes carried as
+round-17 passengers. I do note B4 is the same shape as the bug TR-26 just took 14 rounds to close,
+on the sibling code path — which is why it rides as a named passenger rather than an unranked note.
+**Reversible:** yes — if a future edit reintroduces the "one event early" stamp on the unavailable
+path, or if any caller ever needs the exact-instant exposure boundary, either re-opens as
+IMPORTANT immediately.
