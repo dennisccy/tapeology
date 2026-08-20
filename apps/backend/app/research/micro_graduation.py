@@ -28,24 +28,28 @@ never guesses a join" discipline ``evaluate_mode_b_fold`` itself uses for ``spec
 future join (a Scout candidate registering ITS OWN sequence_id at Mode-B spec time) is a natural
 J-08/J-09 wiring concern, not invented here.
 
-**The sealed-shard EVALUATION verdict is caller-supplied, not computed here -- a disclosed T-1
-interpretation call.** Spec section 8 state 3 requires "additionally passed its single-shot
-root-family-level sealed-shard evaluation (section 7.4, keyed on family_root_id) under a spec frozen
-before assignment" as a CONDITION -- it does not prescribe the statistical MACHINERY that produces a
-pass/fail verdict from a sealed shard's exposed event data (that would be a Mode-B-style evaluation
-run through the accessor against real vault data, which does not exist anywhere in this codebase yet
-and is out of THIS iteration's scope: zero real sealed shards exist this era, J-06 step 4 is
-human-blocked, and TR-3/accessor territory is explicitly deferred to a dedicated J-10 hardening
-iteration). ``vault.py`` itself carries no pass/fail concept at all -- only shard LIFECYCLE state
-(sealed/assigned/exposed). So ``record_sealed_evaluation`` below is handed an ALREADY-COMPUTED
-``passed`` verdict (mirroring ``walkforward.py``'s own "a corpus-specific reader feeds a
-corpus-agnostic statistical core" split for its Mode-B evaluator) and is responsible for exactly the
-TWO things spec section 8 DOES specify: (1) confirming, via ``vault.py``'s existing, UNMODIFIED
-``build_vault_state`` (never a new vault.py function), that the named shard genuinely reached
-``exposed`` for this EXACT ``family_root_id`` before any verdict is ever recorded against it -- never
-trusting the caller's claim alone; and (2) recording that verdict PERMANENTLY, exactly once per
-(family_root_id, dataset_id) (TR-12) -- pass OR fail, since spec section 7.4's own words are "a
-failed sealed verdict is a permanent root-family fact carried in every later export bundle".
+**The sealed-shard EVALUATION verdict now has a named owner -- ``micro_sealed_evaluation.py`` (r6
+owner ruling, 2026-08-18, spec section 8.1, "the sealed verdict has one owner").** Iteration 10's
+``record_sealed_evaluation`` used to accept an ALREADY-COMPUTED ``passed: bool`` straight from its
+caller, disclosed at the time as a T-1 placeholder because the statistical machinery to derive that
+boolean "does not exist anywhere in this codebase yet". That machinery now exists:
+``micro_sealed_evaluation.evaluate_sealed_verdict`` runs the full seven-step mandatory sequence
+(require an assigned-then-exposed shard frozen-before-assignment; verify the candidate's registered
+spec; obtain the shard through the accessor; RECOMPUTE the outcome via
+``walkforward.summarize_fold_observations``, never trust a caller-computed effect; derive a
+tri-state PASS/FAIL/``insufficient`` verdict from ``SEALED_PASS_RULE_V1``'s five conditions) and
+calls THROUGH to ``record_sealed_evaluation`` below for the actual write. This module's own role is
+therefore exactly what spec section 8.1's opening line says it should be: "the ledger owns history;
+the evaluator owns the answer" -- ``record_sealed_evaluation`` below no longer accepts a bare
+``passed: bool`` AT ALL (that parameter shape is structurally gone, not merely deprecated); it
+accepts a whole, already-derived ``artifact: dict`` and (1) persists it PERMANENTLY, exactly once
+per (family_root_id, dataset_id) (TR-12) -- pass, fail, OR ``insufficient`` alike, since spec
+section 7.4's own words are "a failed sealed verdict is a permanent root-family fact carried in
+every later export bundle" -- and (2) enforces the single-shot discipline (an identical repeat is an
+idempotent replay; a genuinely different second attempt is refused). It does NOT re-confirm vault
+exposure binding a second time -- that confirmation is ``micro_sealed_evaluation.py``'s own step 1/3
+responsibility (checked once, by the module that actually reads the shard), never duplicated here as
+a second, independently-valued implementation of the same vault-state check.
 
 **The export bundle is buildable for ANY ledgered family, at ANY state -- not gated to
 ``sealed_survivor``+.** This is what makes TC-6's "a failed-sealed twin's permanent failed verdict
@@ -59,13 +63,26 @@ earned by attempting to build a bundle for a ``sealed_survivor`` candidate and h
 
 **No new module constant, no ``graduation_parameters()``.** Every sibling module with its own tuned
 constants (``scout.py``'s ``SCOUT_SCREEN_ALPHA``, ``walkforward.py``'s ``WF_MIN_SUFFICIENT_FOLDS``,
-...) embeds a ``*_parameters()`` function so a persisted record can key on their hash (the era's
-Parameters discipline, goal.md Constraints). This module introduces NO tunable numeric constant of
-its own -- ``WF_SURVIVOR_RULE_V1`` is evaluated ENTIRELY by ``walkforward.sequence_verdict``
-(consulted, never reimplemented, per this iteration's own spec), and the sealed-shard verdict is
-caller-supplied. A ``graduation_parameters()`` function would have nothing genuine to embed, so none
+``micro_sealed_evaluation.py``'s ``SEALED_PASS_RULE_V1``...) embeds a ``*_parameters()`` function so
+a persisted record can key on their hash (the era's Parameters discipline, goal.md Constraints).
+This module introduces NO tunable numeric constant of its own -- ``WF_SURVIVOR_RULE_V1`` is
+evaluated ENTIRELY by ``walkforward.sequence_verdict`` and the sealed-shard verdict ENTIRELY by
+``micro_sealed_evaluation.evaluate_sealed_verdict`` (both consulted, never reimplemented, per this
+era's own spec). A ``graduation_parameters()`` function would have nothing genuine to embed, so none
 exists -- inventing one would be exactly the "config for behavior the spec fixed" the simplicity bar
 forbids.
+
+**The lineage-wide confirmation boundary (r6 owner ruling, spec section 8.2, TR-24).** The proposed
+confirmation boundary used to be "the latest timestamp on this ONE sequence's own surviving evidence
+rows" -- exactly the naive formula the owner ruling REJECTED, because it lets lineage knowledge be
+laundered through candidate selection (register three siblings, discard the two whose evidence is
+inconveniently recent, keep the one whose own evidence looks old). The corrected formula scans the
+WHOLE ``family_root_id`` lineage -- every scout trial (survivors AND kills), every walk-forward fold
+of ANY verdict/class/process-label, every sealed evaluation of ANY verdict including FAIL/
+``insufficient`` -- for the LATEST instant any of them consumed, then adds the applicable embargo,
+then rounds forward to the first eligible session boundary. See ``_lineage_data_frontier``/
+``_evidence_safe_boundary``/``_proposed_confirmation_boundary`` below for the full derivation and
+this iteration's own disclosed embargo-application interpretation call.
 
 **Idempotent, identity-keyed, replay-safe (the iter-5 lesson, named for this exact journey in this
 iteration's own spec).** Every state-advancing function below checks FIRST whether the target
@@ -81,11 +98,12 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from . import vault
 from . import walkforward as wf
+from . import walkforward_ledger as wl
 from .micro_chain_ledger import HashChainedLedger
 from .scout_ledger import ScoutLedger, distinct_variant_count
 
@@ -114,6 +132,7 @@ __all__ = [
     "bundle_validates",
     "evaluate_referee_handoff_ready_transition",
     "list_graduation_families",
+    "final_confirmation_boundary",
 ]
 
 # === spec section 8's four states, strictly ordered (transcribed verbatim) ==========================
@@ -337,67 +356,54 @@ def evaluate_walkforward_survivor_transition(
 
 def record_sealed_evaluation(
     graduation_ledger: GraduationLedger,
-    vault_shard_ledger: "vault.VaultShardLedger",
-    vault_universe_ledger: "vault.VaultUniverseLedger",
     *,
     family_root_id: str,
     dataset_id: str,
-    spec_hash: str,
-    passed: bool,
-    detail: dict | None = None,
-    evaluated_at: str | None = None,
+    artifact: dict,
 ) -> dict:
-    """Records a single-shot sealed-shard evaluation verdict (module docstring: the verdict itself
-    is caller-supplied; this function's own job is the confirmation + the permanent recording).
-    Confirms, via ``vault.build_vault_state`` (existing, unmodified), that ``dataset_id`` is
-    genuinely ``exposed`` and bound to this EXACT ``family_root_id`` -- refusing
-    (``GraduationTransitionRefusedError``) a claimed evaluation against a shard that was never
-    actually exposed to this family, rather than trusting the caller's say-so.
+    """Persists an ALREADY-COMPUTED sealed-shard evaluation artifact -- spec section 8.1's "the
+    ledger owns history; the evaluator owns the answer" (r6 owner ruling). This function's ONLY
+    caller is ``micro_sealed_evaluation.evaluate_sealed_verdict`` (the sole scientific owner of the
+    verdict, module docstring); it accepts a whole, already-derived ``artifact`` dict, never a bare
+    caller-supplied ``passed: bool`` -- TC-1: the OLD shape's ``passed`` parameter no longer exists
+    on this function's signature AT ALL, so a call built the old way raises ``TypeError`` at the
+    Python argument-binding level, before any of this function's own logic ever runs. This function
+    does NOT re-confirm vault exposure binding (the evaluator's own step 1/3 already did, via the
+    SAME ``vault.build_vault_state`` call this function used to make itself -- never duplicated
+    here as a second, independently-valued check of the same fact).
 
     Single-shot (TR-12): a SECOND call for the identical ``(family_root_id, dataset_id)`` pair is an
-    idempotent ``replayed`` no-op when it repeats the SAME ``(passed, spec_hash)`` verdict (a benign
-    repeat of an operator act, the ``register_fold_spec`` precedent), but is REFUSED outright when it
-    would record a DIFFERENT verdict -- "sealed exposure is ... never a second draw" (goal.md
-    anti-goal) means even a caller HONESTLY re-evaluating never gets to overwrite or supplement a
-    verdict already on permanent record."""
+    idempotent ``replayed`` no-op when it repeats a BYTE-IDENTICAL artifact (a benign repeat of an
+    operator act, the ``register_fold_spec`` precedent), but is REFUSED outright when the artifact
+    content differs -- "sealed exposure is ... never a second draw" (goal.md anti-goal) means even a
+    caller HONESTLY re-evaluating never gets to overwrite or supplement a verdict already on
+    permanent record."""
     existing_for_shard = [
         row for row in sealed_evaluations_for_family(graduation_ledger, family_root_id)
         if row.get("dataset_id") == dataset_id
     ]
+    artifact_content = dict(artifact)
     if existing_for_shard:
         prior = existing_for_shard[-1]
-        if prior["passed"] == bool(passed) and prior["spec_hash"] == spec_hash:
+        prior_content = {
+            k: v for k, v in prior.items()
+            if k not in ("row_kind", "family_root_id", "dataset_id", "row_index", "prev_hash", "row_hash")
+        }
+        if prior_content == artifact_content:
             return {"transition": TRANSITION_REPLAYED, "row": dict(prior)}
         raise GraduationTransitionRefusedError(
             family_root_id, GRADUATION_STATE_SEALED_SURVIVOR,
             f"a sealed-shard evaluation for dataset_id {dataset_id!r} is ALREADY recorded "
-            f"(passed={prior['passed']!r}, spec_hash={prior['spec_hash']!r}); a second, DIFFERENT "
-            f"evaluation attempt (passed={bool(passed)!r}, spec_hash={spec_hash!r}) is refused "
-            "(spec section 7.4/TR-12): sealed exposure is single-shot, never a second draw",
-        )
-
-    vault_state = vault.build_vault_state(vault_shard_ledger, vault_universe_ledger)
-    shard_entry = next((s for s in vault_state["shards"] if s.get("dataset_id") == dataset_id), None)
-    if (
-        shard_entry is None
-        or shard_entry.get("exposure_state") != vault.STATE_EXPOSED
-        or shard_entry.get("family_root_id") != family_root_id
-    ):
-        raise GraduationTransitionRefusedError(
-            family_root_id, GRADUATION_STATE_SEALED_SURVIVOR,
-            f"dataset_id {dataset_id!r} is not an EXPOSED vault shard bound to this exact "
-            "family_root_id -- refused (spec section 7.4): a sealed-shard evaluation can only be "
-            "recorded against a shard genuinely exposed to this family",
+            f"(verdict={prior.get('verdict')!r}); a second, DIFFERENT evaluation attempt "
+            f"(verdict={artifact_content.get('verdict')!r}) is refused (spec section 7.4/TR-12): "
+            "sealed exposure is single-shot, never a second draw",
         )
 
     fields = {
         "row_kind": ROW_KIND_SEALED_EVALUATION,
         "family_root_id": family_root_id,
         "dataset_id": dataset_id,
-        "spec_hash": spec_hash,
-        "passed": bool(passed),
-        "detail": dict(detail) if detail else {},
-        "evaluated_at": evaluated_at if evaluated_at is not None else _iso_utc_now(),
+        **artifact_content,
     }
     row = graduation_ledger.append_row(fields)
     return {"transition": TRANSITION_APPENDED, "row": row}
@@ -411,12 +417,19 @@ def evaluate_sealed_survivor_transition(
     evaluated_at: str | None = None,
 ) -> dict:
     """Requires the family to already be ``walkforward_survivor`` (states are strictly ordered,
-    spec section 8's own opening line -- never skipped) and requires an ALREADY-RECORDED, PASSING
-    ``record_sealed_evaluation`` verdict for ``(family_root_id, dataset_id)``. A recorded FAILING
-    verdict refuses this transition outright (TC-6: the state never advances past
-    ``walkforward_survivor``, but the failed verdict itself stays permanently on record via
-    ``sealed_evaluations_for_family``/``build_export_bundle``). Idempotent + identity-keyed exactly
-    like ``evaluate_walkforward_survivor_transition`` above."""
+    spec section 8's own opening line -- never skipped) and requires an ALREADY-RECORDED sealed
+    evaluation artifact for ``(family_root_id, dataset_id)`` whose ``verdict`` field is the literal
+    string ``"pass"``. A recorded ``"fail"`` OR ``"insufficient"`` verdict refuses this transition
+    outright (TC-6: the state never advances past ``walkforward_survivor``, but the verdict itself
+    stays permanently on record, still distinguishable, via ``sealed_evaluations_for_family``/
+    ``build_export_bundle`` -- never silently coerced to one boolean). The literal string ``"pass"``
+    is compared here rather than importing ``micro_sealed_evaluation.SEALED_VERDICT_PASS`` -- a
+    disclosed, ONE-WAY-dependency interpretation call (T-1): ``micro_sealed_evaluation.py`` already
+    imports FROM this module (``GraduationLedger``, ``record_sealed_evaluation``), so importing back
+    would create a cycle; the three-value vocabulary (``"pass"``/``"fail"``/``"insufficient"``) is
+    frozen (spec section 8.1 point 1) and used in exactly this one spot, so a literal string carries
+    no real drift risk. Idempotent + identity-keyed exactly like
+    ``evaluate_walkforward_survivor_transition`` above."""
     already = [
         row for row in state_transitions_for_family(graduation_ledger, family_root_id)
         if row["to_state"] == GRADUATION_STATE_SEALED_SURVIVOR
@@ -440,15 +453,16 @@ def evaluate_sealed_survivor_transition(
         raise GraduationTransitionRefusedError(
             family_root_id, GRADUATION_STATE_SEALED_SURVIVOR,
             f"no sealed-shard evaluation recorded for dataset_id {dataset_id!r} -- refused: "
-            "record_sealed_evaluation must run first",
+            "micro_sealed_evaluation.evaluate_sealed_verdict must run first",
         )
     evaluation = evaluations[-1]
-    if not evaluation["passed"]:
+    if evaluation.get("verdict") != "pass":  # tri-state -- "fail" AND "insufficient" both refuse here
         raise GraduationTransitionRefusedError(
             family_root_id, GRADUATION_STATE_SEALED_SURVIVOR,
-            f"the recorded sealed-shard evaluation for dataset_id {dataset_id!r} is a permanent "
-            "FAILED verdict -- refused (spec section 7.4): a failed sealed verdict never advances "
-            "and is never re-evaluated",
+            f"the recorded sealed-shard evaluation for dataset_id {dataset_id!r} carries verdict "
+            f"{evaluation.get('verdict')!r}, not \"pass\" -- refused (spec section 7.4/8.1): a "
+            "non-passing sealed verdict is a permanent root-family fact and never advances, "
+            "never re-evaluated",
         )
 
     fields = {
@@ -466,29 +480,148 @@ def evaluate_sealed_survivor_transition(
 
 # === the export bundle (spec section 8 point 4, TC-3/TC-4/TC-6) =====================================
 
+# === TR-24: the lineage-wide confirmation boundary (spec section 8.2, r6 owner ruling) ===============
 
-def _latest_timestamp(values: list[str | None]) -> str | None:
-    present = [v for v in values if v]
-    return max(present) if present else None  # ISO-8601 Z-suffixed strings sort chronologically
+# The embargo-application rule's own disclosed name (persisted on every bundle, never silent) --
+# see ``_roll_forward_weekday_sessions``'s own docstring for why this simplification exists.
+_EMBARGO_RULE_ID = "weekday_roll_forward_v1"
 
 
-def _proposed_confirmation_boundary(fold_results: list[dict], sealed_evaluations: list[dict]) -> str | None:
-    """A disclosed T-1 interpretation call: spec section 8 point 4 names "the proposed confirmation
-    boundary" as a required bundle field without a formula. Read here as the LATEST instant this
-    family's own ledgered evidence has already consumed -- the earliest a genuinely FRESH Referee
-    registration could legitimately start counting new sessions from, since evidence at or before
-    this instant has already been read by this candidate's own historical evaluation. Derived
-    entirely from timestamps already ON the ledgered rows (Mode A's ``validation_revealed_at``, both
-    modes' ``registered_at``, and every sealed evaluation's ``evaluated_at``) -- never a new,
-    independently-tunable rule; honestly ``None`` when no evidence exists yet, never a fabricated
-    date."""
-    candidates: list[str | None] = []
-    for fold in fold_results:
-        candidates.append(fold.get("validation_revealed_at"))
-        candidates.append(fold.get("registered_at"))
-    for evaluation in sealed_evaluations:
-        candidates.append(evaluation.get("evaluated_at"))
-    return _latest_timestamp(candidates)
+def _evidence_item_observed_through(kind: str, row: dict) -> str | None:
+    """Each evidence-item TYPE's own already-recorded timestamp field, standing in for spec section
+    8.2's ``observed_through`` -- no ledger row anywhere is named that (confirmed by direct source
+    read; ``runs/goal-session-rapid-microscope/state/assumptions.md``'s second iter-17 entry). Never
+    a new field, never a wall-clock read: ``scout_trial`` rows (survivors AND kills alike) carry
+    their own ``registered_at``; ``fold_result`` rows (of ANY verdict/class/process-label) carry
+    ``validation_revealed_at`` (Mode A's own LATER reveal instant, preferred when present -- TC-11's
+    own "moves to the later observed_through, never the earlier anchor_at") or ``registered_at``
+    (Mode B rows, which carry no separate reveal instant); ``sealed_evaluation`` rows (of ANY
+    verdict including FAIL/``insufficient``) carry their own ``evaluated_at``."""
+    if kind == "scout_trial":
+        return row.get("registered_at")
+    if kind == "fold_result":
+        return row.get("validation_revealed_at") or row.get("registered_at")
+    if kind == "sealed_evaluation":
+        return row.get("evaluated_at")
+    raise ValueError(f"_evidence_item_observed_through: unknown evidence kind {kind!r}")
+
+
+def _lineage_data_frontier(scout_trials: list[dict], fold_results: list[dict], sealed_evaluations: list[dict]) -> dict:
+    """spec section 8.2: ``lineage_data_frontier`` = ``max(observed_through)`` across EVERY evidence
+    item the ``family_root_id`` lineage ever touched -- survivors, killed/superseded Scout siblings
+    (TC-10), walk-forward folds of ANY verdict/class/process-label (not just eligible ones), sealed
+    evaluations of any verdict including FAIL/``insufficient`` (TR-24's own trap text). Returns the
+    frontier value PLUS which evidence item(s) achieved it (spec: "the bundle persists... the
+    evidence ids contributing to the max") -- an auditable "why here", never a bare timestamp."""
+    items: list[tuple[str, str | None, str | None]] = []  # (kind, evidence_id, observed_through)
+    for row in scout_trials:
+        evidence_id = row.get("candidate_id") or row.get("row_hash")
+        items.append(("scout_trial", evidence_id, _evidence_item_observed_through("scout_trial", row)))
+    for row in fold_results:
+        evidence_id = (
+            f"{row.get('sequence_id')}#{row.get('fold_index')}" if row.get("fold_index") is not None
+            else row.get("row_hash")
+        )
+        items.append(("fold_result", evidence_id, _evidence_item_observed_through("fold_result", row)))
+    for row in sealed_evaluations:
+        evidence_id = row.get("dataset_id") or row.get("row_hash")
+        items.append(("sealed_evaluation", evidence_id, _evidence_item_observed_through("sealed_evaluation", row)))
+
+    dated_items = [item for item in items if item[2] is not None]
+    if not dated_items:
+        return {"frontier": None, "contributing_evidence_ids": []}
+    frontier = max(item[2] for item in dated_items)
+    contributing = sorted({item[1] for item in dated_items if item[2] == frontier and item[1] is not None})
+    return {"frontier": frontier, "contributing_evidence_ids": contributing}
+
+
+def _embargo_for_lineage(wf_ledger: "wf.WalkForwardLedger", fold_results: list[dict]) -> dict:
+    """The applicable dependency embargo (spec section 6.3) for this lineage's OWN registered fold
+    geometry -- read from the LATEST fold spec of the fold results' own ``corpus_id`` (never a
+    second, independently-tuned embargo value; ``wl.latest_fold_spec`` is the SAME reader
+    ``walkforward.py``'s own machinery already uses). Honestly ``0``/no rule (spec section 6.3: "E=0
+    is a legitimate outcome") when no fold geometry is registered yet for this lineage -- a family
+    with only Scout trials and no walk-forward history has no identified cross-boundary dependency
+    to embargo against."""
+    corpus_id = fold_results[0].get("corpus_id") if fold_results else None
+    if corpus_id is None:
+        return {"embargo_sessions": 0, "embargo_rule_id": None}
+    spec = wl.latest_fold_spec(wf_ledger, corpus_id)
+    if spec is None:
+        return {"embargo_sessions": 0, "embargo_rule_id": None}
+    return {
+        "embargo_sessions": spec["geometry"].get("embargo_sessions", 0),
+        "embargo_rule_id": _EMBARGO_RULE_ID,
+    }
+
+
+def _roll_forward_weekday_sessions(instant: str, n_sessions: int) -> str:
+    """Advances the CALENDAR DATE of an ISO instant forward by ``n_sessions`` weekday (Mon-Fri)
+    sessions, returning a date-only ``YYYY-MM-DD`` string -- a disclosed interpretation call (T-1).
+    No trading-SESSION calendar (holiday-aware) authority exists anywhere in this codebase (source
+    search confirms it) that could answer "the Nth session after an arbitrary FUTURE instant" --
+    every existing session-aware function this era ships only SLICES an already-known, already-
+    fetched ``session_dates`` list (``build_folds``), never projects one forward past the corpus it
+    was given; building a full holiday-aware trading calendar is real, unrequested scope this round
+    was never asked to carry. This weekday-only roll-forward is monotonic and order-preserving --
+    exactly what TR-24's own traps (TC-10..TC-14) assert -- and is DISCLOSED, never presented as
+    calendar-exact: a real market holiday inside the span is not skipped, so the boundary this
+    produces is honest but not guaranteed session-exact. Recorded as ``_EMBARGO_RULE_ID`` on every
+    bundle so the simplification is never silent. Since this bundle's ``proposed_confirmation_
+    boundary`` is explicitly advisory (spec section 8.2: the REAL gate is the untouched Referee's
+    own registration-time boundary, computed by a future named revision of ``referee_*.py``), a
+    slightly-conservative estimate carries no admission risk this era."""
+    day = date.fromisoformat(instant[:10])
+    remaining = n_sessions
+    while remaining > 0:
+        day += timedelta(days=1)
+        if day.weekday() < 5:  # Monday=0 .. Friday=4
+            remaining -= 1
+    return day.isoformat()
+
+
+def _next_eligible_session_on_or_after(instant: str) -> str:
+    """The first ELIGIBLE weekday session ON OR AFTER an instant's own calendar date -- the SAME
+    weekday-only interpretation call as ``_roll_forward_weekday_sessions`` (module docstring
+    there): Saturday/Sunday roll forward to the following Monday; a weekday date is already
+    eligible and returned unchanged."""
+    day = date.fromisoformat(instant[:10])
+    while day.weekday() >= 5:
+        day += timedelta(days=1)
+    return day.isoformat()
+
+
+def _evidence_safe_boundary(lineage_data_frontier: str | None, embargo_sessions: int) -> str | None:
+    """spec section 8.2: ``evidence_safe_boundary`` = ``lineage_data_frontier`` + the applicable
+    embargo, applied in session semantics (never an ad-hoc wall-clock delta). Honestly ``None`` when
+    the frontier itself is ``None`` (no lineage evidence exists yet)."""
+    if lineage_data_frontier is None:
+        return None
+    if embargo_sessions <= 0:
+        return _next_eligible_session_on_or_after(lineage_data_frontier)
+    return _roll_forward_weekday_sessions(lineage_data_frontier, embargo_sessions)
+
+
+def _proposed_confirmation_boundary(evidence_safe_boundary: str | None, handoff_created_at: str) -> str:
+    """spec section 8.2: the first eligible session boundary STRICTLY AFTER
+    ``max(evidence_safe_boundary, handoff_created_at)``. ``handoff_created_at`` always participates
+    (even when there is no lineage evidence at all yet) so a freshly-registered, evidence-free
+    family still gets an honest, non-``None`` proposed boundary anchored at "now", never a stale
+    ``None``."""
+    basis = max(v for v in (evidence_safe_boundary, handoff_created_at) if v is not None)
+    day_strictly_after = date.fromisoformat(basis[:10]) + timedelta(days=1)
+    return _next_eligible_session_on_or_after(day_strictly_after.isoformat())
+
+
+def final_confirmation_boundary(proposed_confirmation_boundary: str, referee_registration_boundary: str) -> str:
+    """spec section 8.2's SECOND formula, applied at ACTUAL Referee registration -- a FUTURE,
+    out-of-this-era code path (``referee_*.py`` is byte-untouched this whole era); offered here as a
+    standalone utility, never called by ``build_export_bundle`` itself, since no real Referee
+    registration happens this round. ``final = next_eligible(max(proposed_confirmation_boundary,
+    referee_registration_boundary))`` -- NEVER earlier than either input (TC-12); backdating is
+    never permitted (spec section 8.2's own closing sentence)."""
+    basis = max(proposed_confirmation_boundary, referee_registration_boundary)
+    return _next_eligible_session_on_or_after(basis)
 
 
 def build_export_bundle(
@@ -500,6 +633,7 @@ def build_export_bundle(
     *,
     family_root_id: str,
     sequence_id: str | None = None,
+    handoff_created_at: str | None = None,
 ) -> dict:
     """The provenance-complete bundle (spec section 8 point 4): buildable for ANY ledgered
     ``family_root_id`` at ANY current state (module docstring) -- the ``state`` field inside the
@@ -520,7 +654,13 @@ def build_export_bundle(
       family, pass AND fail (TC-6's own "carried into its own bundle").
     - ``family_multiplicity``: sibling ``family_id``s sharing this root (from ``scout_trials``) and
       the family's complete prior sealed-verdict history (the SAME ``sealed_evaluations`` list,
-      named again under this field per spec section 8 point 4's own phrasing)."""
+      named again under this field per spec section 8 point 4's own phrasing).
+    - **TR-24 (r6, spec section 8.2)**: ``lineage_data_frontier``, ``lineage_frontier_evidence_ids``,
+      ``frontier_observed_through`` (the SAME value as ``lineage_data_frontier``, persisted under
+      its own literal spec name too), ``embargo_rule_id``, ``embargo_sessions``,
+      ``evidence_safe_boundary``, ``handoff_created_at``, and ``proposed_confirmation_boundary`` --
+      the WHOLE derivation persisted, not just the final number, so a reader can audit every step
+      (spec: "the bundle persists the whole derivation")."""
     state = current_graduation_state(graduation_ledger, family_root_id)
 
     scout_trials = [row for row in scout_ledger.all_rows() if row.get("family_root_id") == family_root_id]
@@ -536,6 +676,14 @@ def build_export_bundle(
 
     sibling_family_ids = sorted({row["family_id"] for row in scout_trials if row.get("family_id")})
 
+    handoff_created_at_value = handoff_created_at if handoff_created_at is not None else _iso_utc_now()
+    frontier = _lineage_data_frontier(scout_trials, fold_results, sealed_evaluations)
+    embargo = _embargo_for_lineage(wf_ledger, fold_results)
+    evidence_safe_boundary = _evidence_safe_boundary(frontier["frontier"], embargo["embargo_sessions"])
+    proposed_confirmation_boundary = _proposed_confirmation_boundary(
+        evidence_safe_boundary, handoff_created_at_value,
+    )
+
     return {
         "family_root_id": family_root_id,
         "state": state,
@@ -546,7 +694,14 @@ def build_export_bundle(
         "sealed_evaluations": sealed_evaluations,
         "shards_touched": shards_touched,
         "state_transitions": state_transitions_for_family(graduation_ledger, family_root_id),
-        "proposed_confirmation_boundary": _proposed_confirmation_boundary(fold_results, sealed_evaluations),
+        "lineage_data_frontier": frontier["frontier"],
+        "lineage_frontier_evidence_ids": frontier["contributing_evidence_ids"],
+        "frontier_observed_through": frontier["frontier"],
+        "embargo_rule_id": embargo["embargo_rule_id"],
+        "embargo_sessions": embargo["embargo_sessions"],
+        "evidence_safe_boundary": evidence_safe_boundary,
+        "handoff_created_at": handoff_created_at_value,
+        "proposed_confirmation_boundary": proposed_confirmation_boundary,
         "family_multiplicity": {
             "sibling_family_ids": sibling_family_ids,
             "prior_sealed_verdicts": sealed_evaluations,
@@ -557,7 +712,10 @@ def build_export_bundle(
 
 _REQUIRED_BUNDLE_FIELDS = (
     "family_root_id", "state", "spec_hash", "union_n_variants_tried", "scout_trials", "fold_results",
-    "sealed_evaluations", "shards_touched", "state_transitions", "proposed_confirmation_boundary",
+    "sealed_evaluations", "shards_touched", "state_transitions",
+    "lineage_data_frontier", "lineage_frontier_evidence_ids", "frontier_observed_through",
+    "embargo_rule_id", "embargo_sessions", "evidence_safe_boundary", "handoff_created_at",
+    "proposed_confirmation_boundary",
     "family_multiplicity", "referee_registration_note",
 )
 
@@ -591,6 +749,7 @@ def evaluate_referee_handoff_ready_transition(
     the returned bundle on replay is RE-BUILT live from the current ledgered facts (never a second,
     independently-stored copy -- the era's single-source-of-truth rail applies to this module's own
     served data just as much as to any other)."""
+    evaluated_at_value = evaluated_at if evaluated_at is not None else _iso_utc_now()
     already = [
         row for row in state_transitions_for_family(graduation_ledger, family_root_id)
         if row["to_state"] == GRADUATION_STATE_REFEREE_HANDOFF_READY
@@ -598,7 +757,7 @@ def evaluate_referee_handoff_ready_transition(
     if already:
         bundle = build_export_bundle(
             graduation_ledger, scout_ledger, wf_ledger, vault_shard_ledger, vault_universe_ledger,
-            family_root_id=family_root_id, sequence_id=sequence_id,
+            family_root_id=family_root_id, sequence_id=sequence_id, handoff_created_at=evaluated_at_value,
         )
         return {"transition": TRANSITION_REPLAYED, "state": GRADUATION_STATE_REFEREE_HANDOFF_READY, "row": dict(already[-1]), "bundle": bundle}
 
@@ -612,7 +771,7 @@ def evaluate_referee_handoff_ready_transition(
 
     bundle = build_export_bundle(
         graduation_ledger, scout_ledger, wf_ledger, vault_shard_ledger, vault_universe_ledger,
-        family_root_id=family_root_id, sequence_id=sequence_id,
+        family_root_id=family_root_id, sequence_id=sequence_id, handoff_created_at=evaluated_at_value,
     )
     if not bundle_validates(bundle):
         raise GraduationTransitionRefusedError(
@@ -628,7 +787,7 @@ def evaluate_referee_handoff_ready_transition(
         "from_state": GRADUATION_STATE_SEALED_SURVIVOR,
         "to_state": GRADUATION_STATE_REFEREE_HANDOFF_READY,
         "bundle_hash": _sha256(_canonical(bundle)),
-        "evaluated_at": evaluated_at if evaluated_at is not None else _iso_utc_now(),
+        "evaluated_at": evaluated_at_value,
     }
     row = graduation_ledger.append_row(fields)
     return {"transition": TRANSITION_APPENDED, "state": GRADUATION_STATE_REFEREE_HANDOFF_READY, "row": row, "bundle": bundle}

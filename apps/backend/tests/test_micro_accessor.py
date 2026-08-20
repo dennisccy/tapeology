@@ -350,6 +350,28 @@ def test_exposure_registry_chain_is_verified(tmp_path):
     assert registry.verify_chain()["ok"] is True
 
 
+# === GAP B3 (goal-rapid-microscope-iter-17, TC-16): an EXACTLY-simultaneous exposure logging does
+# NOT count as "before" -- locks down `is_exposed_before`'s strict `<` boundary the iteration-16
+# audit's own `<`->`<=` mutation could otherwise silently drift. ======================================
+
+
+def test_gap_b3_an_exactly_simultaneous_logging_does_not_count_as_before(tmp_path):
+    registry = ma.ExposureRegistry(str(tmp_path / "exposure"))
+    same_instant = "2026-06-09T05:00:00.000000Z"
+    registry.log_exposure(corpus_id="c", window="2026-06-08", surface="test", logged_at=same_instant)
+
+    # a validation window REGISTERED at the EXACT SAME instant the exposure was logged -- strict
+    # `<` semantics: an exactly-simultaneous logging does NOT count as "before".
+    assert registry.is_exposed_before(corpus_id="c", window="2026-06-08", instant=same_instant) is False
+
+    # one microsecond later genuinely counts as before -- proves the predicate is not simply
+    # always-False, only that equality specifically fails to qualify.
+    assert registry.is_exposed_before(corpus_id="c", window="2026-06-08", instant="2026-06-09T05:00:00.000001Z") is True
+
+    # one microsecond earlier is also honestly NOT before (the exposure had not happened yet).
+    assert registry.is_exposed_before(corpus_id="c", window="2026-06-08", instant="2026-06-09T04:59:59.999999Z") is False
+
+
 def test_tc14_r2_initialization_pre_marks_every_named_window_exposed_before_any_serving_act(tmp_path):
     """given a freshly initialized exposure registry, when any window of the (here, a small
     stand-in) corpus is queried for its exposure state, then it reads already-exposed from r2
@@ -410,3 +432,41 @@ def test_origin_fenced_mode_with_a_registry_logs_exactly_one_exposure_entry(rig,
     assert rows[0]["window"] == "2026-06-08"
     assert rows[0]["surface"] == "walkforward_test"
     assert rows[0]["logged_at"] == "2026-06-09T05:00:00.000000Z"
+
+
+# === TC-15 (this file's half, goal-rapid-microscope-iter-17): the corrected module docstring's
+# claim matches the actual production call sites exactly -- zero origin-fenced production callers.
+# =====================================================================================================
+
+
+def test_tc15_the_corrected_docstring_matches_every_production_construction_site():
+    """Direct grep of every ``MicroAccessor(`` construction site in ``app/`` (excluding this
+    module's own class definition and docstring prose): each one either omits ``origin=``
+    entirely or passes ``origin=None`` explicitly -- NO production call site constructs a FENCED
+    accessor. Proves the corrected docstring's claim ("NO current production caller constructs an
+    origin-fenced read") against the actual shipped code, not merely against prose."""
+    app_dir = _APP_DIR
+    call_sites: list[str] = []
+    for path in sorted(app_dir.rglob("*.py")):
+        if "__pycache__" in path.parts or path.name == "micro_accessor.py":
+            continue
+        text = path.read_text(encoding="utf-8")
+        tree = ast.parse(text, filename=str(path))
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "MicroAccessor"
+            ):
+                for kw in node.keywords:
+                    if kw.arg == "origin":
+                        # a literal None is fine; anything else (a string, a variable) is a
+                        # FENCED construction site -- the exact claim the docstring makes.
+                        is_none_literal = isinstance(kw.value, ast.Constant) and kw.value.value is None
+                        if not is_none_literal:
+                            call_sites.append(f"{path.relative_to(app_dir)}: origin= is not a literal None")
+    assert call_sites == [], f"docstring claims zero origin-fenced production callers, found: {call_sites}"
+    # the docstring itself makes this claim in plain language -- not merely proven by this grep.
+    docstring = " ".join((ma.__doc__ or "").split())  # normalize whitespace/line-wraps
+    assert "NO current production caller constructs an origin-fenced read" in docstring
+    assert "walkforward.py`` itself never constructs a ``MicroAccessor`` at all" in docstring

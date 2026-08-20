@@ -1,0 +1,153 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-rapid-microscope-iter-17",
+  "base_url": "http://localhost:3301",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the research command center",
+      "narration": "The Desk page is the hub for all research workflows—corpus readiness, candidate tracking, and validation analysis. This regression test confirms the entire surface works after the backend refactoring this round.",
+      "point_out": "The page loads cleanly with the heading 'Desk' visible and all research sections ready to expand.",
+      "journey": "J-10",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "goto",
+        "url": "/desk"
+      },
+      "expect": {
+        "text": "Desk"
+      }
+    },
+    {
+      "n": 2,
+      "title": "Check corpus readiness",
+      "narration": "The Microscope Readiness section shows diagnostics about the research corpus—symbol-days, distinct datasets, and RTH minutes available. Expanding it verifies the readiness aggregates survived the sealed-verdict module refactoring.",
+      "point_out": "The section expands to show the Corpus Totals table with counts of available data.",
+      "journey": "J-01",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "css": "[data-testid=\"desk-section-expand-microReadiness\"]"
+        }
+      },
+      "expect": {
+        "text": "Corpus Totals"
+      }
+    },
+    {
+      "n": 3,
+      "title": "Review the candidate ledger",
+      "narration": "The Scout Ledger tracks all registered candidate strategies and their trial results. This confirms the ledger chain verification holds and the scout data remains accessible.",
+      "point_out": "The section expands showing the chain verification status and the ledger state, whether empty or populated with registered families.",
+      "journey": "J-04",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "css": "[data-testid=\"desk-section-expand-scoutLedger\"]"
+        }
+      },
+      "expect": {
+        "text": "Ledger chain verification"
+      }
+    },
+    {
+      "n": 4,
+      "title": "Inspect walk-forward validation",
+      "narration": "The Walk-Forward section shows the fold sequences registered for candidate testing. Each fold ensures chronological evaluation without lookahead, a core protection. This confirms the fence logic is sound.",
+      "point_out": "The section expands cleanly, displaying either fold specifications or an honest empty state, with no errors.",
+      "journey": "J-05",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "css": "[data-testid=\"desk-section-expand-walkForward\"]"
+        }
+      },
+      "expect": {
+        "text": "Ledger chain verification"
+      }
+    },
+    {
+      "n": 5,
+      "title": "Load the structure and resistance bands",
+      "narration": "The Structure page analyzes support and resistance bands for any symbol and timestamp. We navigate there to verify this core analysis surface works independent of the sealed-verdict refactoring.",
+      "point_out": "The page loads and displays the input fields ready for analysis.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "goto",
+        "url": "/structure"
+      },
+      "expect": {
+        "text": "Load"
+      }
+    },
+    {
+      "n": 6,
+      "title": "Watch live market data on the Cockpit",
+      "narration": "The Cockpit is where users see live market data in real time. This is the sentinel check that the product's core live-update pipeline still works—our kept-product regression test.",
+      "point_out": "The Cockpit page loads with the chart ready and the ticker input waiting. We'll type a simulated ticker and watch it update.",
+      "journey": "J-10",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "goto",
+        "url": "/"
+      },
+      "expect": {
+        "text": "Simulated"
+      }
+    },
+    {
+      "n": 7,
+      "title": "Enter a simulated ticker and begin watching",
+      "narration": "We type a simulated ticker (SIM-BUYER) to start the live tape. The chart should render and the quote data should update in real time.",
+      "point_out": "The live tape activates, showing confidence, quote levels, and recent trades updating continuously.",
+      "journey": "J-10",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "fill",
+        "target": {
+          "placeholder": "Ticker e.g. SIM-BUYER"
+        },
+        "text": "SIM-BUYER"
+      }
+    },
+    {
+      "n": 8,
+      "title": "Click Watch to activate the feed",
+      "narration": "The Watch button starts the simulated feed and renders the live trading surface.",
+      "point_out": "Live trading data appears: the confidence level, quote levels, and a tape of recent trades all update continuously with no errors.",
+      "journey": "J-10",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "role": "button",
+          "name": "Watch"
+        }
+      },
+      "expect": {
+        "text": "Buyer Control"
+      }
+    }
+  ]
+}

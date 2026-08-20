@@ -125,6 +125,26 @@
 > be designed ad hoc inside this fix. Owner's governing sentence: **for this era, safety wins over
 > degraded availability — unknown or unprovable exposure history means the vault is unavailable,
 > never "fresh".** Traps → TR-29.
+>
+> **Revision r9 (2026-08-20, owner ruling — sealed sufficiency is shard-scoped and pinned).** The
+> iteration-17 audit PROVED by execution that `SEALED_PASS_RULE_V1` condition 1 read its
+> sufficiency floors from the CALLER's spec: a spec carrying `floors={1,1,1}` and a single
+> observation produced a permanent `verdict: "pass"` whose `rule_hash` certified floors of 30/8/2
+> that the run never applied — precisely the defect §8.1 exists to prevent. But mechanically
+> pinning §1's walk-forward floors was ALSO wrong: §7.3 seals a shard per `symbol:date`, so one
+> shard is one symbol-day and `WF_FOLD_MIN_SIGNAL_SESSIONS`/`WF_FOLD_MIN_SYMBOLS` are
+> unsatisfiable, making PASS permanently unreachable. §8.1 and §7.3 genuinely contradicted each
+> other. **The owner resolved it by separating the two stages scientifically rather than by
+> changing the sealing unit: the walk-forward stage owns BREADTH; the sealed stage owns UNTOUCHED
+> REPLICATION on one hidden symbol-day.** r9 adds the sealed-specific pinned constant
+> `SEALED_MIN_OBSERVATIONS` (§1), declares session and symbol breadth `not_applicable_single_shard`
+> at shard scope (never silently 1), and REFUSES any caller-supplied floor or threshold override —
+> the evaluator owns the rule. The rule hash is computed from the sealed rule actually executed.
+> Single-shot semantics are preserved and reinforced: **`insufficient` still consumes that family's
+> sealed evaluation on the assigned shard** — a family does NOT get a fresh shard merely because the
+> first lacked observations, which would be repeated holdout sampling. **The sealing unit is
+> UNCHANGED.** The auditor's honesty-only artifact-field fix is necessary but insufficient; the
+> evaluator's authority must be fixed before any sealed graduation is allowed. Traps → TR-30.
 
 ---
 
@@ -184,6 +204,7 @@
 | `WF_FOLD_MIN_SIGNAL_SESSIONS` | `8` | Per-fold floor: validation sessions carrying ≥1 observation |
 | `WF_FOLD_MIN_OBSERVATIONS` | `30` | Per-fold floor |
 | `WF_FOLD_MIN_SYMBOLS` | `2` | Per-fold floor whenever symbol breadth is claimed |
+| `SEALED_MIN_OBSERVATIONS` | `30` | **(r9)** The ONLY sufficiency floor at sealed-shard scope (§8.1). A shard is one symbol × one session-date (§7.3), so session and symbol breadth are `not_applicable_single_shard` there — never silently 1. Never sourced from a candidate or caller spec |
 | `DIAGNOSTIC_GEOMETRY` | `train=40, embargo=5, test=20, step=20` | Pinned geometry of the ONE playbook-corpus diagnostic acceptance run (§6.6). The `embargo=5` here is that run's predeclared choice, not a universal law — see §6.3 |
 | `VAULT_SEAL_HEX_BELOW` | `4` | Seal iff the last hex digit of the §7.3 HMAC < 4 (≈25% of a universe) |
 | `TRANCHE_MINIMUMS` | §7.6 table | The starter-tranche diversity floors |
@@ -811,18 +832,30 @@ persistence and transition machinery and neither accepts nor invents the scienti
 6. persist an immutable **evaluation artifact** (below);
 7. pass ONLY that artifact's id + hash to the graduation transition.
 
-**`SEALED_PASS_RULE_V1` (frozen; introduces no new constant).** A (root family, shard) evaluation
+**`SEALED_PASS_RULE_V1` (frozen; r9 replaces condition 1).** A (root family, shard) evaluation
 `passes` iff ALL of:
-1. the shard's recomputed observations meet the per-fold sufficiency floors already pinned in §1 —
-   `WF_FOLD_MIN_OBSERVATIONS` observations, `WF_FOLD_MIN_SIGNAL_SESSIONS` signal-bearing sessions,
-   and `WF_FOLD_MIN_SYMBOLS` symbols whenever the family claims breadth; below any floor the
-   verdict is `insufficient`, which is neither a pass nor a fail and consumes the single shot
-   ONLY if the shard was exposed (an exposure is irreversible either way);
+1. **(r9) the shard's recomputed observations meet the SEALED-SPECIFIC pinned floor**
+   `SEALED_MIN_OBSERVATIONS` (§1). The walk-forward per-fold breadth floors are **NOT** reused
+   here: a sealed shard is ONE symbol × ONE session-date (§7.3), so session and symbol breadth are
+   inapplicable at shard scope and MUST be recorded explicitly as
+   `min_signal_sessions: not_applicable_single_shard` and
+   `min_symbols: not_applicable_single_shard` — **never silently set to 1**. Below the observation
+   floor the verdict is `insufficient`, which is neither a pass nor a fail and consumes the single
+   shot ONLY if the shard was exposed (an exposure is irreversible either way).
+   **No sufficiency value may be sourced from the candidate or caller spec.** A caller supplying
+   floors, altered thresholds, or any equivalent override is REFUSED — the evaluator owns the rule.
+   *Scientific rationale (record it wherever the rule is served): the walk-forward stage owns
+   BREADTH — `WF_SURVIVOR_RULE_V1` establishes temporal, session and symbol breadth before a
+   candidate may reach the sealed stage at all. The sealed stage owns UNTOUCHED REPLICATION on one
+   hidden symbol-day. Mechanically reusing breadth floors at shard scope conflates the two.*
 2. the session-clustered effect lies in the family's REGISTERED direction (§5.1 sidedness);
 3. its magnitude ≥ the family's own pre-registered economic floor (§5.5) — the same floor the
    walk-forward applied, not a new one;
 4. the evaluation rule id/version/hash recorded at assignment is byte-identical to the one applied
-   (a rule changed after assignment fails CLOSED);
+   (a rule changed after assignment fails CLOSED). **(r9) The rule hash is computed from the
+   SEALED-SPECIFIC rule actually executed; it must never certify one set of floors while execution
+   applied another** — the artifact records the rule definition/hash AND the actual applied values,
+   and the two must agree byte-for-byte with runtime behaviour;
 5. the shard's evidence class is `historical_oos` and its process label `rule_process` (§6.7/§6.8).
 Anything less is a FAIL, and a fail is permanent for the root family (§7.4). There is no
 discretionary override and no partial credit.
@@ -899,6 +932,7 @@ boundary by its `observed_through`.
 | TR-23 sealed-verdict ownership (r6 §8.1) | A caller-asserted `passed` boolean is impossible/refused · mutating any evaluation input changes the artifact hash and invalidates the transition · a rule unregistered, or changed after assignment, fails closed · re-running the evaluator on identical inputs yields a byte-identical artifact and verdict · a second sealed evaluation for the same (`family_root_id`, shard) is refused · a failed verdict travels in every later export bundle |
 | TR-24 lineage boundary (r6 §8.2) | A KILLED sibling of the same `family_root_id` with a later `observed_through` than the survivor pushes `proposed_confirmation_boundary` past it (lineage knowledge cannot be laundered through candidate selection) · a deferred feature with `anchor_at < observed_through` moves the boundary by its `observed_through` · the final Referee boundary is never earlier than either the proposed or the registration boundary |
 | TR-25 vault-ledger integrity (r6 §7.8) | Tail truncation ⇒ every exposure predicate fails closed · interior-row mutation ⇒ fails closed · a last-known-good prefix still fails closed when a committed checkpoint proves later history existed · a hash-pinned reconstruction restores the exact prior exposure state · an unverifiable recovery never makes an affected shard fresh again — **under r8 that means the recovery is REFUSED and the tranche stays blocked** (the `exposure_unknown` state this row originally named was deleted with r8's graded-resume branch; see TR-29) |
+| TR-30 sealed sufficiency is evaluator-owned (r9 §8.1) | A spec carrying `floors={1,1,1}` is REFUSED and can never make one observation pass · 29 sealed observations ⇒ `insufficient` · 30 otherwise-valid observations ⇒ sufficiency can clear · session and symbol breadth are recorded `not_applicable_single_shard`, never silently 1 · changing ANY caller floor field cannot change the verdict · the artifact's `rule_hash`, its applied-floor values, and runtime behaviour agree byte-for-byte · an `insufficient` verdict still CONSUMES that family's single sealed shot on the assigned shard (no fresh shard on thin data — that would be repeated holdout sampling) |
 | TR-29 recovery is halt-only (r8 §7.8) | The demonstrated attack: seal `d-1`/`d-2`/`d-3`, destroy the row containing `d-3`, present a SAME-LENGTH reconstructed suffix containing an unrelated `d-fake` ⇒ recovery REFUSES, and `d-3` never becomes sealable again under another universe · same row count with REORDERED identities ⇒ refuse · same row count with a SUBSTITUTED identity ⇒ refuse · same final-row count but a missing earlier exposure ⇒ refuse · a cleanly internally re-chained forged suffix is NOT proof of historical completeness · operator attestation never substitutes for missing identity evidence |
 | TR-27 nonced rule commitment (r7 §7.2) | One ledger-tracked shard exposed while untracked pool members remain withheld ⇒ rule contents hidden · ALL tracked shards exposed but one untracked ORIGINAL-pool member still withheld ⇒ still hidden · after the final pool member is released ⇒ `symbol_rule` + `date_rule` + nonce reveal and recompute EXACTLY to the registered `rule_commitment` · a plausible-rule dictionary attack against the served commitment cannot verify guesses without the nonce · no other API/UI/MCP surface serves the symbol or date axes pre-release |
 | TR-28 coarse pre-release volumes (r7 §7.1) | A one-symbol-day run while withheld ⇒ no exact trade/quote/byte count appears on ANY surface · a multi-shard pool ⇒ coarse bucket labels only, never rounded numbers · expose one shard and re-query ⇒ the remaining withheld counts cannot be solved exactly from the before/after response pair (differencing resistance) · buckets never narrow as the pool shrinks · the final ORIGINAL-pool member released ⇒ exact totals may be served |

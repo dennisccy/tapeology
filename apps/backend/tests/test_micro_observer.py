@@ -252,6 +252,57 @@ def test_tc9_response_asymmetry_is_unavailable_when_the_session_ends_first():
     assert all(d["unavailable"] is True and d["value"] is None for d in response_completions)
 
 
+# === GAP B4 (goal-rapid-microscope-iter-17, TC-17): a session whose LAST event is a TRADE, not a
+# quote -- finalize()'s session-end stamp equals the TRADE's own timestamp, numerically DIFFERENT
+# from what it would be had the session ended on a quote instead (`self._last_event_ts` is set
+# unconditionally in `_consume` for EVERY event type, before the trade/quote branch -- this test
+# proves that behavior directly, on the close-out row itself, with a discriminating twin). ==========
+
+
+def _events_ending_on_a_trade() -> list:
+    """5 buy-aggressive trades (far short of RESPONSE_K_TRADES=20, so response_asymmetry stays
+    pending into finalize()) -- the stream's OWN LAST event is the 5th TRADE, at ts=5.0."""
+    events: list = [QuoteEvent(TICKER, 0.0, 100.00, 100.02, 500, 500)]
+    ts = 1.0
+    for _i in range(5):
+        events.append(TradeEvent(TICKER, ts, 100.02, 10, Side.UNKNOWN))
+        ts += 1.0
+    return events  # last event: TradeEvent at ts=5.0
+
+
+def test_gap_b4_a_trade_terminated_session_stamps_finalize_at_the_trades_own_timestamp():
+    rows = _run(_events_ending_on_a_trade())
+    close_out_rows = [r for r in rows if r.get("close_out")]
+    assert len(close_out_rows) == 1
+    close_out = close_out_rows[0]
+    # the session's LAST event was the 5th trade, at ts=5.0 -- finalize()'s own stamp equals it.
+    assert close_out["anchor_at"] == close_out["observed_through"] == close_out["available_at"] == 5.0
+    pending = [d for d in close_out["deferred"] if d["kind"] == "response_asymmetry"]
+    assert len(pending) == 5
+    assert all(d["observed_through"] == d["available_at"] == 5.0 for d in pending)
+
+
+def test_gap_b4_discriminating_twin_a_trailing_quote_moves_the_same_stamp_to_a_different_instant():
+    """The discriminating twin (TC-17's own requirement: correct and corrupted-basis values must
+    be numerically DIFFERENT, never coincidentally equal): the IDENTICAL 5-trade stream, PLUS one
+    trailing QuoteEvent at ts=9.0 -- now the session ends on a QUOTE instead. finalize()'s own
+    stamp moves to 9.0 -- proving the trade-terminated case's 5.0 is genuinely the trade's OWN
+    timestamp, not some incidental default that would show up regardless of what the last event
+    was."""
+    events = _events_ending_on_a_trade() + [QuoteEvent(TICKER, 9.0, 100.00, 100.02, 500, 500)]
+    rows = _run(events)
+    close_out_rows = [r for r in rows if r.get("close_out")]
+    assert len(close_out_rows) == 1
+    close_out = close_out_rows[0]
+    assert close_out["anchor_at"] == close_out["observed_through"] == close_out["available_at"] == 9.0
+    # numerically DIFFERENT from the trade-terminated case's own 5.0 -- never coincidentally equal.
+    assert close_out["observed_through"] != 5.0
+    pending = [d for d in close_out["deferred"] if d["kind"] == "response_asymmetry"]
+    assert len(pending) == 5
+    assert all(d["observed_through"] == d["available_at"] == 9.0 for d in pending)
+    assert all(d["observed_through"] != 5.0 for d in pending)
+
+
 # --- F-LIQUIDITY: quote_imbalance, microprice, quote_depletion, refill_consistent (TC-10) ----------
 
 

@@ -20,8 +20,9 @@ module existed -- this is the "generic hook a J-06 vault can extend without re-d
 discipline" the goal.md IN SCOPE names, proven now on a fixture (TC-2) rather than left unbuilt
 and unproven until J-06 lands.
 
-**Two callers, two disciplines (a disclosed interpretation call, T-1).** ``micro_join.py`` and
-``scout.py`` are re-pointed THROUGH this module this iteration (TR-3's import-ban), but their own
+**Two callers, two disciplines (a disclosed interpretation call, T-1) -- corrected iter-17: NO
+current production caller constructs an origin-fenced read.** ``micro_join.py`` and ``scout.py``
+are re-pointed THROUGH this module this iteration (TR-3's import-ban), but their own
 served/ledgered values must stay BYTE-IDENTICAL (TC-4, TC-5) -- they have never been
 chronologically fenced, and the corpus they read (the legacy tick corpus) is r2-pre-marked
 EXPOSED for its entire span regardless. Fencing them now would be a silent, unrequested behavior
@@ -31,10 +32,21 @@ the exposure registry either -- appending a hash-chained row on every one of ``s
 extract_anchors``'s thousands-of-anchors-per-dataset calls would reintroduce exactly the O(n)-
 per-read cost the iter-4 audit's perf fixes eliminated, for a registry entry that would be
 redundant with r2's own initialization (every window of the legacy/playbook corpus is ALREADY
-marked exposed from the moment the registry exists -- see ``ExposureRegistry`` below). Only
-``walkforward.py``'s OWN origin-fenced reads (an ``origin`` given, an ``ExposureRegistry`` given)
-participate in exposure logging -- the one path where "was this window ever served before?" is an
-actual, load-bearing question this era asks.
+marked exposed from the moment the registry exists -- see ``ExposureRegistry`` below).
+``micro_sealed_evaluation.py`` (J-07/TR-23, iteration 17) is re-pointed through this module too --
+its shard read is a POST-exposure, whole-shard outcome recomputation, not a rolling-origin
+walk-forward fold, so it is a THIRD ``origin=None`` unfenced caller, not a fenced one.
+
+**The FENCED mode is a real, tested capability of this class -- not a claim that a fenced
+production caller exists.** An ``origin`` AND an ``ExposureRegistry`` supplied together make a read
+participate in exposure logging (the "was this window ever served before?" question) --
+proven directly by ``test_origin_fenced_mode_with_a_registry_logs_exactly_one_exposure_entry``. But
+as of iteration 17, confirmed by a direct grep of every ``MicroAccessor(`` construction site in
+``app/``, NO production module actually constructs one this way: ``walkforward.py`` itself never
+constructs a ``MicroAccessor`` at all -- it works over abstract, caller-supplied ``observations``
+per its own "one abstract input" design, never raw snapshot rows directly. The fenced mode remains
+exactly what it has always been: a capability this class offers, proven on fixtures, available to a
+FUTURE rolling-origin caller -- never (today) an actually-exercised production path.
 
 **The exposure registry (section 6.7, r2).** ``ExposureRegistry`` is a corpus-scoped, hash-chained
 ledger (``micro_chain_ledger.HashChainedLedger``) of ``{surface, window, corpus_id, logged_at}``

@@ -157,7 +157,7 @@ items, in that order.**
    `08e471b10130e1e2` every iteration; every `referee_*` module byte-identical to `main` at
    era open (SHA-256 listing recorded at iteration 0 and re-checked); every kept `/`,
    `/structure`, `/desk` behavior browser-verified as shipped.
-2. **No leakage trap fails, ever.** The TR-1…TR-29 suite of
+2. **No leakage trap fails, ever.** The TR-1…TR-30 suite of
    [`docs/rapid-validation-spec.md`](rapid-validation-spec.md) §9 is implemented and green:
    prefix discipline, origin fencing, sealed-shard sweeps, cherry-pick refusal, class-mixing
    refusal, purge exactness, screening calibration, pool invariance, ledger chain integrity,
@@ -168,7 +168,7 @@ items, in that order.**
    the r6 traps: TR-23 sealed-verdict ownership, TR-24 lineage confirmation boundary,
    TR-25 vault-ledger integrity, TR-26 depletion revealing-quote availability — and the r7
    traps: TR-27 nonced rule commitment, TR-28 coarse pre-release volumes, and the r8
-   trap TR-29 halt-only vault recovery.
+   trap TR-29 halt-only vault recovery, and the r9 trap TR-30 evaluator-owned sealed sufficiency.
 3. **Every trial is on the record.** The scout ledger is hash-chained append-only; every
    evaluated variant — every kill, with its closed-vocabulary reason — is a permanent row; the
    union-N denominator is served beside every family; "statistically above null" and
@@ -534,13 +534,13 @@ operator-attended act inside the era.
 
 - **J-10: The kept product stands — traps armed, sentinel green**
   - Steps:
-    1. Land the full TR-1…TR-29 suite (whichever traps did not ship inside J-02…J-07 land
+    1. Land the full TR-1…TR-30 suite (whichever traps did not ship inside J-02…J-07 land
        here — the r2 traps TR-17 availability, TR-18 units, TR-19 preservation, TR-20 root
        lineage, TR-21 process labels, TR-22 exposure registry, and the r6 traps TR-23
        sealed-verdict ownership, TR-24 lineage boundary, TR-25 vault-ledger integrity,
        TR-26 depletion revealing quote, and the r7 traps TR-27 nonced rule commitment,
        TR-28 coarse pre-release volumes, and the r8 trap TR-29 halt-only vault
-       recovery, included) plus the extended
+       recovery, and the r9 trap TR-30 evaluator-owned sealed sufficiency, included) plus the extended
        guard tests (accessor import-ban, micro threshold-sweep ban, copy discipline for micro
        copy, `_PRICE_ARITHMETIC_FIELDS` additions).
     2. Run the deterministic-rerun check (byte-identical snapshot/screen/fold outputs on a

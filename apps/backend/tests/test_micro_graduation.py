@@ -1,12 +1,22 @@
 """``micro_graduation.py`` (Era "The Rapid Microscope" J-07) -- test-first contract: TC-1 through
-TC-9, per ``docs/phases/goal-rapid-microscope-iter-10.md``. Fixture-only throughout (no real
-sealed shard exists this era; J-06 step 4 is human-blocked) -- every scenario builds its OWN
-ledgered evidence directly through the sibling modules' existing public functions
-(``walkforward_ledger.append_fold_result``, ``vault.seal_shard``/``assign_shard``/``expose_shard``,
-``scout_ledger.ScoutLedger.append_row``) and then exercises ``micro_graduation.py``'s own
-evaluation functions against it -- mirroring ``test_walkforward.py``'s own "hand-built,
-ledgered-but-not-re-deriving-the-producer's-own-machinery" style for testing a CONSUMER's logic in
-isolation."""
+TC-9 (iteration 10) plus TC-10 through TC-15 (iteration 17, TR-24, ``docs/phases/goal-rapid-
+microscope-iter-17.md``). Fixture-only throughout (no real sealed shard exists this era; J-06 step
+4 is human-blocked) -- every scenario builds its OWN ledgered evidence directly through the
+sibling modules' existing public functions (``walkforward_ledger.append_fold_result``,
+``vault.seal_shard``/``assign_shard``/``expose_shard``, ``scout_ledger.ScoutLedger.append_row``)
+and then exercises ``micro_graduation.py``'s own evaluation functions against it -- mirroring
+``test_walkforward.py``'s own "hand-built, ledgered-but-not-re-deriving-the-producer's-own-
+machinery" style for testing a CONSUMER's logic in isolation.
+
+**Iteration 17 (r6 owner ruling, spec section 8.1): the sealed-evaluation verdict is no longer
+caller-supplied.** ``record_sealed_evaluation`` now takes a whole, already-computed ``artifact``
+dict (produced, in production, exclusively by ``micro_sealed_evaluation.evaluate_sealed_verdict``
+-- tested end-to-end, including its own mutation-proof and fixture-discrimination requirements, in
+``test_micro_sealed_evaluation.py``). This file's own TC-2/TC-3/TC-4/TC-6-labeled tests below
+(iteration 10's original numbering) build a hand-crafted artifact via the new ``_sealed_artifact``
+helper, exercising ``micro_graduation.py``'s OWN persistence/transition/bundle logic in isolation --
+never re-deriving the scientific computation, exactly this file's own established convention for
+every OTHER sibling ledger."""
 
 from __future__ import annotations
 
@@ -93,6 +103,28 @@ def _scout_row(*, family_root_id: str, family_id: str, candidate_id: str, decisi
         "family_id": family_id, "family_root_id": family_root_id, "candidate_id": candidate_id,
         "decision": decision, "reason": None, "notes": "",
     }
+
+
+def _sealed_artifact(*, passed: bool, spec_hash: str = "spec-fixture-hash-1", **extra) -> dict:
+    """A hand-built sealed-evaluation ARTIFACT (iteration 17: ``micro_graduation.record_sealed_
+    evaluation`` no longer accepts a caller-supplied ``passed: bool`` -- ``micro_sealed_evaluation.
+    py`` is the sole scientific owner of the verdict now, tested in its own
+    ``test_micro_sealed_evaluation.py``). This file tests ``micro_graduation.py``'s OWN persistence/
+    transition logic in isolation -- the ``test_walkforward.py`` "hand-built, ledgered-but-not-
+    re-deriving-the-producer's-own-machinery" style, applied here to the sealed-evaluation artifact
+    shape exactly as it already is to fold rows."""
+    fields = {
+        "spec_hash": spec_hash,
+        "verdict": "pass" if passed else "fail",
+        "failure_reason": None if passed else "below_economic_floor",
+        "effect": 10.0 if passed else 1.0, "sign": "positive", "n": 40, "n_sessions": 10, "n_symbols": 3,
+        "missing": {}, "econ_floor": _ECON_FLOOR, "registered_direction": "long",
+        "evidence_class": wf.EVIDENCE_CLASS_HISTORICAL_OOS, "process_label": wf.PROCESS_LABEL_RULE,
+        "rule_id": "SEALED_PASS_RULE_V1", "rule_version": 1, "rule_hash": "fixture-rule-hash",
+        "observed_through": "2026-06-09T13:01:00.000000Z", "evaluated_at": "2026-06-10T00:00:00.000000Z",
+    }
+    fields.update(extra)
+    return fields
 
 
 # === TC-1: exploratory -> walkforward_survivor =======================================================
@@ -194,11 +226,11 @@ def test_tc2_a_passing_sealed_evaluation_advances_to_sealed_survivor(tmp_path):
 
     shard_ledger, universe_ledger = _exposed_shard(tmp_path, family_root_id=family_root_id, dataset_id="dataset-pass")
     eval_result = g.record_sealed_evaluation(
-        grad_ledger, shard_ledger, universe_ledger, family_root_id=family_root_id, dataset_id="dataset-pass",
-        spec_hash="spec-fixture-hash-1", passed=True,
+        grad_ledger, family_root_id=family_root_id, dataset_id="dataset-pass",
+        artifact=_sealed_artifact(passed=True),
     )
     assert eval_result["transition"] == g.TRANSITION_APPENDED
-    assert eval_result["row"]["passed"] is True
+    assert eval_result["row"]["verdict"] == "pass"
 
     result = g.evaluate_sealed_survivor_transition(grad_ledger, family_root_id=family_root_id, dataset_id="dataset-pass")
     assert result["transition"] == g.TRANSITION_APPENDED
@@ -206,35 +238,19 @@ def test_tc2_a_passing_sealed_evaluation_advances_to_sealed_survivor(tmp_path):
     assert g.current_graduation_state(grad_ledger, family_root_id) == g.GRADUATION_STATE_SEALED_SURVIVOR
 
 
-def test_sealed_evaluation_is_refused_against_a_shard_never_exposed_to_this_family(tmp_path):
-    family_root_id = scout_ledger.compute_family_root_id("a", "b", "c")
-    other_family_root_id = scout_ledger.compute_family_root_id("x", "y", "z")
-    grad_ledger = g.GraduationLedger(str(tmp_path / "grad"))
-    # the shard is exposed, but to a DIFFERENT family entirely.
-    shard_ledger, universe_ledger = _exposed_shard(tmp_path, family_root_id=other_family_root_id)
-
-    with pytest.raises(g.GraduationTransitionRefusedError, match="not an EXPOSED vault shard"):
-        g.record_sealed_evaluation(
-            grad_ledger, shard_ledger, universe_ledger, family_root_id=family_root_id, dataset_id="dataset-1",
-            spec_hash="spec-x", passed=True,
-        )
-    assert g.sealed_evaluations_for_family(grad_ledger, family_root_id) == []
-
-
 def test_a_second_identical_sealed_evaluation_call_is_replayed_a_second_different_one_is_refused(tmp_path):
     family_root_id = scout_ledger.compute_family_root_id("microprice_drift", "band_wall_touch", "trades_20")
     grad_ledger = g.GraduationLedger(str(tmp_path / "grad"))
-    shard_ledger, universe_ledger = _exposed_shard(tmp_path, family_root_id=family_root_id)
 
     first = g.record_sealed_evaluation(
-        grad_ledger, shard_ledger, universe_ledger, family_root_id=family_root_id, dataset_id="dataset-1",
-        spec_hash="spec-x", passed=True,
+        grad_ledger, family_root_id=family_root_id, dataset_id="dataset-1",
+        artifact=_sealed_artifact(passed=True),
     )
     assert first["transition"] == g.TRANSITION_APPENDED
 
     replay = g.record_sealed_evaluation(
-        grad_ledger, shard_ledger, universe_ledger, family_root_id=family_root_id, dataset_id="dataset-1",
-        spec_hash="spec-x", passed=True,
+        grad_ledger, family_root_id=family_root_id, dataset_id="dataset-1",
+        artifact=_sealed_artifact(passed=True),
     )
     assert replay["transition"] == g.TRANSITION_REPLAYED
     assert replay["row"] == first["row"]
@@ -242,8 +258,8 @@ def test_a_second_identical_sealed_evaluation_call_is_replayed_a_second_differen
 
     with pytest.raises(g.GraduationTransitionRefusedError, match="never a second draw"):
         g.record_sealed_evaluation(
-            grad_ledger, shard_ledger, universe_ledger, family_root_id=family_root_id, dataset_id="dataset-1",
-            spec_hash="spec-x", passed=False,  # a genuinely DIFFERENT verdict for the same pair
+            grad_ledger, family_root_id=family_root_id, dataset_id="dataset-1",
+            artifact=_sealed_artifact(passed=False),  # a genuinely DIFFERENT verdict for the same pair
         )
     assert len(g.sealed_evaluations_for_family(grad_ledger, family_root_id)) == 1  # still never a duplicate
 
@@ -254,10 +270,9 @@ def test_sealed_survivor_transition_is_refused_before_walkforward_survivor_is_re
     evaluation on record."""
     family_root_id = scout_ledger.compute_family_root_id("spread_change", "band_wall_touch", "trades_20")
     grad_ledger = g.GraduationLedger(str(tmp_path / "grad"))
-    shard_ledger, universe_ledger = _exposed_shard(tmp_path, family_root_id=family_root_id)
     g.record_sealed_evaluation(
-        grad_ledger, shard_ledger, universe_ledger, family_root_id=family_root_id, dataset_id="dataset-1",
-        spec_hash="spec-x", passed=True,
+        grad_ledger, family_root_id=family_root_id, dataset_id="dataset-1",
+        artifact=_sealed_artifact(passed=True),
     )
     with pytest.raises(g.GraduationTransitionRefusedError, match="strictly ordered"):
         g.evaluate_sealed_survivor_transition(grad_ledger, family_root_id=family_root_id, dataset_id="dataset-1")
@@ -277,10 +292,10 @@ def test_tc6_a_failed_sealed_evaluation_never_advances_and_is_carried_into_the_b
 
     shard_ledger, universe_ledger = _exposed_shard(tmp_path, family_root_id=family_root_id, dataset_id="dataset-fail")
     eval_result = g.record_sealed_evaluation(
-        grad_ledger, shard_ledger, universe_ledger, family_root_id=family_root_id, dataset_id="dataset-fail",
-        spec_hash="spec-fixture-hash-1", passed=False, detail={"reason": "fixture: sealed effect below floor"},
+        grad_ledger, family_root_id=family_root_id, dataset_id="dataset-fail",
+        artifact=_sealed_artifact(passed=False),
     )
-    assert eval_result["row"]["passed"] is False
+    assert eval_result["row"]["verdict"] == "fail"
 
     with pytest.raises(g.GraduationTransitionRefusedError, match="permanent"):
         g.evaluate_sealed_survivor_transition(grad_ledger, family_root_id=family_root_id, dataset_id="dataset-fail")
@@ -290,10 +305,10 @@ def test_tc6_a_failed_sealed_evaluation_never_advances_and_is_carried_into_the_b
     scout = ScoutLedger(str(tmp_path / "scout"))
     bundle = g.build_export_bundle(
         grad_ledger, scout, wf_ledger, shard_ledger, universe_ledger,
-        family_root_id=family_root_id, sequence_id=sequence_id,
+        family_root_id=family_root_id, sequence_id=sequence_id, handoff_created_at="2026-06-15T00:00:00.000000Z",
     )
     assert bundle["state"] == g.GRADUATION_STATE_WALKFORWARD_SURVIVOR
-    failed_verdicts = [e for e in bundle["sealed_evaluations"] if e["passed"] is False]
+    failed_verdicts = [e for e in bundle["sealed_evaluations"] if e["verdict"] == "fail"]
     assert len(failed_verdicts) == 1
     assert failed_verdicts[0]["dataset_id"] == "dataset-fail"
     assert bundle["family_multiplicity"]["prior_sealed_verdicts"] == bundle["sealed_evaluations"]
@@ -314,8 +329,8 @@ def test_tc3_and_tc4_the_full_pipeline_produces_a_validating_bundle_and_referee_
 
     shard_ledger, universe_ledger = _exposed_shard(tmp_path, family_root_id=family_root_id, dataset_id="dataset-e2e")
     g.record_sealed_evaluation(
-        grad_ledger, shard_ledger, universe_ledger, family_root_id=family_root_id, dataset_id="dataset-e2e",
-        spec_hash="spec-fixture-hash-1", passed=True,
+        grad_ledger, family_root_id=family_root_id, dataset_id="dataset-e2e",
+        artifact=_sealed_artifact(passed=True),
     )
     g.evaluate_sealed_survivor_transition(grad_ledger, family_root_id=family_root_id, dataset_id="dataset-e2e")
 
@@ -397,13 +412,26 @@ def test_bundle_is_buildable_and_honestly_partial_for_a_family_with_no_evidence_
     shard_ledger = vault.VaultShardLedger(str(tmp_path / "vault"))
     universe_ledger = vault.VaultUniverseLedger(str(tmp_path / "vault"))
 
-    bundle = g.build_export_bundle(grad_ledger, scout, wf_ledger, shard_ledger, universe_ledger, family_root_id=family_root_id)
+    bundle = g.build_export_bundle(
+        grad_ledger, scout, wf_ledger, shard_ledger, universe_ledger, family_root_id=family_root_id,
+        handoff_created_at="2026-06-01T00:00:00.000000Z",
+    )
     assert bundle["state"] == g.GRADUATION_STATE_EXPLORATORY
     assert bundle["scout_trials"] == []
     assert bundle["fold_results"] == []
     assert bundle["shards_touched"] == []
     assert bundle["sealed_evaluations"] == []
-    assert bundle["proposed_confirmation_boundary"] is None
+    # TR-24 (iteration 17): with NO lineage evidence at all, the frontier/embargo/evidence_safe_
+    # boundary are all honestly None/zero -- but proposed_confirmation_boundary is NEVER None, it is
+    # anchored at handoff_created_at (the bundle's own "now") so a freshly-registered, evidence-free
+    # family still gets an honest, non-stale advisory boundary.
+    assert bundle["lineage_data_frontier"] is None
+    assert bundle["lineage_frontier_evidence_ids"] == []
+    assert bundle["evidence_safe_boundary"] is None
+    assert bundle["embargo_sessions"] == 0
+    assert bundle["embargo_rule_id"] is None
+    assert bundle["handoff_created_at"] == "2026-06-01T00:00:00.000000Z"
+    assert bundle["proposed_confirmation_boundary"] == "2026-06-02"  # the first weekday strictly after
     assert g.bundle_validates(bundle)  # honestly EMPTY fields still validate -- nothing is MISSING
 
 
@@ -554,3 +582,206 @@ def test_graduation_served_copy_clears_the_copy_discipline_lexicon():
     disclaimer -- carry no imperative/predictive/certainty-claim language."""
     assert find_violations(g.EMPTY_LEDGER_MESSAGE) == []
     assert find_violations(g.REFEREE_FUTURE_REVISION_SENTENCE) == []
+
+
+# ============================================================================================
+# TR-24 (iteration 17, r6 owner ruling, spec section 8.2): the lineage-wide confirmation
+# boundary. "Survivor rows are NOT the basis; the LINEAGE is" -- a killed Scout sibling's own
+# LATER evidence must push the boundary past it, proving lineage knowledge cannot be laundered
+# through candidate selection (register three siblings, keep only the one whose own evidence
+# looks conveniently old).
+# ============================================================================================
+
+
+def _append_fold_with_reveal(
+    wf_ledger: wl.WalkForwardLedger, *, fold_index: int, sequence_id: str, corpus_id: str,
+    registered_at: str, validation_revealed_at: str, **overrides,
+) -> dict:
+    """A Mode-A-shaped fold row carrying BOTH ``registered_at`` (the fold spec's own freeze
+    instant -- TC-11's "anchor_at" stand-in) AND ``validation_revealed_at`` (the LATER test-window
+    reveal instant -- TC-11's "observed_through" stand-in), so a single fixture can prove the
+    lineage frontier picks the LATER field, never the earlier one."""
+    fields = {
+        "sequence_id": sequence_id, "corpus_id": corpus_id, "mode": "A", "fitting_rule": "training_quantile(0.90)",
+        "realized_fitted_value": 1.0, "spec_hash": "spec-fixture-hash-1", "fold_index": fold_index,
+        "sidedness": "long", "econ_floor": _ECON_FLOOR, "evidence_class": wf.EVIDENCE_CLASS_HISTORICAL_OOS,
+        "process_label": wf.PROCESS_LABEL_RULE, "registered_at": registered_at,
+        "spec_hash_recorded_at": registered_at, "validation_revealed_at": validation_revealed_at,
+        "status": wf.FOLD_STATUS_SUFFICIENT, "n": 40, "n_sessions": 10, "n_symbols": 3,
+        "effect": 10.0, "sign": "positive", "missing": {},
+    }
+    fields.update(overrides)
+    return wl.append_fold_result(wf_ledger, fields)
+
+
+# === TC-10 + TC-14 (mutually reinforcing): a KILLED sibling's later observed_through pushes the
+# boundary past it -- built on deliberately DIFFERENT calendar instants (never coincidentally
+# equal), so this is simultaneously TC-10's own scenario and TC-14's discrimination proof. ========
+
+
+def test_tc10_and_tc14_a_killed_siblings_later_evidence_pushes_the_boundary_past_it(tmp_path):
+    family_root_id = scout_ledger.compute_family_root_id("tc10_tc14_feature", "band_wall_touch", "trades_20")
+    corpus_id = "graduation-fixture-corpus-tc10"
+    sequence_id = wf.sequence_id_for(corpus_id, "fixture-rule")
+    wf_ledger = wl.WalkForwardLedger(str(tmp_path / "wf"))
+    # the SURVIVOR's own fold evidence -- deliberately EARLY (2026-02-10).
+    _append_fold_with_reveal(
+        wf_ledger, fold_index=0, sequence_id=sequence_id, corpus_id=corpus_id,
+        registered_at="2026-02-01T00:00:00.000000Z", validation_revealed_at="2026-02-10T00:00:00.000000Z",
+    )
+
+    scout = ScoutLedger(str(tmp_path / "scout"))
+    # the survivor candidate's own registration -- also early.
+    scout.append_row({
+        "family_id": "fam-survivor", "family_root_id": family_root_id, "candidate_id": "cand-survivor",
+        "decision": "survive", "reason": None, "notes": "", "registered_at": "2026-02-05T00:00:00.000000Z",
+    })
+    # the KILLED SIBLING -- same family_root_id, a DIFFERENT variant, registered MONTHS later
+    # (2026-05-01) -- a deliberately DIFFERENT calendar instant from every survivor-side timestamp
+    # above (TC-14: never coincidentally equal).
+    scout.append_row({
+        "family_id": "fam-killed-sibling", "family_root_id": family_root_id, "candidate_id": "cand-killed",
+        "decision": "killed_null", "reason": None, "notes": "", "registered_at": "2026-05-01T00:00:00.000000Z",
+    })
+
+    grad_ledger = g.GraduationLedger(str(tmp_path / "grad"))
+    shard_ledger = vault.VaultShardLedger(str(tmp_path / "vault"))
+    universe_ledger = vault.VaultUniverseLedger(str(tmp_path / "vault"))
+    bundle = g.build_export_bundle(
+        grad_ledger, scout, wf_ledger, shard_ledger, universe_ledger,
+        family_root_id=family_root_id, sequence_id=sequence_id, handoff_created_at="2026-01-01T00:00:00.000000Z",
+    )
+
+    # the frontier is the KILLED SIBLING's own later timestamp -- NOT the survivor's own (earlier)
+    # evidence alone.
+    assert bundle["lineage_data_frontier"] == "2026-05-01T00:00:00.000000Z"
+    assert bundle["lineage_data_frontier"] != "2026-02-10T00:00:00.000000Z"  # the survivor-only (wrong) answer
+    assert "cand-killed" in bundle["lineage_frontier_evidence_ids"]
+    assert bundle["frontier_observed_through"] == bundle["lineage_data_frontier"]
+    # the proposed boundary is therefore pushed to strictly after the killed sibling's own instant.
+    assert bundle["proposed_confirmation_boundary"] > "2026-05-01"
+    assert bundle["evidence_safe_boundary"] >= "2026-05-01"
+
+
+# === TC-11: a deferred feature's LATER observed_through moves the frontier, never its earlier
+# anchor_at. =========================================================================================
+
+
+def test_tc11_a_deferred_folds_later_observed_through_moves_the_frontier_not_its_earlier_anchor(tmp_path):
+    family_root_id = scout_ledger.compute_family_root_id("tc11_feature", "band_wall_touch", "trades_20")
+    corpus_id = "graduation-fixture-corpus-tc11"
+    sequence_id = wf.sequence_id_for(corpus_id, "fixture-rule")
+    wf_ledger = wl.WalkForwardLedger(str(tmp_path / "wf"))
+    _append_fold_with_reveal(
+        wf_ledger, fold_index=0, sequence_id=sequence_id, corpus_id=corpus_id,
+        registered_at="2026-02-01T00:00:00.000000Z",  # the "anchor_at" stand-in -- EARLIER
+        validation_revealed_at="2026-03-01T00:00:00.000000Z",  # the "observed_through" stand-in -- LATER
+    )
+    scout = ScoutLedger(str(tmp_path / "scout"))
+    grad_ledger = g.GraduationLedger(str(tmp_path / "grad"))
+    shard_ledger = vault.VaultShardLedger(str(tmp_path / "vault"))
+    universe_ledger = vault.VaultUniverseLedger(str(tmp_path / "vault"))
+
+    bundle = g.build_export_bundle(
+        grad_ledger, scout, wf_ledger, shard_ledger, universe_ledger,
+        family_root_id=family_root_id, sequence_id=sequence_id, handoff_created_at="2026-01-01T00:00:00.000000Z",
+    )
+    assert bundle["lineage_data_frontier"] == "2026-03-01T00:00:00.000000Z"  # the LATER reveal instant
+    assert bundle["lineage_data_frontier"] != "2026-02-01T00:00:00.000000Z"  # never the earlier registration
+
+
+# === TC-12: the final Referee-registration boundary is never earlier than either input =================
+
+
+def test_tc12_final_confirmation_boundary_is_never_earlier_than_either_input():
+    # proposed EARLIER than registration -- both already weekdays.
+    final = g.final_confirmation_boundary("2026-06-02", "2026-06-10")
+    assert final == "2026-06-10"
+    assert final >= "2026-06-02" and final >= "2026-06-10"
+
+    # proposed LATER than registration, and its OWN date (2026-06-20) is a Saturday -- rolls
+    # forward to the next eligible weekday (Monday 2026-06-22).
+    final2 = g.final_confirmation_boundary("2026-06-20", "2026-06-05")
+    assert final2 == "2026-06-22"
+    assert final2 >= "2026-06-20" and final2 >= "2026-06-05"
+
+    # a weekend max (Saturday 2026-06-06) rolls forward to the following Monday.
+    final3 = g.final_confirmation_boundary("2026-06-01", "2026-06-06")
+    assert final3 == "2026-06-08"
+    assert final3 >= "2026-06-01" and final3 >= "2026-06-06"
+
+
+# === TC-13 (mutation evidence): narrowing the lineage scan back to "only the survivor's own
+# sequence" (the r6-REJECTED naive form) makes the killed-sibling assertion fail, naming the too-
+# early boundary it produces; restoring the lineage-wide scan makes it pass again. ==================
+
+
+def test_tc13_narrowing_the_lineage_scan_to_survivor_only_makes_the_killed_sibling_case_fail(monkeypatch, tmp_path):
+    """The established, already-praised mutation-proof pattern
+    (``test_micro_observer.py``'s ``test_tc12_tr26_reverting_the_fix_makes_the_corrected_
+    assertion_fail_restoring_it_passes``), mirrored exactly for TR-24: ``monkeypatch.setattr``
+    installs the REJECTED naive formula (the owner ruling's own words: "the dev's 'latest
+    timestamp on surviving evidence rows' is REJECTED") -- ``fold_results`` only, ignoring
+    ``scout_trials`` (so a killed sibling's later evidence is invisible) and ``sealed_
+    evaluations`` entirely -- reproduces the exact too-early wrong value the naive formula would
+    have produced, then restores and shows the correct, later value returns."""
+    family_root_id = scout_ledger.compute_family_root_id("tc13_feature", "band_wall_touch", "trades_20")
+    corpus_id = "graduation-fixture-corpus-tc13"
+    sequence_id = wf.sequence_id_for(corpus_id, "fixture-rule")
+    wf_ledger = wl.WalkForwardLedger(str(tmp_path / "wf"))
+    _append_fold_with_reveal(
+        wf_ledger, fold_index=0, sequence_id=sequence_id, corpus_id=corpus_id,
+        registered_at="2026-02-01T00:00:00.000000Z", validation_revealed_at="2026-02-10T00:00:00.000000Z",
+    )
+    scout = ScoutLedger(str(tmp_path / "scout"))
+    scout.append_row({
+        "family_id": "fam-survivor", "family_root_id": family_root_id, "candidate_id": "cand-survivor",
+        "decision": "survive", "reason": None, "notes": "", "registered_at": "2026-02-05T00:00:00.000000Z",
+    })
+    scout.append_row({
+        "family_id": "fam-killed-sibling", "family_root_id": family_root_id, "candidate_id": "cand-killed",
+        "decision": "killed_null", "reason": None, "notes": "", "registered_at": "2026-05-01T00:00:00.000000Z",
+    })
+    grad_ledger = g.GraduationLedger(str(tmp_path / "grad"))
+    shard_ledger = vault.VaultShardLedger(str(tmp_path / "vault"))
+    universe_ledger = vault.VaultUniverseLedger(str(tmp_path / "vault"))
+
+    def _naive_survivor_only_frontier(scout_trials, fold_results, sealed_evaluations):
+        # BUG (the r6-REJECTED naive form): only fold_results -- ignores scout_trials (so a
+        # killed sibling's later evidence is invisible) and sealed_evaluations entirely.
+        candidates = [row.get("validation_revealed_at") or row.get("registered_at") for row in fold_results]
+        candidates = [c for c in candidates if c is not None]
+        if not candidates:
+            return {"frontier": None, "contributing_evidence_ids": []}
+        return {"frontier": max(candidates), "contributing_evidence_ids": []}
+
+    monkeypatch.setattr(g, "_lineage_data_frontier", _naive_survivor_only_frontier)
+    corrupted_bundle = g.build_export_bundle(
+        grad_ledger, scout, wf_ledger, shard_ledger, universe_ledger,
+        family_root_id=family_root_id, sequence_id=sequence_id, handoff_created_at="2026-01-01T00:00:00.000000Z",
+    )
+    # the exact TOO-EARLY wrong value the naive code produces -- proves the corrected assertion
+    # (frontier == "2026-05-01...", the killed sibling's own instant) WOULD fail against it.
+    assert corrupted_bundle["lineage_data_frontier"] == "2026-02-10T00:00:00.000000Z"
+    assert corrupted_bundle["lineage_data_frontier"] != "2026-05-01T00:00:00.000000Z"
+
+    monkeypatch.undo()
+    restored_bundle = g.build_export_bundle(
+        grad_ledger, scout, wf_ledger, shard_ledger, universe_ledger,
+        family_root_id=family_root_id, sequence_id=sequence_id, handoff_created_at="2026-01-01T00:00:00.000000Z",
+    )
+    assert restored_bundle["lineage_data_frontier"] == "2026-05-01T00:00:00.000000Z"
+
+
+# === TC-15 (this file's half): the rewritten micro_graduation.py docstrings no longer describe
+# the retired caller-supplied-verdict or single-sequence-boundary behavior. ==========================
+
+
+def test_tc15_the_rewritten_docstrings_no_longer_describe_retired_behavior():
+    module_doc = g.__doc__ or ""
+    record_doc = g.record_sealed_evaluation.__doc__ or ""
+    boundary_doc = g._proposed_confirmation_boundary.__doc__ or ""
+    assert "caller-supplied" not in record_doc.lower() or "no longer" in record_doc.lower()
+    assert "passed: bool" not in record_doc or "no longer" in record_doc
+    assert "latest timestamp on this one sequence" not in boundary_doc.lower()
+    assert "micro_sealed_evaluation" in module_doc
