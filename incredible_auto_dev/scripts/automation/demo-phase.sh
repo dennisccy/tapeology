@@ -153,6 +153,25 @@ EOF
 
 echo "[demo] Running product demo for: $ID (mode: $MODE)"
 
+# FAIL-CLOSED, and BEFORE the self-boot block below: ensure_services_running
+# refuses under maintenance isolation and returns 1, and this script runs under
+# `set -e`, so a guard placed after that call never executes — the session
+# walkthrough (MODE=session pins FRONTEND_PRESENT=yes) died on the refusal
+# instead of skipping as a documented decision. Skipping here also keeps the
+# skip message single and correct: the phase-mode backend-only branch below
+# would otherwise report a contract decision as "Backend-only iteration", and
+# the runner-stage guard would report it as a missing Playwright install.
+# Showcase, non-gating: exit 0 with a SKIPPED record, exactly like the
+# author-crash path.
+if goal_maintenance_isolation_required 2>/dev/null; then
+  maintenance_isolation_refuse "demo-phase" "app-service boot + Playwright showcase for ${ID}" || true
+  echo "[demo] SKIPPED — maintenance isolation forbids application-service boot and browser execution for this iteration."
+  if [[ "$MODE" == "record" ]]; then
+    _write_demo_skipped_stub "Maintenance isolation is required for this iteration — application-service boot and browser execution are forbidden by contract, not unavailable. No browser walkthrough was performed and no services were started."
+  fi
+  exit 0
+fi
+
 # Backend-only (phase mode) — write stubs and exit cleanly.
 if [[ "$MODE" != "session" && "$FRONTEND_PRESENT" == "no" ]]; then
   echo "[demo] Backend-only iteration — writing N/A stubs and skipping browser."
@@ -323,10 +342,24 @@ fi
 [[ "${CHAIN_DEMO_CAPTION:-}" =~ ^(1|true|yes|TRUE|YES)$ ]] && RUNNER_ARGS+=(--caption)
 
 _runner_rc=0
+if goal_maintenance_isolation_required 2>/dev/null; then
+  # FAIL-CLOSED: the demo runner drives Playwright against a live app. Refuse
+  # before launching a browser. Demo is non-gating showcase, so a skip here never
+  # blocks the pipeline — it simply produces no walkthrough for this iteration.
+  maintenance_isolation_refuse "demo_runner" "Playwright showcase for ${ID}" || true
+  echo "[demo] SKIPPED — maintenance isolation forbids browser/app execution for this iteration." >&2
+  # A dedicated rc, NOT the runner's 3 ("Playwright not available"): the case
+  # below must not follow a contract decision with an install hint. Unreachable
+  # while the guard above stands; kept as defence in depth for a direct call
+  # into this stage.
+  _runner_rc=90
+else
 python3 "$RUNNER" "${RUNNER_ARGS[@]}" || _runner_rc=$?
+fi
 
 case "$_runner_rc" in
   0) ;;
+  90) ;;   # maintenance isolation — already reported above, once
   3) echo "[demo] Playwright not available (see install hint above) — showcase skipped." >&2 ;;
   4) echo "[demo] Live demo needs a display. View the recorded gallery instead: ./scripts/automation/demo.sh $ID" >&2 ;;
   130|137|143)
@@ -340,7 +373,9 @@ esac
 # (lib/replay-lane.sh). Runs at both depths — demo-phase.sh is the one
 # recording hook the lean tail and the full pipeline share. Non-gating
 # showcase enrichment: any failure inside is contained.
-if [[ "$MODE" == "record" && $_runner_rc -eq 0 && "$ID" =~ ^goal-.+-iter-[0-9]+$ ]]; then
+if goal_maintenance_isolation_required 2>/dev/null; then
+  maintenance_isolation_refuse "demo golden auto-derive" "browser-driven showcase for ${ID}" || true
+elif [[ "$MODE" == "record" && $_runner_rc -eq 0 && "$ID" =~ ^goal-.+-iter-[0-9]+$ ]]; then
   source "$SCRIPT_DIR/lib/replay-lane.sh"
   # shellcheck disable=SC2034  # log prefix consumed by the lane lib
   REPLAY_LANE_TAG="demo"

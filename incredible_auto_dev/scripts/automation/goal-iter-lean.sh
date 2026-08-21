@@ -619,6 +619,18 @@ case "$_BQA_REQUESTED" in
     echo "[goal-iter-lean] CHAIN_LEAN_PARALLEL_BROWSER_QA='$_BQA_REQUESTED' is not off|replay|full — using off." >&2
     _BQA_MODE="off" ;;
 esac
+# FAIL-CLOSED belt-and-braces: when full depth is a hard requirement, this lean
+# path must never have been reached at all — run-goal.sh pauses AWAITING_FULL_DEPTH
+# before dispatch. If some other caller reaches lean anyway, the parallel
+# browser-QA/replay lane stays OFF regardless of the knob: that lane is exactly
+# what ran against a knowingly damaged database in the incident this guard exists
+# to prevent (it forks service boots + a replay the moment developer.done lands).
+if [[ "$_BQA_MODE" != "off" ]] && declare -F goal_full_depth_required >/dev/null 2>&1 \
+   && goal_full_depth_required "${SPEC:-}"; then
+  echo "[goal-iter-lean] Full depth is REQUIRED for this iteration — forcing CHAIN_LEAN_PARALLEL_BROWSER_QA=off (no replay, no browser QA, no second backend/frontend)." >&2
+  _BQA_MODE="off"
+  _BQA_OFF_REASON="full-depth-required"
+fi
 if [[ "$_BQA_MODE" == "replay" || "$_BQA_MODE" == "full" ]]; then
   _tw_rc=0
   _bqa_tripwire_active || _tw_rc=$?
@@ -990,6 +1002,14 @@ When complete:
 - Update runs/${ITER_NAME}/status.json with current_step: dev_complete
 " || _rc=$?
   record_agent_invocation_end "developer" "$_start" "$_rc"
+  # REL-11: the dev handoff is the reviewer's and the goal-evaluator's only
+  # account of what this iteration changed — a dispatch that returns without it
+  # reads downstream as "nothing happened". Loud banner + missing_evidence
+  # telemetry, never a gate (the caller's rc is untouched). Quota exhaustion is
+  # excluded: nothing was dispatched, so nothing went missing.
+  if [[ ! -s "$DEV_HANDOFF" && "$_rc" -ne "${QUOTA_EXHAUSTED_EXIT_CODE:-75}" ]]; then
+    warn_missing_evidence "developer" "$DEV_HANDOFF"
+  fi
   return $_rc
 }
 
@@ -1156,9 +1176,7 @@ else
   _rev_rc=0
   run_reviewer || _rev_rc=$?
   _pause_if_transport "$_rev_rc" "reviewer"
-  if _review_parses; then
-    record_telemetry_event "review_verdict" "$(jq -cn --arg v "$(_review_verdict)" --argjson a 1 --arg n "$ITER_NAME" '{verdict:$v, attempt:$a, iter_name:$n}' 2>/dev/null || printf '{"verdict":"%s","attempt":1}' "$(_review_verdict)")"
-  fi
+  record_review_verdict "$REVIEW_REPORT" 1 "$ITER_NAME" "$_rev_rc" || true
   if [[ "$_rev_rc" -eq 0 ]] && _review_parses; then
     step_mark_done review-1 --dir "$ITER_DIR" --verdict "$(_review_verdict)" "$REVIEW_REPORT"
   fi
@@ -1203,9 +1221,7 @@ Review report path: $REVIEW_REPORT
     _rev_rc=0
     run_reviewer || _rev_rc=$?
     _pause_if_transport "$_rev_rc" "reviewer (fix-mode)"
-    if _review_parses; then
-      record_telemetry_event "review_verdict" "$(jq -cn --arg v "$(_review_verdict)" --argjson a 2 --arg n "$ITER_NAME" '{verdict:$v, attempt:$a, iter_name:$n}' 2>/dev/null || printf '{"verdict":"%s","attempt":2}' "$(_review_verdict)")"
-    fi
+    record_review_verdict "$REVIEW_REPORT" 2 "$ITER_NAME" "$_rev_rc" || true
     if [[ "$_rev_rc" -eq 0 ]] && _review_parses; then
       step_mark_done review-2 --dir "$ITER_DIR" --verdict "$(_review_verdict)" "$REVIEW_REPORT"
     fi
