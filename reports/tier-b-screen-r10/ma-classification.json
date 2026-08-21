@@ -1,0 +1,99 @@
+{
+  "candidates": {
+    "AG": {
+      "classified": [
+        {
+          "agreement": "Agreement and Plan of Merger (acquirer side)",
+          "filed": "2024-10-15",
+          "form": "F-4",
+          "status": "REQUIRES_CLOSURE_VERIFICATION"
+        },
+        {
+          "agreement": "Agreement and Plan of Merger (amendment)",
+          "filed": "2024-11-18",
+          "form": "F-4/A",
+          "status": "REQUIRES_CLOSURE_VERIFICATION"
+        }
+      ],
+      "hits": 2,
+      "reason": "transaction_status_unclassified_pending_closure_evidence",
+      "verdict": "unresolved"
+    },
+    "FLUT": {
+      "classified": [],
+      "hits": 0,
+      "note": "340 forms searched in the 24-month window with zero flagged hits \u2014 a complete search record, not an absent one",
+      "reason": "no_pending_definitive_transaction",
+      "verdict": "pass"
+    },
+    "FSLY": {
+      "classified": [
+        {
+          "note": "all four are convertible senior notes / capped call / indenture / revolving credit"
+        }
+      ],
+      "hits": 4,
+      "reason": "no_pending_definitive_transaction",
+      "verdict": "pass"
+    },
+    "LYFT": {
+      "classified": [
+        {
+          "agreement": "convertible senior notes / capped call / indenture",
+          "filed": "2025-09-05",
+          "status": "not_a_transaction"
+        }
+      ],
+      "hits": 1,
+      "reason": "no_pending_definitive_transaction",
+      "verdict": "pass"
+    },
+    "TDC": {
+      "classified": [
+        {
+          "accession": "0000816761-26-000032",
+          "agreement": "Indemnification Agreement with directors/officers",
+          "filed": "2026-08-17",
+          "status": "not_a_transaction"
+        },
+        {
+          "agreement": "credit agreement / term loan / revolving",
+          "filed": "2026-06-24",
+          "status": "not_a_transaction"
+        },
+        {
+          "accession": "0001628280-26-007274",
+          "agreement": "Cooperation Agreement with Lynrock Lake (board composition)",
+          "filed": "2026-02-11",
+          "status": "not_a_transaction"
+        }
+      ],
+      "hits": 3,
+      "reason": "no_pending_definitive_transaction",
+      "verdict": "pass"
+    },
+    "WULF": {
+      "classified": [
+        {
+          "accession": "0001104659-25-102858",
+          "agreement": "data-centre joint venture LLC agreement (Fluidstack) \u2014 not an acquisition of or by the listed issuer",
+          "filed": "2025-10-28",
+          "status": "not_a_transaction"
+        },
+        {
+          "note": "remaining 13 hits are financing: indentures, notes due, credit agreements, underwriting, convertible senior notes"
+        }
+      ],
+      "hits": 14,
+      "reason": "no_pending_definitive_transaction",
+      "verdict": "pass"
+    }
+  },
+  "classified_utc": "2026-08-21T14:03:21Z",
+  "method": "Each flagged filing's primary document was fetched from EDGAR and read; classification is based on the filing's own stated agreement type, not on item codes alone.",
+  "not_yet_classified": "candidates ranked below FLUT were not reached; classification proceeds in the frozen hash order only as far as needed.",
+  "rule": "\u00a77.2.1 (g): FAILS iff a DEFINITIVE announced merger/acquisition/business-combination/take-private involving the candidate remains PENDING at the cutoff. An 8-K Item 1.01 hit alone is a search hit requiring classification, never a failure.",
+  "screening_cutoff_utc": "2026-08-21T12:06:00Z",
+  "spec_revision": "r11",
+  "stage": "pending_ma_classification"
+}

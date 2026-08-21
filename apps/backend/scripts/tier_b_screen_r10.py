@@ -18,6 +18,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import sys
 import time
 import urllib.request
@@ -219,11 +220,127 @@ def stage_bars(chunk_size: int = 150) -> dict:
     return out
 
 
-_STAGES = {"freeze": stage_freeze, "universe": stage_universe, "bars": stage_bars}
+def stage_mcap() -> dict:
+    """r11 §7.2.1 (d), applied UNIFORMLY to every price+ADV survivor -- never candidate-specific
+    rescue. Primary CompanyFacts DEI first; the cover-page fallback ONLY where that is unavailable;
+    no third source. The multi-class rule is unchanged, so a filing disclosing several common
+    classes still fails closed."""
+    universe = json.loads((ARTIFACT_DIR / "candidate-universe.json").read_text())
+    price_adv = json.loads((ARTIFACT_DIR / "price-adv.json").read_text())
+    cutoff_date = universe["screening_cutoff_utc"][:10]
+    dir_exch = {c["ticker"]: c["exchange"] for c in universe["candidates"]}
+    closes = {r["ticker"]: r["price"] for r in price_adv["results"]}
+    survivors = price_adv["survivors"]
+
+    index = _sec_ticker_index()
+    rows, started = [], time.time()
+    for n, tic in enumerate(survivors, 1):
+        entry = index.get(tic)
+        if entry is None:
+            rows.append({"ticker": tic, "shares_source": None,
+                         "market_cap": tb.evaluate_market_cap(None, None),
+                         "listing": tb.evaluate_primary_listing(dir_exch.get(tic), None),
+                         "note": "ticker_not_in_sec_index"})
+            continue
+        cik = entry["cik"]
+        time.sleep(_SEC_PAUSE_SECONDS)
+        pf = _latest_shares_fact(cik, cutoff_date)
+        primary = None
+        if pf:
+            primary = {"shares": pf["val"], "multi_class": pf["multi_class_signal"],
+                       "accession": pf["accn"], "form": pf["form"],
+                       "fact_period_end": pf["end"], "filing_date": pf["filed"],
+                       "concept": "dei:EntityCommonStockSharesOutstanding"}
+        fallback = None
+        if primary is None:
+            time.sleep(_SEC_PAUSE_SECONDS)
+            filing = _latest_periodic_filing(cik, cutoff_date)
+            if filing and filing.get("primary_document"):
+                time.sleep(_SEC_PAUSE_SECONDS)
+                try:
+                    fallback = _cover_page_shares(cik, filing)
+                except Exception as exc:  # noqa: BLE001 -- disclosed, never a guess
+                    fallback = {"shares": None, "multi_class": False,
+                                "extraction_method": f"error:{type(exc).__name__}"}
+        basis = tb.select_shares_basis(primary, fallback)
+        multi = bool(basis.get("multi_class")) or len(entry["tickers_for_cik"]) > 1
+        price = closes.get(tic, {})
+        cap = tb.evaluate_market_cap(
+            basis.get("shares"), price.get("close"), multi_class=multi, cik=f"{cik:010d}",
+            accession=basis.get("accession"), concept=basis.get("concept"),
+            fact_period_end=basis.get("fact_period_end") or basis.get("report_period"),
+            filing_date=basis.get("filing_date"),
+            price_session=price.get("session"), price_source=price.get("source"),
+        )
+        rows.append({
+            "ticker": tic, "cik": f"{cik:010d}", "tickers_for_cik": entry["tickers_for_cik"],
+            "shares_source": basis.get("shares_source"), "shares_basis": basis,
+            "market_cap": cap,
+            "listing": tb.evaluate_primary_listing(dir_exch.get(tic), entry["sec_exchange"]),
+        })
+        if n % 25 == 0:
+            sys.stderr.write(f"  mcap {n}/{len(survivors)}  {time.time()-started:.0f}s\n")
+
+    from collections import Counter
+    out = {
+        "spec_revision": "r11", "stage": "market_cap_and_listing",
+        "screening_cutoff_utc": universe["screening_cutoff_utc"],
+        "price_basis": "Yahoo Finance unadjusted daily Close for the most recent fully completed "
+                       "trading session strictly before the screening cutoff",
+        "evaluated_count": len(rows),
+        "shares_source_counts": dict(Counter(r.get("shares_source") or "none" for r in rows)),
+        "market_cap_status_counts": dict(Counter(r["market_cap"]["status"] for r in rows)),
+        "listing_status_counts": dict(Counter(r["listing"]["status"] for r in rows)),
+        "multi_class_unresolved": sum(
+            1 for r in rows if r["market_cap"]["reason"] == "multi_class_capitalization_ambiguous"),
+        "survivors": sorted(r["ticker"] for r in rows
+                            if r["market_cap"]["status"] == tb.STATUS_PASS
+                            and r["listing"]["status"] == tb.STATUS_PASS),
+        "rows": rows,
+    }
+    out["survivor_count"] = len(out["survivors"])
+    (ARTIFACT_DIR / "market-cap-listing.json").write_text(
+        json.dumps(out, indent=2, sort_keys=True) + "\n")
+    return out
+
+
+def stage_ma(tickers: list[str]) -> dict:
+    """§7.2.1 (g): the frozen search record for the named tickers, in the order given (the caller
+    walks the frozen hash ranking). Produces the SEARCH RECORD only -- classification of each
+    flagged hit is a separate, evidence-based act, and an unclassified hit stays `unresolved`."""
+    universe = json.loads((ARTIFACT_DIR / "candidate-universe.json").read_text())
+    cutoff_date = universe["screening_cutoff_utc"][:10]
+    index = _sec_ticker_index()
+    rows = []
+    for tic in tickers:
+        entry = index.get(tic)
+        if entry is None:
+            rows.append({"ticker": tic, "error": "ticker_not_in_sec_index"})
+            continue
+        time.sleep(_SEC_PAUSE_SECONDS)
+        rows.append({"ticker": tic, "cik": f"{entry['cik']:010d}",
+                     "ma_search": _ma_filing_search(entry["cik"], cutoff_date)})
+    path = ARTIFACT_DIR / "ma-search.json"
+    prior = json.loads(path.read_text())["rows"] if path.exists() else []
+    seen = {r["ticker"] for r in rows}
+    out = {"spec_revision": "r11", "stage": "pending_ma_search",
+           "screening_cutoff_utc": universe["screening_cutoff_utc"],
+           "rows": [r for r in prior if r["ticker"] not in seen] + rows}
+    out["evaluated_count"] = len(out["rows"])
+    path.write_text(json.dumps(out, indent=2, sort_keys=True) + "\n")
+    return out
+
+
+_STAGES = {"freeze": stage_freeze, "universe": stage_universe, "bars": stage_bars, "mcap": stage_mcap}
 # `sec` takes tickers on the command line, so it is dispatched separately in main().
 
 
 def main() -> int:
+    if len(sys.argv) >= 3 and sys.argv[1] == "ma":
+        out = stage_ma([t.strip().upper() for t in sys.argv[2].split(",") if t.strip()])
+        print(json.dumps({k: v for k, v in out.items() if not isinstance(v, list)},
+                         indent=2, sort_keys=True))
+        return 0
     if len(sys.argv) >= 3 and sys.argv[1] == "sec":
         out = stage_sec([t.strip().upper() for t in sys.argv[2].split(",") if t.strip()])
         print(json.dumps({k: v for k, v in out.items() if not isinstance(v, list)},
@@ -387,6 +504,112 @@ def stage_sec(tickers: list[str]) -> dict:
     out["evaluated_count"] = len(out["rows"])
     path.write_text(json.dumps(out, indent=2, sort_keys=True) + "\n")
     return out
+
+
+# --- r11: the cover-page shares fallback (§7.2.1 (d)) ---------------------------------------------
+
+_IX_FACT = re.compile(
+    r'<ix:nonfraction([^>]*name="dei:EntityCommonStockSharesOutstanding"[^>]*)>(.*?)</ix:nonfraction>',
+    re.IGNORECASE | re.DOTALL)
+_CONTEXT = re.compile(r'<xbrli:context[^>]*id="([^"]+)"(.*?)</xbrli:context>', re.IGNORECASE | re.DOTALL)
+_MEMBER = re.compile(r'<xbrldi:explicitmember[^>]*dimension="([^"]+)"[^>]*>([^<]+)<', re.IGNORECASE)
+_INSTANT = re.compile(r'<xbrli:instant>([^<]+)</xbrli:instant>', re.IGNORECASE)
+
+
+def _attr(blob: str, name: str) -> str | None:
+    m = re.search(rf'{name}="([^"]*)"', blob, re.IGNORECASE)
+    return m.group(1) if m else None
+
+
+def _latest_periodic_filing(cik: int, cutoff_date: str) -> dict | None:
+    """The latest 10-Q or 10-K FILED AND ACCEPTED at or before the cutoff (§7.2.1 (d) r11)."""
+    payload = json.loads(_fetch(_SEC_SUBMISSIONS.format(cik=cik)))
+    rec = payload.get("filings", {}).get("recent", {})
+    forms, dates = rec.get("form", []), rec.get("filingDate", [])
+    for i, form in enumerate(forms):
+        if form in ("10-Q", "10-K") and dates[i] <= cutoff_date:
+            return {
+                "form": form, "filing_date": dates[i],
+                "accession": rec["accessionNumber"][i],
+                "acceptance_datetime": rec.get("acceptanceDateTime", [None] * len(forms))[i],
+                "report_period": rec.get("reportDate", [None] * len(forms))[i],
+                "primary_document": rec.get("primaryDocument", [None] * len(forms))[i],
+            }
+    return None
+
+
+def _cover_page_shares(cik: int, filing: dict) -> dict:
+    """r11 fallback extraction. PREFERS the filing's own Inline-XBRL dimensional cover-page facts;
+    only if none are present does it fall back to a deterministic cover-page text read. Returns
+    every common-stock class disclosed, so ``cover_page_multi_class`` can fail closed."""
+    accn = filing["accession"].replace("-", "")
+    url = f"https://www.sec.gov/Archives/edgar/data/{cik}/{accn}/{filing['primary_document']}"
+    raw = _fetch(url)
+    html = raw.decode("utf-8", errors="replace")
+    doc_sha = hashlib.sha256(raw).hexdigest()
+
+    contexts = {}
+    for ctx_id, body in _CONTEXT.findall(html):
+        members = {dim.split(":")[-1]: val.strip() for dim, val in _MEMBER.findall(body)}
+        inst = _INSTANT.search(body)
+        contexts[ctx_id] = {"members": members, "instant": inst.group(1).strip() if inst else None}
+
+    classes = []
+    for attrs, inner in _IX_FACT.findall(html):
+        text = re.sub(r"<[^>]+>", "", inner).strip()
+        digits = re.sub(r"[^0-9]", "", text)
+        if not digits:
+            continue
+        scale = int(_attr(attrs, "scale") or 0)
+        ctx_id = _attr(attrs, "contextref")
+        ctx = contexts.get(ctx_id, {})
+        member = next((v for k, v in ctx.get("members", {}).items() if "Class" in k or "Stock" in k),
+                      None)
+        classes.append({
+            "class_name": member or "CommonStock",
+            "shares": int(digits) * (10 ** scale),
+            "raw_text": text,
+            "context_ref": ctx_id,
+            "cover_page_as_of": ctx.get("instant"),
+            "extraction_method": "inline_xbrl_dimensional_cover_page_fact",
+        })
+
+    method = "inline_xbrl_dimensional_cover_page_fact"
+    if not classes:
+        # No usable structured cover-page facts -- deterministic cover-page text read (the SAME
+        # fallback source, per r11), anchored on the standard cover-page sentence.
+        text = re.sub(r"<[^>]+>", " ", html)
+        text = re.sub(r"\s+", " ", text)
+        m = re.search(r"([\d,]{7,})\s+shares of (?:the registrant'?s? )?common stock",
+                      text, re.IGNORECASE)
+        if m:
+            classes.append({
+                "class_name": "CommonStock",
+                "shares": int(re.sub(r"[^0-9]", "", m.group(1))),
+                "raw_text": m.group(1),
+                "context_ref": None,
+                "cover_page_as_of": None,
+                "extraction_method": "deterministic_cover_page_text",
+            })
+            method = "deterministic_cover_page_text"
+        else:
+            method = "no_usable_cover_page_disclosure"
+
+    multi = tb.cover_page_multi_class(classes)
+    return {
+        "shares": (classes[0]["shares"] if len(classes) == 1 else None),
+        "multi_class": multi,
+        "classes": classes,
+        "extraction_method": method,
+        "document_url": url,
+        "document_sha256": doc_sha,
+        "cik": f"{cik:010d}",
+        "form": filing["form"],
+        "accession": filing["accession"],
+        "filing_date": filing["filing_date"],
+        "acceptance_datetime": filing["acceptance_datetime"],
+        "report_period": filing["report_period"],
+    }
 
 if __name__ == "__main__":
     raise SystemExit(main())

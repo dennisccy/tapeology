@@ -167,6 +167,28 @@
 > Tier-B screen result has been revealed. Detail → §7.2.1. Traps → TR-32 (live-progress
 > composition, which the same preflight found open on BOTH transports).
 
+> **Revision r11 (2026-08-21, owner ruling — the market-cap source hierarchy is completed, and the
+> canonical live-progress text catches up to the code).** The r10 screen ran its cheap stages and
+> then HALTED at `ABORTED_PRE_RESOLUTION` / `market_cap_source_hierarchy_incomplete`: r10 (d)
+> authorised "one named fallback only if the primary is unavailable" but never named one, and
+> `dei:EntityCommonStockSharesOutstanding` proved to be a genuine CompanyFacts 404 for ~12% of the
+> price+ADV survivors. **Missing structured extraction must not silently turn a Card-5.2 criterion
+> into a test of XBRL tagging quality**, so r11 names the fallback: the cover-page shares-outstanding
+> disclosure of the latest 10-Q/10-K filed and accepted at or before the cutoff, which recovers the
+> SAME underlying point-in-time quantity from the authoritative filing. It is an EVIDENCE-RECOVERY
+> mechanism, never a new capitalization methodology — **r10 (d)'s multi-class fail-closed rule is
+> unchanged**, so a candidate whose filing discloses several common classes stays `unresolved`, and
+> that outcome is acceptable. `us-gaap:CommonStockSharesOutstanding` is explicitly NOT the fallback
+> (a balance-sheet fact with a different measurement date, and stale in practice), and there is no
+> third source. r11 also corrects a provenance MISNOMER — the screening runner uses Yahoo Finance
+> unadjusted daily `Close`, which r10 wrongly called an "official close" — and reconciles §7.1's
+> stale r5/r7 progress prose with what production actually serves after the TR-32 composition
+> attacks (§7.1, TR-32). **Nothing else moves**: the six criteria, the five seeds, the hash ranking,
+> exactly-three resolution, the 8-symbol panel, the 80-symbol-day arithmetic, the Nasdaq parser, the
+> frozen raw source bytes, the screening cutoff, and the ADV / spread / pending-M&A windows are all
+> untouched, and the rerun recomputes from those SAME frozen artifacts — the universe is never
+> re-cut after partial results were seen. Detail → §7.2.1 (d), §7.1. Traps → TR-32.
+
 ---
 
 ## 0. Shared conventions
@@ -550,28 +572,49 @@ symbol-days so band context joins. Recording failure modes (vendor timeout, part
 credential absence) are per-chunk `failed` outcomes with detail — never a raise, never a
 fabricated row.
 
-**Recorder progress is AGGREGATE-ONLY while the pool is unexposed (r5), and its VOLUMES are COARSE
-(r7).** `GET /research/desk/micro/recorder/compute` — and every other progress surface, UI or MCP —
-serves only non-identifying aggregates: chunks completed / total, successful / failed / pending
-counts, aggregate retry and failure counts, percent complete, and deterministic elapsed/throughput
-diagnostics (throughput as a bucket/range). It MUST NOT serve symbol, date, dataset id, shard
-id, per-shard byte or event counts, or any other per-chunk identity-bearing metadata, because
-watching a live recording would otherwise reveal pool membership before assignment. The detailed
-per-chunk identities remain in the INTERNAL recorder ledger for recovery, idempotency and audit;
-recovery and debugging read that persisted state, never an identity-bearing public response.
-Once a shard is legitimately exposed, its identity appears through the normal exposure surfaces.
-**There is no operator-only bypass** — using one would itself be a human exposure event that
-destroys the tranche's blindness, and it is unnecessary for ordinary monitoring. TR-2's
-inference trap (§7.5) covers the recorder progress path explicitly.
+**Recorder progress is NON-OUTCOME while the pool is unexposed (r11/TR-32 — supersedes the r5/r7
+shape).** `GET /research/desk/micro/recorder/compute`, the CLI, and every other LIVE progress
+surface — UI, MCP, or any future transport — serve ONLY non-outcome operational state:
 
-**Event and byte VOLUMES are coarse buckets pre-release (r7) — §7.1 no longer mandates exact
-totals.** The iteration-11 audit proved the contradiction: on a one-symbol-day run the "aggregate"
+| served live | withheld from live progress |
+|---|---|
+| `chunks_done`, `chunks_total` | fetched / reused / unchanged / failed counts |
+| `percent_complete`, `elapsed_seconds` | exact OR bucketed trade totals |
+| `chunks_per_minute` | exact OR bucketed quote totals |
+| | symbol, date, dataset id, shard id, per-chunk byte/event counts |
+| | any field whose CHANGE proves a particular known chunk's realized state |
+
+`chunks_per_minute` is admissible only because it is deterministically derived from position and
+time fields already served, and so adds no independent outcome information.
+
+**Why the earlier r5/r7 shape was insufficient.** r5 required aggregate-only fields and r7 replaced
+exact volumes with coarse buckets, but both reasoned FIELD-BY-FIELD. Iteration 23 mounted the
+COMPOSITION attack and broke them on both transports: (1) with one line/response per completed chunk
+and exact cumulative outcome counters, an observer who polls often enough that `chunks_done` advances
+by exactly one differences those counters against the deterministic, operator-known plan and pins
+that chunk's realized outcome — a whole run was reconstructed exactly, failed symbol-day included;
+and (2) the coarse volume buckets leaked by EXISTENCE rather than magnitude, because running totals
+advance ONLY on a `fetched` chunk, so a bucket TRANSITION across a single-chunk advance proves that
+chunk was fetched. r7's differencing-resistance argument defeated recovery of the VOLUME but not
+this existence proof. The requirement is therefore OUTCOME-BASED, not field-based: **no sequence of
+operator-visible progress snapshots, composed with the known registered plan, may reveal a specific
+withheld symbol/date/chunk's realized success or failure with certainty.**
+
+Detailed per-chunk identities and exact counts remain in the INTERNAL recorder state for recovery,
+idempotency and audit. **There is no operator-only bypass** — using one would itself be a human
+exposure event that destroys the tranche's blindness. TERMINAL/batch reporting is a DISTINCT
+lifecycle stage: TR-4's disclosed per-chunk/per-symbol vendor-failure list remains REQUIRED there
+under the existing lawful disclosure rules, and the terminal run-log row still carries the exact
+counts. TR-2's inference trap (§7.5) and TR-32 cover the live paths.
+
+**Event and byte VOLUMES elsewhere remain coarse buckets pre-release (r7, unchanged for non-live
+surfaces).** The iteration-11 audit proved the contradiction: on a one-symbol-day run the "aggregate"
 `trades_total` IS that withheld shard's exact count. §7.5's no-exact-count rule is the stronger
 confidentiality contract and wins. While ANY member of the ORIGINAL registered pool is unexposed,
-every recorder / readiness / API / UI / MCP surface serves trades recorded, quotes recorded, and
-bytes recorded ONLY as **predeclared coarse buckets** — a deterministic order-of-magnitude or
-broad powers-of-two scheme, carrying the bucket LABEL/RANGE rather than a rounded number
-(`trades_total_bucket: "1M–10M"`, never `trades_total: 3842117`).
+every readiness / API / UI / MCP surface serves trades recorded, quotes recorded, and bytes recorded
+ONLY as **predeclared coarse buckets** (`trades_total_bucket: "1M–10M"`, never
+`trades_total: 3842117`). On LIVE RECORDER PROGRESS specifically, r11/TR-32 goes further and serves
+no volume field at all.
 
 The scheme must be **differencing-resistant**: never a per-shard count while that shard is
 withheld; never an exact delta between successive progress snapshots; never finer buckets as the
@@ -682,12 +725,42 @@ class information is the authoritative cross-check. **Any disagreement between t
 and FAILS CLOSED** — never resolved toward whichever source lets the candidate pass.
 
 **(d) Market cap.** The latest SEC-reported common shares outstanding legally available as of the
-cutoff × the most recent completed official close at or before the cutoff. Persist: CIK;
-accession/form; fact/concept; fact period/end date; filing date; raw shares value; price
-source/session/raw close; derived USD market cap. **Where a multi-class or otherwise ambiguous
-capitalization means one ticker price × one shares figure does not unambiguously represent issuer
-market cap, `market_cap_status = unresolved` and the candidate FAILS CLOSED.** No aggregation rule
-may be invented after seeing candidates.
+cutoff × the frozen close basis defined below. Persist: CIK; accession/form; fact/concept; fact
+period/end date; filing date; raw shares value; price source/session/raw close; derived USD market
+cap.
+
+*The source hierarchy (r11).* **Primary:** SEC CompanyFacts `dei:EntityCommonStockSharesOutstanding`,
+legally available by the cutoff. **Fallback — ONLY when the primary is unavailable:** the latest
+10-Q or 10-K filed and accepted by the SEC at or before the cutoff, using that filing's COVER-PAGE
+shares-outstanding disclosure. Prefer the filing's own Inline-XBRL dimensional cover-page facts where
+present — if CompanyFacts merely omitted the aggregation but the filing itself carries correctly
+class-dimensioned `dei:EntityCommonStockSharesOutstanding` facts, consume those filing-level facts;
+where the filing provides no usable structured cover-page facts but visibly states the count, a
+deterministic cover-page extractor may read that same disclosure. The fallback exists because a
+missing structured extraction must not silently turn this criterion into a test of XBRL tagging
+quality; it recovers the SAME point-in-time quantity from the authoritative filing. **There is no
+third source**, and `us-gaap:CommonStockSharesOutstanding` is explicitly NOT the fallback (a
+balance-sheet fact with a different measurement date, stale in practice). Persist additionally for a
+fallback extraction: form; accession; filing date; SEC acceptance timestamp; report period;
+cover-page as-of date of the count; EVERY common-stock class disclosed with its class name and raw
+outstanding value; extraction method; exact SEC document identity; and a content hash / evidence
+excerpt locator sufficient to reproduce the extraction.
+
+*Fail-closed, unchanged by the fallback.* The fallback is an EVIDENCE-RECOVERY mechanism, never a new
+capitalization methodology. **Where a multi-class or otherwise ambiguous capitalization means one
+listed ticker price × the filing's shares basis does not unambiguously represent issuer market cap,
+`market_cap_status = unresolved` and the candidate FAILS CLOSED** — a candidate may legitimately
+remain unresolved after the fallback. It is forbidden to sum classes and multiply by one class's
+price, to use one class only, to substitute public float or weighted-average diluted shares, to infer
+a synthetic class price, or to pick whichever treatment lands the issuer inside $2B–$20B. If neither
+primary nor fallback yields an unambiguous point-in-time shares basis, the status is `unresolved`.
+
+*The frozen close basis (r11 provenance correction).* r10 called this an "official close"; the
+screening runner in fact uses **Yahoo Finance unadjusted daily `Close` for the most recent fully
+completed trading session strictly before the screening cutoff**. That is the honest name for the
+basis actually used, and it is the SAME basis for BOTH the USD 15–100 price criterion and the
+market-cap multiplication. Persist the source, the session date and the raw `Close`. The price vendor
+is never switched on the basis of a candidate's result.
 
 **(e) ADV.** The arithmetic mean of raw share volume over the **30 most recent fully completed
 regular US trading sessions strictly before the cutoff** — sessions, never 30 calendar days. The
@@ -1043,7 +1116,8 @@ boundary by its `observed_through`.
 | TR-30 sealed sufficiency is evaluator-owned (r9 §8.1) | A spec carrying `floors={1,1,1}` is REFUSED and can never make one observation pass · 29 sealed observations ⇒ `insufficient` · 30 otherwise-valid observations ⇒ sufficiency can clear · session and symbol breadth are recorded `not_applicable_single_shard`, never silently 1 · changing ANY caller floor field cannot change the verdict · the artifact's `rule_hash`, its applied-floor values, and runtime behaviour agree byte-for-byte · an `insufficient` verdict still CONSUMES that family's single sealed shot on the assigned shard (no fresh shard on thin data — that would be repeated holdout sampling) |
 | TR-29 recovery is halt-only (r8 §7.8) | The demonstrated attack: seal `d-1`/`d-2`/`d-3`, destroy the row containing `d-3`, present a SAME-LENGTH reconstructed suffix containing an unrelated `d-fake` ⇒ recovery REFUSES, and `d-3` never becomes sealable again under another universe · same row count with REORDERED identities ⇒ refuse · same row count with a SUBSTITUTED identity ⇒ refuse · same final-row count but a missing earlier exposure ⇒ refuse · a cleanly internally re-chained forged suffix is NOT proof of historical completeness · operator attestation never substitutes for missing identity evidence |
 | TR-27 nonced rule commitment (r7 §7.2) | One ledger-tracked shard exposed while untracked pool members remain withheld ⇒ rule contents hidden · ALL tracked shards exposed but one untracked ORIGINAL-pool member still withheld ⇒ still hidden · after the final pool member is released ⇒ `symbol_rule` + `date_rule` + nonce reveal and recompute EXACTLY to the registered `rule_commitment` · a plausible-rule dictionary attack against the served commitment cannot verify guesses without the nonce · no other API/UI/MCP surface serves the symbol or date axes pre-release |
-| TR-28 coarse pre-release volumes (r7 §7.1) | A one-symbol-day run while withheld ⇒ no exact trade/quote/byte count appears on ANY surface · a multi-shard pool ⇒ coarse bucket labels only, never rounded numbers · expose one shard and re-query ⇒ the remaining withheld counts cannot be solved exactly from the before/after response pair (differencing resistance) · buckets never narrow as the pool shrinks · the final ORIGINAL-pool member released ⇒ exact totals may be served |
+| TR-28 coarse pre-release volumes (r7 §7.1, NON-LIVE surfaces) | A one-symbol-day run while withheld ⇒ no exact trade/quote/byte count appears on ANY surface · a multi-shard pool ⇒ coarse bucket labels only, never rounded numbers · expose one shard and re-query ⇒ the remaining withheld counts cannot be solved exactly from the before/after response pair (differencing resistance) · buckets never narrow as the pool shrinks · the final ORIGINAL-pool member released ⇒ exact totals may be served. **LIVE recorder progress is governed by TR-32 instead, which serves no volume field at all.** |
+| TR-32 live-progress composition (r11 §7.1) | Poll/observe any live progress transport (REST, CLI, UI, MCP) frequently enough that `chunks_done` advances by exactly one, and difference every served field against the deterministic operator-known plan ⇒ NO specific chunk's realized success/failure is recoverable with certainty · a coarse volume bucket TRANSITION across a single-chunk advance must not prove that chunk was `fetched` (running totals advance only on fetch) · bucketing the outcome counters is NOT sufficient (an exact 0→1 boundary still pins the first failure) · internal exact state and the TERMINAL TR-4 disclosed-failure list remain lawful |
 | TR-26 depletion revealing quote (r6 §3) | Price-change termination: `available_at` equals the first CHANGED-price quote, not the last same-price one · bound termination: `available_at` equals the bound-hitting quote · truncating immediately BEFORE the revealing quote makes the depletion value non-existent/unavailable, and including it makes the value appear deterministically |
 
 Plus the standing suite: engine golden trace + observer equivalence + frozen-default profile,

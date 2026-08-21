@@ -1,0 +1,452 @@
+{
+  "evaluated_count": 12,
+  "rows": [
+    {
+      "cik": "0000816761",
+      "ma_search": {
+        "flagged_hits": [
+          {
+            "accession": "0000816761-26-000032",
+            "filed": "2026-08-17",
+            "form": "8-K",
+            "items": "1.01,9.01",
+            "primary_document": "tdc-20260812.htm"
+          },
+          {
+            "accession": "0001140361-26-026267",
+            "filed": "2026-06-24",
+            "form": "8-K",
+            "items": "1.01,1.02,2.03,9.01",
+            "primary_document": "ef20076708_8k.htm"
+          },
+          {
+            "accession": "0001628280-26-007274",
+            "filed": "2026-02-11",
+            "form": "8-K",
+            "items": "1.01,9.01",
+            "primary_document": "tdc-20260210.htm"
+          }
+        ],
+        "forms_searched_count": 186,
+        "retrieved_utc": "2026-08-21T14:00:45Z",
+        "window_end": "2026-08-21",
+        "window_start": "2024-08-21"
+      },
+      "ticker": "TDC"
+    },
+    {
+      "cik": "0001308648",
+      "ma_search": {
+        "flagged_hits": [
+          {
+            "accession": "0001193125-24-260103",
+            "filed": "2024-11-18",
+            "form": "F-4/A",
+            "items": "",
+            "primary_document": "d850549df4a.htm"
+          },
+          {
+            "accession": "0001193125-24-236901",
+            "filed": "2024-10-15",
+            "form": "F-4",
+            "items": "",
+            "primary_document": "d850549df4.htm"
+          }
+        ],
+        "forms_searched_count": 104,
+        "retrieved_utc": "2026-08-21T14:00:45Z",
+        "window_end": "2026-08-21",
+        "window_start": "2024-08-21"
+      },
+      "ticker": "AG"
+    },
+    {
+      "cik": "0001759509",
+      "ma_search": {
+        "flagged_hits": [
+          {
+            "accession": "0001759509-25-000141",
+            "filed": "2025-09-05",
+            "form": "8-K",
+            "items": "1.01,2.03,3.02,8.01,9.01",
+            "primary_document": "lyft-20250902.htm"
+          }
+        ],
+        "forms_searched_count": 246,
+        "retrieved_utc": "2026-08-21T14:00:46Z",
+        "window_end": "2026-08-21",
+        "window_start": "2024-08-21"
+      },
+      "ticker": "LYFT"
+    },
+    {
+      "cik": "0001083301",
+      "ma_search": {
+        "flagged_hits": [
+          {
+            "accession": "0001104659-26-044387",
+            "filed": "2026-04-16",
+            "form": "8-K",
+            "items": "1.01,8.01,9.01",
+            "primary_document": "tm2611661d9_8k.htm"
+          },
+          {
+            "accession": "0000950142-26-000720",
+            "filed": "2026-03-16",
+            "form": "8-K",
+            "items": "1.01,2.03,7.01,9.01",
+            "primary_document": "eh260751501_8k.htm"
+          },
+          {
+            "accession": "0001104659-25-124839",
+            "filed": "2025-12-29",
+            "form": "8-K",
+            "items": "1.01,2.03,9.01",
+            "primary_document": "tm2534384d1_8k.htm"
+          },
+          {
+            "accession": "0001104659-25-104928",
+            "filed": "2025-10-31",
+            "form": "8-K",
+            "items": "1.01,2.03,3.02,8.01,9.01",
+            "primary_document": "tm2529894d1_8k.htm"
+          },
+          {
+            "accession": "0001104659-25-102858",
+            "filed": "2025-10-28",
+            "form": "8-K",
+            "items": "1.01,2.02,7.01,9.01",
+            "primary_document": "tm2529509d1_8k.htm"
+          },
+          {
+            "accession": "0001104659-25-101866",
+            "filed": "2025-10-23",
+            "form": "8-K",
+            "items": "1.01,2.03,9.01",
+            "primary_document": "tm2529300d1_8k.htm"
+          },
+          {
+            "accession": "0001104659-25-080911",
+            "filed": "2025-08-20",
+            "form": "8-K",
+            "items": "1.01,2.03,3.02,9.01",
+            "primary_document": "tm2523651d5_8k.htm"
+          },
+          {
+            "accession": "0001104659-25-079463",
+            "filed": "2025-08-18",
+            "form": "8-K",
+            "items": "1.01,7.01,9.01",
+            "primary_document": "tm2523651d3_8k.htm"
+          },
+          {
+            "accession": "0001104659-25-078086",
+            "filed": "2025-08-14",
+            "form": "8-K",
+            "items": "1.01,2.02,7.01,8.01,9.01",
+            "primary_document": "tm2523008d1_8k.htm"
+          },
+          {
+            "accession": "0001104659-25-078084",
+            "filed": "2025-08-14",
+            "form": "8-K",
+            "items": "1.01,7.01,8.01,9.01",
+            "primary_document": "tm2523008d2_8k.htm"
+          },
+          {
+            "accession": "0001083301-25-000041",
+            "filed": "2025-05-27",
+            "form": "8-K",
+            "items": "1.01,1.02,7.01,9.01",
+            "primary_document": "wulf-20250521.htm"
+          },
+          {
+            "accession": "0000950142-24-002636",
+            "filed": "2024-10-25",
+            "form": "8-K",
+            "items": "1.01,2.03,3.02,8.01,9.01",
+            "primary_document": "eh240549125_8k.htm"
+          },
+          {
+            "accession": "0001083301-24-000136",
+            "filed": "2024-10-10",
+            "form": "8-K",
+            "items": "1.01,1.02,7.01",
+            "primary_document": "wulf-20241009.htm"
+          },
+          {
+            "accession": "0000950142-24-002511",
+            "filed": "2024-10-03",
+            "form": "8-K",
+            "items": "1.01,1.02,7.01,9.01",
+            "primary_document": "eh240539927_8k.htm"
+          }
+        ],
+        "forms_searched_count": 251,
+        "retrieved_utc": "2026-08-21T14:00:46Z",
+        "window_end": "2026-08-21",
+        "window_start": "2024-08-21"
+      },
+      "ticker": "WULF"
+    },
+    {
+      "cik": "0001517413",
+      "ma_search": {
+        "flagged_hits": [
+          {
+            "accession": "0001517413-26-000238",
+            "filed": "2026-08-17",
+            "form": "8-K",
+            "items": "1.01,2.03",
+            "primary_document": "fsly-20260817.htm"
+          },
+          {
+            "accession": "0001517413-25-000350",
+            "filed": "2025-12-17",
+            "form": "8-K",
+            "items": "1.01,2.03,3.02,8.01",
+            "primary_document": "fsly-20251215.htm"
+          },
+          {
+            "accession": "0001517413-25-000343",
+            "filed": "2025-12-09",
+            "form": "8-K",
+            "items": "1.01,2.03,3.02,8.01",
+            "primary_document": "fsly-20251203.htm"
+          },
+          {
+            "accession": "0001517413-24-000244",
+            "filed": "2024-12-05",
+            "form": "8-K",
+            "items": "1.01,2.03,3.02,8.01",
+            "primary_document": "fsly-20241202.htm"
+          }
+        ],
+        "forms_searched_count": 353,
+        "retrieved_utc": "2026-08-21T14:00:47Z",
+        "window_end": "2026-08-21",
+        "window_start": "2024-08-21"
+      },
+      "ticker": "FSLY"
+    },
+    {
+      "cik": "0001635327",
+      "ma_search": {
+        "flagged_hits": [],
+        "forms_searched_count": 340,
+        "retrieved_utc": "2026-08-21T14:00:47Z",
+        "window_end": "2026-08-21",
+        "window_start": "2024-08-21"
+      },
+      "ticker": "FLUT"
+    },
+    {
+      "cik": "0001822479",
+      "ma_search": {
+        "flagged_hits": [
+          {
+            "accession": "0001193125-26-232585",
+            "filed": "2026-05-20",
+            "form": "8-K",
+            "items": "1.01,2.03,9.01",
+            "primary_document": "d107933d8k.htm"
+          },
+          {
+            "accession": "0001193125-25-207549",
+            "filed": "2025-09-18",
+            "form": "8-K",
+            "items": "1.01,2.03,9.01",
+            "primary_document": "d45811d8k.htm"
+          }
+        ],
+        "forms_searched_count": 150,
+        "retrieved_utc": "2026-08-21T14:00:48Z",
+        "window_end": "2026-08-21",
+        "window_start": "2024-08-21"
+      },
+      "ticker": "SHC"
+    },
+    {
+      "cik": "0001816581",
+      "ma_search": {
+        "flagged_hits": [
+          {
+            "accession": "0001193125-25-326944",
+            "filed": "2025-12-19",
+            "form": "8-K",
+            "items": "1.01,9.01",
+            "primary_document": "d96126d8k.htm"
+          }
+        ],
+        "forms_searched_count": 240,
+        "retrieved_utc": "2026-08-21T14:00:48Z",
+        "window_end": "2026-08-21",
+        "window_start": "2024-08-21"
+      },
+      "ticker": "OUST"
+    },
+    {
+      "cik": "0001849056",
+      "ma_search": {
+        "flagged_hits": [
+          {
+            "accession": "0001104659-26-060385",
+            "filed": "2026-05-13",
+            "form": "8-K",
+            "items": "1.01,1.02,9.01",
+            "primary_document": "tm2614461d1_8k.htm"
+          },
+          {
+            "accession": "0001104659-25-118494",
+            "filed": "2025-12-04",
+            "form": "8-K",
+            "items": "1.01,9.01",
+            "primary_document": "tm2532691d1_8k.htm"
+          }
+        ],
+        "forms_searched_count": 262,
+        "retrieved_utc": "2026-08-21T14:00:49Z",
+        "window_end": "2026-08-21",
+        "window_start": "2024-08-21"
+      },
+      "ticker": "OKLO"
+    },
+    {
+      "cik": "0001860160",
+      "ma_search": {
+        "flagged_hits": [
+          {
+            "accession": "0001193125-26-252407",
+            "filed": "2026-06-02",
+            "form": "8-K",
+            "items": "1.01,9.01",
+            "primary_document": "d156539d8k.htm"
+          },
+          {
+            "accession": "0001193125-26-142298",
+            "filed": "2026-04-03",
+            "form": "8-K",
+            "items": "1.01,2.03,5.02,8.01",
+            "primary_document": "d118914d8k.htm"
+          },
+          {
+            "accession": "0001193125-25-274198",
+            "filed": "2025-11-10",
+            "form": "8-K",
+            "items": "1.01,2.03,9.01",
+            "primary_document": "d31146d8k.htm"
+          },
+          {
+            "accession": "0001193125-25-267129",
+            "filed": "2025-11-05",
+            "form": "8-K",
+            "items": "2.01,7.01,9.01",
+            "primary_document": "d949895d8k.htm"
+          },
+          {
+            "accession": "0001193125-25-230927",
+            "filed": "2025-10-06",
+            "form": "8-K",
+            "items": "1.01,3.02,7.01,9.01",
+            "primary_document": "d46239d8k.htm"
+          },
+          {
+            "accession": "0001193125-25-177023",
+            "filed": "2025-08-08",
+            "form": "8-K",
+            "items": "1.01,2.03,3.03,5.02,5.03,9.01",
+            "primary_document": "d58174d8k.htm"
+          }
+        ],
+        "forms_searched_count": 136,
+        "retrieved_utc": "2026-08-21T14:00:49Z",
+        "window_end": "2026-08-21",
+        "window_start": "2024-08-21"
+      },
+      "ticker": "FLY"
+    },
+    {
+      "cik": "0000891103",
+      "ma_search": {
+        "flagged_hits": [
+          {
+            "accession": "0001104659-25-080938",
+            "filed": "2025-08-20",
+            "form": "8-K",
+            "items": "1.01,2.03,9.01",
+            "primary_document": "tm2523672d1_8k.htm"
+          }
+        ],
+        "forms_searched_count": 270,
+        "retrieved_utc": "2026-08-21T14:00:49Z",
+        "window_end": "2026-08-21",
+        "window_start": "2024-08-21"
+      },
+      "ticker": "MTCH"
+    },
+    {
+      "cik": "0000092380",
+      "ma_search": {
+        "flagged_hits": [
+          {
+            "accession": "0000092380-26-000098",
+            "filed": "2026-08-12",
+            "form": "8-K",
+            "items": "1.01,1.02,2.03,9.01",
+            "primary_document": "luv-20260810.htm"
+          },
+          {
+            "accession": "0001193125-26-230895",
+            "filed": "2026-05-19",
+            "form": "8-K",
+            "items": "1.01,2.03",
+            "primary_document": "d117563d8k.htm"
+          },
+          {
+            "accession": "0001193125-26-102966",
+            "filed": "2026-03-12",
+            "form": "8-K",
+            "items": "1.01,2.03",
+            "primary_document": "d108115d8k.htm"
+          },
+          {
+            "accession": "0001193125-25-262544",
+            "filed": "2025-11-03",
+            "form": "8-K",
+            "items": "1.01,2.03,8.01,9.01",
+            "primary_document": "d83756d8k.htm"
+          },
+          {
+            "accession": "0001193125-25-029062",
+            "filed": "2025-02-19",
+            "form": "8-K",
+            "items": "1.01,7.01,9.01",
+            "primary_document": "d919314d8k.htm"
+          },
+          {
+            "accession": "0001193125-24-243459",
+            "filed": "2024-10-25",
+            "form": "8-K",
+            "items": "1.01,3.03,9.01",
+            "primary_document": "d861396d8k.htm"
+          },
+          {
+            "accession": "0001193125-24-242286",
+            "filed": "2024-10-24",
+            "form": "8-K",
+            "items": "1.01,5.02,7.01,9.01",
+            "primary_document": "d899498d8k.htm"
+          }
+        ],
+        "forms_searched_count": 240,
+        "retrieved_utc": "2026-08-21T14:00:50Z",
+        "window_end": "2026-08-21",
+        "window_start": "2024-08-21"
+      },
+      "ticker": "LUV"
+    }
+  ],
+  "screening_cutoff_utc": "2026-08-21T12:06:00Z",
+  "spec_revision": "r11",
+  "stage": "pending_ma_search"
+}

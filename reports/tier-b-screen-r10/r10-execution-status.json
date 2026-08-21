@@ -1,0 +1,67 @@
+{
+  "aborted_utc": "2026-08-21T13:38:27Z",
+  "artifacts_referenced": {
+    "candidate-universe.json": {
+      "bytes": 2395073,
+      "sha256": "33900faa1f5f8f3db833bcdc0321bd61e2d59c73d9741fe31987c1f9cd6a0be8"
+    },
+    "nasdaqlisted.txt": {
+      "bytes": 347404,
+      "sha256": "85fe43725ecb35cf6d18d0d9cfee89130815e4e8f38cafad92d1942eb82a080f"
+    },
+    "otherlisted.txt": {
+      "bytes": 536571,
+      "sha256": "4191463da67760b4646317b3695225a5efb44d6f486d07430d798088fe590de4"
+    },
+    "price-adv.json": {
+      "bytes": 5673606,
+      "sha256": "680bfb0620dc77996cdd31dcb26fdb6f24ebbe95690eb2013674f6726cdb4bb0"
+    },
+    "sec-evidence.json": {
+      "bytes": 7517,
+      "sha256": "98c8f577aa313303fc7162ee452216e1a0a8e89bfc85100df38d0ba4f9e5c1bf"
+    },
+    "source-snapshot.json": {
+      "bytes": 843,
+      "sha256": "2c0c6a5a4299934e85e3f4736956916aa6bc51985c889892db2a35b6a83d3186"
+    }
+  },
+  "disclosure": "The price/ADV/market-cap observations below WERE observed before the r11 ruling and remain part of the audit trail. They are screening inputs, not Tapeology alpha outcomes. They are NOT deleted or overwritten. The r11 rerun recomputes from the SAME frozen snapshot bytes and the SAME cutoff, so the universe is never re-cut after partial results were seen.",
+  "observed_before_ruling": {
+    "candidate_universe": "4973 candidates / 8194 excluded of 13167 rows",
+    "price_and_adv_survivors": 299,
+    "sec_partial": {
+      "AFRM": "unresolved missing_shares_outstanding",
+      "DKNG": "unresolved missing_shares_outstanding",
+      "RKLB": "market cap $43.65B fail",
+      "SOFI": "market cap $23.14B fail"
+    },
+    "seeds": {
+      "AFRM": "price+ADV pass",
+      "DKNG": "price+ADV pass",
+      "ETSY": "ADV fail 2,944,737 < 3,000,000",
+      "RKLB": "price+ADV pass",
+      "SOFI": "price+ADV pass"
+    }
+  },
+  "owner_ruling": "r10 (d) authorised 'one named fallback only if the primary is unavailable' but never named one. dei:EntityCommonStockSharesOutstanding is a genuine 404 for ~12% of the price+ADV survivors (measured on a 60-name sample), including 2 of the 4 surviving provisional seeds. Naming the fallback after observing which candidates it rescues would be the outcome-driven methodology selection the owner ruling's section D forbids, so execution halted BEFORE resolution and escalated. Superseded by r11.",
+  "reason": "market_cap_source_hierarchy_incomplete",
+  "screening_cutoff_utc": "2026-08-21T12:06:00Z",
+  "spec_revision": "r10",
+  "stage": "screen_execution",
+  "stages_completed": [
+    "source_snapshot",
+    "candidate_universe",
+    "price_and_adv",
+    "sec_evidence(partial: 4 surviving seeds only)"
+  ],
+  "stages_not_reached": [
+    "market_cap(complete pool)",
+    "primary_listing(complete pool)",
+    "pending_ma(complete pool)",
+    "median_rth_spread",
+    "tier_b_resolution"
+  ],
+  "status": "ABORTED_PRE_RESOLUTION",
+  "superseded_by": "r11"
+}

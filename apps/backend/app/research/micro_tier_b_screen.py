@@ -497,3 +497,54 @@ def evaluate_spread(
     ok = float(median_bps) <= SPREAD_MAX_BPS
     return _result(STATUS_PASS if ok else STATUS_FAIL,
                    "within_cap" if ok else "exceeds_cap", median_bps=float(median_bps), **prov)
+
+
+# === (d) the r11 market-cap source hierarchy ======================================================
+
+SHARES_SOURCE_PRIMARY = "sec_companyfacts_dei_EntityCommonStockSharesOutstanding"
+SHARES_SOURCE_FALLBACK = "sec_filing_cover_page_shares_outstanding"
+
+__all__ += ["SHARES_SOURCE_PRIMARY", "SHARES_SOURCE_FALLBACK", "select_shares_basis",
+            "cover_page_multi_class"]
+
+
+def select_shares_basis(primary: dict | None, fallback: dict | None) -> dict:
+    """§7.2.1 (d) as completed by r11: PRIMARY is CompanyFacts
+    ``dei:EntityCommonStockSharesOutstanding``; the cover-page disclosure of the latest 10-Q/10-K
+    accepted at or before the cutoff is used ONLY when the primary is unavailable. **There is no
+    third source.**
+
+    The fallback exists because a missing structured extraction must not silently turn a Card-5.2
+    criterion into a test of XBRL tagging quality -- it recovers the SAME point-in-time quantity
+    from the authoritative filing. It is EVIDENCE RECOVERY, never a new capitalization methodology,
+    so it does not touch the multi-class rule: a filing disclosing several common classes still
+    yields ``multi_class=True`` and the candidate still fails closed in ``evaluate_market_cap``.
+
+    Each argument is ``{"shares": int, "multi_class": bool, ...provenance}`` or ``None``. Returns
+    the selected basis annotated with ``shares_source``, or a ``None`` basis when neither source
+    yields an unambiguous point-in-time count."""
+    for source, basis in ((SHARES_SOURCE_PRIMARY, primary), (SHARES_SOURCE_FALLBACK, fallback)):
+        if basis and basis.get("shares"):
+            return {**basis, "shares_source": source, "available": True}
+    # Neither source yielded a usable single-class count. The multi-class SIGNAL must still survive:
+    # a source that found several common classes did NOT "fail to find" the data -- it found data the
+    # frozen rule refuses to collapse. Dropping the flag here would mislabel a multi-class refusal as
+    # a missing fact, understating the multi_class_unresolved count the owner ruling asks for.
+    consulted = [b for b in (primary, fallback) if b]
+    multi = any(bool(b.get("multi_class")) for b in consulted)
+    return {
+        "shares": None, "multi_class": multi, "available": False,
+        "shares_source": None,
+        "classes": next((b.get("classes") for b in consulted if b.get("classes")), None),
+        "reason": ("sources_disclosed_multiple_common_classes" if multi
+                   else "neither_primary_nor_fallback_yielded_a_point_in_time_shares_basis"),
+    }
+
+
+def cover_page_multi_class(classes: list[dict] | None) -> bool:
+    """r11: a cover page disclosing MORE THAN ONE common-stock class means one listed ticker price x
+    one shares figure cannot represent issuer capitalization, so ``evaluate_market_cap`` must fail
+    closed. Summing classes, taking one class, substituting float or weighted-average diluted
+    shares, or inferring a synthetic class price are all forbidden -- this predicate exists so the
+    caller never has to decide."""
+    return bool(classes) and len({c.get("class_name") for c in classes}) > 1

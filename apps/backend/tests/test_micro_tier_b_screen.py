@@ -412,3 +412,94 @@ def test_more_passing_seeds_than_slots_takes_exactly_three_by_documented_order()
 def test_all_five_seeds_passing_still_takes_exactly_three():
     out = tb.resolve_tier_b(passing_seeds=list(tb.PROVISIONAL_SEEDS), passing_replacements=[])
     assert out["resolved"] == ["DKNG", "ETSY", "AFRM"]
+
+
+# === (d) the r11 market-cap source hierarchy ======================================================
+
+
+def test_the_primary_source_wins_whenever_it_is_available():
+    basis = tb.select_shares_basis(
+        primary={"shares": 100, "multi_class": False, "accn": "p"},
+        fallback={"shares": 999, "multi_class": False, "accn": "f"},
+    )
+    assert basis["shares"] == 100 and basis["shares_source"] == tb.SHARES_SOURCE_PRIMARY
+
+
+def test_the_fallback_is_used_only_when_the_primary_is_unavailable():
+    basis = tb.select_shares_basis(
+        primary=None, fallback={"shares": 999, "multi_class": False, "accn": "f"},
+    )
+    assert basis["shares"] == 999 and basis["shares_source"] == tb.SHARES_SOURCE_FALLBACK
+
+
+def test_neither_source_available_is_unresolved_and_there_is_no_third_source():
+    basis = tb.select_shares_basis(primary=None, fallback=None)
+    assert basis["available"] is False and basis["shares"] is None
+    cap = tb.evaluate_market_cap(basis["shares"], 50.0)
+    assert cap["status"] == tb.STATUS_UNRESOLVED
+
+
+def test_the_fallback_does_not_override_the_multi_class_fail_closed_rule():
+    """r11 is explicit: the fallback is EVIDENCE RECOVERY, not a new capitalization methodology. A
+    cover page disclosing Class A and Class B still fails closed -- summing them, taking A only, or
+    substituting float/weighted-average diluted shares are all forbidden."""
+    classes = [{"class_name": "Class A", "shares": 400_000_000},
+               {"class_name": "Class B", "shares": 100_000_000}]
+    assert tb.cover_page_multi_class(classes) is True
+    basis = tb.select_shares_basis(
+        primary=None,
+        fallback={"shares": 400_000_000, "multi_class": tb.cover_page_multi_class(classes),
+                  "classes": classes, "accn": "0000000000-26-000001"},
+    )
+    assert basis["shares_source"] == tb.SHARES_SOURCE_FALLBACK
+    cap = tb.evaluate_market_cap(basis["shares"], 30.0, multi_class=basis["multi_class"])
+    assert cap["status"] == tb.STATUS_UNRESOLVED
+    assert cap["reason"] == "multi_class_capitalization_ambiguous"
+    assert cap["market_cap_usd"] is None
+
+
+def test_a_single_class_cover_page_resolves_normally_through_the_fallback():
+    classes = [{"class_name": "Common Stock", "shares": 200_000_000}]
+    assert tb.cover_page_multi_class(classes) is False
+    basis = tb.select_shares_basis(
+        primary=None, fallback={"shares": 200_000_000, "multi_class": False, "classes": classes},
+    )
+    cap = tb.evaluate_market_cap(basis["shares"], 50.0, multi_class=basis["multi_class"])
+    assert cap["status"] == tb.STATUS_PASS and cap["market_cap_usd"] == 10_000_000_000.0
+
+
+def test_an_empty_or_absent_class_list_is_not_treated_as_multi_class():
+    assert tb.cover_page_multi_class(None) is False
+    assert tb.cover_page_multi_class([]) is False
+
+
+def test_a_zero_share_fallback_is_not_selected_as_a_basis():
+    """A present-but-zero count is not an unambiguous point-in-time basis."""
+    basis = tb.select_shares_basis(primary=None, fallback={"shares": 0, "multi_class": False})
+    assert basis["available"] is False and basis["shares_source"] is None
+
+
+def test_a_multi_class_signal_survives_even_when_no_single_class_basis_exists():
+    """Fidelity of the RECORDED REASON, not just the outcome. A source that disclosed Class A and
+    Class B did not 'fail to find' the fact -- it found data the frozen rule refuses to collapse.
+    Reporting that as `missing_shares_outstanding` would understate the multi_class_unresolved
+    count the owner ruling asks for. (Caught live: DKNG was mislabelled this way.)"""
+    classes = [{"class_name": "ClassA", "shares": 496_454_048},
+               {"class_name": "ClassB", "shares": 393_013_951}]
+    basis = tb.select_shares_basis(
+        primary=None,
+        fallback={"shares": None, "multi_class": True, "classes": classes},
+    )
+    assert basis["available"] is False and basis["shares"] is None
+    assert basis["multi_class"] is True
+    assert basis["reason"] == "sources_disclosed_multiple_common_classes"
+    assert basis["classes"] == classes
+    cap = tb.evaluate_market_cap(basis["shares"], 30.0, multi_class=basis["multi_class"])
+    assert cap["status"] == tb.STATUS_UNRESOLVED
+    assert cap["reason"] == "multi_class_capitalization_ambiguous"
+
+
+def test_a_genuinely_absent_fact_still_reports_as_absent_not_as_multi_class():
+    basis = tb.select_shares_basis(primary=None, fallback={"shares": None, "multi_class": False})
+    assert basis["multi_class"] is False
+    assert basis["reason"] == "neither_primary_nor_fallback_yielded_a_point_in_time_shares_basis"
