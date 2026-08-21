@@ -1,0 +1,39 @@
+{
+  "classification": {
+    "reason": "no_pending_definitive_transaction",
+    "rule": "\u00a77.2.1 (g): a completed or terminated transaction does not fail merely because it was recent; only a transaction still PENDING at the cutoff fails.",
+    "status": "closed",
+    "verdict": "pass"
+  },
+  "closure_evidence": {
+    "acceptance_datetime": "2025-01-16T14:07:38.000Z",
+    "accession": "0001062993-25-000816",
+    "cik": "0001308648",
+    "closed_on": "2025-01-16",
+    "document_sha256": "dc9757cc3f77696b27da7265f6ff126c9723a975525b9c40ced6c83b952197d5",
+    "document_url": "https://www.sec.gov/Archives/edgar/data/1308648/000106299325000816/exhibit99-1.htm",
+    "excerpt": "First Majestic Completes Acquisition of Gatos Silver Vancouver, BC, Canada - First Majestic Silver Corp. (NYSE:AG) (TSX:AG) (FSE:FMV) (the \"Company\" or \"First Majestic\") and Gatos Silver, Inc. (NYSE: GATO) (TSX: GATO) (\"Gatos Silver\") are pleased to announce the completion of the acquisition of Gatos Silver by First Majestic (the \"Transaction\") pursuant to the agreement and plan of merger (the \"Merger Agreement\") previously announced in the joint news release of First Majestic and Gatos Silver dated September 5, 2024 . On Tuesday, January 14, 2025, both First Majestic and Gatos Silver announced that they received all necessary share",
+    "filing_date": "2025-01-16",
+    "form": "6-K"
+  },
+  "flagged_filings_verified": [
+    {
+      "accession": "0000000000-00-000000",
+      "filed": "2024-10-15",
+      "form": "F-4"
+    },
+    {
+      "accession": "0001193125-24-260103",
+      "counterparty_evidence": "F-4/A primary document names 'Gatos Silver, Inc'",
+      "filed": "2024-11-18",
+      "form": "F-4/A"
+    }
+  ],
+  "other_flagged_hits": "AG's 24-month search returned exactly 2 flagged filings, both F-4 filings for this same transaction. No other definitive transaction was flagged, so none remained pending at the cutoff.",
+  "retrieved_utc": "2026-08-21T14:22:09Z",
+  "screening_cutoff_utc": "2026-08-21T12:06:00Z",
+  "spec_revision": "r11",
+  "stage": "pending_ma_closure_evidence",
+  "ticker": "AG",
+  "transaction": "First Majestic Silver Corp acquisition of Gatos Silver, Inc."
+}

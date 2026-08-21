@@ -1,0 +1,305 @@
+{
+  "basis": "spread = ask - bid; mid = (bid+ask)/2; bps via micro_features.spread_bps; eligible = two-sided, positive mid, not crossed (ask >= bid > 0)",
+  "evaluated_count": 6,
+  "exposure_note": "SCREENING/EXPOSED observations -- these sessions may never be used as J-06 sealed historical-OOS recording dates for any symbol screened here.",
+  "frozen_sessions": [
+    "2026-08-14",
+    "2026-08-17",
+    "2026-08-18",
+    "2026-08-19",
+    "2026-08-20"
+  ],
+  "rows": [
+    {
+      "crossed_excluded": 2,
+      "eligible_observations": 113157,
+      "median_bps": 10.777797736662885,
+      "per_session": [
+        {
+          "crossed_excluded": 2,
+          "eligible_observations": 24771,
+          "session": "2026-08-14"
+        },
+        {
+          "crossed_excluded": 0,
+          "eligible_observations": 30242,
+          "session": "2026-08-17"
+        },
+        {
+          "crossed_excluded": 0,
+          "eligible_observations": 19284,
+          "session": "2026-08-18"
+        },
+        {
+          "crossed_excluded": 0,
+          "eligible_observations": 20285,
+          "session": "2026-08-19"
+        },
+        {
+          "crossed_excluded": 0,
+          "eligible_observations": 18575,
+          "session": "2026-08-20"
+        }
+      ],
+      "raw_quote_records": 113159,
+      "spread": {
+        "median_bps": 10.777797736662885,
+        "observations": 113157,
+        "reason": "exceeds_cap",
+        "sessions": [
+          "2026-08-14",
+          "2026-08-17",
+          "2026-08-18",
+          "2026-08-19",
+          "2026-08-20"
+        ],
+        "source": "alpaca-sip-historical-quotes",
+        "status": "fail"
+      },
+      "ticker": "TDC"
+    },
+    {
+      "crossed_excluded": 29,
+      "eligible_observations": 1717162,
+      "median_bps": 4.97883993029702,
+      "per_session": [
+        {
+          "crossed_excluded": 5,
+          "eligible_observations": 267402,
+          "session": "2026-08-14"
+        },
+        {
+          "crossed_excluded": 9,
+          "eligible_observations": 253019,
+          "session": "2026-08-17"
+        },
+        {
+          "crossed_excluded": 3,
+          "eligible_observations": 242979,
+          "session": "2026-08-18"
+        },
+        {
+          "crossed_excluded": 6,
+          "eligible_observations": 453510,
+          "session": "2026-08-19"
+        },
+        {
+          "crossed_excluded": 6,
+          "eligible_observations": 500252,
+          "session": "2026-08-20"
+        }
+      ],
+      "raw_quote_records": 1717191,
+      "spread": {
+        "median_bps": 4.97883993029702,
+        "observations": 1717162,
+        "reason": "within_cap",
+        "sessions": [
+          "2026-08-14",
+          "2026-08-17",
+          "2026-08-18",
+          "2026-08-19",
+          "2026-08-20"
+        ],
+        "source": "alpaca-sip-historical-quotes",
+        "status": "pass"
+      },
+      "ticker": "AG"
+    },
+    {
+      "crossed_excluded": 98,
+      "eligible_observations": 611823,
+      "median_bps": 5.765350245028287,
+      "per_session": [
+        {
+          "crossed_excluded": 19,
+          "eligible_observations": 87637,
+          "session": "2026-08-14"
+        },
+        {
+          "crossed_excluded": 17,
+          "eligible_observations": 89168,
+          "session": "2026-08-17"
+        },
+        {
+          "crossed_excluded": 8,
+          "eligible_observations": 105502,
+          "session": "2026-08-18"
+        },
+        {
+          "crossed_excluded": 14,
+          "eligible_observations": 186866,
+          "session": "2026-08-19"
+        },
+        {
+          "crossed_excluded": 40,
+          "eligible_observations": 142650,
+          "session": "2026-08-20"
+        }
+      ],
+      "raw_quote_records": 611921,
+      "spread": {
+        "median_bps": 5.765350245028287,
+        "observations": 611823,
+        "reason": "within_cap",
+        "sessions": [
+          "2026-08-14",
+          "2026-08-17",
+          "2026-08-18",
+          "2026-08-19",
+          "2026-08-20"
+        ],
+        "source": "alpaca-sip-historical-quotes",
+        "status": "pass"
+      },
+      "ticker": "LYFT"
+    },
+    {
+      "crossed_excluded": 91,
+      "eligible_observations": 1760721,
+      "median_bps": 6.11433812289698,
+      "per_session": [
+        {
+          "crossed_excluded": 31,
+          "eligible_observations": 431901,
+          "session": "2026-08-14"
+        },
+        {
+          "crossed_excluded": 34,
+          "eligible_observations": 297339,
+          "session": "2026-08-17"
+        },
+        {
+          "crossed_excluded": 7,
+          "eligible_observations": 334987,
+          "session": "2026-08-18"
+        },
+        {
+          "crossed_excluded": 14,
+          "eligible_observations": 320879,
+          "session": "2026-08-19"
+        },
+        {
+          "crossed_excluded": 5,
+          "eligible_observations": 375615,
+          "session": "2026-08-20"
+        }
+      ],
+      "raw_quote_records": 1760812,
+      "spread": {
+        "median_bps": 6.11433812289698,
+        "observations": 1760721,
+        "reason": "within_cap",
+        "sessions": [
+          "2026-08-14",
+          "2026-08-17",
+          "2026-08-18",
+          "2026-08-19",
+          "2026-08-20"
+        ],
+        "source": "alpaca-sip-historical-quotes",
+        "status": "pass"
+      },
+      "ticker": "WULF"
+    },
+    {
+      "crossed_excluded": 46,
+      "eligible_observations": 392709,
+      "median_bps": 10.353753235547051,
+      "per_session": [
+        {
+          "crossed_excluded": 18,
+          "eligible_observations": 78925,
+          "session": "2026-08-14"
+        },
+        {
+          "crossed_excluded": 14,
+          "eligible_observations": 84092,
+          "session": "2026-08-17"
+        },
+        {
+          "crossed_excluded": 8,
+          "eligible_observations": 94669,
+          "session": "2026-08-18"
+        },
+        {
+          "crossed_excluded": 6,
+          "eligible_observations": 59401,
+          "session": "2026-08-19"
+        },
+        {
+          "crossed_excluded": 0,
+          "eligible_observations": 75622,
+          "session": "2026-08-20"
+        }
+      ],
+      "raw_quote_records": 392755,
+      "spread": {
+        "median_bps": 10.353753235547051,
+        "observations": 392709,
+        "reason": "exceeds_cap",
+        "sessions": [
+          "2026-08-14",
+          "2026-08-17",
+          "2026-08-18",
+          "2026-08-19",
+          "2026-08-20"
+        ],
+        "source": "alpaca-sip-historical-quotes",
+        "status": "fail"
+      },
+      "ticker": "FSLY"
+    },
+    {
+      "crossed_excluded": 4,
+      "eligible_observations": 96216,
+      "median_bps": 14.979029396240342,
+      "per_session": [
+        {
+          "crossed_excluded": 3,
+          "eligible_observations": 19195,
+          "session": "2026-08-14"
+        },
+        {
+          "crossed_excluded": 0,
+          "eligible_observations": 22546,
+          "session": "2026-08-17"
+        },
+        {
+          "crossed_excluded": 1,
+          "eligible_observations": 18766,
+          "session": "2026-08-18"
+        },
+        {
+          "error": "VendorTimeout: market data provider timed out",
+          "session": "2026-08-19"
+        },
+        {
+          "crossed_excluded": 0,
+          "eligible_observations": 23249,
+          "session": "2026-08-20"
+        }
+      ],
+      "raw_quote_records": 96220,
+      "spread": {
+        "median_bps": 14.979029396240342,
+        "observations": 96216,
+        "reason": "exceeds_cap",
+        "sessions": [
+          "2026-08-14",
+          "2026-08-17",
+          "2026-08-18",
+          "2026-08-19",
+          "2026-08-20"
+        ],
+        "source": "alpaca-sip-historical-quotes",
+        "status": "fail"
+      },
+      "ticker": "FLUT"
+    }
+  ],
+  "screening_cutoff_utc": "2026-08-21T12:06:00Z",
+  "source": "alpaca-sip-historical-quotes",
+  "spec_revision": "r11",
+  "stage": "median_rth_spread"
+}

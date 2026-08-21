@@ -503,3 +503,24 @@ def test_a_genuinely_absent_fact_still_reports_as_absent_not_as_multi_class():
     basis = tb.select_shares_basis(primary=None, fallback={"shares": None, "multi_class": False})
     assert basis["multi_class"] is False
     assert basis["reason"] == "neither_primary_nor_fallback_yielded_a_point_in_time_shares_basis"
+
+
+# === (f) exposed sessions may never become sealed recording dates =================================
+
+
+def test_the_five_screening_sessions_are_frozen_in_source():
+    assert tb.SCREENING_EXPOSED_SESSIONS == (
+        "2026-08-14", "2026-08-17", "2026-08-18", "2026-08-19", "2026-08-20")
+
+
+def test_a_date_rule_reusing_a_screening_session_is_refused():
+    """§7.2.1 (f): those sessions are EXPOSED. Recording one would hand sealed historical-OOS
+    credit to a date the spread screen already looked at."""
+    with pytest.raises(tb.ExposedSessionInRecordingUniverse, match="2026-08-18"):
+        tb.assert_no_exposed_session(["2026-07-01", "2026-08-18", "2026-07-03"])
+
+
+def test_a_clean_date_rule_passes_the_exposed_session_check():
+    out = tb.assert_no_exposed_session(["2026-07-01", "2026-07-02", "2026-07-06"])
+    assert out["ok"] is True
+    assert out["checked_against"] == list(tb.SCREENING_EXPOSED_SESSIONS)

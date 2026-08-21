@@ -548,3 +548,34 @@ def cover_page_multi_class(classes: list[dict] | None) -> bool:
     shares, or inferring a synthetic class price are all forbidden -- this predicate exists so the
     caller never has to decide."""
     return bool(classes) and len({c.get("class_name") for c in classes}) > 1
+
+
+# === (f) the screening/EXPOSED sessions — never sealed recording dates ============================
+
+#: §7.2.1 (f) + owner ruling 2026-08-21: the five completed RTH sessions the median-spread screen
+#: consumed. They are SCREENING/EXPOSED observations, so they may NEVER be used as J-06 sealed
+#: historical-OOS recording dates for any symbol screened on them. Frozen in source so the
+#: constraint is machine-checkable at universe-registration time rather than merely documented.
+SCREENING_EXPOSED_SESSIONS: tuple[str, ...] = (
+    "2026-08-14", "2026-08-17", "2026-08-18", "2026-08-19", "2026-08-20",
+)
+
+__all__ += ["SCREENING_EXPOSED_SESSIONS", "ExposedSessionInRecordingUniverse",
+            "assert_no_exposed_session"]
+
+
+class ExposedSessionInRecordingUniverse(Exception):
+    """A proposed J-06 ``date_rule`` contains a session already burned as SCREENING/EXPOSED data.
+    Recording it would give sealed historical-OOS credit to a date the screen already looked at."""
+
+
+def assert_no_exposed_session(date_rule: list[str]) -> dict:
+    """Refuses a ``date_rule`` that reuses any screening/exposed session. Called BEFORE universe
+    registration -- the one moment the date axis is still changeable (§7.2 freezes it thereafter)."""
+    clash = sorted(set(date_rule) & set(SCREENING_EXPOSED_SESSIONS))
+    if clash:
+        raise ExposedSessionInRecordingUniverse(
+            f"date_rule reuses screening/EXPOSED session(s) {clash!r}; §7.2.1 (f) forbids sealed "
+            "historical-OOS credit for a date the Tier-B spread screen already consumed"
+        )
+    return {"ok": True, "checked_against": list(SCREENING_EXPOSED_SESSIONS)}

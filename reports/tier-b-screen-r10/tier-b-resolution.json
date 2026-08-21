@@ -1,0 +1,618 @@
+{
+  "eligible_replacements_evaluated": [
+    "AG",
+    "LYFT",
+    "WULF"
+  ],
+  "exposed_sessions_never_sealed": [
+    "2026-08-14",
+    "2026-08-17",
+    "2026-08-18",
+    "2026-08-19",
+    "2026-08-20"
+  ],
+  "frozen_panel": [
+    "PG",
+    "AAPL",
+    "MSFT",
+    "NVDA",
+    "AG",
+    "LYFT",
+    "WULF",
+    "SPY"
+  ],
+  "passing_seeds": [],
+  "planned_symbol_days": 80,
+  "replacement_hash_ranking": [
+    {
+      "rank_key": "021bb3c50203cba97aba376e5aac5c63d1341a670b8956ac2ba408e094b9a487",
+      "ticker": "AG"
+    },
+    {
+      "rank_key": "08f9434081e05c8c80f39ec0a85c52a191eb4c2d867037edde479244666af15d",
+      "ticker": "LYFT"
+    },
+    {
+      "rank_key": "0905d0706c72a49b58b9c18633de5d1b599986edec3a51379927d2de96bd3ce0",
+      "ticker": "WULF"
+    }
+  ],
+  "resolved_tier_b": [
+    "AG",
+    "LYFT",
+    "WULF"
+  ],
+  "resolved_utc": "2026-08-21T14:35:50Z",
+  "salt": "rapid-microscope-tier-b-r10:",
+  "screening_cutoff_utc": "2026-08-21T12:06:00Z",
+  "six_criterion_results": {
+    "AG": {
+      "adv": {
+        "adv": 10388183.333333334,
+        "reason": "meets_floor",
+        "sessions": [
+          "2026-07-10",
+          "2026-07-13",
+          "2026-07-14",
+          "2026-07-15",
+          "2026-07-16",
+          "2026-07-17",
+          "2026-07-20",
+          "2026-07-21",
+          "2026-07-22",
+          "2026-07-23",
+          "2026-07-24",
+          "2026-07-27",
+          "2026-07-28",
+          "2026-07-29",
+          "2026-07-30",
+          "2026-07-31",
+          "2026-08-03",
+          "2026-08-04",
+          "2026-08-05",
+          "2026-08-06",
+          "2026-08-07",
+          "2026-08-10",
+          "2026-08-11",
+          "2026-08-12",
+          "2026-08-13",
+          "2026-08-14",
+          "2026-08-17",
+          "2026-08-18",
+          "2026-08-19",
+          "2026-08-20"
+        ],
+        "source": "yahoo-daily",
+        "status": "pass"
+      },
+      "listing": {
+        "directory_exchange": "NYSE",
+        "reason": "primary_us_listing_confirmed",
+        "sec_exchange": "NYSE",
+        "status": "pass"
+      },
+      "market_cap": {
+        "accession": "0001062993-26-001765",
+        "cik": "0001308648",
+        "concept": "dei:EntityCommonStockSharesOutstanding",
+        "fact_period_end": "2025-12-31",
+        "filing_date": "2026-03-31",
+        "market_cap_usd": 10411119884.154419,
+        "price_session": "2026-08-20",
+        "price_source": "yahoo-daily",
+        "raw_close": 21.190000534057617,
+        "raw_shares_outstanding": 491322304,
+        "reason": "in_range",
+        "status": "pass"
+      },
+      "median_bps": 4.97883993029702,
+      "pending_ma": {
+        "reason": "no_pending_definitive_transaction (closure evidence: 6-K 0001062993-25-000816)",
+        "verdict": "pass"
+      },
+      "price": {
+        "close": 21.190000534057617,
+        "reason": "in_range",
+        "session": "2026-08-20",
+        "source": "yahoo-daily",
+        "status": "pass"
+      },
+      "spread": {
+        "median_bps": 4.97883993029702,
+        "observations": 1717162,
+        "reason": "within_cap",
+        "sessions": [
+          "2026-08-14",
+          "2026-08-17",
+          "2026-08-18",
+          "2026-08-19",
+          "2026-08-20"
+        ],
+        "source": "alpaca-sip-historical-quotes",
+        "status": "pass"
+      }
+    },
+    "FLUT": {
+      "adv": {
+        "adv": 3163363.3333333335,
+        "reason": "meets_floor",
+        "sessions": [
+          "2026-07-10",
+          "2026-07-13",
+          "2026-07-14",
+          "2026-07-15",
+          "2026-07-16",
+          "2026-07-17",
+          "2026-07-20",
+          "2026-07-21",
+          "2026-07-22",
+          "2026-07-23",
+          "2026-07-24",
+          "2026-07-27",
+          "2026-07-28",
+          "2026-07-29",
+          "2026-07-30",
+          "2026-07-31",
+          "2026-08-03",
+          "2026-08-04",
+          "2026-08-05",
+          "2026-08-06",
+          "2026-08-07",
+          "2026-08-10",
+          "2026-08-11",
+          "2026-08-12",
+          "2026-08-13",
+          "2026-08-14",
+          "2026-08-17",
+          "2026-08-18",
+          "2026-08-19",
+          "2026-08-20"
+        ],
+        "source": "yahoo-daily",
+        "status": "pass"
+      },
+      "listing": {
+        "directory_exchange": "NYSE",
+        "reason": "primary_us_listing_confirmed",
+        "sec_exchange": "NYSE",
+        "status": "pass"
+      },
+      "market_cap": {
+        "accession": "0001635327-26-000056",
+        "cik": "0001635327",
+        "concept": "dei:EntityCommonStockSharesOutstanding",
+        "fact_period_end": "2026-07-31",
+        "filing_date": "2026-08-05",
+        "market_cap_usd": 17279288333.18007,
+        "price_session": "2026-08-20",
+        "price_source": "yahoo-daily",
+        "raw_close": 99.56999969482422,
+        "raw_shares_outstanding": 173539102,
+        "reason": "in_range",
+        "status": "pass"
+      },
+      "median_bps": 14.979029396240342,
+      "pending_ma": {
+        "classified": [],
+        "hits": 0,
+        "note": "340 forms searched in the 24-month window with zero flagged hits \u2014 a complete search record, not an absent one",
+        "reason": "no_pending_definitive_transaction",
+        "verdict": "pass"
+      },
+      "price": {
+        "close": 99.56999969482422,
+        "reason": "in_range",
+        "session": "2026-08-20",
+        "source": "yahoo-daily",
+        "status": "pass"
+      },
+      "spread": {
+        "median_bps": 14.979029396240342,
+        "observations": 96216,
+        "reason": "exceeds_cap",
+        "sessions": [
+          "2026-08-14",
+          "2026-08-17",
+          "2026-08-18",
+          "2026-08-19",
+          "2026-08-20"
+        ],
+        "source": "alpaca-sip-historical-quotes",
+        "status": "fail"
+      }
+    },
+    "FSLY": {
+      "adv": {
+        "adv": 6266863.333333333,
+        "reason": "meets_floor",
+        "sessions": [
+          "2026-07-10",
+          "2026-07-13",
+          "2026-07-14",
+          "2026-07-15",
+          "2026-07-16",
+          "2026-07-17",
+          "2026-07-20",
+          "2026-07-21",
+          "2026-07-22",
+          "2026-07-23",
+          "2026-07-24",
+          "2026-07-27",
+          "2026-07-28",
+          "2026-07-29",
+          "2026-07-30",
+          "2026-07-31",
+          "2026-08-03",
+          "2026-08-04",
+          "2026-08-05",
+          "2026-08-06",
+          "2026-08-07",
+          "2026-08-10",
+          "2026-08-11",
+          "2026-08-12",
+          "2026-08-13",
+          "2026-08-14",
+          "2026-08-17",
+          "2026-08-18",
+          "2026-08-19",
+          "2026-08-20"
+        ],
+        "source": "yahoo-daily",
+        "status": "pass"
+      },
+      "listing": {
+        "directory_exchange": "Nasdaq",
+        "reason": "primary_us_listing_confirmed",
+        "sec_exchange": "Nasdaq",
+        "status": "pass"
+      },
+      "market_cap": {
+        "accession": "0001517413-26-000213",
+        "cik": "0001517413",
+        "concept": "dei:EntityCommonStockSharesOutstanding",
+        "fact_period_end": "2026-07-24",
+        "filing_date": "2026-08-05",
+        "market_cap_usd": 3617702854.156494,
+        "price_session": "2026-08-20",
+        "price_source": "yahoo-daily",
+        "raw_close": 22.709999084472656,
+        "raw_shares_outstanding": 159300000,
+        "reason": "in_range",
+        "status": "pass"
+      },
+      "median_bps": 10.353753235547051,
+      "pending_ma": {
+        "classified": [
+          {
+            "note": "all four are convertible senior notes / capped call / indenture / revolving credit"
+          }
+        ],
+        "hits": 4,
+        "reason": "no_pending_definitive_transaction",
+        "verdict": "pass"
+      },
+      "price": {
+        "close": 22.709999084472656,
+        "reason": "in_range",
+        "session": "2026-08-20",
+        "source": "yahoo-daily",
+        "status": "pass"
+      },
+      "spread": {
+        "median_bps": 10.353753235547051,
+        "observations": 392709,
+        "reason": "exceeds_cap",
+        "sessions": [
+          "2026-08-14",
+          "2026-08-17",
+          "2026-08-18",
+          "2026-08-19",
+          "2026-08-20"
+        ],
+        "source": "alpaca-sip-historical-quotes",
+        "status": "fail"
+      }
+    },
+    "LYFT": {
+      "adv": {
+        "adv": 11706836.666666666,
+        "reason": "meets_floor",
+        "sessions": [
+          "2026-07-10",
+          "2026-07-13",
+          "2026-07-14",
+          "2026-07-15",
+          "2026-07-16",
+          "2026-07-17",
+          "2026-07-20",
+          "2026-07-21",
+          "2026-07-22",
+          "2026-07-23",
+          "2026-07-24",
+          "2026-07-27",
+          "2026-07-28",
+          "2026-07-29",
+          "2026-07-30",
+          "2026-07-31",
+          "2026-08-03",
+          "2026-08-04",
+          "2026-08-05",
+          "2026-08-06",
+          "2026-08-07",
+          "2026-08-10",
+          "2026-08-11",
+          "2026-08-12",
+          "2026-08-13",
+          "2026-08-14",
+          "2026-08-17",
+          "2026-08-18",
+          "2026-08-19",
+          "2026-08-20"
+        ],
+        "source": "yahoo-daily",
+        "status": "pass"
+      },
+      "listing": {
+        "directory_exchange": "Nasdaq",
+        "reason": "primary_us_listing_confirmed",
+        "sec_exchange": "Nasdaq",
+        "status": "pass"
+      },
+      "market_cap": {
+        "accession": "0001628280-26-054499",
+        "cik": "0001759509",
+        "concept": "dei:EntityCommonStockSharesOutstanding",
+        "fact_period_end": "2026-07-31",
+        "filing_date": "2026-08-07",
+        "market_cap_usd": 6586600188.198355,
+        "price_session": "2026-08-20",
+        "price_source": "yahoo-daily",
+        "raw_close": 17.399999618530273,
+        "raw_shares_outstanding": 378540249,
+        "reason": "in_range",
+        "status": "pass"
+      },
+      "median_bps": 5.765350245028287,
+      "pending_ma": {
+        "classified": [
+          {
+            "agreement": "convertible senior notes / capped call / indenture",
+            "filed": "2025-09-05",
+            "status": "not_a_transaction"
+          }
+        ],
+        "hits": 1,
+        "reason": "no_pending_definitive_transaction",
+        "verdict": "pass"
+      },
+      "price": {
+        "close": 17.399999618530273,
+        "reason": "in_range",
+        "session": "2026-08-20",
+        "source": "yahoo-daily",
+        "status": "pass"
+      },
+      "spread": {
+        "median_bps": 5.765350245028287,
+        "observations": 611823,
+        "reason": "within_cap",
+        "sessions": [
+          "2026-08-14",
+          "2026-08-17",
+          "2026-08-18",
+          "2026-08-19",
+          "2026-08-20"
+        ],
+        "source": "alpaca-sip-historical-quotes",
+        "status": "pass"
+      }
+    },
+    "TDC": {
+      "adv": {
+        "adv": 3162213.3333333335,
+        "reason": "meets_floor",
+        "sessions": [
+          "2026-07-10",
+          "2026-07-13",
+          "2026-07-14",
+          "2026-07-15",
+          "2026-07-16",
+          "2026-07-17",
+          "2026-07-20",
+          "2026-07-21",
+          "2026-07-22",
+          "2026-07-23",
+          "2026-07-24",
+          "2026-07-27",
+          "2026-07-28",
+          "2026-07-29",
+          "2026-07-30",
+          "2026-07-31",
+          "2026-08-03",
+          "2026-08-04",
+          "2026-08-05",
+          "2026-08-06",
+          "2026-08-07",
+          "2026-08-10",
+          "2026-08-11",
+          "2026-08-12",
+          "2026-08-13",
+          "2026-08-14",
+          "2026-08-17",
+          "2026-08-18",
+          "2026-08-19",
+          "2026-08-20"
+        ],
+        "source": "yahoo-daily",
+        "status": "pass"
+      },
+      "listing": {
+        "directory_exchange": "NYSE",
+        "reason": "primary_us_listing_confirmed",
+        "sec_exchange": "NYSE",
+        "status": "pass"
+      },
+      "market_cap": {
+        "accession": "0001628280-26-053103",
+        "cik": "0000816761",
+        "concept": "dei:EntityCommonStockSharesOutstanding",
+        "fact_period_end": "2026-07-24",
+        "filing_date": "2026-08-05",
+        "market_cap_usd": 2564009971.6186523,
+        "price_session": "2026-08-20",
+        "price_source": "yahoo-daily",
+        "raw_close": 27.56999969482422,
+        "raw_shares_outstanding": 93000000,
+        "reason": "in_range",
+        "status": "pass"
+      },
+      "median_bps": 10.777797736662885,
+      "pending_ma": {
+        "classified": [
+          {
+            "accession": "0000816761-26-000032",
+            "agreement": "Indemnification Agreement with directors/officers",
+            "filed": "2026-08-17",
+            "status": "not_a_transaction"
+          },
+          {
+            "agreement": "credit agreement / term loan / revolving",
+            "filed": "2026-06-24",
+            "status": "not_a_transaction"
+          },
+          {
+            "accession": "0001628280-26-007274",
+            "agreement": "Cooperation Agreement with Lynrock Lake (board composition)",
+            "filed": "2026-02-11",
+            "status": "not_a_transaction"
+          }
+        ],
+        "hits": 3,
+        "reason": "no_pending_definitive_transaction",
+        "verdict": "pass"
+      },
+      "price": {
+        "close": 27.56999969482422,
+        "reason": "in_range",
+        "session": "2026-08-20",
+        "source": "yahoo-daily",
+        "status": "pass"
+      },
+      "spread": {
+        "median_bps": 10.777797736662885,
+        "observations": 113157,
+        "reason": "exceeds_cap",
+        "sessions": [
+          "2026-08-14",
+          "2026-08-17",
+          "2026-08-18",
+          "2026-08-19",
+          "2026-08-20"
+        ],
+        "source": "alpaca-sip-historical-quotes",
+        "status": "fail"
+      }
+    },
+    "WULF": {
+      "adv": {
+        "adv": 33555206.666666664,
+        "reason": "meets_floor",
+        "sessions": [
+          "2026-07-10",
+          "2026-07-13",
+          "2026-07-14",
+          "2026-07-15",
+          "2026-07-16",
+          "2026-07-17",
+          "2026-07-20",
+          "2026-07-21",
+          "2026-07-22",
+          "2026-07-23",
+          "2026-07-24",
+          "2026-07-27",
+          "2026-07-28",
+          "2026-07-29",
+          "2026-07-30",
+          "2026-07-31",
+          "2026-08-03",
+          "2026-08-04",
+          "2026-08-05",
+          "2026-08-06",
+          "2026-08-07",
+          "2026-08-10",
+          "2026-08-11",
+          "2026-08-12",
+          "2026-08-13",
+          "2026-08-14",
+          "2026-08-17",
+          "2026-08-18",
+          "2026-08-19",
+          "2026-08-20"
+        ],
+        "source": "yahoo-daily",
+        "status": "pass"
+      },
+      "listing": {
+        "directory_exchange": "Nasdaq",
+        "reason": "primary_us_listing_confirmed",
+        "sec_exchange": "Nasdaq",
+        "status": "pass"
+      },
+      "market_cap": {
+        "accession": "0001083301-26-000166",
+        "cik": "0001083301",
+        "concept": "dei:EntityCommonStockSharesOutstanding",
+        "fact_period_end": "2026-07-31",
+        "filing_date": "2026-08-05",
+        "market_cap_usd": 8208035117.33289,
+        "price_session": "2026-08-20",
+        "price_source": "yahoo-daily",
+        "raw_close": 16.450000762939453,
+        "raw_shares_outstanding": 498968677,
+        "reason": "in_range",
+        "status": "pass"
+      },
+      "median_bps": 6.11433812289698,
+      "pending_ma": {
+        "classified": [
+          {
+            "accession": "0001104659-25-102858",
+            "agreement": "data-centre joint venture LLC agreement (Fluidstack) \u2014 not an acquisition of or by the listed issuer",
+            "filed": "2025-10-28",
+            "status": "not_a_transaction"
+          },
+          {
+            "note": "remaining 13 hits are financing: indentures, notes due, credit agreements, underwriting, convertible senior notes"
+          }
+        ],
+        "hits": 14,
+        "reason": "no_pending_definitive_transaction",
+        "verdict": "pass"
+      },
+      "price": {
+        "close": 16.450000762939453,
+        "reason": "in_range",
+        "session": "2026-08-20",
+        "source": "yahoo-daily",
+        "status": "pass"
+      },
+      "spread": {
+        "median_bps": 6.11433812289698,
+        "observations": 1760721,
+        "reason": "within_cap",
+        "sessions": [
+          "2026-08-14",
+          "2026-08-17",
+          "2026-08-18",
+          "2026-08-19",
+          "2026-08-20"
+        ],
+        "source": "alpaca-sip-historical-quotes",
+        "status": "pass"
+      }
+    }
+  },
+  "spec_revision": "r11",
+  "stage": "tier_b_resolution",
+  "status": "RESOLVED"
+}

@@ -331,11 +331,99 @@ def stage_ma(tickers: list[str]) -> dict:
     return out
 
 
+#: §7.2.1 (f): the FROZEN five-session spread window. Screening/EXPOSED observations -- these dates
+#: may never be used as J-06 sealed historical-OOS recording dates for any symbol screened on them.
+SPREAD_SESSIONS_FROZEN = ("2026-08-14", "2026-08-17", "2026-08-18", "2026-08-19", "2026-08-20")
+
+
+def stage_spread(tickers: list[str]) -> dict:
+    """§7.2.1 (f) on the canonical basis, over the frozen five completed RTH sessions.
+
+    ``spread = ask - bid`` (``app/engine/market_state.py`` computes it exactly once) and
+    ``mid = (bid + ask) / 2`` (``micro_features.mid``), expressed in bps by the canonical
+    ``micro_features.spread_bps``. An ELIGIBLE in-effect NBBO observation is two-sided with a
+    positive mid and not crossed (``ask >= bid > 0``); crossed/one-sided records are counted and
+    excluded rather than silently folded in, and the count is persisted so the exclusion is
+    auditable. The window is frozen -- never substituted because of a fetch or a result."""
+    from datetime import datetime as _dt, timezone as _tz
+    from zoneinfo import ZoneInfo as _Z
+
+    from app.env import load_env
+    load_env()
+    from app.research import micro_features as mf
+    from app.research.routes import get_study_market_adapter
+
+    adapter = get_study_market_adapter()
+    et = _Z("America/New_York")
+    rows, started = [], time.time()
+    for tic in tickers:
+        per_session, values, crossed, total = [], [], 0, 0
+        for d in SPREAD_SESSIONS_FROZEN:
+            y, m, dd = (int(x) for x in d.split("-"))
+            lo = _dt(y, m, dd, 9, 30, tzinfo=et).astimezone(_tz.utc)
+            hi = _dt(y, m, dd, 16, 0, tzinfo=et).astimezone(_tz.utc)
+            n_ok = n_x = 0
+            try:
+                for w in adapter.iter_historical_chunks(tic, lo, hi):
+                    for q in w.quotes:
+                        total += 1
+                        if q.bid is None or q.ask is None or q.bid <= 0 or q.ask <= 0:
+                            continue
+                        if q.ask < q.bid:
+                            n_x += 1
+                            crossed += 1
+                            continue
+                        bps = mf.spread_bps(q.ask - q.bid, mf.mid_price(q.bid, q.ask))
+                        if bps is not None:
+                            values.append(bps)
+                            n_ok += 1
+            except (AttributeError, TypeError, NameError):
+                raise  # a coding fault is NOT a vendor failure -- never disguise one as the other
+            except Exception as exc:  # noqa: BLE001 -- genuine vendor faults are disclosed
+                per_session.append({"session": d, "error": f"{type(exc).__name__}: {exc}"})
+                continue
+            per_session.append({"session": d, "eligible_observations": n_ok, "crossed_excluded": n_x})
+        median = None
+        if values:
+            values.sort()
+            n = len(values)
+            median = values[n // 2] if n % 2 else (values[n // 2 - 1] + values[n // 2]) / 2.0
+        result = tb.evaluate_spread(
+            median, sessions=list(SPREAD_SESSIONS_FROZEN),
+            observations=len(values), source="alpaca-sip-historical-quotes",
+        )
+        rows.append({"ticker": tic, "spread": result, "median_bps": median,
+                     "eligible_observations": len(values), "crossed_excluded": crossed,
+                     "raw_quote_records": total, "per_session": per_session})
+        sys.stderr.write(f"  spread {tic}: median={median} n={len(values)} "
+                         f"[{result['status']}] {time.time()-started:.0f}s\n")
+    path = ARTIFACT_DIR / "spread.json"
+    prior = json.loads(path.read_text())["rows"] if path.exists() else []
+    seen = {r["ticker"] for r in rows}
+    out = {"spec_revision": "r11", "stage": "median_rth_spread",
+           "screening_cutoff_utc": "2026-08-21T12:06:00Z",
+           "frozen_sessions": list(SPREAD_SESSIONS_FROZEN),
+           "basis": "spread = ask - bid; mid = (bid+ask)/2; bps via micro_features.spread_bps; "
+                    "eligible = two-sided, positive mid, not crossed (ask >= bid > 0)",
+           "source": "alpaca-sip-historical-quotes",
+           "exposure_note": "SCREENING/EXPOSED observations -- these sessions may never be used as "
+                            "J-06 sealed historical-OOS recording dates for any symbol screened here.",
+           "rows": [r for r in prior if r["ticker"] not in seen] + rows}
+    out["evaluated_count"] = len(out["rows"])
+    path.write_text(json.dumps(out, indent=2, sort_keys=True) + "\n")
+    return out
+
+
 _STAGES = {"freeze": stage_freeze, "universe": stage_universe, "bars": stage_bars, "mcap": stage_mcap}
 # `sec` takes tickers on the command line, so it is dispatched separately in main().
 
 
 def main() -> int:
+    if len(sys.argv) >= 3 and sys.argv[1] == "spread":
+        out = stage_spread([t.strip().upper() for t in sys.argv[2].split(",") if t.strip()])
+        print(json.dumps({k: v for k, v in out.items() if not isinstance(v, list)},
+                         indent=2, sort_keys=True))
+        return 0
     if len(sys.argv) >= 3 and sys.argv[1] == "ma":
         out = stage_ma([t.strip().upper() for t in sys.argv[2].split(",") if t.strip()])
         print(json.dumps({k: v for k, v in out.items() if not isinstance(v, list)},
