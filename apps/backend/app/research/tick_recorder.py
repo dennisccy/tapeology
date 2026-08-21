@@ -130,6 +130,7 @@ __all__ = [
     "run_tick_recording",
     "pair_bar_backfill_for_recorded_days",
     "TickRecorderComputeManager",
+    "format_cli_progress_line",
     "resolve_tick_recorder_checkpoint_dir",
     "resolve_tick_recorder_log_dir",
     "main",
@@ -749,6 +750,41 @@ def _progress_view(progress: dict, *, started_utc: str | None, finished_utc: str
     }
 
 
+def format_cli_progress_line(progress: dict, *, started_utc: str | None) -> str:
+    """The aggregate-only OPERATOR-FACING (stdout) progress line for the CLI's live ``--progress``
+    tick (spec section 7.1, r5/r7 -- the SAME contract ``_progress_view`` serves the REST route
+    under).
+
+    **Why this exists (iteration 23 leak fix).** The CLI's own live tick previously printed
+    ``{symbol} {date} {chunk-start} -> {outcome}`` per chunk. That is exactly the identity-bearing
+    per-shard metadata section 7.1 forbids: an operator (or anyone reading over their shoulder, a
+    terminal recording, a scrollback, a CI log) watching a real opaque-pool recording would learn
+    which symbol-days resolved and how -- realized per-member success/failure, which is precisely
+    what would reveal the hidden partition the vault exists to protect. The REST projection was
+    already correct (``_progress_view``); the CLI was the remaining hole, and section 7.1's
+    prohibition is about the INFORMATION, never about which transport carries it.
+
+    **One projection, not two.** This delegates to ``_progress_view`` rather than re-deriving the
+    safe fields, so the stdout surface and the REST surface can never drift apart -- the same
+    reason ``_copy_recorder_snapshot`` below routes BOTH the GET and the POST return through that
+    one function. ``pending`` is derived here from the two chunk counters already in the
+    projection (never a new stored field, and never a per-chunk value).
+
+    The caller's INTERNAL ``progress`` dict keeps exact identities and exact counts (the
+    ``outcomes`` list, ``trades_total``/``quotes_total``) -- section 7.1 permits that for
+    checkpoint/recovery/audit; what it forbids is SERVING them, and nothing identity-bearing
+    survives into the returned string."""
+    view = _progress_view(progress, started_utc=started_utc, finished_utc=None)
+    pending = view["chunks_total"] - view["chunks_done"]
+    return (
+        f"  [{view['chunks_done']}/{view['chunks_total']}] {view['percent_complete']:.1f}% · "
+        f"{view['chunks_fetched']} fetched · {view['chunks_reused']} reused · "
+        f"{view['chunks_unchanged']} unchanged · {view['chunks_failed']} failed · "
+        f"{pending} pending · trades {view['trades_total_bucket']} · "
+        f"quotes {view['quotes_total_bucket']} · {view['elapsed_seconds']:.0f}s"
+    )
+
+
 def _copy_recorder_snapshot(snapshot: dict) -> dict:
     """The manager's PUBLIC projection -- used by BOTH ``snapshot()`` (``GET .../recorder/compute``)
     and ``trigger()``'s own immediate return (``POST .../recorder/compute``), so neither surface can
@@ -982,15 +1018,24 @@ def main() -> int:
 
     started_utc = _iso_utc_now()
     walk_started = time.perf_counter()
-    done = 0
+    # The CLI's own INTERNAL running progress -- the SAME shape the compute manager accumulates
+    # (`_IDLE_PROGRESS`), exact on purpose (checkpoint/recovery/audit, section 7.1). Only
+    # `format_cli_progress_line`'s aggregate-only projection of it is ever printed.
+    cli_progress: dict = {
+        "chunks_total": len(chunks), "chunks_done": 0, "outcomes": [],
+        "trades_total": 0, "quotes_total": 0,
+    }
 
     def _tick(entry: dict) -> None:
-        nonlocal done
-        done += 1
-        print(
-            f"  [{done}/{len(chunks)}] {entry['symbol']} {entry['date']} {entry['start'][11:16]} "
-            f"-> {entry['outcome']}" + (f" -- {entry['detail']}" if entry["detail"] else "")
-        )
+        """Aggregate-only stdout (iteration 23 leak fix) -- see ``format_cli_progress_line``. This
+        deliberately prints NO symbol, date, chunk time, dataset id, per-chunk outcome label, or
+        ``detail`` string: a real opaque-pool recording's realized per-member success/failure is
+        exactly what section 7.1 withholds, and stdout is not exempt from that."""
+        cli_progress["chunks_done"] += 1
+        cli_progress["outcomes"].append(entry)
+        cli_progress["trades_total"] += entry.get("trade_count", 0)
+        cli_progress["quotes_total"] += entry.get("quote_count", 0)
+        print(format_cli_progress_line(cli_progress, started_utc=started_utc))
 
     tick_outcomes = run_tick_recording(
         chunks, dataset_store, checkpoint_store, adapter, CONFIG, progress=_tick,

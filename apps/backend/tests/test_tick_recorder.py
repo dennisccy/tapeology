@@ -1140,3 +1140,130 @@ def test_volume_bucket_scheme_is_frozen_predeclared_and_never_a_rounded_number(m
 
 
 from app.config import CONFIG  # noqa: E402 -- imported at bottom to keep the fixture section terse
+
+
+# ==================================================================================================
+# 14. TR-31 -- the CLI/operator-facing progress surface is aggregate-only too (iteration 23).
+# ==================================================================================================
+
+
+def test_tr31_format_cli_progress_line_serves_only_the_whitelisted_aggregates():
+    """TR-31 (spec section 7.1, r5/r7 -- iteration 23 leak fix), unit level.
+
+    ``format_cli_progress_line`` is the CLI's ONLY live-progress formatter. Given an internal
+    progress dict that carries a full identity-bearing ``outcomes`` list and EXACT running event
+    totals, the string it returns must carry none of that: no symbol, no date, no chunk time, no
+    dataset id, no per-chunk outcome label, no exact count. The internal dict keeping them is
+    correct and deliberate (checkpoint/recovery/audit) -- what section 7.1 forbids is SERVING
+    them, on any transport."""
+    progress = {
+        "chunks_total": 4,
+        "chunks_done": 3,
+        "outcomes": [
+            {"symbol": "AAPL", "date": "2026-06-01", "start": "2026-06-01T13:30:00Z",
+             "outcome": "fetched", "detail": None, "dataset_id": "ds-aapl-0601",
+             "trade_count": 4242, "quote_count": 91_337},
+            {"symbol": "MSFT", "date": "2026-06-02", "start": "2026-06-02T13:30:00Z",
+             "outcome": "failed", "detail": "vendor 500", "dataset_id": None,
+             "trade_count": 0, "quote_count": 0},
+            {"symbol": "RKLB", "date": "2026-06-03", "start": "2026-06-03T13:30:00Z",
+             "outcome": "reused", "detail": None, "dataset_id": "ds-rklb-0603",
+             "trade_count": 11, "quote_count": 22},
+        ],
+        "trades_total": 4253,
+        "quotes_total": 91_359,
+    }
+
+    line = tr.format_cli_progress_line(progress, started_utc="2026-06-01T13:00:00Z")
+
+    # --- nothing identity-bearing survives ------------------------------------------------------
+    for forbidden in (
+        "AAPL", "MSFT", "RKLB",                      # symbols
+        "2026-06-01", "2026-06-02", "2026-06-03",    # dates
+        "13:30", "T13:30:00Z",                       # chunk times
+        "ds-aapl-0601", "ds-rklb-0603",              # dataset ids
+        "vendor 500",                                # per-chunk failure detail
+        "4242", "91337", "4253", "91359",            # exact event counts (per-chunk AND running)
+    ):
+        assert forbidden not in line, f"{forbidden!r} leaked into the CLI progress line: {line!r}"
+
+    # a bare per-chunk outcome LABEL must not appear as a realized verdict; the only permitted use
+    # of those words is as a COUNT noun ("2 fetched"), which the aggregate assertions below pin.
+    assert "-> fetched" not in line and "-> failed" not in line and "-> reused" not in line
+
+    # --- the safe aggregates ARE there ----------------------------------------------------------
+    assert "[3/4]" in line and "75.0%" in line
+    assert "1 fetched" in line and "1 reused" in line and "0 unchanged" in line and "1 failed" in line
+    assert "1 pending" in line
+    labels = [label for _low, _high, label in tr._VOLUME_BUCKETS]
+    assert any(f"trades {lab}" in line for lab in labels)
+    assert any(f"quotes {lab}" in line for lab in labels)
+    # coarse buckets, never the exact totals they stand in for
+    assert "trades 1K-10K" in line and "quotes 10K-100K" in line
+
+
+def test_tr31_the_live_cli_run_never_prints_a_realized_symbol_day_outcome(tmp_path, monkeypatch, capsys):
+    """TR-31 at the OPERATOR path, end to end -- the gap the pre-iteration-23 traps left open.
+
+    ``test_tc6_...`` already sweeps the REST projection; this sweeps the CLI, which is the surface
+    an operator actually watches during a real attended recording. The plan is monkeypatched to an
+    explicit 3-chunk/2-symbol plan (the TC-6 precedent) so the walk stays fast and the exact
+    identity tokens under test are known.
+
+    The pre-fetch plan banner (``_print_plan``) legitimately shows the frozen universe -- an
+    operator approving their own registered tranche is explicitly NOT the threat model (spec
+    section 7.2's own note). So this asserts against the REALIZED PROGRESS LINES only: the
+    per-member success/failure stream that would reveal the hidden partition."""
+    import sys
+
+    from app.main import app, get_market_adapter
+    from app.research.routes import ResearchRegistry, set_registry
+    from app.research.store import JournalStore
+
+    monkeypatch.setenv("TAPEOLOGY_DATASET_DIR", str(tmp_path / "datasets"))
+    monkeypatch.setenv("TAPEOLOGY_BAR_DIR", str(tmp_path / "bars"))
+    monkeypatch.setenv("TAPEOLOGY_BAR_INDEX_DB", str(tmp_path / "index.db"))
+    monkeypatch.setenv("TAPEOLOGY_MICRO_RECORDER_CHECKPOINT_DIR", str(tmp_path / "checkpoints"))
+    monkeypatch.setenv("TAPEOLOGY_MICRO_RECORDER_LOG_DIR", str(tmp_path / "runs"))
+    monkeypatch.setenv("TAPEOLOGY_DESK_DEEP_BACKFILL_WORKERS", "1")
+    monkeypatch.setattr(
+        sys, "argv", ["tick_recorder.py", "--symbols", "AAPL,MSFT", "--dates", "2026-06-01"],
+    )
+    fake_plan = [
+        {"symbol": "AAPL", "date": "2026-06-01", "start": "2026-06-01T13:30:00Z", "end": "2026-06-01T15:00:00Z"},
+        {"symbol": "AAPL", "date": "2026-06-01", "start": "2026-06-01T15:00:00Z", "end": "2026-06-01T20:00:00Z"},
+        {"symbol": "MSFT", "date": "2026-06-01", "start": "2026-06-01T13:30:00Z", "end": "2026-06-01T20:00:00Z"},
+    ]
+    monkeypatch.setattr(tr, "plan_recorder_chunks", lambda symbols, dates: list(fake_plan))
+    tr._reset_recorder_throttle_for_tests()
+    adapter = _FakeTickAdapter()
+    app.dependency_overrides[get_market_adapter] = lambda: adapter
+    journal = JournalStore(str(tmp_path / "journal.db"), CONFIG)
+    set_registry(ResearchRegistry(journal, CONFIG))
+    try:
+        exit_code = tr.main()
+    finally:
+        set_registry(None)
+        app.dependency_overrides.pop(get_market_adapter, None)
+        journal.close()
+        tr._reset_recorder_throttle_for_tests()
+
+    assert exit_code == 0
+    out = capsys.readouterr().out
+
+    # The realized-progress stream is exactly the lines `_tick` emits.
+    progress_lines = [ln for ln in out.splitlines() if ln.startswith("  [")]
+    assert len(progress_lines) == 3, f"expected one progress line per chunk, got {progress_lines!r}"
+
+    for line in progress_lines:
+        for forbidden in ("AAPL", "MSFT", "2026-06-01", "13:30", "15:00", "20:00"):
+            assert forbidden not in line, f"{forbidden!r} leaked into a live progress line: {line!r}"
+        assert "->" not in line, f"a per-chunk outcome arrow leaked: {line!r}"
+
+    # ...and the operator still gets genuinely useful aggregate progress.
+    assert "[3/3]" in progress_lines[-1] and "100.0%" in progress_lines[-1]
+    assert "0 pending" in progress_lines[-1]
+    assert "3 fetched" in progress_lines[-1]
+
+    # The pre-fetch plan banner is the sanctioned exception -- it may (and does) name the universe.
+    assert "3 chunk(s) over 2 symbol-day(s)" in out
