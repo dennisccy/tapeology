@@ -560,22 +560,29 @@ def get_tick_recorder_compute(
     """The current (or last-terminal) recording job's progress -- never 404 (the idle default
     before any job has ever run this process).
 
-    Aggregate-only, at every point during a run (spec section 7.1, r5, era iteration 11):
-    ``progress`` never carries a symbol, a date, a dataset id, or any other per-chunk field --
-    ``chunks_total``/``chunks_done``/``chunks_fetched``/``chunks_reused``/``chunks_unchanged``/
-    ``chunks_failed``/``trades_total_bucket``/``quotes_total_bucket``/``percent_complete``/
-    ``elapsed_seconds`` only -- never the exact ``trades_total``/``quotes_total`` counts
-    (TR-28/spec section 7.1, r7, iteration 12: bucketed UNCONDITIONALLY, since a one-symbol-day
-    run's "aggregate" exact total would itself be that withheld shard's exact count; see
-    ``tick_recorder._progress_view``'s own docstring for why this never varies with vault-release
-    state -- recording strictly PRECEDES any possible exposure, so a run this progress surface
-    describes is already historical by the time any pool it fed could ever be released).
-    ``manager.snapshot()`` already projects it that way
-    (``tick_recorder._copy_recorder_snapshot``/``_progress_view``, an explicit whitelist), so this
-    route forwards it VERBATIM -- no second computation, and deliberately no operator-only bypass
-    parameter, header, or role claim on this route (r5: using one would itself be a human exposure
-    event that destroys the tranche's blindness). TR-2's widened inference trap
-    (``test_vault.py``) sweeps this exact path."""
+    Aggregate-only AND composition-safe, at every point during a run (spec section 7.1 r5/r7 +
+    TR-32, owner ruling 2026-08-21). ``progress`` never carries a symbol, a date, a dataset id, or
+    any other per-chunk field -- and, since TR-32, it carries no OUTCOME-TYPED field either:
+    ``chunks_total``/``chunks_done``/``percent_complete``/``elapsed_seconds``/
+    ``chunks_per_minute`` only.
+
+    TR-32 closed a COMPOSED leak that field-level opacity alone did not: an observer polling often
+    enough that ``chunks_done`` advances by exactly one could difference the former
+    ``chunks_fetched``/``chunks_reused``/``chunks_unchanged``/``chunks_failed`` counters against
+    the known deterministic plan and reconstruct that specific chunk's realized outcome (verified:
+    a whole run was reconstructed exactly). The former ``trades_total_bucket``/
+    ``quotes_total_bucket`` leaked the same way by existence rather than magnitude -- running
+    totals advance ONLY on a ``fetched`` chunk, so a bucket transition across a single-chunk
+    advance proved that chunk was fetched. Both are gone from live progress; exact counts survive
+    internally and in the TERMINAL run-log row, where TR-4 positively requires the disclosed
+    per-chunk/per-symbol failure list.
+
+    ``manager.snapshot()`` already projects it that way (``tick_recorder._copy_recorder_snapshot``/
+    ``_progress_view``, an explicit whitelist and the ONE canonical serving owner both live
+    transports share), so this route forwards it VERBATIM -- no second computation, and
+    deliberately no operator-only bypass parameter, header, or role claim on this route (r5: using
+    one would itself be a human exposure event that destroys the tranche's blindness). TR-2's
+    widened inference trap (``test_vault.py``) sweeps this exact path."""
     snap = manager.snapshot()
     return {
         "state": snap["state"],

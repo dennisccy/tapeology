@@ -719,20 +719,36 @@ def _progress_view(progress: dict, *, started_utc: str | None, finished_utc: str
     ``percent_complete``/``elapsed_seconds`` are DERIVED here, never stored on ``progress`` itself,
     since ``elapsed_seconds`` must reflect "now" for a still-running job.
 
-    **TR-28/spec section 7.1 (r7, iteration 12): ``trades_total``/``quotes_total`` are GONE from
-    this projection, replaced by ``trades_total_bucket``/``quotes_total_bucket`` (``_volume_
-    bucket`` above).** The iteration-11 audit proved the contradiction this closes: on a
-    one-symbol-day run, the "aggregate" exact total WAS that withheld shard's exact count. This
-    surface ALWAYS buckets -- never conditionally, never threading per-universe vault-exposure
-    state through the recorder -- because recording strictly PRECEDES any possible exposure in
-    the one-way ``sealed -> assigned -> exposed`` lifecycle (``vault.py``'s own module docstring:
-    zero production call sites of ``seal_shard``/``assign_shard``/``expose_shard`` today), so by
-    the time a pool could ever be "whole-pool released" (TR-27's own gate), the recording run this
-    progress surface describes is already historical. This is the phase spec's own explicitly
-    sanctioned scope-reducing option (NOTES: "provably spec-compliant... TC-9/TC-10/TC-11 are
-    outcome-based and pass either way"), deliberately chosen to avoid new coupling between this
-    module and ``vault.py`` -- the OUT-OF-SCOPE item this iteration already names ("wiring
-    tick_recorder to call vault.seal_shard/assign_shard/expose_shard directly")."""
+    **TR-32 (owner ruling 2026-08-21, amendment 1) -- the COMPOSED leak, closed HERE because this
+    is the one canonical serving owner both live transports go through** (the REST route forwards
+    it verbatim via ``_copy_recorder_snapshot``; the CLI renders it via
+    ``format_cli_progress_line``). Fixing only the CLI formatter left REST wide open.
+
+    Two attacks were reproduced against the previous shape, both succeeding:
+
+    1. *Outcome counters.* An observer polling often enough that ``chunks_done`` advances by
+       exactly one differences ``chunks_fetched``/``chunks_reused``/``chunks_unchanged``/
+       ``chunks_failed`` and reads that chunk's identity off the known deterministic plan. A
+       6-chunk run was reconstructed exactly, failed symbol-day included. Bucketing the counters
+       would NOT have fixed it: a coarse bucket still has an exact ``0 -> 1`` boundary, so the
+       first failure is pinned as it crosses.
+    2. *Volume buckets.* ``trade_count``/``quote_count`` are populated at exactly ONE call site --
+       the ``"fetched"`` branch -- so the running totals advance ONLY for freshly fetched chunks.
+       A bucket TRANSITION while ``chunks_done`` advances by one therefore proves that chunk was
+       ``fetched`` rather than failed/reused/unchanged. TR-28's iteration-12 bucketing defeated
+       differencing of the MAGNITUDE, but not this existence proof.
+
+    So live progress now serves ONLY non-outcome position and timing: ``chunks_done``/
+    ``chunks_total`` (pure position -- the operator already knows the plan length),
+    ``percent_complete``, ``elapsed_seconds``, and ``chunks_per_minute``. That throughput figure
+    is safe by construction: it is a pure function of two fields already served, so it carries no
+    information they do not, and it cannot identify any chunk's outcome.
+
+    Exact outcome counts and exact event totals remain INTERNAL on ``progress`` (checkpoint,
+    recovery, audit) and still reach the TERMINAL run-log row via ``_outcome_type_counts`` --
+    terminal/audit reporting is a separate lifecycle stage, and TR-4 positively REQUIRES a
+    disclosed per-chunk/per-symbol failure list in the batch report. What is forbidden is the
+    progressive, per-member reconstruction while the tranche is still being recorded."""
     chunks_total = progress["chunks_total"]
     chunks_done = progress["chunks_done"]
     percent_complete = (chunks_done / chunks_total * 100.0) if chunks_total > 0 else 0.0
@@ -740,14 +756,13 @@ def _progress_view(progress: dict, *, started_utc: str | None, finished_utc: str
         elapsed_seconds = 0.0
     else:
         elapsed_seconds = _elapsed_seconds(started_utc, finished_utc or _iso_utc_now())
+    chunks_per_minute = (chunks_done / elapsed_seconds * 60.0) if elapsed_seconds > 0 else 0.0
     return {
         "chunks_total": chunks_total,
         "chunks_done": chunks_done,
-        **_outcome_type_counts(progress["outcomes"]),
-        "trades_total_bucket": _volume_bucket(progress["trades_total"]),
-        "quotes_total_bucket": _volume_bucket(progress["quotes_total"]),
         "percent_complete": percent_complete,
         "elapsed_seconds": elapsed_seconds,
+        "chunks_per_minute": chunks_per_minute,
     }
 
 
@@ -790,9 +805,9 @@ def format_cli_progress_line(progress: dict, *, started_utc: str | None) -> str:
     boundary, so a first failure would still be pinned the moment it crossed. With no outcome
     field present there is nothing to difference, whatever the cadence or the plan knowledge.
     ``chunks_done``/``chunks_total`` stay exact -- they are pure position, carry no outcome, and
-    the operator already knows the plan length -- and the volume buckets stay as
-    ``_volume_bucket``'s own docstring already argues for them (monotone, order-of-magnitude
-    bands, never an exact inter-snapshot delta).
+    the operator already knows the plan length. The volume buckets are GONE too (owner ruling
+    amendment 1): running totals advance only on a ``fetched`` chunk, so a bucket transition
+    while ``chunks_done`` advances by one would itself prove that chunk was fetched.
 
     Failure counts are NOT hidden forever: the terminal run summary still reports them, and TR-4
     positively REQUIRES a disclosed per-chunk/per-symbol failure list in the batch report. What is
@@ -800,8 +815,7 @@ def format_cli_progress_line(progress: dict, *, started_utc: str | None) -> str:
     view = _progress_view(progress, started_utc=started_utc, finished_utc=None)
     return (
         f"  [{view['chunks_done']}/{view['chunks_total']}] {view['percent_complete']:.0f}% · "
-        f"trades {view['trades_total_bucket']} · quotes {view['quotes_total_bucket']} · "
-        f"{view['elapsed_seconds']:.0f}s"
+        f"{view['chunks_per_minute']:.1f} chunks/min · {view['elapsed_seconds']:.0f}s"
     )
 
 

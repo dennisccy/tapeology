@@ -858,9 +858,8 @@ def test_cancel_while_running_stops_the_walk_cooperatively_through_the_route(rou
 
 
 _PROGRESS_AGGREGATE_KEYS = {
-    "chunks_total", "chunks_done", "chunks_fetched", "chunks_reused", "chunks_unchanged",
-    "chunks_failed", "trades_total_bucket", "quotes_total_bucket", "percent_complete",
-    "elapsed_seconds",
+    "chunks_total", "chunks_done", "percent_complete", "elapsed_seconds",
+    "chunks_per_minute",
 }
 
 
@@ -957,14 +956,14 @@ def test_tc6_recorder_progress_never_leaks_a_planned_chunks_symbol_date_or_datas
         # --- terminal: still aggregate-only, and the aggregates are the RIGHT numbers ---------
         _assert_progress_is_aggregate_only(terminal["progress"])
         assert terminal["progress"]["chunks_done"] == terminal["progress"]["chunks_total"] == 3
-        assert terminal["progress"]["chunks_fetched"] == 3
-        assert terminal["progress"]["chunks_reused"] == 0
-        assert terminal["progress"]["chunks_unchanged"] == 0
-        assert terminal["progress"]["chunks_failed"] == 0
-        # 3 trades/3 quotes total (1 trade/chunk, 1 quote/chunk -- the fake adapter's shape) both
-        # land in the SAME coarse bucket (iteration 12, TR-28/r7) -- never the exact number 3.
-        assert terminal["progress"]["trades_total_bucket"] == tr._volume_bucket(3) == "1-999"
-        assert terminal["progress"]["quotes_total_bucket"] == tr._volume_bucket(3) == "1-999"
+        # TR-32: no outcome-typed counter is served live any more -- the terminal run-log row
+        # carries the exact counts, where TR-4 requires the disclosed failure list.
+        for banned in ("chunks_fetched", "chunks_reused", "chunks_unchanged", "chunks_failed"):
+            assert banned not in terminal["progress"]
+        # TR-32 (amendment 1): the volume signal is gone from live progress entirely -- it
+        # leaked by EXISTENCE, since totals advance only on a fetched chunk.
+        for banned in ("trades_total", "quotes_total", "trades_total_bucket", "quotes_total_bucket"):
+            assert banned not in terminal["progress"]
         assert terminal["progress"]["percent_complete"] == 100.0
         assert terminal["progress"]["elapsed_seconds"] >= 0.0
 
@@ -1035,87 +1034,85 @@ def _run_a_one_symbol_day_recording_to_done(client) -> dict:
 
 
 def test_tc9_a_one_symbol_day_run_never_serves_an_exact_trade_or_quote_count(route_ctx):
-    """TC-9 (phase spec, literal scenario): a one-symbol-day recorder run whose pool is unexposed
-    -- ``GET /research/desk/micro/recorder/compute`` polled during and after the run never carries
-    an exact trade count, quote count, or byte count anywhere -- only a predeclared coarse bucket
-    label. The iteration-11 audit's own reproduction: on exactly this shape, the "aggregate"
-    ``trades_total``/``quotes_total`` WAS that one shard's exact count."""
-    client, _mgr, _adapter, _tmp_path = route_ctx
-    terminal = _run_a_one_symbol_day_recording_to_done(client)
+    """TC-9, carried forward under TR-32 (owner ruling 2026-08-21, amendment 1).
+
+    The original iteration-12 form asserted the served value was a coarse BUCKET label rather than
+    an exact count. TR-32 went further and removed the volume fields from live progress entirely,
+    because the buckets leaked by EXISTENCE rather than magnitude: running totals advance only on a
+    ``fetched`` chunk, so a bucket transition across a single-chunk advance proved that chunk's
+    outcome. Absence strictly subsumes the original guarantee -- a field that is not served can
+    never be an exact count."""
+    client, _mgr, _adapter, _tmp = route_ctx
+    r = client.post(
+        "/research/desk/micro/recorder/compute",
+        json={"symbols": ["AAPL"], "dates": ["2026-06-01"]},
+    )
+    assert r.status_code == 200
+    deadline = time.time() + 20
+    terminal = None
+    while time.time() < deadline:
+        terminal = client.get("/research/desk/micro/recorder/compute").json()
+        if terminal["state"] != "running":
+            break
+        time.sleep(0.02)
+    assert terminal is not None and terminal["state"] == "done"
     progress = terminal["progress"]
-    _assert_progress_is_aggregate_only(progress)  # exactly the bucket-shaped field set, nothing else
-    assert isinstance(progress["trades_total_bucket"], str) and progress["trades_total_bucket"]
-    assert isinstance(progress["quotes_total_bucket"], str) and progress["quotes_total_bucket"]
-    body_text = json.dumps(terminal)
-    assert "trades_total\"" not in body_text and "quotes_total\"" not in body_text
+    for key in ("trades_total", "quotes_total", "trades_total_bucket", "quotes_total_bucket"):
+        assert key not in progress, f"{key!r} is served on live progress again"
+    _assert_progress_is_aggregate_only(progress)
 
 
-def test_tc10_before_after_a_run_grows_the_bucket_never_narrows_and_resists_differencing(
-    route_ctx, monkeypatch
-):
-    """TC-10: poll a run's progress before and after its own running totals GROW -- the served
-    bucket is monotonic non-decreasing (never narrows), and because it is ALWAYS a coarse label
-    (never conditionally exact -- ``_progress_view``'s own iteration-12 docstring), no pair of
-    snapshots can be combined to solve any count exactly: neither response carries an exact number
-    to difference in the first place."""
-    client, mgr, _adapter, _tmp_path = route_ctx
-    from app.main import app, get_market_adapter
-
-    fake_plan = [
-        {"symbol": "AAPL", "date": "2026-06-01", "start": "2026-06-01T13:30:00Z", "end": "2026-06-01T15:00:00Z"},
-        {"symbol": "AAPL", "date": "2026-06-01", "start": "2026-06-01T15:00:00Z", "end": "2026-06-01T20:00:00Z"},
-    ]
-    monkeypatch.setattr(tr, "plan_recorder_chunks", lambda symbols, dates: list(fake_plan))
-    blocking_adapter = _BlockingTickAdapter()
-    app.dependency_overrides[get_market_adapter] = lambda: blocking_adapter
-    try:
-        r = client.post(
-            "/research/desk/micro/recorder/compute", json={"symbols": ["AAPL"], "dates": ["2026-06-01"]},
-        )
-        assert r.status_code == 200
-        assert blocking_adapter.started.wait(timeout=5.0)
-        before = client.get("/research/desk/micro/recorder/compute").json()["progress"]
-
-        blocking_adapter.proceed.set()
-        deadline = time.time() + 15
-        terminal = None
-        while time.time() < deadline:
-            terminal = client.get("/research/desk/micro/recorder/compute").json()
-            if terminal["state"] != "running":
-                break
-            time.sleep(0.02)
-        assert terminal is not None and terminal["state"] == "done"
-        after = terminal["progress"]
-
-        for snapshot in (before, after):
-            assert "trades_total" not in snapshot and "quotes_total" not in snapshot
-
-        bucket_order = [label for _, _, label in tr._VOLUME_BUCKETS]
-        assert bucket_order.index(before["trades_total_bucket"]) <= bucket_order.index(
-            after["trades_total_bucket"]
-        )
-        assert bucket_order.index(before["quotes_total_bucket"]) <= bucket_order.index(
-            after["quotes_total_bucket"]
-        )
-    finally:
-        blocking_adapter.proceed.set()
-        mgr.join_all(timeout=10.0)
+def test_tc10_live_progress_carries_no_volume_signal_that_could_be_differenced(route_ctx):
+    """TC-10, carried forward under TR-32. The original asserted the bucket never NARROWED between
+    two observations (differencing-resistance of the magnitude). TR-32 removes the signal outright,
+    so there is no volume series to difference at all -- across any pair of observations, at any
+    polling cadence."""
+    client, _mgr, _adapter, _tmp = route_ctx
+    before = client.get("/research/desk/micro/recorder/compute").json()["progress"]
+    r = client.post(
+        "/research/desk/micro/recorder/compute",
+        json={"symbols": ["AAPL"], "dates": ["2026-06-01"]},
+    )
+    assert r.status_code == 200
+    deadline = time.time() + 20
+    after = None
+    while time.time() < deadline:
+        snap = client.get("/research/desk/micro/recorder/compute").json()
+        if snap["state"] != "running":
+            after = snap["progress"]
+            break
+        time.sleep(0.02)
+    assert after is not None
+    for progress in (before, after):
+        assert not [k for k in progress if "trades" in k or "quotes" in k], progress
+    # position and timing still advance, so the surface is not merely empty.
+    assert after["chunks_done"] >= before["chunks_done"]
 
 
 def test_tc11_this_surface_deliberately_never_re_enables_exact_totals(route_ctx):
-    """TC-11 is PERMISSIVE ("exact totals MAY be served again"), never mandatory -- and the phase
-    spec's own NOTES sanction never threading per-universe vault-exposure state into this module at
-    all (recording strictly PRECEDES any possible exposure, so a completed run's own progress here
-    always describes pre-release history). This module's own choice: ``_progress_view`` ALWAYS
-    buckets, with no code path that could ever flip to exact -- pinned here so a future change
-    cannot silently re-open TR-28 by conditionally reinstating ``trades_total``."""
-    client, _mgr, _adapter, _tmp_path = route_ctx
-    terminal = _run_a_one_symbol_day_recording_to_done(client)
-    for _ in range(3):  # "long after" completion, simulated by simply re-polling with no new work
-        again = client.get("/research/desk/micro/recorder/compute").json()["progress"]
-        assert "trades_total" not in again and "quotes_total" not in again
-        assert again["trades_total_bucket"] == terminal["progress"]["trades_total_bucket"]
-        assert again["quotes_total_bucket"] == terminal["progress"]["quotes_total_bucket"]
+    """TC-11, carried forward under TR-32: the projection is an explicit whitelist, so neither the
+    exact totals (removed in iteration 12) nor the bucket labels that replaced them (removed by
+    TR-32) can reappear, and neither can the outcome-typed counters. A regression here would mean
+    someone widened the whitelist."""
+    client, _mgr, _adapter, _tmp = route_ctx
+    r = client.post(
+        "/research/desk/micro/recorder/compute",
+        json={"symbols": ["AAPL"], "dates": ["2026-06-01"]},
+    )
+    assert r.status_code == 200
+    deadline = time.time() + 20
+    terminal = None
+    while time.time() < deadline:
+        terminal = client.get("/research/desk/micro/recorder/compute").json()
+        if terminal["state"] != "running":
+            break
+        time.sleep(0.02)
+    assert terminal is not None and terminal["state"] == "done"
+    again = client.get("/research/desk/micro/recorder/compute").json()["progress"]
+    assert set(again) == _PROGRESS_AGGREGATE_KEYS
+    for banned in ("trades_total", "quotes_total", "trades_total_bucket", "quotes_total_bucket",
+                   "chunks_fetched", "chunks_reused", "chunks_unchanged", "chunks_failed"):
+        assert banned not in again, f"{banned!r} reappeared on the live projection"
 
 
 def test_volume_bucket_scheme_is_frozen_predeclared_and_never_a_rounded_number(monkeypatch):
@@ -1195,11 +1192,10 @@ def test_tr31_format_cli_progress_line_serves_only_the_whitelisted_aggregates():
 
     # --- the safe aggregates ARE there ----------------------------------------------------------
     assert "[3/4]" in line and "75%" in line
-    labels = [label for _low, _high, label in tr._VOLUME_BUCKETS]
-    assert any(f"trades {lab}" in line for lab in labels)
-    assert any(f"quotes {lab}" in line for lab in labels)
-    # coarse buckets, never the exact totals they stand in for
-    assert "trades 1K-10K" in line and "quotes 10K-100K" in line
+    # TR-32 amendment 1: no volume field either -- running totals advance only on a fetched
+    # chunk, so a bucket transition across a single-chunk advance would prove that outcome.
+    assert "trades" not in line and "quotes" not in line
+    assert "chunks/min" in line
 
 
 def test_tr31_the_live_cli_run_never_prints_a_realized_symbol_day_outcome(tmp_path, monkeypatch, capsys):
@@ -1356,8 +1352,7 @@ def test_tr32_no_snapshot_sequence_plus_the_known_plan_pins_a_chunks_realized_ou
     # The stream must still be genuinely useful: real completion progress and coarse volume.
     assert lines, "the operator must still get progress"
     assert "[6/6]" in lines[-1] and "100" in lines[-1]
-    labels = [label for _low, _high, label in tr._VOLUME_BUCKETS]
-    assert any(f"trades {lab}" in lines[-1] for lab in labels)
+    assert "chunks/min" in lines[-1]  # the safe throughput indicator the ruling permits
 
 
 def test_tr32_the_live_cli_run_survives_the_differencing_attack_with_a_real_failed_chunk(
@@ -1410,3 +1405,133 @@ def test_tr32_the_live_cli_run_survives_the_differencing_attack_with_a_real_fail
     )
     for line in progress_lines:
         assert _parse_outcome_counters(line) is None, f"outcome counters survived on: {line!r}"
+
+
+# ==================================================================================================
+# 16. TR-32 across EVERY live transport -- the REST path (owner ruling 2026-08-21 amendment 1).
+# ==================================================================================================
+
+
+class _SteppingTickAdapter(_FakeTickAdapter):
+    """Releases exactly ONE chunk at a time, so a test can poll the REST progress surface between
+    consecutive chunk completions -- the precise cadence the differencing attack needs (an observer
+    polling frequently enough that ``chunks_done`` advances by exactly one)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.entered = threading.Semaphore(0)
+        self.release = threading.Semaphore(0)
+
+    def iter_historical_chunks(self, symbol, start, end):
+        self.entered.release()
+        assert self.release.acquire(timeout=15.0), "stepping adapter was never released"
+        yield from super().iter_historical_chunks(symbol, start, end)
+
+
+def test_tr32_rest_live_progress_carries_no_outcome_typed_counter_in_a_pollable_sequence():
+    """TR-32 at the canonical SERVING OWNER (owner ruling amendment 1). ``_progress_view`` is what
+    ``GET /research/desk/micro/recorder/compute`` forwards VERBATIM (via
+    ``_copy_recorder_snapshot``), so its per-poll shape IS the REST contract -- fixing only the CLI
+    formatter left this transport wide open.
+
+    The attack is identical to the CLI one: poll often enough that ``chunks_done`` advances by
+    exactly one, difference the cumulative outcome counters, and read the chunk's identity off the
+    known deterministic plan."""
+    progress = {
+        "chunks_total": 5, "chunks_done": 0, "outcomes": [], "trades_total": 0, "quotes_total": 0,
+    }
+    views = []
+    for outcome in ("fetched", "failed", "fetched", "reused", "unchanged"):
+        progress["chunks_done"] += 1
+        progress["outcomes"].append(
+            {"outcome": outcome,
+             "trade_count": 5_000 if outcome == "fetched" else 0,
+             "quote_count": 20_000 if outcome == "fetched" else 0}
+        )
+        if outcome == "fetched":
+            progress["trades_total"] += 5_000
+            progress["quotes_total"] += 20_000
+        views.append(tr._progress_view(progress, started_utc="2026-06-01T13:00:00Z", finished_utc=None))
+
+    for view in views:
+        for key in view:
+            assert not key.startswith("chunks_fetched"), view
+        leaked = [k for k in view if k in
+                  ("chunks_fetched", "chunks_reused", "chunks_unchanged", "chunks_failed")]
+        assert leaked == [], f"outcome-typed counters served on the REST projection: {leaked}"
+
+
+def test_tr32_rest_volume_buckets_cannot_prove_a_specific_chunk_was_fetched():
+    """TR-32, the SECOND attack the owner ruling names (amendment 1): the live volume buckets.
+
+    ``trade_count``/``quote_count`` are populated at exactly ONE call site -- the ``"fetched"``
+    branch (``tick_recorder.py``'s ``_chunk_entry`` call in ``run_tick_recording``). So the running
+    totals advance ONLY for freshly fetched chunks. If a bucket TRANSITIONS while ``chunks_done``
+    advances by exactly one, that single chunk provably contributed events, i.e. it was ``fetched``
+    rather than failed/reused/unchanged -- a specific chunk's realized outcome, identified with
+    certainty from the known plan. That is a genuine break, so live progress carries no volume
+    field at all."""
+    progress = {
+        "chunks_total": 3, "chunks_done": 0, "outcomes": [], "trades_total": 0, "quotes_total": 0,
+    }
+    # chunk 1 reused (0 events), chunk 2 fetched enough to CROSS a bucket boundary, chunk 3 failed.
+    steps = [("reused", 0), ("fetched", 1_500_000), ("failed", 0)]
+    views = []
+    for outcome, events in steps:
+        progress["chunks_done"] += 1
+        progress["outcomes"].append({"outcome": outcome, "trade_count": events, "quote_count": events})
+        progress["trades_total"] += events
+        progress["quotes_total"] += events
+        views.append(tr._progress_view(progress, started_utc="2026-06-01T13:00:00Z", finished_utc=None))
+
+    volume_keys = [k for k in views[0] if "trades_total" in k or "quotes_total" in k]
+    assert volume_keys == [], (
+        "live progress still serves a volume field; a bucket transition while chunks_done advances "
+        f"by exactly one proves that chunk was fetched: {volume_keys}"
+    )
+
+
+def test_tr32_the_live_rest_route_survives_a_per_chunk_polling_attack(route_ctx, monkeypatch):
+    """TR-32 end to end on the REAL route, polling between every chunk with a stepping adapter --
+    the operator-observable transport, not a projection unit test."""
+    client, _mgr, _adapter, _tmp = route_ctx
+    from app.main import app, get_market_adapter
+
+    fake_plan = [
+        {"symbol": "AAPL", "date": "2026-06-01", "start": "2026-06-01T13:30:00Z", "end": "2026-06-01T15:00:00Z"},
+        {"symbol": "AAPL", "date": "2026-06-01", "start": "2026-06-01T15:00:00Z", "end": "2026-06-01T20:00:00Z"},
+        {"symbol": "MSFT", "date": "2026-06-01", "start": "2026-06-01T13:30:00Z", "end": "2026-06-01T20:00:00Z"},
+    ]
+    monkeypatch.setattr(tr, "plan_recorder_chunks", lambda symbols, dates: list(fake_plan))
+    stepper = _SteppingTickAdapter()
+    stepper.raise_for = {("MSFT", "2026-06-01T13:30:00Z")}
+    app.dependency_overrides[get_market_adapter] = lambda: stepper
+    polls = []
+    try:
+        r = client.post(
+            "/research/desk/micro/recorder/compute",
+            json={"symbols": ["AAPL", "MSFT"], "dates": ["2026-06-01"]},
+        )
+        assert r.status_code == 200
+        for _ in range(len(fake_plan)):
+            assert stepper.entered.acquire(timeout=15.0)
+            polls.append(client.get("/research/desk/micro/recorder/compute").json()["progress"])
+            stepper.release.release()
+        deadline = time.time() + 15
+        while time.time() < deadline:
+            snap = client.get("/research/desk/micro/recorder/compute").json()
+            if snap["state"] != "running":
+                polls.append(snap["progress"])
+                break
+            time.sleep(0.02)
+    finally:
+        app.dependency_overrides.pop(get_market_adapter, None)
+        stepper.release.release()
+
+    assert polls, "the attack needs at least one observed poll"
+    forbidden = {"chunks_fetched", "chunks_reused", "chunks_unchanged", "chunks_failed"}
+    for progress in polls:
+        leaked = forbidden & set(progress)
+        assert leaked == set(), f"REST poll leaked outcome-typed counters: {sorted(leaked)}"
+        vol = [k for k in progress if "trades_total" in k or "quotes_total" in k]
+        assert vol == [], f"REST poll leaked a volume field: {vol}"
