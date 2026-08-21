@@ -146,6 +146,27 @@
 > UNCHANGED.** The auditor's honesty-only artifact-field fix is necessary but insufficient; the
 > evaluator's authority must be fixed before any sealed graduation is allowed. Traps → TR-30.
 
+> **Revision r10 (2026-08-21, owner ruling — the Tier-B resolution is operationally frozen).**
+> §7.2 already fixed the mandatory ORDER (screen → record → freeze → `symbol_rule` → register →
+> commitment + HMAC → only then fetch) and Card 5.2 already froze the six screening CRITERIA. The
+> iteration-23 preflight found the order un-executable anyway: three of the six criteria (market
+> cap, primary US listing, no pending M&A) had NO data source in the project, and — more
+> fundamentally — the spec never named the candidate UNIVERSE that replacement names are drawn
+> from, nor the provenance protocol for the external criteria, nor what the negative "no pending
+> M&A" test actually asserts. Resolving those inside a screen would have been methodology invented
+> after seeing candidates. **The six criteria are UNCHANGED by this revision** — r10 adds only the
+> pre-recording operational detail needed to execute them reproducibly: the frozen candidate
+> universe (Nasdaq Trader listing directories, preserved as raw bytes, not merely hashed), the
+> mechanical non-common-equity exclusions, the primary-listing interpretation, the SEC-based
+> market-cap basis (fail-closed on multi-class), ADV as 30 completed SESSIONS, the previously
+> undefined median-RTH-spread window (5 completed sessions, which become EXPOSED data and may
+> never be sealed recording dates), the pending-M&A definition and search protocol, and a
+> deterministic resolution that treats the five provisional names as seeds rather than
+> grandfathered passes. r10 is legal now precisely because it is PRE-EVIDENCE: no recording
+> universe is registered, no sealed tranche exists, zero J-06 tape calls have occurred, and no
+> Tier-B screen result has been revealed. Detail → §7.2.1. Traps → TR-32 (live-progress
+> composition, which the same preflight found open on BOTH transports).
+
 ---
 
 ## 0. Shared conventions
@@ -629,6 +650,93 @@ inconvenient, no replacement from vendor availability or observed data** — a v
 a DISCLOSED per-chunk/per-symbol failure in the batch report, never a silent swap. The current
 provisional names are never hard-coded as permanently valid; only the resolved, recorded list
 of step 2 is.
+
+### 7.2.1 Tier-B resolution — the frozen operational protocol (r10)
+
+Everything in this subsection is PRE-RECORDING operational detail. **The six Card-5.2 screening
+criteria are unchanged and are restated here verbatim only so the protocol is self-contained:**
+market cap USD 2B–20B; price USD 15–100; trailing 30-session ADV ≥ 3M shares; median RTH quoted
+spread ≤ 8 bps; primary US listing; no pending M&A. Recent market-cap moves MAY cause provisional
+names to fail — that is the expected behaviour of a recording-time screen, never a reason to widen
+a criterion.
+
+**(a) Candidate universe.** The Nasdaq Trader symbol directories `nasdaqlisted` and `otherlisted`,
+as of the screening cutoff. Chosen so the frozen numeric/market criteria perform the selection
+rather than membership in an independently committee-selected index. Reproducibility requires
+preserving the SOURCE SNAPSHOT, not merely its hash — a later reader must reproduce the exact
+candidate universe after Nasdaq updates the live files, so the live URL is never a dependency.
+Persist immutably at the cutoff: the exact raw bytes of both files; the SHA-256 of each raw file;
+Nasdaq's embedded file-creation timestamp; the retrieval UTC timestamp; the parser/version hash;
+and the resulting pre-filter membership hash.
+
+**(b) Mechanical exclusions, applied BEFORE the six-factor screen** — ETF flag `Y`; test issue
+`Y`; warrants; rights; units; preferred stock; funds/ETNs and other non-common-equity instruments.
+The exclusion parser and its rules are frozen and tested before screening. **A security whose type
+is ambiguous is never silently admitted:** it is marked `unresolved` and excluded, with provenance.
+
+**(c) Primary US listing.** Passes only a common-stock / class-common-stock security registered
+under Exchange Act §12(b) whose primary listed venue is Nasdaq, NYSE, or NYSE American. ADRs/ADSs,
+preferreds, warrants, units, OTC securities and other non-common-equity instruments fail. The
+frozen Nasdaq Trader snapshot is the listing-directory owner; SEC filing/cover-page exchange and
+class information is the authoritative cross-check. **Any disagreement between the two is recorded
+and FAILS CLOSED** — never resolved toward whichever source lets the candidate pass.
+
+**(d) Market cap.** The latest SEC-reported common shares outstanding legally available as of the
+cutoff × the most recent completed official close at or before the cutoff. Persist: CIK;
+accession/form; fact/concept; fact period/end date; filing date; raw shares value; price
+source/session/raw close; derived USD market cap. **Where a multi-class or otherwise ambiguous
+capitalization means one ticker price × one shares figure does not unambiguously represent issuer
+market cap, `market_cap_status = unresolved` and the candidate FAILS CLOSED.** No aggregation rule
+may be invented after seeing candidates.
+
+**(e) ADV.** The arithmetic mean of raw share volume over the **30 most recent fully completed
+regular US trading sessions strictly before the cutoff** — sessions, never 30 calendar days. The
+exact 30-session list and input volumes are persisted.
+
+**(f) Median RTH quoted spread** (previously undefined; closed here). The **5 most recent fully
+completed regular US trading sessions strictly before the cutoff**. For candidates still eligible
+after the cheaper non-spread filters, compute the median quoted spread in bps across eligible
+in-effect RTH NBBO observations over those five sessions, on the existing canonical quote basis.
+No hand-picked days. **Those five sessions are SCREENING/EXPOSED data and may NEVER be used as
+J-06 sealed historical-OOS recording dates.** The exact five-session list and source provenance are
+persisted. Identity-bearing progressive results are not served while this screening fetch runs.
+
+**(g) Pending M&A.** A candidate FAILS iff, at the cutoff, public SEC/issuer evidence establishes a
+definitive, announced merger / acquisition / business-combination / take-private transaction
+involving the candidate that remains PENDING rather than closed or terminated. Rumour or
+speculation alone does not fail; a completed or terminated transaction does not remain a failure
+merely because it was recent. Search protocol: relevant filings over the prior 24 calendar months,
+PLUS the most recent 10-K and every later 10-Q/8-K through the cutoff. Flagged for transaction-
+status inspection: 8-K Item 1.01; 8-K Item 2.01; PREM14A; DEFM14A; S-4 / F-4; SC 13E-3; and
+equivalent issuer-IR definitive-transaction announcements. **An 8-K Item 1.01 alone is NOT a
+failure — it is a search hit requiring transaction classification.** Persist: filings searched;
+accession numbers; dates; relevant transaction status; a deterministic pass/fail explanation; and
+the retrieval timestamp. **"No search hit" without the complete frozen search record is not
+evidence.**
+
+**(h) Deterministic resolution.** Ticker-alphabetical selection is REJECTED — deterministic, but it
+imports an irrelevant lexical bias. The five provisional Card-5.2 names `DKNG`, `ETSY`, `AFRM`,
+`SOFI`, `RKLB` are SEEDS, not grandfathered passes: all five face the identical frozen six-factor
+screen. Then: (1) retain passing provisional names in their already-documented order; (2) if fewer
+than three pass, fill the missing slots from other eligible exchange-universe survivors; (3) rank
+replacement survivors by ascending `sha256("rapid-microscope-tier-b-r10:" + normalized_ticker)`;
+(4) take only enough replacements to reach exactly three Tier-B names for the J-06 starter tranche.
+No human choice after results are visible. **If fewer than three eligible Tier-B names exist in
+total: STOP** — never loosen a criterion, never manually substitute.
+
+**(i) The frozen minimum starter panel.** Once the three Tier-B names resolve, the J-06 minimum
+legal starter panel is exactly eight symbols, following the existing frozen Tier-A/Tier-C ordering
+so no post-screen human selection remains: `PG`, `AAPL`, `MSFT`, `NVDA`, the three resolved Tier-B
+names, and `SPY`. With ten dates this is exactly **80 planned symbol-days** before disclosed vendor
+failures (the ≥8-symbol and ≥10-date floors are Cartesian under §7.2, so 80 is the true minimum —
+Card 5.2's "~30–50" prose estimate is arithmetically unreachable and is superseded here).
+
+**(j) Screen-once discipline.** The candidate universe, source hierarchy, cutoff, criteria, and
+selection rule are all frozen BEFORE the screen runs, and the screen then runs EXACTLY ONCE. The
+complete provenance record of §7.2 step 2 — including every candidate's six raw criterion inputs,
+per-criterion pass/fail, all failures, the deterministic ordering, and any `unresolved` candidate —
+is persisted and immutable before the resolved list may become the Tier-B portion of `symbol_rule`.
+No hidden manual exclusions.
 
 ### 7.3 Split vs seal — two independent assignments
 - **Split** (train/holdout tag, Card 5.2's published rule, unchanged): `holdout` iff the last hex
