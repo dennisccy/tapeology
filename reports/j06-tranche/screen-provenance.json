@@ -1,0 +1,12 @@
+{
+  "chain_ok": true,
+  "recorded_at": "2026-08-21T16:04:36.186978Z",
+  "resolved_tier_b": [
+    "AG",
+    "LYFT",
+    "WULF"
+  ],
+  "row_index": 0,
+  "screen_id": "rapid-microscope-tier-b-r11",
+  "stage": "screen_provenance"
+}

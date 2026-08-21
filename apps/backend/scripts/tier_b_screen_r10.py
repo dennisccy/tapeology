@@ -388,9 +388,12 @@ def stage_spread(tickers: list[str]) -> dict:
             values.sort()
             n = len(values)
             median = values[n // 2] if n % 2 else (values[n // 2 - 1] + values[n // 2]) / 2.0
+        completed = [x["session"] for x in per_session
+                     if "error" not in x and x.get("eligible_observations", 0) > 0]
         result = tb.evaluate_spread(
             median, sessions=list(SPREAD_SESSIONS_FROZEN),
             observations=len(values), source="alpaca-sip-historical-quotes",
+            completed_sessions=completed,   # owner ruling: 5/5 or unresolved, never a short window
         )
         rows.append({"ticker": tic, "spread": result, "median_bps": median,
                      "eligible_observations": len(values), "crossed_excluded": crossed,

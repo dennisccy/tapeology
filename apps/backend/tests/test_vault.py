@@ -2762,3 +2762,84 @@ def test_tc14_the_widened_tr2_sweep_forbids_an_untracked_pool_members_symbol_and
         assert untracked_date not in served_text, "the untracked pool member's session date leaked"
         assert untracked_meta["id"] not in served_text
         assert untracked_meta["checksum"] not in served_text
+
+
+def test_load_vault_secret_expands_the_home_idiom_in_the_configured_path(tmp_path, monkeypatch):
+    """A configured ``TAPEOLOGY_VAULT_SECRET_FILE`` may use ``~``. A shell expands it; ``Path`` does
+    not, so an EXISTING secret file was raising ``VaultSecretUnavailable`` and blocking J-06
+    universe registration outright. Found live during the J-06 preflight."""
+    home = tmp_path / "home"
+    (home / ".config" / "tapeology").mkdir(parents=True)
+    (home / ".config" / "tapeology" / "vault-secret").write_text("s3cret-under-home\n")
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("TAPEOLOGY_VAULT_SECRET_FILE", "~/.config/tapeology/vault-secret")
+
+    assert vault.load_vault_secret() == b"s3cret-under-home"
+
+
+def test_an_unexpandable_missing_secret_still_refuses_typed(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("TAPEOLOGY_VAULT_SECRET_FILE", "~/nope/vault-secret")
+    with pytest.raises(vault.VaultSecretUnavailable):
+        vault.load_vault_secret()
+
+
+# === the Tier-B screen provenance ledger (§7.2 step 2 / §7.2.1 (j)) ===============================
+
+
+def _screen_kwargs(**over):
+    base = dict(
+        screen_id="rapid-microscope-tier-b-r11",
+        spec_revision="r11",
+        screening_cutoff_utc="2026-08-21T12:06:00Z",
+        source_snapshot_sha256={"nasdaqlisted": "85fe4372", "otherlisted": "4191463d"},
+        candidate_universe_membership_hash="b72805fb",
+        screening_artifacts={"tier-b-resolution.json": "fb89c5a2"},
+        resolution_artifact_sha256="fb89c5a2",
+        resolved_tier_b=["AG", "LYFT", "WULF"],
+        resolution_rule_identity="sha256(rapid-microscope-tier-b-r10: + ticker), exactly-3",
+    )
+    base.update(over)
+    return base
+
+
+def test_screen_provenance_is_a_distinct_ledger_that_cannot_confuse_find_universe(tmp_path):
+    """The reason this is a separate file: ``find_universe`` resolves the LATEST row carrying a
+    given ``universe_id``, so a screen row sharing that field could masquerade as a registration and
+    silently redefine ``expected_recording_pairs``, neutralizing TR-4."""
+    root = str(tmp_path)
+    sled = vault.VaultScreenProvenanceLedger(root)
+    uled = vault.VaultUniverseLedger(root)
+    row = vault.record_screen_provenance(sled, **_screen_kwargs())
+
+    assert row["record_kind"] == "tier_b_screen_provenance"
+    assert "universe_id" not in row
+    assert sled.path != uled.path
+    # the universe ledger is untouched, so no screen row can resolve as a registration
+    assert uled.all_rows() == []
+    assert vault.find_universe(uled, "rapid-microscope-tier-b-r11") is None
+    assert vault.find_screen_provenance(sled, "rapid-microscope-tier-b-r11")["resolved_tier_b"] == [
+        "AG", "LYFT", "WULF"]
+
+
+def test_recording_the_same_screen_twice_is_idempotent_not_a_second_row(tmp_path):
+    sled = vault.VaultScreenProvenanceLedger(str(tmp_path))
+    a = vault.record_screen_provenance(sled, **_screen_kwargs())
+    b = vault.record_screen_provenance(sled, **_screen_kwargs())
+    assert a["row_index"] == b["row_index"]
+    assert len(sled.all_rows()) == 1
+
+
+def test_a_conflicting_re_record_of_one_screen_id_is_refused(tmp_path):
+    """A screen's history can never be quietly rewritten."""
+    sled = vault.VaultScreenProvenanceLedger(str(tmp_path))
+    vault.record_screen_provenance(sled, **_screen_kwargs())
+    with pytest.raises(vault.VaultUniverseAlreadyRegisteredError):
+        vault.record_screen_provenance(sled, **_screen_kwargs(resolved_tier_b=["AG", "LYFT", "TDC"]))
+
+
+def test_the_screen_provenance_chain_verifies(tmp_path):
+    sled = vault.VaultScreenProvenanceLedger(str(tmp_path))
+    vault.record_screen_provenance(sled, **_screen_kwargs())
+    assert sled.verify_chain()["ok"] is True
+    assert sled.verified_rows()[0]["resolution_artifact_sha256"] == "fb89c5a2"

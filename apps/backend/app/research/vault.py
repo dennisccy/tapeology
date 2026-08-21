@@ -278,6 +278,10 @@ __all__ = [
     "shard_ledger_for_dataset_dir",
     "universe_ledger_for_dataset_dir",
     "recovery_ledger_for_dataset_dir",
+    "VaultScreenProvenanceLedger",
+    "screen_provenance_ledger_for_dataset_dir",
+    "record_screen_provenance",
+    "find_screen_provenance",
     "VaultUniverseLedger",
     "VaultShardLedger",
     "VaultRecoveryLedger",
@@ -356,6 +360,7 @@ _SHARD_LEDGER_FILENAME = "vault_shard_ledger.jsonl"
 # the corruption event separately and immutably" (never in the corrupted ledger itself, which
 # cannot be trusted to record its own corruption).
 _RECOVERY_LEDGER_FILENAME = "vault_recovery_ledger.jsonl"
+_SCREEN_PROVENANCE_LEDGER_FILENAME = "vault_screen_provenance_ledger.jsonl"
 
 # Ledger-machinery keys ``HashChainedLedger.append_row`` itself manages -- stripped before a row's
 # OWN content is carried forward into a later row (``assign_shard``/``expose_shard`` below), so a
@@ -644,6 +649,93 @@ class VaultRecoveryLedger:
 # === universe registration (spec section 7.2) =======================================================
 
 
+class VaultScreenProvenanceLedger:
+    """The Tier-B SCREEN provenance chain (spec §7.2 step 2 / §7.2.1 (j)) -- a DISTINCT
+    hash-chained append-only ledger, deliberately NOT the universe ledger.
+
+    §7.2 requires the resolved Tier-B screening provenance to be durably bound BEFORE universe
+    registration. It must not live in ``vault_universe_ledger.jsonl``: ``find_universe`` resolves
+    the LATEST row carrying a given ``universe_id``, so a screen row sharing that field would
+    masquerade as a registration and could silently redefine ``expected_recording_pairs``,
+    neutralizing TR-4. A separate file is the narrowest owner that makes that confusion
+    structurally impossible rather than merely discouraged."""
+
+    def __init__(self, root_dir: str) -> None:
+        self._chain = HashChainedLedger(root_dir, _SCREEN_PROVENANCE_LEDGER_FILENAME)
+
+    @property
+    def path(self) -> Path:
+        return self._chain.path
+
+    def verify_chain(self) -> dict:
+        return self._chain.verify_chain()
+
+    def all_rows(self) -> list[dict]:
+        return self._chain.all_rows()
+
+    def verified_rows(self) -> list[dict]:
+        result = self._chain.verify_chain()
+        if not result["ok"]:
+            raise VaultLedgerCorruptionError("screen_provenance", result)
+        return self._chain.all_rows()
+
+    def append_row(self, fields: dict) -> dict:
+        return self._chain.append_row(fields)
+
+
+def screen_provenance_ledger_for_dataset_dir(dataset_dir_resolved: str) -> "VaultScreenProvenanceLedger":
+    """The screen-provenance ledger for a dataset dir -- the ``*_ledger_for_dataset_dir`` idiom."""
+    return VaultScreenProvenanceLedger(resolve_vault_dir(dataset_dir_resolved))
+
+
+def record_screen_provenance(
+    ledger: VaultScreenProvenanceLedger,
+    *,
+    screen_id: str,
+    spec_revision: str,
+    screening_cutoff_utc: str,
+    source_snapshot_sha256: dict,
+    candidate_universe_membership_hash: str,
+    screening_artifacts: dict,
+    resolution_artifact_sha256: str,
+    resolved_tier_b: list[str],
+    resolution_rule_identity: str,
+    recorded_at: str | None = None,
+) -> dict:
+    """Binds ONE completed screen's provenance immutably, before any universe registration.
+
+    Idempotent on ``screen_id`` when every field is byte-identical (a crash-retry of the one
+    operator act must not fork the chain -- ``register_universe``'s own discipline, mirrored);
+    ``VaultUniverseAlreadyRegisteredError`` on a conflicting re-record, so a screen's history can
+    never be quietly rewritten. Carries NO ``universe_id`` field by construction."""
+    fields = {
+        "record_kind": "tier_b_screen_provenance",
+        "screen_id": screen_id,
+        "spec_revision": spec_revision,
+        "screening_cutoff_utc": screening_cutoff_utc,
+        "source_snapshot_sha256": dict(source_snapshot_sha256),
+        "candidate_universe_membership_hash": candidate_universe_membership_hash,
+        "screening_artifacts": dict(screening_artifacts),
+        "resolution_artifact_sha256": resolution_artifact_sha256,
+        "resolved_tier_b": list(resolved_tier_b),
+        "resolution_rule_identity": resolution_rule_identity,
+        "recorded_at": recorded_at if recorded_at is not None else _iso_utc_now(),
+    }
+    content = {k: v for k, v in fields.items() if k != "recorded_at"}
+    for row in ledger.verified_rows():
+        if row.get("screen_id") == screen_id:
+            if {k: row.get(k) for k in content} == content:
+                return row
+            raise VaultUniverseAlreadyRegisteredError(
+                screen_id, row.get("resolution_artifact_sha256"), resolution_artifact_sha256)
+    return ledger.append_row(fields)
+
+
+def find_screen_provenance(ledger: VaultScreenProvenanceLedger, screen_id: str) -> dict | None:
+    matches = [r for r in ledger.verified_rows() if r.get("screen_id") == screen_id]
+    return matches[-1] if matches else None
+
+
 def compute_rule_hash(symbol_rule: list[str], date_rule: list[str]) -> str:
     """A pure content hash over the resolved, explicit ``symbol_rule``/``date_rule`` lists --
     excludes any wall-clock-derived value (``registered_at`` is never part of this), so two
@@ -796,6 +888,12 @@ def load_vault_secret(path: str | None = None) -> bytes:
     contract: "a missing or unreadable TAPEOLOGY_VAULT_SECRET_FILE ... is a typed configuration
     refusal, never a crash")."""
     resolved = path if path is not None else os.environ.get(_VAULT_SECRET_FILE_ENV)
+    # A configured path may legitimately use the ``~`` home idiom -- a shell would expand it, but
+    # ``Path`` treats it as a literal directory name, so an EXISTING, correctly-configured secret
+    # file read as ``'~/...'`` raised ``VaultSecretUnavailable`` and blocked J-06 registration
+    # outright. Expanding here honours the existing env contract rather than changing it.
+    if resolved:
+        resolved = os.path.expanduser(resolved)
     if not resolved:
         raise VaultSecretUnavailable(
             f"no vault secret file configured -- set {_VAULT_SECRET_FILE_ENV} to a readable file "

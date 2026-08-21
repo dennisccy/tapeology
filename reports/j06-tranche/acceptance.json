@@ -1,0 +1,79 @@
+{
+  "all_checksummed": true,
+  "at": "2026-08-21T20:49:00Z",
+  "calendar_span_days": 63,
+  "cooperative_cancel_observed": true,
+  "dataset_list_errors": 0,
+  "disclosed_failures": [
+    [
+      "NVDA",
+      "2026-07-08"
+    ]
+  ],
+  "distinct_dates": 10,
+  "distinct_symbols": 8,
+  "duplicate_dataset_ids": 0,
+  "full_session_pct": 100.0,
+  "hmac_selected_recorded": 21,
+  "hmac_selected_total": 21,
+  "legacy_collisions_excluded_from_tranche": [
+    {
+      "created_utc": "2026-07-15T11:57:30.596930Z",
+      "dataset_id": "72ca8bc0e5d24e40bef8d2dc6c0fe44b",
+      "date": "2026-07-08",
+      "schema_basis": null,
+      "symbol": "NVDA"
+    }
+  ],
+  "legacy_datasets_untouched": 18,
+  "max_single_date_concentration": 0.1013,
+  "max_single_symbol_concentration": 0.1266,
+  "pg_present": true,
+  "planned_pairs": 80,
+  "quote_size_unit_distribution": {
+    "shares": 79
+  },
+  "recorded_pairs": 79,
+  "recording_runs": 4,
+  "research_gate_150_symbol_days": {
+    "have": 79,
+    "met": false,
+    "target": 150
+  },
+  "resolved_tier_b_present": [
+    "AG",
+    "LYFT",
+    "WULF"
+  ],
+  "schema_basis_distribution": {
+    "tick_recorder_v1_card_5_1_preservation_present": 79
+  },
+  "screen_provenance_bound": true,
+  "screen_provenance_chain_ok": true,
+  "sealed_of_selected_recorded": 21,
+  "sealed_shard_rows": 21,
+  "shard_ledger_chain_ok": true,
+  "split_distribution": {
+    "holdout": 12,
+    "train": 67
+  },
+  "spy_present": true,
+  "stage": "acceptance",
+  "symbols": [
+    "AAPL",
+    "AG",
+    "LYFT",
+    "MSFT",
+    "NVDA",
+    "PG",
+    "SPY",
+    "WULF"
+  ],
+  "tr4_batch_verification": {
+    "ok": true
+  },
+  "universe_id": "rapid-microscope-j06-starter",
+  "universe_ledger_chain_ok": true,
+  "universe_registrations": 1,
+  "unsealed_selected_recorded": []
+}

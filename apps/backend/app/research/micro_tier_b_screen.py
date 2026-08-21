@@ -483,11 +483,29 @@ def evaluate_pending_ma(
 def evaluate_spread(
     median_bps: float | None, *, sessions: list[str] | None = None,
     observations: int | None = None, source: str | None = None,
+    completed_sessions: list[str] | None = None,
 ) -> dict:
     """Card 5.2: median RTH quoted spread <= 8 bps, over the §7.2.1 (f) window of the 5 most recent
     fully completed regular sessions strictly before the cutoff. A missing measurement is
-    ``unresolved`` (fail-closed) -- never an assumed-tight spread."""
-    prov = {"sessions": sessions, "observations": observations, "source": source}
+    ``unresolved`` (fail-closed) -- never an assumed-tight spread.
+
+    **Window COMPLETENESS is required (owner ruling 2026-08-21).** A frozen five-session evaluation
+    is eligible for pass/fail ONLY when all five required sessions completed successfully AND each
+    produced eligible observations. ``completed_sessions`` names the sessions that actually did; any
+    missing or failed required session yields ``unresolved``, never a pass/fail computed from the
+    survivors. The bug this closes was live: a vendor timeout on one of the five silently produced a
+    FOUR-session median that was then reported as a definitive verdict. There is NO date
+    substitution -- a short window is a different statistic, not a repairable one."""
+    prov = {"sessions": sessions, "observations": observations, "source": source,
+            "completed_sessions": completed_sessions}
+    if sessions is not None and completed_sessions is not None:
+        missing = [s for s in sessions if s not in set(completed_sessions)]
+        if missing:
+            return _result(
+                STATUS_UNRESOLVED,
+                f"incomplete_session_window_missing_{len(missing)}_of_{len(sessions)}",
+                median_bps=(float(median_bps) if median_bps is not None else None),
+                missing_sessions=missing, **prov)
     if median_bps is None:
         return _result(STATUS_UNRESOLVED, "no_spread_measurement", median_bps=None, **prov)
     if sessions is not None and len(sessions) != SPREAD_SESSIONS:

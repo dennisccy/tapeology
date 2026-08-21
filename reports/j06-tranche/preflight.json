@@ -1,0 +1,22 @@
+{
+  "at": "2026-08-21T16:05:45Z",
+  "checks": {
+    "adapter": "AlpacaAdapter",
+    "bar_dir": "/home/dennis-chan/Git/tapeology/apps/backend/.data/bars",
+    "checkpoint_dir_writable": true,
+    "colliding_existing_datasets": [],
+    "credentials_available": true,
+    "dataset_store_readable": true,
+    "disk_free_gb": 174.7,
+    "expected_pairs": 80,
+    "historical_feed": "sip",
+    "no_exposed_session_collision": true,
+    "planned_chunks": 2080,
+    "screen_provenance_chain_ok": true,
+    "shard_ledger_chain_ok": true,
+    "tr19_preservation": true,
+    "universe_ledger_chain_ok": true
+  },
+  "stage": "preflight",
+  "universe_id": "rapid-microscope-j06-starter"
+}

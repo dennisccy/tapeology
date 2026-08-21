@@ -524,3 +524,50 @@ def test_a_clean_date_rule_passes_the_exposed_session_check():
     out = tb.assert_no_exposed_session(["2026-07-01", "2026-07-02", "2026-07-06"])
     assert out["ok"] is True
     assert out["checked_against"] == list(tb.SCREENING_EXPOSED_SESSIONS)
+
+
+# === (f) window COMPLETENESS (owner ruling 2026-08-21) ============================================
+
+_FIVE = ["2026-08-14", "2026-08-17", "2026-08-18", "2026-08-19", "2026-08-20"]
+
+
+def test_a_vendor_failure_on_one_required_session_makes_the_spread_unresolved():
+    """The live bug this closes: FLUT hit a VendorTimeout on 2026-08-19 and a FOUR-session median
+    was still reported as a definitive `fail`. A short window is a different statistic, not a
+    repairable one -- and there is no date substitution."""
+    got = tb.evaluate_spread(
+        14.98, sessions=_FIVE, observations=96_216, source="alpaca-sip-historical-quotes",
+        completed_sessions=[s for s in _FIVE if s != "2026-08-19"],
+    )
+    assert got["status"] == tb.STATUS_UNRESOLVED
+    assert got["reason"] == "incomplete_session_window_missing_1_of_5"
+    assert got["missing_sessions"] == ["2026-08-19"]
+
+
+def test_a_session_that_produced_zero_eligible_observations_also_blocks_a_verdict():
+    got = tb.evaluate_spread(3.0, sessions=_FIVE, completed_sessions=_FIVE[:4])
+    assert got["status"] == tb.STATUS_UNRESOLVED
+    assert got["missing_sessions"] == ["2026-08-20"]
+
+
+def test_a_complete_five_of_five_window_still_returns_a_verdict():
+    assert tb.evaluate_spread(4.98, sessions=_FIVE, completed_sessions=_FIVE)["status"] == tb.STATUS_PASS
+    assert tb.evaluate_spread(10.78, sessions=_FIVE, completed_sessions=_FIVE)["status"] == tb.STATUS_FAIL
+
+
+def test_the_accepted_winners_each_had_a_complete_five_of_five_window():
+    """The accepted AG/LYFT/WULF resolution is NOT reopened -- this verifies it never depended on
+    the bug, by re-deriving each winner's verdict from the persisted per-session record."""
+    import json
+    from pathlib import Path
+
+    art = Path(__file__).resolve().parents[3] / "reports/tier-b-screen-r10/spread.json"
+    rows = {r["ticker"]: r for r in json.loads(art.read_text())["rows"]}
+    for tic, expected in (("AG", tb.STATUS_PASS), ("LYFT", tb.STATUS_PASS), ("WULF", tb.STATUS_PASS)):
+        row = rows[tic]
+        complete = [s["session"] for s in row["per_session"]
+                    if "error" not in s and s.get("eligible_observations", 0) > 0]
+        assert len(complete) == 5, f"{tic} was not 5/5: {complete}"
+        again = tb.evaluate_spread(row["median_bps"], sessions=_FIVE,
+                                   completed_sessions=complete, source=row["spread"]["source"])
+        assert again["status"] == expected, (tic, again)

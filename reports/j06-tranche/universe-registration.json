@@ -1,0 +1,39 @@
+{
+  "arithmetic": {
+    "max_date_concentration": 0.1,
+    "max_symbol_concentration": 0.125,
+    "planned_pairs": 80,
+    "span_days": 63
+  },
+  "date_rule": [
+    "2026-06-10",
+    "2026-06-17",
+    "2026-06-24",
+    "2026-07-01",
+    "2026-07-08",
+    "2026-07-15",
+    "2026-07-22",
+    "2026-07-29",
+    "2026-08-05",
+    "2026-08-12"
+  ],
+  "expected_pairs": 80,
+  "hmac_selected_count": 21,
+  "registered_at": "2026-08-21T16:04:59.646127Z",
+  "rule_commitment": "b0d6d09e533ba043e8925d319bf1738b1807dddc751c10420b43e936e90d3736",
+  "rule_hash": "ed065e4d223996fe11e5a50aa2bcf8d07f1419ee4026787b56b505127552e9df",
+  "stage": "universe_registration",
+  "symbol_rule": [
+    "PG",
+    "AAPL",
+    "MSFT",
+    "NVDA",
+    "AG",
+    "LYFT",
+    "WULF",
+    "SPY"
+  ],
+  "universe_id": "rapid-microscope-j06-starter",
+  "universe_ledger_chain_ok": true,
+  "vault_secret_commitment": "68f2bbb382de525d33ef7db9b53cc72f8e43b41ced8e10dffc9195c0292da8f9"
+}
