@@ -419,3 +419,35 @@ fix. Do not read `CLOSURE-PASS` as "every lane agreed"; open
 `reports/phase-<iter>-ui-test-results.md` and read its verdict line directly.
 **Applies to:** every evaluator, every iteration; and to any framework change touching
 `scripts/automation/lib/closure_gate.py`.
+
+## iter-22 — 2026-08-21T04:10:00Z
+
+**Verdict:** STALLED
+**Lesson:** A "does this really screen anything?" test can be blind in a way the usual
+break-tests miss: `test_iter22_study3_capitulation_screens_with_real_playbook_signal_anchor`
+(`apps/backend/tests/test_scout.py:1676`) asserts only that a decision is in the closed vocabulary
+and that a floor-check row exists — both of which are produced identically by a hollow ZERO-anchor
+pass-through. I proved it by pushing `_plant_capitulation_signal`'s `trigger_ts` 5e9 seconds
+outside the dataset window (so no signal could join) and watching the test stay green. Its Study-1
+twin at `:1664` has the one line that closes it: `screen_result["n_candidate"] +
+screen_result["n_comparator"] > 0`. The general shape: whenever a screen/join can legitimately end
+in "insufficient_n", the honest-refusal path and the never-saw-any-data path produce the SAME
+assertions, so every such test needs an explicit non-vacuity assertion on the joined count — a
+sibling test having it is not evidence that this one does.
+**Applies to:** any iteration adding or editing a Scout/screen/join test whose acceptable outcome
+includes `insufficient_n` / `no survivor` / a floor refusal — i.e. anything under
+`apps/backend/tests/test_scout.py`, `test_walkforward*.py`, or new `micro_*` join tests.
+
+## iter-22 — 2026-08-21T04:10:00Z (second)
+
+**Verdict:** STALLED
+**Lesson:** The showcase walkthrough lane cannot photograph a backend research address at all: it
+rewrites every URL onto the frontend port (`:3301`), which has no pass-through, so
+`reports/demo/goal-rapid-microscope-iter-22/step-07.png` is a Next.js 404 for the graduation
+surface even though the browser-QA lane's own `UT-08-result.png` shows the full body. Do NOT open
+an `evidence_makeup` make-up ride for a demo step of this shape — a re-capture through the same
+lane reproduces the identical 404. Either write the demo step against a page-served surface, or
+accept the soft note. (Round 19 recorded the same mechanism for J-07's replay script; this is the
+demo lane's version of it.)
+**Applies to:** any iteration whose demo script includes a step on a `GET /research/...` address
+rather than a `/cockpit`, `/structure` or `/desk` page.

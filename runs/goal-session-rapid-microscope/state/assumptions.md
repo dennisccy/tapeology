@@ -1163,3 +1163,58 @@ exact deferral through and recorded it as reversible, future scope, not a defect
 **Reversible:** yes — a later iteration can extend Study 1's request to the real two-feature
 co-occurrence condition and re-screen it as a NEW candidate variant (a new row, never an edit to
 this iteration's recorded decision, per the ledger's own append-only discipline).
+
+## iter-22 — goal-evaluator
+
+**Ambiguity:** how to score J-09 "The pilot studies" when its Acceptance clause is fully met but
+its STEP 2 is not. Acceptance asks for "three ledgered study families ... whose registration
+timestamps precede their first outcome read; each serves its screen with evidence class,
+denominators, concentration/ToD/fallback disclosures, and the economic column; each carries a
+recorded decision in the closed vocabulary — with `no survivor`, wrong-direction, and
+`insufficient_n` all acceptable end states". Step 2, however, says "Run each through the Scout on
+the full joinable corpus (legacy exploratory symbol-days + any EXPOSED tranche shards)". All three
+studies were screened against committed hermetic fixtures with zero (Studies 1/2) or one (Study 3)
+usable anchor; the legacy 12 symbol-days were never queried, so every answer is `insufficient_n`
+produced from an empty or near-empty anchor set (auditor finding B2).
+**We chose:** `passing`. Grounds, each checked this round rather than inherited: (a) I verified the
+Acceptance clause field by field from the raw ledger row in `UT-10-ledger.jsonl` — `evidence_class:
+historical_exposed_diagnostic`, `n_candidate`/`n_comparator`/`n_sessions_total`/`n_usable_sessions`,
+`concentration`, `fallback_tercile`, `best_of_n_disclosure`, and the economic column
+(`econ_floor.floor_bps` = 3.356 bps with its "research cost proxy" sentence) are all present and
+honestly zero/null, plus a closed-vocabulary `decision` — and `insufficient_n` is a NAMED acceptable
+end state in the journey's own text; (b) the step-2 corpus run is not the machine's to make: it
+writes permanent hash-chained rows into the live `.data/` ledger (irreversible), it would break
+J-10's own passing golden assertion "No candidates ledgered." against that store, and the iter-21
+auditor measured the anchor search as quadratic and uncancellable, which is why THIS iteration's
+spec listed it under OUT OF SCOPE as "still forbidden" — so it is owner-gated in the same way J-06's
+tranche is; (c) the iteration-20 and iteration-21 evaluators both stated in writing that three
+recorded decisions, including "not enough evidence", would make J-09 green, and iteration 22 was
+scoped to exactly that — re-raising the bar after the work was delivered to order would be the
+framework's own #1 anti-pattern (vague acceptance criteria → infinite loop). I record the residual
+risk plainly: J-09's three questions have been ASKED properly but never ANSWERED with data, and if
+the owner authorises a real-corpus run later, the results will land as new ledger rows beside these,
+never as edits to them.
+**Reversible:** yes — a later iteration (after the speed fix, and after J-10's golden assertion is
+updated to expect the rows) can run the three studies against the real corpus; the append-only
+ledger makes those new rows purely additive, and this scoring note is superseded rather than undone.
+
+## iter-22 — goal-evaluator (second)
+
+**Ambiguity:** whether STALLED is the right verdict on an iteration that MADE progress (J-09
+partial → passing) and where identifiable machine work still exists (the 22.3-second readiness
+latency fix, the duplicated selector table, Study 3's missing non-vacuity assertion). Decision tree
+C.2 fires on "every unblock path for the current blocker is a human-owned action", but the agent
+file's own note glosses STALLED as "I cannot identify productive next work" — and I can identify
+some.
+**We chose:** STALLED. The two readings diverge only because "productive" is doing double duty. The
+blocker to the GOAL is J-06 alone, and all three of its unblock paths are human-owned (authorise the
+paid-feed tranche recording and attend it; amend `docs/goal.md`'s J-06; or accept an unfinished
+era) — C.2 fires literally, and it is listed above C.4/C.5 in a first-match-wins tree. The remaining
+machine work is real but moves NO journey: it is polish on already-green surfaces, and the agent
+file forbids scoring evidence/polish-only work as progress. Spending another full round on it would
+delay, for a seventh consecutive round, the moment the owner is actually asked the one question that
+can finish the era. I therefore halt and name the polish jobs as an explicit third resume option
+rather than silently converting them into a round of their own.
+**Reversible:** yes — STALLED halts the loop but destroys nothing; `--resume` after any of the three
+choices continues from exactly this state, and the three polish jobs are carried in
+`iteration-state.md` so a resume is productive immediately.

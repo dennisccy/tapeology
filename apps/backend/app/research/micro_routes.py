@@ -56,7 +56,13 @@ from .micro_snapshots import (
     resolve_micro_snapshots_dir,
 )
 from .routes import get_bar_index, get_bar_store, get_dataset_store, get_registry, get_study_market_adapter
-from .scout import ScoutComputeManager, list_scout_families
+from .scout import (
+    GRID_SELECTOR_CAPITULATION_PILOT,
+    GRID_SELECTOR_DELTA_DIVERGENCE_PILOT,
+    GRID_SELECTOR_RANGE_WALL_PILOT,
+    ScoutComputeManager,
+    list_scout_families,
+)
 from .scout_ledger import ScoutLedger, resolve_scout_ledger_dir
 from .tick_recorder import (
     RecorderCheckpointStore,
@@ -262,12 +268,23 @@ def get_micro_exposure_registry_dir() -> str:
 class ScoutComputeRequest(BaseModel):
     """Body for ``POST /research/desk/micro/scout/compute`` (J-09, additive). ``grid`` defaults to
     ``None`` -- omitted (or the body omitted entirely, same as every pre-J-09 caller), this route's
-    behavior stays byte-identical: the unchanged default reference grid.
-    ``scout.GRID_SELECTOR_DELTA_DIVERGENCE_PILOT`` runs ONLY the ONE J-09 pilot candidate this era
-    screens (Studies 1/3 stay frozen-in-source only -- structurally unreachable through this
-    route)."""
+    behavior stays byte-identical: the unchanged default reference grid. As of iteration 22, each of
+    ``scout.GRID_SELECTOR_RANGE_WALL_PILOT`` / ``scout.GRID_SELECTOR_DELTA_DIVERGENCE_PILOT`` /
+    ``scout.GRID_SELECTOR_CAPITULATION_PILOT`` runs ONLY its own ONE predeclared pilot candidate --
+    never the 6-wide default grid, never more than one candidate per request."""
 
     grid: str | None = None
+
+
+# grid_selector -> which of resolver/playbook_store this route must construct for it -- the SAME
+# structure_context.kind split ``scout._PILOT_GRID_SELECTORS`` already encodes, read here by VALUE
+# (never a second, independently-maintained selector->kind table) so the route stays selector-aware
+# rather than "any non-default selector gets a resolver", which stopped being true the moment a
+# playbook_signal-kind selector existed.
+_BAND_TOUCH_PILOT_SELECTORS = frozenset(
+    {GRID_SELECTOR_RANGE_WALL_PILOT, GRID_SELECTOR_DELTA_DIVERGENCE_PILOT}
+)
+_PLAYBOOK_SIGNAL_PILOT_SELECTORS = frozenset({GRID_SELECTOR_CAPITULATION_PILOT})
 
 
 @router.post("/scout/compute")
@@ -277,6 +294,7 @@ def trigger_scout_compute(
     snapshots_dir: str = Depends(get_micro_snapshots_dir),
     ledger_dir: str = Depends(get_scout_ledger_dir),
     bar_store: BarStore = Depends(get_bar_store),
+    playbook_store: PlaybookStore = Depends(get_playbook_store),
     exposure_registry_dir: str = Depends(get_micro_exposure_registry_dir),
     manager: ScoutComputeManager = Depends(get_scout_compute_manager),
 ) -> dict:
@@ -285,18 +303,24 @@ def trigger_scout_compute(
     already running.
 
     J-09: ``body.grid`` selects ``ScoutComputeManager.trigger``'s own ``grid_selector`` -- see
-    that method's docstring. ``bar_store`` is an ADDITIVE dependency (the SAME
-    ``routes.get_bar_store`` the readiness route now also uses); constructing the
-    ``BandMapResolver`` it feeds is CONDITIONAL on a non-default selector -- this is a POST,
-    operator-triggered act (never a page-load GET), so the construction cost only lands on the
-    request that actually asks for it.
+    that method's docstring. ``bar_store``/``playbook_store`` are ADDITIVE dependencies (the SAME
+    ``routes.get_bar_store``/``desk_routes.get_playbook_store`` the readiness/walk-forward routes
+    already use); constructing the ``BandMapResolver`` a ``band_touch``-kind selector needs, or
+    passing the ``playbook_store`` a ``playbook_signal``-kind selector needs, is SELECTOR-AWARE
+    (iter-22: three pilot selectors now exist, spanning two different ``structure_context.kind``
+    values) -- this is a POST, operator-triggered act (never a page-load GET), so the construction
+    cost only lands on the request that actually asks for it.
 
-    iter-21 audit fix B1: the pilot selector also carries the ``ExposureRegistry`` its walk-forward
-    floor check needs, so the operator-reachable run RECORDS that decision (a second ledger row
-    under the same ``candidate_id``) exactly as goal.md IN SCOPE item 6 requires -- previously that
-    stage existed in source but ran only inside a unit test."""
+    iter-21 audit fix B1 (extended iter-22 to all three pilot selectors): every pilot selector also
+    carries the ``ExposureRegistry`` its walk-forward floor check needs, so the operator-reachable
+    run RECORDS that decision (a second ledger row under the same ``candidate_id``) exactly as
+    goal.md IN SCOPE item 6 requires -- previously that stage existed in source but ran only inside
+    a unit test."""
     grid_selector = body.grid if body is not None else None
-    resolver = BandMapResolver(bar_store, CONFIG) if grid_selector is not None else None
+    resolver = BandMapResolver(bar_store, CONFIG) if grid_selector in _BAND_TOUCH_PILOT_SELECTORS else None
+    playbook_store_for_trigger = (
+        playbook_store if grid_selector in _PLAYBOOK_SIGNAL_PILOT_SELECTORS else None
+    )
     # iter-21 audit fix B1: the pilot run's walk-forward floor-check stage reads the SAME durable
     # exposure registry `POST /walkforward/compute` already depends on (never a second, differently
     # rooted one). Constructed ONLY for a non-default selector -- the default grid's request path is
@@ -304,7 +328,8 @@ def trigger_scout_compute(
     exposure_registry = ExposureRegistry(exposure_registry_dir) if grid_selector is not None else None
     result = manager.trigger(
         dataset_store, CONFIG, snapshots_dir, ledger_dir,
-        grid_selector=grid_selector, resolver=resolver, exposure_registry=exposure_registry,
+        grid_selector=grid_selector, resolver=resolver, playbook_store=playbook_store_for_trigger,
+        exposure_registry=exposure_registry,
     )
     if result["state"] == "refused":
         return result

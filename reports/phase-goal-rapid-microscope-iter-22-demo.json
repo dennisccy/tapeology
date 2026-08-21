@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-rapid-microscope-iter-22",
+  "base_url": "http://localhost:3301",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the Desk to see research studies",
+      "narration": "The Desk displays all research studies that have been screened against the product's historical record. Let's open it to see what screening questions have been answered.",
+      "point_out": "The Desk page loads with section headers including Scout Ledger and Walk-Forward sections.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/desk" },
+      "expect": { "text": "Scout Ledger" }
+    },
+    {
+      "n": 2,
+      "title": "Expand Scout Ledger to see all screened studies",
+      "narration": "Scout Ledger holds the trial results for each feature question we've tested. When expanded, it shows every candidate we screened and its recorded decision—survive or killed, with a stated reason.",
+      "point_out": "The Scout Ledger section expands to show trial-row tables organized by family. Multiple families now appear, each one a different screening question.",
+      "journey": "J-09",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Scout Ledger" } },
+      "expect": { "text": "failed_aggression_score__band_touch__trades_20" }
+    },
+    {
+      "n": 3,
+      "title": "View Study 1: range-wall failed aggression",
+      "narration": "Study 1 asks: when we see aggressive buying or selling into a price wall, does that aggression—measured by our failed-aggression signal—predict the wall will reject the aggressor? This family shows the screened answer.",
+      "point_out": "The first family block displays Study 1's trial row. Its Feature column reads 'failed_aggression_score / threshold (band_touch)', showing the specific question. The Decision column records whether this candidate survived or was killed.",
+      "journey": "J-09",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "css": "[data-testid='scout-family-failed_aggression_score__band_touch__trades_20']" } },
+      "expect": { "text": "failed_aggression_score / threshold (band_touch)" }
+    },
+    {
+      "n": 4,
+      "title": "View Study 3: capitulation exhaustion",
+      "narration": "Study 3 asks: when the playbook detects capitulation—exhaustion of selling interest—does that signal predict rejection? This is the second new screening question now visible in the same ledger.",
+      "point_out": "Another family block shows Study 3's trial row. Its Feature reads 'failed_aggression_score / threshold (playbook_signal)', using the same feature name but keyed to a different structure context: playbook signals instead of price bands.",
+      "journey": "J-09",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "css": "[data-testid='scout-family-failed_aggression_score__playbook_signal__trades_20']" } },
+      "expect": { "text": "failed_aggression_score / threshold (playbook_signal)" }
+    },
+    {
+      "n": 5,
+      "title": "See the walk-forward floor-check row",
+      "narration": "For each screening study, a second row records an honest eligibility check: 'Do we yet have enough independently-verified evidence to trust this answer?' Both new studies show that the product has zero confirmed independent trading sessions on record. The honest answer is killed_insufficient_n—never a fabricated pass.",
+      "point_out": "Below each family's screen-decision row, a floor-check row shows em-dashes in Feature and Horizon columns, and 'killed_insufficient_n' in the Decision column. This is the product saying: the screening question is real, the answer is recorded, but we do not yet have enough confirmed independent evidence.",
+      "journey": "J-09",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "css": "details" } },
+      "expect": { "text": "killed_insufficient_n" }
+    },
+    {
+      "n": 6,
+      "title": "Expand Walk-Forward section to confirm eligibility",
+      "narration": "The Walk-Forward section summarizes the walk-forward eligibility picture across all screened studies. Let's expand it to confirm that Studies 1 and 3 appear here too—proof the screening flows through the full chain.",
+      "point_out": "The Walk-Forward section expands below Scout Ledger. It mirrors the same families and their eligibility status, confirming the walk-forward checks were recorded.",
+      "journey": "J-09",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Walk-Forward" } },
+      "expect": { "text": "Walk-Forward" }
+    },
+    {
+      "n": 7,
+      "title": "View the Graduation surface—the immutable ledger",
+      "narration": "The Graduation endpoint records sealed readings—an immutable ledger of what has already passed sufficiently tight filters to graduate to the next stage. This is the record of confirmed evidence, never backdated, never altered.",
+      "point_out": "The Graduation endpoint displays JSON with families, their sealed readings, verdicts, and observation counts. This is proof that the backend maintains an immutable chain of what has been verified and what remains exploratory.",
+      "journey": "J-07",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/research/desk/micro/graduation" },
+      "expect": { "text": "families" }
+    }
+  ]
+}

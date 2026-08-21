@@ -1477,3 +1477,81 @@ two permanent study records, and a caching fix with a named wrong-data risk all 
 why I am spending the escalation here, and why I am also asking for the round to be kept small so
 the clock does not eat J-07 a third time. Still do NOT record real market tape, and still do not
 touch the sealed judge's money floor — those two remain the only things genuinely waiting on you.
+
+## Iteration 22 — goal-rapid-microscope-iter-22
+
+**Date:** 2026-08-21T04:10:00Z
+**Verdict:** STALLED
+**Depth dispatched:** full (forced by my round-21 verdict line; the independent checker ran and
+earned its place a tenth time — see below)
+**Journey deltas:**
+- **Newly passing: J-09 "The pilot studies" — partial → PASSING.** All three predeclared studies
+  now carry a recorded answer plus a walk-forward eligibility row, and an operator can run each
+  one from the command line or the web address, not only from a test.
+- Newly failing: none. Regressed: none.
+- Re-verified with a fresh look this round: **J-07 "Graduation"**, whose stamp moves from round 20
+  to round 22, closing the skip the clock caused last round. J-01, J-02, J-03, J-04, J-05, J-08,
+  J-10 re-verified green by their stored checks; I opened two of the pictures myself (J-04, J-08)
+  and both hold.
+- Not verified: J-06 "The recorder and the Vault" partial — deliberately out of scope; its
+  remaining step is the operator act you have withheld.
+- Anti-goal violations: no critical ones, introduced or open. ONE older minor item CLOSED, proved
+  closed by me. THREE NEW minor items opened, two of which I reproduced by hand. Eight stay open,
+  none waiting on you except the money-floor ruling.
+
+**Reasoning:** I took nothing on trust. I ran the whole test set myself: 3,322 passed, 8 skipped,
+0 failures, 0 errors, clean exit in 655.13s — six more than the round started with, none lost, and
+exactly the number the independent checker reported, which is how a claim like that should
+reproduce. I checked the frozen parts by hand: the settings fingerprint prints 08e471b10130e1e2,
+no judge file and no settings file changed at all, the tool list still holds its 26-tool contract,
+and my own sweep of the test folder finds the safety tests TR-1 through TR-30 with no gap (TR-17
+again only as its three lettered parts — the trap this session recorded two rounds ago). The
+launcher's own record shows your real data store holding exactly the same 11,275 files before and
+after, byte-size and time unchanged: the automated lanes wrote nothing into it.
+
+The round's real work is done and I proved it by looking rather than reading. I opened the
+pictures: Study 1's family and Study 3's family each appear on the Desk with a proper answer row
+and an honest "not enough data" eligibility row, Study 1's family still there when Study 3's
+arrives, and — in the same picture — Study 2's eligibility row stamped 18:47 today, which is the
+photograph round 21 said was still owed. I read the command line's own record by hand and found
+the answer row carrying its evidence label, its counts, its concentration and fallback
+disclosures and its money column, and the second row refusing the walk-forward with the
+arithmetic written out. Then I broke the program on purpose: I cut the wiring that records the
+eligibility row and watched exactly the two web-address tests go red, then put the file back and
+confirmed it byte-identical. So the "an operator can really reach this" claim is not a story.
+
+Two findings are worth your attention. The first is the checker's, and it is the tenth time in
+this era it has caught something after both the review and the quality check passed the same
+work: the quality report cited three pictures as proof of things on screen, and two of them are
+THE SAME entirely blank image while the third is a copy of another lane's picture. The claims
+themselves are true — I re-established every one from evidence that report never cited — but this
+is the second round running that this lane certified something it had not checked. The checker
+appended a signed retraction rather than quietly editing, which is the right way. The second
+finding is the checker's too, and I reproduced it myself rather than accepting it: Study 3's new
+test cannot fail. I moved its planted signal outside the data window so nothing could possibly
+match, and the test still passed. Study 1's twin has the one line that would have caught it. I
+restored the file byte-identical and re-ran those tests green.
+
+One judgement I want on the record because it decides the verdict. J-09's three answers all read
+"not enough data", and they come from practice fixtures — the studies have never been asked of
+your real recorded tape. I scored J-09 passing anyway, for three reasons I checked rather than
+inherited: its own written pass bar names "not enough data" as an acceptable answer and asks only
+for the disclosures and the recorded decision, all of which I verified field by field; asking the
+questions for real writes permanent rows into your live record, would break J-10's stored check
+that the live record is empty, and is currently far too slow to finish — so it is your act, not
+the machine's; and rounds 20 and 21 both promised in writing that three recorded answers would be
+enough, so moving the bar after the work was done exactly to order would be dishonest. The
+limitation is written into the journey record and the assumption ledger, unhidden.
+
+**Next-step recommendation:** halt — the era cannot finish without you. J-06 "The recorder and the
+Vault" is the only journey left, and its one remaining step is the recording of real market tape:
+an act the goal itself calls an operator act, needing your paid data feed, your attendance, and
+your sanction for something that cannot be undone. Choose one: authorise the recording and let the
+machine re-check J-06 afterwards; or change what the goal asks of J-06 so the recorder and vault
+count as proved on practice data; or resume anyway, accepting an unfinished era, and let the
+machine spend its time on three small polish jobs that need nobody's permission — stop the Desk
+readiness panel taking twenty-two seconds, collapse the duplicated study-selector list into the
+one list that already owns it, and add the missing line to Study 3's test so it can fail. Those
+three are written into the next planner's digest; none of them turns a journey green, and I have
+deliberately not dressed them up as progress. Still do not touch the sealed judge's money floor —
+that ruling remains yours and nothing now waits on it.

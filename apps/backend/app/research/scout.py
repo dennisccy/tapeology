@@ -12,15 +12,18 @@ the two production-boundary rules that module deliberately does NOT (module docs
 anchor, with no playbook-signal or band-touch conditioning -- this era's OPERATOR-run production
 grid (the CLI, ``ScoutComputeManager``'s default trigger) is unchanged by J-09.
 
-**J-09 wires the other two ``structure_context.kind`` values, in a SEPARATE, frozen
-``pilot_study_candidate_grid``.** ``extract_anchors`` now supports ``"band_touch"`` (via
+**J-09 wires all three ``structure_context.kind`` combinations, in a SEPARATE, frozen
+``pilot_study_candidate_grid``.** ``extract_anchors`` supports ``"band_touch"`` (via
 ``micro_join.enumerate_band_touches`` + ``micro_join.join_band_touch``) and ``"playbook_signal"``
 (via ``micro_join.join_playbook_signal``) -- ``ScoutUnsupportedStructureContextError`` still guards
 any FUTURE, genuinely-unsupported value (there is none today: the closed
-``STRUCTURE_CONTEXT_KINDS`` set is now fully wired). Only ONE of the three predeclared pilot-study
-candidates (delta divergence at level tests) is taken through ``register_and_screen_candidate``
-this iteration -- the other two exist frozen-in-source only (goal.md OUT OF SCOPE, explicitly
-deferred per the era's own scope-pressure order).
+``STRUCTURE_CONTEXT_KINDS`` set is fully wired). As of iteration 22, all three predeclared
+pilot-study candidates (range-wall failed aggression, delta divergence at level tests, capitulation
+exhaustion) are taken through ``register_and_screen_candidate``, each via its own additive grid
+selector on ``ScoutComputeManager.trigger``/the CLI. Study 1's real screen still examines only its
+single ``failed_aggression_score`` feature -- the eventual opposite-side ``refill_consistent``
+co-occurrence condition remains T-1 (genuinely unbuilt, disclosed in the request's own frozen
+comment, never invented here).
 
 **Read-side law: no second outcome implementation.** Anchor extraction reads snapshot rows through
 ``micro_accessor.MicroAccessor`` (J-05 re-point, unfenced -- TR-3's import-ban; after
@@ -142,7 +145,9 @@ __all__ = [
     "register_and_screen_candidate",
     "default_fixture_grid",
     "pilot_study_candidate_grid",
+    "GRID_SELECTOR_RANGE_WALL_PILOT",
     "GRID_SELECTOR_DELTA_DIVERGENCE_PILOT",
+    "GRID_SELECTOR_CAPITULATION_PILOT",
     "run_scout_grid_and_record",
     "register_screen_and_walkforward_check",
     "list_scout_families",
@@ -1581,19 +1586,24 @@ def default_fixture_grid(dataset_store: DatasetStore, *, grid_version: int = 1) 
 
 
 # === J-09: the three predeclared pilot-study candidate requests, frozen-in-source, in goal.md's
-# own stated priority order (Study 1, 2, 3) -- module docstring. Only Study 2 (delta divergence) is
-# taken through ``register_and_screen_candidate`` this iteration (below); Studies 1 and 3 exist
-# here, reviewable and unit-tested for shape (TC-4), but deliberately UNSCREENED (goal.md OUT OF
-# SCOPE, TC-7) -- named, not silently dropped, in the dev handoff.
+# own stated priority order (Study 1, 2, 3) -- module docstring. As of iteration 22, all three are
+# taken through ``register_and_screen_candidate`` (below), each via its own additive grid selector
+# -- Study 1's real screen still carries only its single ``failed_aggression_score`` feature (T-1:
+# the ``refill_consistent`` co-occurrence condition is genuinely unbuilt, disclosed in its own
+# frozen request comment below, not invented here).
 
 PILOT_STUDY_RANGE_WALL_FAILED_AGGRESSION = "range_wall_failed_aggression"
 PILOT_STUDY_DELTA_DIVERGENCE_LEVEL_TESTS = "delta_divergence_level_tests"
 PILOT_STUDY_CAPITULATION_EXHAUSTION = "capitulation_exhaustion"
 
-# ``ScoutComputeManager.trigger``/``main``'s own additive grid-selector value (below) -- the ONLY
-# pilot-grid value either accepts, so Studies 1/3 are structurally unreachable through the compute
-# manager or the CLI this iteration (goal.md OUT OF SCOPE).
+# ``ScoutComputeManager.trigger``/``main``'s own additive grid-selector values (below) -- one per
+# predeclared pilot study, each wired the SAME way (one-element grid, required
+# resolver/playbook_store, required exposure_registry) so every study's walk-forward floor-check
+# decision is recorded on the SAME operator-reachable path (CLI or ``POST /scout/compute``), never
+# only a unit test (the iter-21 audit's own B1 lesson, extended to all three this iteration).
+GRID_SELECTOR_RANGE_WALL_PILOT = "range_wall_failed_aggression_pilot"
 GRID_SELECTOR_DELTA_DIVERGENCE_PILOT = "delta_divergence_pilot"
+GRID_SELECTOR_CAPITULATION_PILOT = "capitulation_exhaustion_pilot"
 
 
 def pilot_study_candidate_grid(
@@ -1666,6 +1676,18 @@ def pilot_study_candidate_grid(
         PILOT_STUDY_DELTA_DIVERGENCE_LEVEL_TESTS: delta_divergence_level_tests,
         PILOT_STUDY_CAPITULATION_EXHAUSTION: capitulation_exhaustion,
     }
+
+
+# Grid-selector -> (pilot_study_candidate_grid's own study id, structure_context.kind) -- the ONE
+# table ``ScoutComputeManager.trigger`` and the CLI's ``main()`` both read (never a second,
+# independently-maintained selector->study mapping); the kind decides which of resolver/
+# playbook_store the caller must supply (band_touch needs a resolver, playbook_signal needs a
+# playbook_store -- the two structure_context.kind values the three pilot studies actually span).
+_PILOT_GRID_SELECTORS: dict[str, tuple[str, str]] = {
+    GRID_SELECTOR_RANGE_WALL_PILOT: (PILOT_STUDY_RANGE_WALL_FAILED_AGGRESSION, "band_touch"),
+    GRID_SELECTOR_DELTA_DIVERGENCE_PILOT: (PILOT_STUDY_DELTA_DIVERGENCE_LEVEL_TESTS, "band_touch"),
+    GRID_SELECTOR_CAPITULATION_PILOT: (PILOT_STUDY_CAPITULATION_EXHAUSTION, "playbook_signal"),
+}
 
 
 def run_scout_grid_and_record(
@@ -1899,6 +1921,7 @@ class ScoutComputeManager:
         grid_version: int = 1,
         grid_selector: str | None = None,
         resolver: "BandMapResolver | None" = None,
+        playbook_store: "PlaybookStore | None" = None,
         exposure_registry: "ExposureRegistry | None" = None,
     ) -> dict:
         """Start a NEW screening run over ``default_fixture_grid`` (ensuring snapshots exist first,
@@ -1906,54 +1929,64 @@ class ScoutComputeManager:
         process-wide).
 
         ``grid_selector`` (J-09, default ``None``): ``None`` is BYTE-IDENTICAL to every pre-J-09
-        call (the unchanged default grid). ``GRID_SELECTOR_DELTA_DIVERGENCE_PILOT`` selects a
-        ONE-ELEMENT grid -- the SAME frozen delta-divergence request
-        ``pilot_study_candidate_grid`` carries, with ``resolver`` (REQUIRED, a plain ``ValueError``
-        when omitted) attached -- so the pilot candidate is CLI/manager-runnable beside the default
-        grid, never a second endpoint. Studies 1 and 3 are structurally UNREACHABLE through this
-        selector (goal.md OUT OF SCOPE): no other pilot-grid value exists here.
+        call (the unchanged default grid). Each of ``GRID_SELECTOR_RANGE_WALL_PILOT`` /
+        ``GRID_SELECTOR_DELTA_DIVERGENCE_PILOT`` / ``GRID_SELECTOR_CAPITULATION_PILOT`` (iter-22:
+        all three predeclared pilot studies, `_PILOT_GRID_SELECTORS`) selects a ONE-ELEMENT grid --
+        the matching frozen request ``pilot_study_candidate_grid`` carries -- so every pilot
+        candidate is CLI/manager-runnable beside the default grid, never a second endpoint. The two
+        ``band_touch``-kind selectors (range-wall, delta-divergence) require ``resolver`` (a plain
+        ``ValueError`` when omitted); the ``playbook_signal``-kind selector (capitulation) requires
+        ``playbook_store`` instead -- selector-aware, since the three studies span two different
+        ``structure_context.kind`` values.
 
-        ``exposure_registry`` (iter-21 audit fix B1) is REQUIRED beside ``resolver`` for the pilot
-        selector and IGNORED for the default grid: it is what lets the pilot run record its
-        walk-forward floor-check decision as a second ledger row under the SAME ``candidate_id``
-        (goal.md IN SCOPE item 6), instead of leaving that stage reachable only from a unit test."""
-        if grid_selector is not None and grid_selector != GRID_SELECTOR_DELTA_DIVERGENCE_PILOT:
+        ``exposure_registry`` (iter-21 audit fix B1, extended iter-22 to all three selectors) is
+        REQUIRED beside ``resolver``/``playbook_store`` for every pilot selector and IGNORED for
+        the default grid: it is what lets the pilot run record its walk-forward floor-check
+        decision as a second ledger row under the SAME ``candidate_id`` (goal.md IN SCOPE item 6),
+        instead of leaving that stage reachable only from a unit test."""
+        if grid_selector is not None and grid_selector not in _PILOT_GRID_SELECTORS:
             raise ValueError(f"ScoutComputeManager.trigger: unknown grid_selector {grid_selector!r}")
-        if grid_selector == GRID_SELECTOR_DELTA_DIVERGENCE_PILOT and resolver is None:
-            raise ValueError(
-                "ScoutComputeManager.trigger: grid_selector="
-                f"{GRID_SELECTOR_DELTA_DIVERGENCE_PILOT!r} requires a resolver"
-            )
-        # iter-21 audit fix B1: the pilot run RECORDS its walk-forward floor-check decision
-        # (goal.md IN SCOPE item 6) -- so the registry that decides `historical_oos` eligibility is
-        # as REQUIRED here as the resolver is, never an optional extra a caller could forget and
-        # silently get a screen-only run back.
-        if grid_selector == GRID_SELECTOR_DELTA_DIVERGENCE_PILOT and exposure_registry is None:
-            raise ValueError(
-                "ScoutComputeManager.trigger: grid_selector="
-                f"{GRID_SELECTOR_DELTA_DIVERGENCE_PILOT!r} requires an exposure_registry"
-            )
+        if grid_selector is not None:
+            _study_id, _structure_kind = _PILOT_GRID_SELECTORS[grid_selector]
+            if _structure_kind == "band_touch" and resolver is None:
+                raise ValueError(
+                    f"ScoutComputeManager.trigger: grid_selector={grid_selector!r} requires a "
+                    "resolver"
+                )
+            if _structure_kind == "playbook_signal" and playbook_store is None:
+                raise ValueError(
+                    f"ScoutComputeManager.trigger: grid_selector={grid_selector!r} requires a "
+                    "playbook_store"
+                )
+            # iter-21 audit fix B1 (extended iter-22 to all three pilot selectors): the pilot run
+            # RECORDS its walk-forward floor-check decision (goal.md IN SCOPE item 6) -- so the
+            # registry that decides `historical_oos` eligibility is as REQUIRED here as
+            # resolver/playbook_store, never an optional extra a caller could forget and silently
+            # get a screen-only run back.
+            if exposure_registry is None:
+                raise ValueError(
+                    f"ScoutComputeManager.trigger: grid_selector={grid_selector!r} requires an "
+                    "exposure_registry"
+                )
         with self._lock:
             if self._snapshot["state"] == "running":
                 return {"state": "refused", "reason": "already_running"}
 
-            if grid_selector == GRID_SELECTOR_DELTA_DIVERGENCE_PILOT:
+            if grid_selector is not None:
+                study_id, structure_kind = _PILOT_GRID_SELECTORS[grid_selector]
                 request = dict(
-                    pilot_study_candidate_grid(dataset_store, grid_version=grid_version)[
-                        PILOT_STUDY_DELTA_DIVERGENCE_LEVEL_TESTS
-                    ]
+                    pilot_study_candidate_grid(dataset_store, grid_version=grid_version)[study_id]
                 )
-                request["resolver"] = resolver
+                if structure_kind == "band_touch":
+                    request["resolver"] = resolver
+                else:
+                    request["playbook_store"] = playbook_store
                 grid = [request]
             else:
                 grid = default_fixture_grid(dataset_store, grid_version=grid_version)
             # The DEFAULT grid stays screen-only, byte-identical to every pre-J-09 run (one ledger
-            # row per candidate); only the pilot selector carries the floor-check stage.
-            floor_check_registry = (
-                exposure_registry
-                if grid_selector == GRID_SELECTOR_DELTA_DIVERGENCE_PILOT
-                else None
-            )
+            # row per candidate); only a pilot selector carries the floor-check stage.
+            floor_check_registry = exposure_registry if grid_selector is not None else None
             run_id = uuid.uuid4().hex
             self._run_id = run_id
             cancel_event = threading.Event()
@@ -2058,12 +2091,15 @@ def _cli_progress_printer() -> Callable[[str], None]:
 
 
 def main() -> int:
-    """``python -m app.research.scout [--grid-version N] [--grid {default,delta_divergence_pilot}]``
-    -- registers and screens this era's bounded reference candidate grid against the operator's
-    REAL dataset/snapshot/ledger directories, synchronously, in-process (the ``micro_snapshots``
+    """``python -m app.research.scout [--grid-version N] [--grid {default,range_wall_failed_
+    aggression_pilot,delta_divergence_pilot,capitulation_exhaustion_pilot}]`` -- registers and
+    screens this era's bounded reference candidate grid against the operator's REAL
+    dataset/snapshot/ledger directories, synchronously, in-process (the ``micro_snapshots``
     CLI-warmer precedent), persisting through the SAME ledger ``GET /research/desk/micro/scout``
     serves. ``--grid`` (J-09, default ``default``) mirrors ``ScoutComputeManager.trigger``'s own
-    ``grid_selector`` -- omitted, byte-identical to every pre-J-09 invocation."""
+    ``grid_selector`` -- omitted, byte-identical to every pre-J-09 invocation; any of the three
+    pilot-study values (iter-22: all three are wired, `_PILOT_GRID_SELECTORS`) runs that ONE
+    predeclared candidate through the SAME operator-reachable path the route uses."""
     parser = argparse.ArgumentParser(
         description="Scout screening CLI warmer -- registers and screens the era's bounded "
         "reference candidate grid, ensuring prerequisite snapshots exist first."
@@ -2072,9 +2108,10 @@ def main() -> int:
         "--grid-version", type=int, default=1, help="the grid_version to stamp on this run's rows."
     )
     parser.add_argument(
-        "--grid", choices=("default", GRID_SELECTOR_DELTA_DIVERGENCE_PILOT), default="default",
-        help="'default' (unchanged) or 'delta_divergence_pilot' (the ONE J-09 pilot candidate "
-        "this era screens -- Studies 1/3 stay frozen-in-source only, never reachable here).",
+        "--grid", choices=("default", *_PILOT_GRID_SELECTORS), default="default",
+        help="'default' (unchanged) or one of the three J-09 pilot-study grid selectors -- "
+        "'range_wall_failed_aggression_pilot', 'delta_divergence_pilot', "
+        "'capitulation_exhaustion_pilot' -- each screening its ONE predeclared candidate.",
     )
     args = parser.parse_args()
 
@@ -2086,24 +2123,29 @@ def main() -> int:
     run_snapshot_build_and_record(dataset_store, config, snapshots_dir, None)
     ledger = ScoutLedger(ledger_dir)
     exposure_registry = None
-    if args.grid == GRID_SELECTOR_DELTA_DIVERGENCE_PILOT:
+    if args.grid in _PILOT_GRID_SELECTORS:
         from .bars import BarStore
+        from .desk_playbook import PlaybookStore, resolve_desk_playbook_dir
         from .desk_playbook_context import BandMapResolver
         from .micro_accessor import ExposureRegistry, resolve_micro_exposure_registry_dir
 
-        resolver = BandMapResolver(BarStore(config.bar_dir_resolved()), config)
-        # iter-21 audit fix B1: the SAME durable registry `POST /walkforward/compute` already reads
-        # (`resolve_micro_exposure_registry_dir` -- never a second, differently-rooted one), so the
-        # pilot run's floor check reads the operator's real exposure state.
+        study_id, structure_kind = _PILOT_GRID_SELECTORS[args.grid]
+        # iter-21 audit fix B1 (extended iter-22 to all three pilot selectors): the SAME durable
+        # registry `POST /walkforward/compute` already reads (`resolve_micro_exposure_registry_dir`
+        # -- never a second, differently-rooted one), so the pilot run's floor check reads the
+        # operator's real exposure state.
         exposure_registry = ExposureRegistry(
             resolve_micro_exposure_registry_dir(config.dataset_dir_resolved())
         )
         request = dict(
-            pilot_study_candidate_grid(dataset_store, grid_version=args.grid_version)[
-                PILOT_STUDY_DELTA_DIVERGENCE_LEVEL_TESTS
-            ]
+            pilot_study_candidate_grid(dataset_store, grid_version=args.grid_version)[study_id]
         )
-        request["resolver"] = resolver
+        if structure_kind == "band_touch":
+            request["resolver"] = BandMapResolver(BarStore(config.bar_dir_resolved()), config)
+        else:
+            request["playbook_store"] = PlaybookStore(
+                resolve_desk_playbook_dir(config.desk_universe_dir_resolved())
+            )
         grid = [request]
     else:
         grid = default_fixture_grid(dataset_store, grid_version=args.grid_version)

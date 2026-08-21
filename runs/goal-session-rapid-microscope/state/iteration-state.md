@@ -1,28 +1,26 @@
 # Iteration State — rapid-microscope
 
-**After iteration:** 21 · **Date:** 2026-08-20 · **Verdict:** ESCALATE
+**After iteration:** 22 · **Date:** 2026-08-21 · **Verdict:** STALLED
 
 ## Journeys
 
-8 passing (J-01 J-02 J-03 J-04 J-05 J-07 J-08 J-10) · 2 partial (J-06, **J-09 — was failing**) — 10 total.
-J-09 failing→partial: study 2 of 3 screened + ledgered (`killed_insufficient_n`). J-07 NOT tested (`DEFERRED-BUDGET`, keeps its iter-20 stamp). Suite 3,316 pass / 8 skip / 0 fail (evaluator ran it).
+9 passing (J-01 J-02 J-03 J-04 J-05 J-07 J-08 J-09 J-10) · 1 partial (J-06) — 10 total
 
 ## Active blockers
 
-- **J-09 needs Studies 1 + 3 screened** on the SAME committed hermetic fixture study 2 used (`scout.pilot_study_candidate_grid`: `PILOT_STUDY_RANGE_WALL_FAILED_AGGRESSION` / `PILOT_STUDY_CAPITULATION_EXHAUSTION`) → recorded decisions; `insufficient_n` / `no survivor` are passing answers. Study 1 also needs two-feature (`failed_aggression_score` × `refill_consistent`) co-occurrence, named unbuilt in the grid's own comment. Owner: dev.
-- **UT-04 evidence owed** (dev): the auditor's own B1 fix (`run_scout_grid_and_record` gains `exposure_registry`) is the only lane that has checked itself. Photograph the second ledger row (`stage: walkforward_floor_check`) or J-09 stays `partial`.
-- **/desk readiness GET costs 22.3 s** on the real store (auditor B2, unfixed by design): `micro_routes.py:108` + `micro_join.py:639-643` re-parse every dataset per request. Fix = durable cache keyed `(dataset checksum, resolver map key)`, publish ONLY on a resolved map, never memoize a miss; mirror `MicroReadinessCache` (`micro_readiness.py:414-418`). Shed THIS first if the clock bites — never the two re-verifications.
-- **HUMAN, unchanged:** sealed judge's econ-floor / evidence-label sourcing (no spec revision after r9); J-06 step 4 real Alpaca tranche recording.
+- **J-06 "The recorder and the Vault" — OWNER-BLOCKED (human).** Steps 1-3 built (`tick_recorder.py`, `vault.py`). Step 4 (screen+freeze Tier-B, record real Alpaca trades+quotes to spec §7.6 minimums, seal at birth) is an operator act needing the paid feed, owner attendance, and sanction for a one-way seal; step 5 depends on it. Unblock: authorise the recording · amend `docs/goal.md` J-06 · resume unfinished on polish only.
+- Owner ruling open, blocks NO journey: source of a candidate's money floor / evidence label (`micro_sealed_evaluation.py:316`).
+- Machine work available, moves NO journey (polish; needs nobody's permission): (1) Desk readiness 22.3s/load — `micro_routes.py:108` rebuilds a BandMapResolver per GET; cache per dataset checksum AND band map, never cache a "no touches" answer. (2) `micro_routes.py:284-287` duplicates `scout.py:1684-1689`'s selector→kind table — derive it. (3) `tests/test_scout.py:1676` cannot fail — add `screen_result["n_candidate"] + screen_result["n_comparator"] > 0` (mirrors `:1664`).
 
 ## Last 2 verdicts
 
-- iter 21: ESCALATE — J-09 partial; a FAIL browser verdict (UT-04) still closed the round (`closure_gate.py` never reads it) and only the auditor fixed it. Budget was breached, so CONTINUE would FORCE lean (`run-goal.sh` arbiter rung 3). **Keep the next round SMALL.**
-- iter 20: ESCALATE — clean evidence-only round; J-07's owed capture landed and is discriminating.
+- iter 22: STALLED — J-09 finished (three studies recorded + operator-reachable) and J-07 re-photographed; J-06's owner-only tape recording is the sole remaining blocker.
+- iter 21: ESCALATE — Study 2 screened (J-09 failing→partial); audit repaired a floor-check row that nothing but a unit test could produce.
 
 ## Do not redo
 
-- **DONE iter-21, proved by the evaluator:** J-10.json steps 9-10 restored AND executed twice (UT-08 + golden replay); UT-10 element capture re-taken (UT-06, real panel text); guard/source-scan for zero micro/scout/walkforward/vault callers of `strategy_trade_readiness`.
-- **Frozen foundations re-proved iter-21** — fingerprint `08e471b10130e1e2`, zero `referee_*.py` modified, MCP tools == 26, TR-1…TR-30 green (TR-17 exists only as TR-17a/b/c).
-- **The "defer up to two of three studies" allowance is SPENT** — a third deferral is not available.
-- **Do NOT** run the pilot grid against the real `.data/` store (quadratic divergence anchor extraction, uncancellable mid-candidate — auditor B3, deferred); do NOT author a J-07 golden script (impossible, iter-19); do NOT touch `econ_floor`, `referee_*`, or the `iter18-qa-universe` vault assertions.
-- **Rig rule now covers the DEMO lane too:** rig-mutating browser tests (POST `/scout/compute`) invalidate `J-08.json` step 3 / `J-10.json` step 12 "No candidates ledgered." for every later lane.
+- **J-09 DONE, passing** — three families screened to closed-vocabulary decisions + floor-check rows via `POST /research/desk/micro/scout/compute {"grid":…}` AND `python -m app.research.scout --grid …`. Do NOT re-screen; do NOT run them against the real `.data/` corpus (owner-gated: permanent rows, breaks J-10's "No candidates ledgered." golden, search is quadratic).
+- **J-07 re-verified fresh** (`UT-08-result.png`, iter-22) — no make-up capture owed; the demo lane's step-07 404 is the runner rewriting research URLs onto `:3301`, never schedule a re-record.
+- **Study 1 stays single-feature** (`failed_aggression_score >= 0.5`) — `refill_consistent` co-occurrence is a disclosed T-1 deferral. Do NOT record real tape; do NOT touch the sealed judge's money floor.
+- **Rig rule (binding):** run the golden-replay set BEFORE any lane POSTing into the shared QA rig (J-08 step 3 / J-10 step 12 assert "No candidates ledgered.").
+- Baseline: 3,322 pass / 8 skip / 0 fail; fingerprint `08e471b10130e1e2`; no `referee_*` diff.
