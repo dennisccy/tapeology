@@ -286,7 +286,10 @@ def resolve_tier_b(passing_seeds: list[str], passing_replacements: list[str], *,
     Raises ``TierBResolutionImpossible`` when fewer than ``needed`` eligible names exist in total --
     the owner's hard STOP. This function never widens a criterion and never sees one."""
     seeds_in_order = [t for t in PROVISIONAL_SEEDS if t in set(passing_seeds)]
-    chosen = list(seeds_in_order)
+    # §7.2.1 (h) step 4 / (i): the starter tranche takes EXACTLY `needed` Tier-B names. When more
+    # seeds pass than there are slots, the surplus is dropped by the already-documented seed order --
+    # never by a post-screen human choice, and never by taking all of them.
+    chosen = list(seeds_in_order)[:needed]
     ranked = sorted(
         (t for t in dict.fromkeys(passing_replacements) if t not in set(chosen)),
         key=replacement_rank_key,

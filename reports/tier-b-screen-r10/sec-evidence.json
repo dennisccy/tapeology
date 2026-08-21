@@ -1,0 +1,252 @@
+{
+  "evaluated_count": 4,
+  "rows": [
+    {
+      "cik": "0001883685",
+      "listing": {
+        "directory_exchange": "Nasdaq",
+        "reason": "primary_us_listing_confirmed",
+        "sec_exchange": "Nasdaq",
+        "status": "pass"
+      },
+      "ma_search": {
+        "flagged_hits": [
+          {
+            "accession": "0001104659-25-020044",
+            "filed": "2025-03-04",
+            "form": "8-K",
+            "items": "1.01,2.03,7.01,9.01",
+            "primary_document": "tm258053d1_8k.htm"
+          },
+          {
+            "accession": "0001104659-24-115572",
+            "filed": "2024-11-08",
+            "form": "8-K",
+            "items": "1.01,2.02,2.03,9.01",
+            "primary_document": "tm2427766d1_8k.htm"
+          }
+        ],
+        "forms_searched_count": 350,
+        "retrieved_utc": "2026-08-21T12:09:57Z",
+        "window_end": "2026-08-21",
+        "window_start": "2024-08-21"
+      },
+      "market_cap": {
+        "accession": null,
+        "cik": "0001883685",
+        "concept": "dei:EntityCommonStockSharesOutstanding",
+        "fact_period_end": null,
+        "filing_date": null,
+        "market_cap_usd": null,
+        "price_session": "2026-08-20",
+        "price_source": "yahoo-daily",
+        "raw_close": 25.030000686645508,
+        "raw_shares_outstanding": null,
+        "reason": "missing_shares_outstanding",
+        "status": "unresolved"
+      },
+      "sec_exchange_raw": "Nasdaq",
+      "shares_fact": null,
+      "ticker": "DKNG",
+      "tickers_for_cik": [
+        "DKNG"
+      ]
+    },
+    {
+      "cik": "0001820953",
+      "listing": {
+        "directory_exchange": "Nasdaq",
+        "reason": "primary_us_listing_confirmed",
+        "sec_exchange": "Nasdaq",
+        "status": "pass"
+      },
+      "ma_search": {
+        "flagged_hits": [
+          {
+            "accession": "0001628280-26-045491",
+            "filed": "2026-06-25",
+            "form": "8-K",
+            "items": "1.01,5.02,9.01",
+            "primary_document": "afrm-20260618.htm"
+          },
+          {
+            "accession": "0001628280-25-050159",
+            "filed": "2025-11-06",
+            "form": "8-K",
+            "items": "1.01,2.02,3.02,9.01",
+            "primary_document": "afrm-20251102.htm"
+          },
+          {
+            "accession": "0001820953-25-000017",
+            "filed": "2025-02-20",
+            "form": "8-K",
+            "items": "1.01,1.02,7.01,9.01",
+            "primary_document": "afrm-20250214.htm"
+          },
+          {
+            "accession": "0001820953-24-000073",
+            "filed": "2024-12-20",
+            "form": "8-K",
+            "items": "1.01,2.03,3.02,8.01,9.01",
+            "primary_document": "afrm-20241220.htm"
+          }
+        ],
+        "forms_searched_count": 277,
+        "retrieved_utc": "2026-08-21T12:09:58Z",
+        "window_end": "2026-08-21",
+        "window_start": "2024-08-21"
+      },
+      "market_cap": {
+        "accession": null,
+        "cik": "0001820953",
+        "concept": "dei:EntityCommonStockSharesOutstanding",
+        "fact_period_end": null,
+        "filing_date": null,
+        "market_cap_usd": null,
+        "price_session": "2026-08-20",
+        "price_source": "yahoo-daily",
+        "raw_close": 75.05000305175781,
+        "raw_shares_outstanding": null,
+        "reason": "missing_shares_outstanding",
+        "status": "unresolved"
+      },
+      "sec_exchange_raw": "Nasdaq",
+      "shares_fact": null,
+      "ticker": "AFRM",
+      "tickers_for_cik": [
+        "AFRM"
+      ]
+    },
+    {
+      "cik": "0001818874",
+      "listing": {
+        "directory_exchange": "Nasdaq",
+        "reason": "primary_us_listing_confirmed",
+        "sec_exchange": "Nasdaq",
+        "status": "pass"
+      },
+      "ma_search": {
+        "flagged_hits": [],
+        "forms_searched_count": 308,
+        "retrieved_utc": "2026-08-21T12:09:59Z",
+        "window_end": "2026-08-21",
+        "window_start": "2024-08-21"
+      },
+      "market_cap": {
+        "accession": "0001818874-26-000054",
+        "cik": "0001818874",
+        "concept": "dei:EntityCommonStockSharesOutstanding",
+        "fact_period_end": "2026-07-31",
+        "filing_date": "2026-08-06",
+        "market_cap_usd": 23144940304.618996,
+        "price_session": "2026-08-20",
+        "price_source": "yahoo-daily",
+        "raw_close": 17.920000076293945,
+        "raw_shares_outstanding": 1291570324,
+        "reason": "out_of_range",
+        "status": "fail"
+      },
+      "sec_exchange_raw": "Nasdaq",
+      "shares_fact": {
+        "accn": "0001818874-26-000054",
+        "distinct_values_same_filing": [
+          1291570324
+        ],
+        "end": "2026-07-31",
+        "filed": "2026-08-06",
+        "form": "10-Q",
+        "multi_class_signal": false,
+        "val": 1291570324
+      },
+      "ticker": "SOFI",
+      "tickers_for_cik": [
+        "SOFI"
+      ]
+    },
+    {
+      "cik": "0001819994",
+      "listing": {
+        "directory_exchange": "Nasdaq",
+        "reason": "primary_us_listing_confirmed",
+        "sec_exchange": "Nasdaq",
+        "status": "pass"
+      },
+      "ma_search": {
+        "flagged_hits": [
+          {
+            "accession": "0001753926-26-001452",
+            "filed": "2026-08-13",
+            "form": "S-4",
+            "items": "",
+            "primary_document": "g085840_s4.htm"
+          },
+          {
+            "accession": "0001753926-26-001085",
+            "filed": "2026-06-29",
+            "form": "8-K",
+            "items": "1.01,7.01,9.01",
+            "primary_document": "g085783_8k.htm"
+          },
+          {
+            "accession": "0001628280-25-027920",
+            "filed": "2025-05-27",
+            "form": "8-K",
+            "items": "1.01,3.02,7.01,9.01",
+            "primary_document": "rklb-20250522.htm"
+          },
+          {
+            "accession": "0001628280-25-027473",
+            "filed": "2025-05-23",
+            "form": "8-K12B",
+            "items": "1.01,2.03,3.01,3.03,5.01,5.02,5.03,8.01,9.01",
+            "primary_document": "rklb-20250523.htm"
+          },
+          {
+            "accession": "0000950170-24-133686",
+            "filed": "2024-12-05",
+            "form": "8-K",
+            "items": "1.01,3.02,5.02,9.01",
+            "primary_document": "rklb-20241203.htm"
+          }
+        ],
+        "forms_searched_count": 285,
+        "retrieved_utc": "2026-08-21T12:09:59Z",
+        "window_end": "2026-08-21",
+        "window_start": "2024-08-21"
+      },
+      "market_cap": {
+        "accession": "0001819994-26-000062",
+        "cik": "0001819994",
+        "concept": "dei:EntityCommonStockSharesOutstanding",
+        "fact_period_end": "2026-08-05",
+        "filing_date": "2026-08-10",
+        "market_cap_usd": 43649665835.87924,
+        "price_session": "2026-08-20",
+        "price_source": "yahoo-daily",
+        "raw_close": 72.94999694824219,
+        "raw_shares_outstanding": 598350482,
+        "reason": "out_of_range",
+        "status": "fail"
+      },
+      "sec_exchange_raw": "Nasdaq",
+      "shares_fact": {
+        "accn": "0001819994-26-000062",
+        "distinct_values_same_filing": [
+          598350482
+        ],
+        "end": "2026-08-05",
+        "filed": "2026-08-10",
+        "form": "10-Q",
+        "multi_class_signal": false,
+        "val": 598350482
+      },
+      "ticker": "RKLB",
+      "tickers_for_cik": [
+        "RKLB"
+      ]
+    }
+  ],
+  "screening_cutoff_utc": "2026-08-21T12:06:00Z",
+  "spec_revision": "r10",
+  "stage": "sec_evidence"
+}

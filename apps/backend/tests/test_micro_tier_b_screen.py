@@ -396,3 +396,19 @@ def test_a_wrong_length_spread_window_is_unresolved():
     statistic, so it cannot silently satisfy the criterion."""
     r = tb.evaluate_spread(3.0, sessions=["s1", "s2", "s3"])
     assert r["status"] == tb.STATUS_UNRESOLVED and r["reason"] == "session_window_3_of_5"
+
+
+def test_more_passing_seeds_than_slots_takes_exactly_three_by_documented_order():
+    """§7.2.1 (h) step 4 / (i): the starter tranche is EXACTLY three Tier-B names. Four passing
+    seeds must not yield a four-name tranche -- the surplus drops by the documented seed order,
+    never by a post-screen human choice. (Caught live: the real screen left four seeds standing.)"""
+    out = tb.resolve_tier_b(
+        passing_seeds=["RKLB", "SOFI", "AFRM", "DKNG"], passing_replacements=["AAAA"],
+    )
+    assert out["resolved"] == ["DKNG", "AFRM", "SOFI"]
+    assert out["replacements_taken"] == []
+
+
+def test_all_five_seeds_passing_still_takes_exactly_three():
+    out = tb.resolve_tier_b(passing_seeds=list(tb.PROVISIONAL_SEEDS), passing_replacements=[])
+    assert out["resolved"] == ["DKNG", "ETSY", "AFRM"]

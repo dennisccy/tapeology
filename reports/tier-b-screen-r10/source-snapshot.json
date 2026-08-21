@@ -1,0 +1,22 @@
+{
+  "files": {
+    "nasdaqlisted": {
+      "bytes": 347404,
+      "embedded_file_creation_time": "0821202608:01",
+      "sha256": "85fe43725ecb35cf6d18d0d9cfee89130815e4e8f38cafad92d1942eb82a080f",
+      "url": "https://www.nasdaqtrader.com/dynamic/SymDir/nasdaqlisted.txt"
+    },
+    "otherlisted": {
+      "bytes": 536571,
+      "embedded_file_creation_time": "0821202608:01",
+      "sha256": "4191463da67760b4646317b3695225a5efb44d6f486d07430d798088fe590de4",
+      "url": "https://www.nasdaqtrader.com/dynamic/SymDir/otherlisted.txt"
+    }
+  },
+  "parser_version": "tier-b-screen-parser-r10-v1",
+  "parser_version_hash": "2627d49a2b716ffdea208f98e4150b0b92d62e85ff9b9ddbd7c142bd58bea701",
+  "retrieved_utc": "2026-08-21T12:06:00Z",
+  "screening_cutoff_utc": "2026-08-21T12:06:00Z",
+  "spec_revision": "r10",
+  "stage": "source_snapshot"
+}
