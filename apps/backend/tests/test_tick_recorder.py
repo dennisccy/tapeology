@@ -1187,14 +1187,14 @@ def test_tr31_format_cli_progress_line_serves_only_the_whitelisted_aggregates():
     ):
         assert forbidden not in line, f"{forbidden!r} leaked into the CLI progress line: {line!r}"
 
-    # a bare per-chunk outcome LABEL must not appear as a realized verdict; the only permitted use
-    # of those words is as a COUNT noun ("2 fetched"), which the aggregate assertions below pin.
-    assert "-> fetched" not in line and "-> failed" not in line and "-> reused" not in line
+    # No outcome-typed word survives in ANY form -- not as a realized verdict and not as a count
+    # noun. TR-32 (owner ruling section F) removed the counters entirely: a coarse bucket would
+    # still have an exact 0 -> 1 boundary, so a first failure would still be pinned as it crossed.
+    for word in ("fetched", "reused", "unchanged", "failed"):
+        assert word not in line, f"outcome-typed field {word!r} survived: {line!r}"
 
     # --- the safe aggregates ARE there ----------------------------------------------------------
-    assert "[3/4]" in line and "75.0%" in line
-    assert "1 fetched" in line and "1 reused" in line and "0 unchanged" in line and "1 failed" in line
-    assert "1 pending" in line
+    assert "[3/4]" in line and "75%" in line
     labels = [label for _low, _high, label in tr._VOLUME_BUCKETS]
     assert any(f"trades {lab}" in line for lab in labels)
     assert any(f"quotes {lab}" in line for lab in labels)
@@ -1251,9 +1251,10 @@ def test_tr31_the_live_cli_run_never_prints_a_realized_symbol_day_outcome(tmp_pa
     assert exit_code == 0
     out = capsys.readouterr().out
 
-    # The realized-progress stream is exactly the lines `_tick` emits.
+    # The realized-progress stream is exactly the lines `_tick` emits. TR-32 put these on a coarse
+    # milestone cadence, so this asserts the CONTENT contract, never a line-per-chunk count.
     progress_lines = [ln for ln in out.splitlines() if ln.startswith("  [")]
-    assert len(progress_lines) == 3, f"expected one progress line per chunk, got {progress_lines!r}"
+    assert progress_lines, "the operator must still get progress"
 
     for line in progress_lines:
         for forbidden in ("AAPL", "MSFT", "2026-06-01", "13:30", "15:00", "20:00"):
@@ -1261,9 +1262,151 @@ def test_tr31_the_live_cli_run_never_prints_a_realized_symbol_day_outcome(tmp_pa
         assert "->" not in line, f"a per-chunk outcome arrow leaked: {line!r}"
 
     # ...and the operator still gets genuinely useful aggregate progress.
-    assert "[3/3]" in progress_lines[-1] and "100.0%" in progress_lines[-1]
-    assert "0 pending" in progress_lines[-1]
-    assert "3 fetched" in progress_lines[-1]
+    assert "[3/3]" in progress_lines[-1] and "100%" in progress_lines[-1]
 
     # The pre-fetch plan banner is the sanctioned exception -- it may (and does) name the universe.
     assert "3 chunk(s) over 2 symbol-day(s)" in out
+
+
+# ==================================================================================================
+# 15. TR-32 -- the COMPOSED (differencing) leak: snapshots x the known plan (owner ruling, iter 23).
+# ==================================================================================================
+
+
+def _parse_outcome_counters(line: str) -> dict | None:
+    """Every outcome-typed counter an operator can read off ONE progress line, or ``None`` when the
+    line carries no outcome-typed information at all (the post-fix shape)."""
+    import re
+
+    found = {}
+    for key in ("fetched", "reused", "unchanged", "failed"):
+        m = re.search(rf"(\d+)\s+{key}\b", line)
+        if m:
+            found[key] = int(m.group(1))
+    return found or None
+
+
+def _reconstruct_outcomes_by_differencing(lines: list[str], plan: list[dict]) -> list[tuple]:
+    """THE ATTACK (owner ruling section F). The operator knows the registered plan and its
+    deterministic walk order, and watches every progress line. Difference each line's cumulative
+    outcome counters against its predecessor: whenever exactly one counter advances by exactly one,
+    that chunk's realized outcome is pinned -- and its identity is already known from the plan.
+
+    Returns every (symbol, date, outcome) triple recovered WITH CERTAINTY."""
+    recovered: list[tuple] = []
+    prev = {"fetched": 0, "reused": 0, "unchanged": 0, "failed": 0}
+    for idx, line in enumerate(lines):
+        cur = _parse_outcome_counters(line)
+        if cur is None:
+            continue  # no outcome-typed information on this line -- nothing to difference
+        advanced = [k for k, v in cur.items() if v - prev.get(k, 0) == 1]
+        total_advance = sum(v - prev.get(k, 0) for k, v in cur.items())
+        if len(advanced) == 1 and total_advance == 1 and idx < len(plan):
+            recovered.append((plan[idx]["symbol"], plan[idx]["date"], advanced[0]))
+        prev = {**prev, **cur}
+    return recovered
+
+
+def test_tr32_no_snapshot_sequence_plus_the_known_plan_pins_a_chunks_realized_outcome():
+    """TR-32 (owner ruling 2026-08-21, section F) -- the COMPOSITION requirement r5/r7 actually
+    imposes, which iteration 23's first fix (f54d0ee) did NOT satisfy.
+
+    f54d0ee removed the explicit ``{symbol} {date} -> {outcome}`` string, but kept ONE line per
+    completed chunk carrying EXACT cumulative ``fetched``/``reused``/``unchanged``/``failed``
+    counters. Those two properties compose into a full break: the Nth line corresponds to the Nth
+    chunk of a deterministic, operator-known plan, and differencing consecutive lines pins that
+    chunk's realized outcome exactly. Verified before the fix -- the attack below reconstructed all
+    four chunks' outcomes with an EXACT match to ground truth.
+
+    The requirement is OUTCOME-based, not field-based: no sequence of operator-visible snapshots,
+    combined with the known registered plan, may reveal a specific chunk's realized success or
+    failure with certainty. Internal exact progress stays permitted (checkpoint/recovery/audit),
+    and the TERMINAL batch report still discloses failures -- TR-4 REQUIRES that disclosure; what
+    is forbidden is the progressive, per-member reconstruction during the run."""
+    plan = [
+        {"symbol": "AAPL", "date": "2026-06-01"}, {"symbol": "AAPL", "date": "2026-06-02"},
+        {"symbol": "MSFT", "date": "2026-06-01"}, {"symbol": "MSFT", "date": "2026-06-02"},
+        {"symbol": "PG", "date": "2026-06-01"},   {"symbol": "PG", "date": "2026-06-02"},
+    ]
+    realized = ["fetched", "fetched", "failed", "reused", "fetched", "unchanged"]
+
+    progress = {
+        "chunks_total": len(plan), "chunks_done": 0, "outcomes": [],
+        "trades_total": 0, "quotes_total": 0,
+    }
+    lines: list[str] = []
+    for outcome in realized:
+        progress["chunks_done"] += 1
+        progress["outcomes"].append({"outcome": outcome, "trade_count": 1_000, "quote_count": 5_000})
+        progress["trades_total"] += 1_000
+        progress["quotes_total"] += 5_000
+        if tr.should_emit_cli_progress(progress["chunks_done"], progress["chunks_total"]):
+            lines.append(tr.format_cli_progress_line(progress, started_utc="2026-06-01T13:00:00Z"))
+
+    recovered = _reconstruct_outcomes_by_differencing(lines, plan)
+    assert recovered == [], (
+        "the differencing attack pinned a specific chunk's realized outcome from the operator-"
+        f"visible progress stream: {recovered!r}\nlines were:\n" + "\n".join(lines)
+    )
+
+    # ...and, belt and braces, no line carries outcome-typed counters at all.
+    for line in lines:
+        assert _parse_outcome_counters(line) is None, f"outcome counters survived on: {line!r}"
+
+    # The stream must still be genuinely useful: real completion progress and coarse volume.
+    assert lines, "the operator must still get progress"
+    assert "[6/6]" in lines[-1] and "100" in lines[-1]
+    labels = [label for _low, _high, label in tr._VOLUME_BUCKETS]
+    assert any(f"trades {lab}" in lines[-1] for lab in labels)
+
+
+def test_tr32_the_live_cli_run_survives_the_differencing_attack_with_a_real_failed_chunk(
+    tmp_path, monkeypatch, capsys
+):
+    """TR-32 end to end, against the REAL CLI with a REAL failing chunk -- the operator path, not a
+    simulation. ``_FakeTickAdapter.raise_for`` fails exactly one known chunk; the attack then runs
+    against the genuine captured stdout."""
+    import sys
+
+    from app.main import app, get_market_adapter
+    from app.research.routes import ResearchRegistry, set_registry
+    from app.research.store import JournalStore
+
+    monkeypatch.setenv("TAPEOLOGY_DATASET_DIR", str(tmp_path / "datasets"))
+    monkeypatch.setenv("TAPEOLOGY_BAR_DIR", str(tmp_path / "bars"))
+    monkeypatch.setenv("TAPEOLOGY_BAR_INDEX_DB", str(tmp_path / "index.db"))
+    monkeypatch.setenv("TAPEOLOGY_MICRO_RECORDER_CHECKPOINT_DIR", str(tmp_path / "checkpoints"))
+    monkeypatch.setenv("TAPEOLOGY_MICRO_RECORDER_LOG_DIR", str(tmp_path / "runs"))
+    monkeypatch.setenv("TAPEOLOGY_DESK_DEEP_BACKFILL_WORKERS", "1")
+    monkeypatch.setattr(
+        sys, "argv", ["tick_recorder.py", "--symbols", "AAPL,MSFT", "--dates", "2026-06-01"],
+    )
+    fake_plan = [
+        {"symbol": "AAPL", "date": "2026-06-01", "start": "2026-06-01T13:30:00Z", "end": "2026-06-01T15:00:00Z"},
+        {"symbol": "AAPL", "date": "2026-06-01", "start": "2026-06-01T15:00:00Z", "end": "2026-06-01T20:00:00Z"},
+        {"symbol": "MSFT", "date": "2026-06-01", "start": "2026-06-01T13:30:00Z", "end": "2026-06-01T20:00:00Z"},
+    ]
+    monkeypatch.setattr(tr, "plan_recorder_chunks", lambda symbols, dates: list(fake_plan))
+    tr._reset_recorder_throttle_for_tests()
+    adapter = _FakeTickAdapter()
+    adapter.raise_for = {("MSFT", "2026-06-01T13:30:00Z")}  # one known chunk genuinely fails
+    app.dependency_overrides[get_market_adapter] = lambda: adapter
+    journal = JournalStore(str(tmp_path / "journal.db"), CONFIG)
+    set_registry(ResearchRegistry(journal, CONFIG))
+    try:
+        tr.main()
+    finally:
+        set_registry(None)
+        app.dependency_overrides.pop(get_market_adapter, None)
+        journal.close()
+        tr._reset_recorder_throttle_for_tests()
+
+    out = capsys.readouterr().out
+    progress_lines = [ln for ln in out.splitlines() if ln.startswith("  [")]
+    recovered = _reconstruct_outcomes_by_differencing(progress_lines, fake_plan)
+    assert recovered == [], (
+        f"the live CLI stream leaked a specific chunk's realized outcome: {recovered!r}\n"
+        + "\n".join(progress_lines)
+    )
+    for line in progress_lines:
+        assert _parse_outcome_counters(line) is None, f"outcome counters survived on: {line!r}"

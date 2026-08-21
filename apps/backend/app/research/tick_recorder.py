@@ -131,6 +131,7 @@ __all__ = [
     "pair_bar_backfill_for_recorded_days",
     "TickRecorderComputeManager",
     "format_cli_progress_line",
+    "should_emit_cli_progress",
     "resolve_tick_recorder_checkpoint_dir",
     "resolve_tick_recorder_log_dir",
     "main",
@@ -773,16 +774,56 @@ def format_cli_progress_line(progress: dict, *, started_utc: str | None) -> str:
     The caller's INTERNAL ``progress`` dict keeps exact identities and exact counts (the
     ``outcomes`` list, ``trades_total``/``quotes_total``) -- section 7.1 permits that for
     checkpoint/recovery/audit; what it forbids is SERVING them, and nothing identity-bearing
-    survives into the returned string."""
+    survives into the returned string.
+
+    **TR-32 (owner ruling 2026-08-21, section F) -- the COMPOSED leak this ALSO has to close.**
+    The first fix (f54d0ee) removed the identity string but still emitted ONE line per completed
+    chunk carrying EXACT cumulative ``fetched``/``reused``/``unchanged``/``failed`` counters.
+    Those two properties compose into a total break, and it was verified empirically before this
+    change: the Nth line is the Nth chunk of a deterministic, operator-known plan, so differencing
+    consecutive lines pins every chunk's realized outcome (the attack reconstructed a 4-chunk run
+    EXACTLY). Field-level opacity is not enough; the requirement is outcome-based -- no SEQUENCE
+    of operator-visible snapshots, composed with the known plan, may pin a specific chunk.
+
+    The fix is to carry **no outcome-typed information at all** on a live line. That is strictly
+    stronger than bucketing the counters would be: a coarse bucket still has an exact ``0 -> 1``
+    boundary, so a first failure would still be pinned the moment it crossed. With no outcome
+    field present there is nothing to difference, whatever the cadence or the plan knowledge.
+    ``chunks_done``/``chunks_total`` stay exact -- they are pure position, carry no outcome, and
+    the operator already knows the plan length -- and the volume buckets stay as
+    ``_volume_bucket``'s own docstring already argues for them (monotone, order-of-magnitude
+    bands, never an exact inter-snapshot delta).
+
+    Failure counts are NOT hidden forever: the terminal run summary still reports them, and TR-4
+    positively REQUIRES a disclosed per-chunk/per-symbol failure list in the batch report. What is
+    forbidden is the progressive, per-member reconstruction while the tranche is being recorded."""
     view = _progress_view(progress, started_utc=started_utc, finished_utc=None)
-    pending = view["chunks_total"] - view["chunks_done"]
     return (
-        f"  [{view['chunks_done']}/{view['chunks_total']}] {view['percent_complete']:.1f}% · "
-        f"{view['chunks_fetched']} fetched · {view['chunks_reused']} reused · "
-        f"{view['chunks_unchanged']} unchanged · {view['chunks_failed']} failed · "
-        f"{pending} pending · trades {view['trades_total_bucket']} · "
-        f"quotes {view['quotes_total_bucket']} · {view['elapsed_seconds']:.0f}s"
+        f"  [{view['chunks_done']}/{view['chunks_total']}] {view['percent_complete']:.0f}% · "
+        f"trades {view['trades_total_bucket']} · quotes {view['quotes_total_bucket']} · "
+        f"{view['elapsed_seconds']:.0f}s"
     )
+
+
+# TR-32 (owner ruling section F): live progress is emitted on a COARSE MILESTONE cadence, never
+# once per completed chunk. Defense in depth -- `format_cli_progress_line` above already carries no
+# outcome-typed field, so the differencing attack has nothing to work with at ANY cadence; this
+# additionally removes the 1:1 line-index -> plan-index mapping that made the attack trivial to
+# mount in the first place, and keeps a real 2,080-chunk tranche from emitting 2,080 lines.
+_CLI_PROGRESS_MILESTONE_PERCENT = 5
+
+
+def should_emit_cli_progress(chunks_done: int, chunks_total: int) -> bool:
+    """``True`` when this completed chunk lands on a coarse progress milestone (every
+    ``_CLI_PROGRESS_MILESTONE_PERCENT`` of the plan), or is the final chunk -- so the operator
+    always sees the run reach 100%. A plan smaller than one milestone step still reports only on
+    its final chunk, never per chunk."""
+    if chunks_total <= 0:
+        return False
+    if chunks_done >= chunks_total:
+        return True
+    step = max(1, (chunks_total * _CLI_PROGRESS_MILESTONE_PERCENT) // 100)
+    return step > 1 and chunks_done % step == 0
 
 
 def _copy_recorder_snapshot(snapshot: dict) -> dict:
@@ -1035,7 +1076,8 @@ def main() -> int:
         cli_progress["outcomes"].append(entry)
         cli_progress["trades_total"] += entry.get("trade_count", 0)
         cli_progress["quotes_total"] += entry.get("quote_count", 0)
-        print(format_cli_progress_line(cli_progress, started_utc=started_utc))
+        if should_emit_cli_progress(cli_progress["chunks_done"], cli_progress["chunks_total"]):
+            print(format_cli_progress_line(cli_progress, started_utc=started_utc))
 
     tick_outcomes = run_tick_recording(
         chunks, dataset_store, checkpoint_store, adapter, CONFIG, progress=_tick,
