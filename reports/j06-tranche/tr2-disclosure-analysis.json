@@ -1,0 +1,30 @@
+{
+  "at": "2026-08-22T11:34:01Z",
+  "attacker_knowledge": [
+    "the registered universe rule (8 symbols x 10 dates = 80 pairs)",
+    "every served/public artifact, including the published selected COUNT",
+    "the legacy-dataset collision at one registered pair",
+    "the disclosed non-selected pool position(s): 1",
+    "readiness / dataset / run / UI / MCP surfaces"
+  ],
+  "combinatorial": {
+    "any_identity_certain": false,
+    "candidate_identities_per_unexposed_selected_shard": 79,
+    "disclosed_non_selected_positions": 1,
+    "feasible_selection_assignments": 7449416156804224460,
+    "hidden_set_fully_determined": false,
+    "publicly_published_selected_count": 21,
+    "still_unexposed_selected_shards": 21,
+    "universe_pairs": 80,
+    "unknown_positions": 79
+  },
+  "no_identity_determinable_with_certainty": true,
+  "observational": {
+    "genuine_j06_datasets": 80,
+    "leaked_to_served_surfaces": 0,
+    "legacy_datasets_visible_by_design": 18,
+    "withheld_from_served_surfaces": 80
+  },
+  "stage": "tr2_disclosure_analysis",
+  "universe_id": "rapid-microscope-j06-starter"
+}

@@ -1,21 +1,24 @@
 {
   "all_checksummed": true,
-  "at": "2026-08-21T20:49:00Z",
+  "at": "2026-08-22T11:20:44Z",
   "calendar_span_days": 63,
+  "configured_secret_matches_registered_commitment": true,
   "cooperative_cancel_observed": true,
   "dataset_list_errors": 0,
-  "disclosed_failures": [
-    [
-      "NVDA",
-      "2026-07-08"
-    ]
-  ],
+  "date_rule_unchanged": true,
+  "disclosed_positions": 1,
+  "disclosed_positions_with_any_shard_row": 0,
+  "disclosure_incidents": 1,
+  "disclosure_ledger_chain_ok": true,
   "distinct_dates": 10,
   "distinct_symbols": 8,
   "duplicate_dataset_ids": 0,
+  "duplicate_seal_rows": 0,
   "full_session_pct": 100.0,
+  "genuine_j06_recorded_pairs": 80,
   "hmac_selected_recorded": 21,
   "hmac_selected_total": 21,
+  "legacy_collisions_counted_as_j06": 0,
   "legacy_collisions_excluded_from_tranche": [
     {
       "created_utc": "2026-07-15T11:57:30.596930Z",
@@ -25,18 +28,23 @@
       "symbol": "NVDA"
     }
   ],
+  "legacy_collisions_present": 1,
+  "legacy_dataset_ids_with_shard_rows": 0,
   "legacy_datasets_untouched": 18,
-  "max_single_date_concentration": 0.1013,
-  "max_single_symbol_concentration": 0.1266,
+  "max_single_date_concentration": 0.1,
+  "max_single_symbol_concentration": 0.125,
   "pg_present": true,
   "planned_pairs": 80,
+  "preservation_capability_present": true,
   "quote_size_unit_distribution": {
-    "shares": 79
+    "shares": 80
   },
-  "recorded_pairs": 79,
-  "recording_runs": 4,
+  "quote_size_unit_present": true,
+  "recorded_pairs": 80,
+  "recording_runs": 5,
+  "registered_at": "2026-08-21T16:04:59.646127Z",
   "research_gate_150_symbol_days": {
-    "have": 79,
+    "have": 80,
     "met": false,
     "target": 150
   },
@@ -45,20 +53,24 @@
     "LYFT",
     "WULF"
   ],
+  "rule_commitment": "b0d6d09e533ba043e8925d319bf1738b1807dddc751c10420b43e936e90d3736",
+  "rule_hash": "ed065e4d223996fe11e5a50aa2bcf8d07f1419ee4026787b56b505127552e9df",
   "schema_basis_distribution": {
-    "tick_recorder_v1_card_5_1_preservation_present": 79
+    "tick_recorder_v1_card_5_1_preservation_present": 80
   },
   "screen_provenance_bound": true,
   "screen_provenance_chain_ok": true,
+  "screening_acts": 1,
   "sealed_of_selected_recorded": 21,
   "sealed_shard_rows": 21,
   "shard_ledger_chain_ok": true,
   "split_distribution": {
-    "holdout": 12,
+    "holdout": 13,
     "train": 67
   },
   "spy_present": true,
   "stage": "acceptance",
+  "symbol_rule_unchanged": true,
   "symbols": [
     "AAPL",
     "AG",
@@ -70,10 +82,16 @@
     "WULF"
   ],
   "tr4_batch_verification": {
-    "ok": true
+    "blocking_missing_pairs": {},
+    "disclosed_vendor_failures": [],
+    "ok": true,
+    "vendor_failure_evidence": {},
+    "verifier": "j06_typed"
   },
   "universe_id": "rapid-microscope-j06-starter",
   "universe_ledger_chain_ok": true,
   "universe_registrations": 1,
-  "unsealed_selected_recorded": []
+  "unrecovered_disclosed_vendor_failures": [],
+  "unsealed_selected_recorded": [],
+  "vault_secret_commitment": "68f2bbb382de525d33ef7db9b53cc72f8e43b41ced8e10dffc9195c0292da8f9"
 }

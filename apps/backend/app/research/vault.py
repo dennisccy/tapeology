@@ -274,6 +274,7 @@ __all__ = [
     "ShardLifecycleOrderError",
     "SealedShardWithheldError",
     "VaultLedgerCorruptionError",
+    "DisclosedPoolPositionError",
     "resolve_vault_dir",
     "shard_ledger_for_dataset_dir",
     "universe_ledger_for_dataset_dir",
@@ -282,6 +283,11 @@ __all__ = [
     "screen_provenance_ledger_for_dataset_dir",
     "record_screen_provenance",
     "find_screen_provenance",
+    "VaultDisclosureIncidentLedger",
+    "disclosure_incident_ledger_for_dataset_dir",
+    "record_disclosure_incident",
+    "find_disclosure_incident",
+    "disclosed_pool_positions",
     "VaultUniverseLedger",
     "VaultShardLedger",
     "VaultRecoveryLedger",
@@ -361,6 +367,7 @@ _SHARD_LEDGER_FILENAME = "vault_shard_ledger.jsonl"
 # cannot be trusted to record its own corruption).
 _RECOVERY_LEDGER_FILENAME = "vault_recovery_ledger.jsonl"
 _SCREEN_PROVENANCE_LEDGER_FILENAME = "vault_screen_provenance_ledger.jsonl"
+_DISCLOSURE_LEDGER_FILENAME = "vault_disclosure_incident_ledger.jsonl"
 
 # Ledger-machinery keys ``HashChainedLedger.append_row`` itself manages -- stripped before a row's
 # OWN content is carried forward into a later row (``assign_shard``/``expose_shard`` below), so a
@@ -451,6 +458,27 @@ class SealedShardWithheldError(Exception):
             "this dataset is sealed in the validation vault -- its metadata is withheld until "
             "its exposure is recorded (spec section 7.5)"
         )
+
+
+class DisclosedPoolPositionError(Exception):
+    """A shard whose (symbol, session_date) pool position has been recorded as DISCLOSED may never
+    be assigned to a family root (spec section 7.4/TR-2: the ``sealed -> assigned`` transition is
+    what grants a shard blind/historical-OOS credit).
+
+    A pool-position disclosure -- even a *non*-selected, non-sealed one -- is public information an
+    attacker may condition on. The evidence consequence is permanent: the pair can no longer serve
+    as blind evidence for anything, because its relationship to the hidden partition was revealed
+    outside the vault's own one-way lifecycle. Recorded once in the disclosure-incident ledger, this
+    refusal then applies for the lifetime of that vault directory."""
+
+    def __init__(self, symbol: str, session_date: str, incident_id: str) -> None:
+        super().__init__(
+            f"({symbol!r}, {session_date!r}) is a DISCLOSED pool position (incident {incident_id!r}) "
+            "-- it can never be granted sealed/blind/historical_oos credit"
+        )
+        self.symbol = symbol
+        self.session_date = session_date
+        self.incident_id = incident_id
 
 
 class VaultLedgerCorruptionError(Exception):
@@ -734,6 +762,131 @@ def record_screen_provenance(
 def find_screen_provenance(ledger: VaultScreenProvenanceLedger, screen_id: str) -> dict | None:
     matches = [r for r in ledger.verified_rows() if r.get("screen_id") == screen_id]
     return matches[-1] if matches else None
+
+
+# === pool-position disclosure incidents (spec section 7.5/TR-2) ====================================
+
+
+class VaultDisclosureIncidentLedger:
+    """The FOURTH hash-chained append-only ledger: every act that leaked a shard's *pool position*
+    -- its membership or non-membership of the hidden HMAC partition -- outside the vault's own
+    one-way ``sealed -> assigned -> exposed`` lifecycle.
+
+    Deliberately a separate file, for the same structural reason ``VaultScreenProvenanceLedger``
+    is: an incident row must never be resolvable as a universe registration or a shard-lifecycle
+    transition. Recording an incident does NOT move any shard's ``exposure_state`` -- no new
+    lifecycle transition is invented here. It records what a human/agent already revealed, and
+    ``assign_shard`` reads it as a permanent refusal."""
+
+    def __init__(self, root_dir: str) -> None:
+        self._chain = HashChainedLedger(root_dir, _DISCLOSURE_LEDGER_FILENAME)
+
+    @property
+    def path(self) -> Path:
+        return self._chain.path
+
+    def verify_chain(self) -> dict:
+        return self._chain.verify_chain()
+
+    def all_rows(self) -> list[dict]:
+        return self._chain.all_rows()
+
+    def verified_rows(self) -> list[dict]:
+        result = self._chain.verify_chain()
+        if not result["ok"]:
+            raise VaultLedgerCorruptionError("disclosure_incident", result)
+        return self._chain.all_rows()
+
+    def append_row(self, fields: dict) -> dict:
+        return self._chain.append_row(fields)
+
+
+def disclosure_incident_ledger_for_dataset_dir(dataset_dir_resolved: str) -> "VaultDisclosureIncidentLedger":
+    """The disclosure-incident ledger for a dataset dir -- the ``*_ledger_for_dataset_dir`` idiom."""
+    return VaultDisclosureIncidentLedger(resolve_vault_dir(dataset_dir_resolved))
+
+
+#: The only disclosure class this ledger can currently represent: a pool position revealed as NOT
+#: sealed / NOT HMAC-selected. It leaks one bit about one pair and nothing about any other member's
+#: identity -- see ``record_disclosure_incident``'s refusal for the class it deliberately cannot
+#: launder into a lawful record.
+DISCLOSURE_NON_SEALED_POOL_POSITION = "non_sealed_pool_position"
+
+
+def record_disclosure_incident(
+    ledger: VaultDisclosureIncidentLedger,
+    *,
+    incident_id: str,
+    disclosure_type: str,
+    universe_id: str,
+    pairs: list[tuple[str, str]],
+    source: str,
+    occurred_at: str,
+    sealed_member_identity_disclosed: bool,
+    evidence_consequence: str,
+    provenance: dict | None = None,
+    recorded_at: str | None = None,
+) -> dict:
+    """Binds ONE named, immutable pool-position disclosure incident.
+
+    Idempotent on ``incident_id`` when every content field is byte-identical (the
+    ``register_universe``/``record_screen_provenance`` discipline); a conflicting re-record raises
+    ``VaultUniverseAlreadyRegisteredError`` so an incident's history can never be quietly rewritten.
+
+    Refuses ``sealed_member_identity_disclosed=True``: this ledger's ONLY lawful representation is
+    a *non*-sealed pool position. A leaked SEALED member's identity is a different, graver event
+    that the current model has no containment for, and manufacturing a row for it here would
+    silently imply one exists. That case must escalate to the owner, not be recorded as if handled."""
+    if sealed_member_identity_disclosed:
+        raise ValueError(
+            f"incident {incident_id!r} claims a SEALED member identity was disclosed -- this ledger "
+            "represents non-sealed pool positions ONLY; a sealed-member leak has no lawful "
+            "containment in the current model and must be escalated, never recorded as contained"
+        )
+    if disclosure_type != DISCLOSURE_NON_SEALED_POOL_POSITION:
+        raise ValueError(
+            f"unknown disclosure_type {disclosure_type!r} -- only "
+            f"{DISCLOSURE_NON_SEALED_POOL_POSITION!r} is representable today"
+        )
+    fields = {
+        "record_kind": "pool_position_disclosure_incident",
+        "incident_id": incident_id,
+        "disclosure_type": disclosure_type,
+        "universe_id": universe_id,
+        "pairs": [[s, d] for s, d in pairs],
+        "source": source,
+        "occurred_at": occurred_at,
+        "sealed_member_identity_disclosed": False,
+        "evidence_consequence": evidence_consequence,
+        "provenance": dict(provenance or {}),
+        "recorded_at": recorded_at if recorded_at is not None else _iso_utc_now(),
+    }
+    content = {k: v for k, v in fields.items() if k != "recorded_at"}
+    for row in ledger.verified_rows():
+        if row.get("incident_id") == incident_id:
+            if {k: row.get(k) for k in content} == content:
+                return row
+            raise VaultUniverseAlreadyRegisteredError(
+                incident_id, row.get("pairs"), fields["pairs"])
+    return ledger.append_row(fields)
+
+
+def find_disclosure_incident(ledger: VaultDisclosureIncidentLedger, incident_id: str) -> dict | None:
+    matches = [r for r in ledger.verified_rows() if r.get("incident_id") == incident_id]
+    return matches[-1] if matches else None
+
+
+def disclosed_pool_positions(
+    ledger: VaultDisclosureIncidentLedger, universe_id: str | None = None
+) -> dict[tuple[str, str], str]:
+    """Every disclosed (symbol, session_date) -> the incident id that disclosed it."""
+    out: dict[tuple[str, str], str] = {}
+    for row in ledger.verified_rows():
+        if universe_id is not None and row.get("universe_id") != universe_id:
+            continue
+        for pair in row.get("pairs") or []:
+            out[(pair[0], pair[1])] = row.get("incident_id")
+    return out
 
 
 def compute_rule_hash(symbol_rule: list[str], date_rule: list[str]) -> str:
@@ -1095,12 +1248,24 @@ def assign_shard(
     row is currently ``sealed`` -- covers BOTH "never sealed" and "already assigned/exposed"
     (module docstring's shard-global single-shot reading, TC-8).
 
+    Also refused (``DisclosedPoolPositionError``) when this shard's (``symbol``, ``session_date``)
+    appears in the vault's disclosure-incident ledger: assignment is exactly the act that grants
+    blind/historical-OOS credit, and a pool position already revealed outside the lifecycle can
+    never carry that credit again.
+
     **Corruption gating covers this function's own shard ledger only (iteration 13) -- see
     ``seal_shard``'s own docstring for the full reasoning.**"""
     latest = _latest_shard_row(ledger, dataset_id)
     actual_state = latest["exposure_state"] if latest is not None else None
     if actual_state != STATE_SEALED:
         raise ShardLifecycleOrderError(dataset_id, STATE_SEALED, actual_state)
+    # The permanent evidence consequence of a pool-position disclosure. The incident ledger is
+    # resolved from this ledger's OWN root dir rather than taken as a parameter, so the refusal is
+    # unavoidable for every caller in that vault directory instead of opt-in.
+    disclosed = disclosed_pool_positions(VaultDisclosureIncidentLedger(str(ledger.path.parent)))
+    incident = disclosed.get((symbol, session_date))
+    if incident is not None:
+        raise DisclosedPoolPositionError(symbol, session_date, incident)
     fields = {
         **_row_content(latest),
         "exposure_state": STATE_ASSIGNED,

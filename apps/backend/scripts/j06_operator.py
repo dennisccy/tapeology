@@ -197,6 +197,18 @@ def stage_register(sessions: set[str] | None = None) -> dict:
 # === §7: preflight after registration, before market data =========================================
 
 
+def colliding_registered_pairs(records: list[dict], pairs) -> list:
+    """Registered pairs already occupied by SOME dataset -- the §7 pre-registration STOP condition.
+
+    The session date is DERIVED from each record's own ``window_start_utc``. The pre-fix check read
+    ``r.get("session_date") or r.get("date")``; neither is a field on a dataset record, so every
+    record keyed as ``(symbol, None)``, nothing could ever collide, and a real collision (the legacy
+    NVDA 2026-07-08 partial) passed preflight silently. Kept as a pure function so that failure mode
+    is testable directly rather than only through the full preflight stage."""
+    have = {(r["symbol"], _session_date_of(r)) for r in records}
+    return sorted(p for p in pairs if p in have)
+
+
 def stage_preflight() -> dict:
     """§7. Every check is a refusal, not a warning."""
     uled, shled, sled, store, ddir = _ledgers()
@@ -221,11 +233,7 @@ def stage_preflight() -> dict:
 
     existing, errors = store.list()
     checks["dataset_store_readable"] = errors == []
-    # `session_date`/`date` are NOT fields on a dataset record -- comparing them yielded
-    # (symbol, None) and could never collide, so this check silently passed a real collision
-    # (legacy NVDA 2026-07-08). The session date is DERIVED from the recorded window, as elsewhere.
-    have = {(r["symbol"], _session_date_of(r)) for r in existing}
-    collisions = sorted(p for p in pairs if p in have)
+    collisions = colliding_registered_pairs(existing, pairs)
     checks["colliding_existing_datasets"] = collisions
     if collisions:
         raise SystemExit(
@@ -267,6 +275,19 @@ def _session_date_of(record: dict) -> str:
     return start.astimezone(ZoneInfo("America/New_York")).date().isoformat()
 
 
+#: §12's full-session floor: a J-06 shard covers the whole 09:30-16:00 ET regular session (6.5 h);
+#: 6.4 h absorbs a vendor's first/last-print jitter without admitting a partial window.
+J06_FULL_SESSION_SECONDS = 6.4 * 3600
+
+
+def _full_session(record: dict) -> bool:
+    from zoneinfo import ZoneInfo
+    et = ZoneInfo("America/New_York")
+    a = datetime.fromisoformat(record["window_start_utc"].replace("Z", "+00:00")).astimezone(et)
+    b = datetime.fromisoformat(record["window_end_utc"].replace("Z", "+00:00")).astimezone(et)
+    return (b - a).total_seconds() >= J06_FULL_SESSION_SECONDS
+
+
 def stage_record() -> dict:
     """§8. Walks the registered universe pair by pair through the EXISTING recorder, and seals each
     HMAC-selected dataset IMMEDIATELY after it finalizes -- before anything could read it.
@@ -295,7 +316,12 @@ def stage_record() -> dict:
     # growing), so calling it per pair made the walk quadratic -- ~105 s/pair and worsening. The
     # recorder already RETURNS the finalized `dataset_id`, and `store.get(id)` reads one record, so
     # the loop below needs no further full listing.
-    existing = {(_session_date_of(r), r["symbol"]): r["id"] for r in store.list()[0]}
+    # ``already_recorded`` is permitted ONLY for a dataset that is itself a genuine J-06 shard.
+    # Keying on (session_date, symbol) alone let the legacy partial NVDA 2026-07-08 dataset
+    # short-circuit the recorder, so a registered pair was silently never recorded.
+    existing = _recorded_pairs(store, universe)
+    disclosed_positions = vault.disclosed_pool_positions(
+        vault.disclosure_incident_ledger_for_dataset_dir(ddir), UNIVERSE_ID)
     outcomes, sealed_now, started = [], 0, time.time()
     cancelled = False
     for n, (symbol, date) in enumerate(pairs, 1):
@@ -303,7 +329,7 @@ def stage_record() -> dict:
             cancelled = True
             sys.stderr.write(f"  cooperative cancel honoured after {n - 1}/{len(pairs)} pairs\n")
             break
-        key = (date, symbol)
+        key = (symbol, date)
         if key in existing:
             outcomes.append({"symbol": symbol, "date": date, "outcome": "already_recorded",
                              "dataset_id": existing[key]})
@@ -328,17 +354,25 @@ def stage_record() -> dict:
             outcomes.append({"symbol": symbol, "date": date, "outcome": "recorded",
                              "dataset_id": dsid})
         # --- IMMEDIATE seal, before anything could read this dataset -------------------------
+        # belt-and-braces: a disclosed pool position can never take sealed-side credit, even if
+        # the HMAC rule would otherwise select it (`assign_shard` refuses independently).
+        if key in disclosed_positions:
+            continue
+        if not vault.compute_seal(secret, symbol, date):
+            continue
+        if vault._latest_shard_row(shled, existing[key]) is not None:
+            continue                     # already sealed by an earlier run -- never double-seal
+        # `store.get` re-verifies the dataset's content, so it is read ONLY for a pair that is
+        # actually about to be sealed, never once per pair (the store is 22 GB).
         rec = store.get(existing[key])
-        if vault.compute_seal(secret, symbol, date):
-            if vault._latest_shard_row(shled, rec["id"]) is None:
-                counts = rec.get("event_counts") or {}
-                vault.seal_shard(
-                    shled, dataset_id=rec["id"], universe_id=UNIVERSE_ID,
-                    content_checksum=rec["checksum"],
-                    event_count=int(counts.get("trades", 0)) + int(counts.get("quotes", 0)),
-                    vault_secret=secret,
-                )
-                sealed_now += 1
+        counts = rec.get("event_counts") or {}
+        vault.seal_shard(
+            shled, dataset_id=rec["id"], universe_id=UNIVERSE_ID,
+            content_checksum=rec["checksum"],
+            event_count=int(counts.get("trades", 0)) + int(counts.get("quotes", 0)),
+            vault_secret=secret,
+        )
+        sealed_now += 1
         if n % 5 == 0:
             done = sum(1 for o in outcomes if o["outcome"] in ("recorded", "already_recorded"))
             sys.stderr.write(f"  [{n}/{len(pairs)}] {done} recorded · {time.time() - started:.0f}s\n")
@@ -400,14 +434,33 @@ def stage_bars() -> dict:
 J06_SCHEMA_BASIS = tr.RECORDER_SCHEMA_BASIS
 
 
+def is_genuine_j06_dataset(record: dict, expected: set) -> bool:
+    """The ONE canonical J-06 eligibility test, shared by the recorder walk (§8: what may count as
+    ``already_recorded``) and by acceptance (§12: what may count toward the tranche).
+
+    A dataset that merely occupies a registered symbol-day is NOT a J-06 shard. Before the owner's
+    repair ruling these were two definitions: the walk keyed only on ``(session_date, symbol)`` and
+    so let a legacy partial short-circuit the recorder, while acceptance additionally required the
+    recorder's own ``schema_basis``. One predicate, no drift."""
+    if record.get("schema_basis") != J06_SCHEMA_BASIS:
+        return False
+    if (record["symbol"], _session_date_of(record)) not in expected:
+        return False
+    if not record.get("checksum"):
+        return False
+    return _full_session(record)
+
+
 def _recorded_pairs(store: DatasetStore, universe: dict, *, records=None) -> dict:
-    """Every registered pair with a genuine J-06 shard, keyed (symbol, date) -> dataset id."""
+    """Every registered pair with a genuine J-06 shard, keyed (symbol, date) -> dataset id.
+
+    ``store.list()`` returns healthy records and a separate error list, so membership here already
+    means the ``DatasetStore`` record itself read back cleanly."""
     expected = set(vault.expected_recording_pairs(universe))
     out = {}
     for r in (records if records is not None else store.list()[0]):
-        key = (r["symbol"], _session_date_of(r))
-        if key in expected and r.get("schema_basis") == J06_SCHEMA_BASIS:
-            out[key] = r["id"]
+        if is_genuine_j06_dataset(r, expected):
+            out[(r["symbol"], _session_date_of(r))] = r["id"]
     return out
 
 
@@ -418,16 +471,88 @@ def _legacy_occupying_registered_pairs(store: DatasetStore, universe: dict, *, r
     out = []
     for r in (records if records is not None else store.list()[0]):
         key = (r["symbol"], _session_date_of(r))
-        if key in expected and r.get("schema_basis") != J06_SCHEMA_BASIS:
+        if key in expected and not is_genuine_j06_dataset(r, expected):
             out.append({"symbol": key[0], "date": key[1], "dataset_id": r["id"],
                         "created_utc": r.get("created_utc"), "schema_basis": r.get("schema_basis")})
     return out
 
 
+# === §10: the TYPED J-06 batch verifier ==========================================================
+#
+# The gap this closes. `stage_verify` used to compute `disclosed = expected - recorded` and hand
+# that set straight to `vault.verify_recording_batch`. That makes TR-4 vacuous through this path:
+# ANY missing pair launders itself into the "disclosed vendor failure" category simply by being
+# missing, and the check can then never fail. `verify_recording_batch` is a generic primitive and
+# stays exactly as it is -- it validates a batch against a rule net of failures its CALLER vouches
+# for. This module is that caller for J-06, so the vouching belongs here, and it must come from
+# recorder evidence, never from arithmetic.
+
+#: The typed reasons a registered pair can lack a genuine J-06 shard. Only the first is lawful.
+MISSING_VENDOR_FAILURE = "unrecovered_vendor_failure"
+MISSING_LEGACY_COLLISION = "legacy_dataset_collision"
+MISSING_UNEXPLAINED = "unexplained"
+
+
+def unrecovered_vendor_failures(runs: list[dict]) -> dict:
+    """Pairs whose LAST recorder outcome across every run is a vendor failure, with that run's own
+    failure detail as the evidence. A pair re-attempted and later recorded is NOT a failure; a pair
+    that was never attempted has no evidence at all and can never appear here."""
+    last: dict = {}
+    for run in runs:
+        for o in run.get("outcomes") or []:
+            last[(o["symbol"], o["date"])] = (run.get("at"), o)
+    return {pair: {"at": at, "detail": o.get("detail"), "outcome": o.get("outcome")}
+            for pair, (at, o) in last.items() if o.get("outcome") == "failed"}
+
+
+def classify_missing_pairs(expected, recorded, collisions, runs) -> dict:
+    """Every registered pair without a genuine J-06 shard, mapped to its TYPED condition.
+
+    A legacy collision DOMINATES: a pair blocked by a pre-existing dataset is a collision even if a
+    later run also failed on it, because the collision -- not the vendor -- is why no lawful shard
+    exists. That precedence is what makes "a collision may never be converted into a vendor
+    failure merely because the pair is missing" structural rather than a naming convention."""
+    collided = {(c["symbol"], c["date"]) for c in collisions}
+    failures = unrecovered_vendor_failures(runs)
+    out = {}
+    for pair in sorted(set(expected) - set(recorded)):
+        if pair in collided:
+            out[pair] = {"condition": MISSING_LEGACY_COLLISION}
+        elif pair in failures:
+            out[pair] = {"condition": MISSING_VENDOR_FAILURE, "evidence": failures[pair]}
+        else:
+            out[pair] = {"condition": MISSING_UNEXPLAINED}
+    return out
+
+
+def verify_j06_batch(universe: dict, *, recorded, collisions, runs) -> dict:
+    """TR-4 for J-06. Takes NO caller-supplied ``disclosed_failures`` -- that argument is exactly
+    the laundering surface, so it is not reachable from here. The disclosed set is DERIVED from
+    recorder run evidence and every other missing pair blocks acceptance outright."""
+    expected = vault.expected_recording_pairs(universe)
+    classified = classify_missing_pairs(expected, recorded, collisions, runs)
+    blocking = {p: c for p, c in classified.items() if c["condition"] != MISSING_VENDOR_FAILURE}
+    disclosed = sorted(p for p, c in classified.items() if c["condition"] == MISSING_VENDOR_FAILURE)
+    result = {
+        "verifier": "j06_typed",
+        "disclosed_vendor_failures": [list(p) for p in disclosed],
+        "blocking_missing_pairs": {f"{s} {d}": c["condition"] for (s, d), c in sorted(blocking.items())},
+        "vendor_failure_evidence": {f"{s} {d}": classified[(s, d)]["evidence"] for s, d in disclosed},
+    }
+    if blocking:
+        result["ok"] = False
+        result["refusal"] = (
+            "TR-4 refused: registered pair(s) lack a genuine J-06 dataset and have no "
+            "provenance-backed unrecovered vendor failure permitted by §7.2")
+        return result
+    result.update(vault.verify_recording_batch(
+        universe, recorded=list(recorded), disclosed_failures=disclosed))
+    return result
+
+
 def stage_verify() -> dict:
     """§10 batch verification (TR-4) + §12 acceptance, computed from the CANONICAL stores."""
     from collections import Counter
-    from zoneinfo import ZoneInfo
 
     uled, shled, sled, store, ddir = _ledgers()
     universe = vault.find_universe(uled, UNIVERSE_ID)
@@ -436,16 +561,20 @@ def stage_verify() -> dict:
     expected = sorted(vault.expected_recording_pairs(universe))
     recorded = _recorded_pairs(store, universe, records=records)
     collisions = _legacy_occupying_registered_pairs(store, universe, records=records)
-    disclosed = sorted(set(expected) - set(recorded))
+    runs = json.loads((STATE_DIR / "recording-runs.json").read_text())["runs"]
 
-    # --- TR-4: recorded == registered universe net of disclosed failures ---------------------
-    tr4 = vault.verify_recording_batch(
-        universe, recorded=list(recorded), disclosed_failures=disclosed)
+    # --- TR-4, through the TYPED J-06 verifier (never set subtraction) ------------------------
+    tr4 = verify_j06_batch(universe, recorded=recorded, collisions=collisions, runs=runs)
+    disclosed = [tuple(p) for p in tr4["disclosed_vendor_failures"]]
 
     secret = vault.load_vault_secret()
     hmac_selected = [p for p in expected if vault.compute_seal(secret, *p)]
-    sealed_ids = {r["dataset_id"] for r in shled.verified_rows()
+    shard_rows = shled.verified_rows()
+    tracked_ids = {r["dataset_id"] for r in shard_rows if r.get("dataset_id")}
+    sealed_ids = {r["dataset_id"] for r in shard_rows
                   if r.get("exposure_state") == vault.STATE_SEALED and r.get("dataset_id")}
+    dled = vault.disclosure_incident_ledger_for_dataset_dir(ddir)
+    disclosed_positions = vault.disclosed_pool_positions(dled, UNIVERSE_ID)
     selected_recorded = [p for p in hmac_selected if p in recorded]
     sealed_selected = [p for p in selected_recorded if recorded[p] in sealed_ids]
 
@@ -454,24 +583,19 @@ def stage_verify() -> dict:
     n = len(recorded)
     date_conc = max(Counter(d for _s, d in recorded).values()) / n
     sym_conc = max(Counter(s for s, _d in recorded).values()) / n
-    et = ZoneInfo("America/New_York")
-
-    def _full_session(rec) -> bool:
-        a = datetime.fromisoformat(rec["window_start_utc"].replace("Z", "+00:00")).astimezone(et)
-        b = datetime.fromisoformat(rec["window_end_utc"].replace("Z", "+00:00")).astimezone(et)
-        return (b - a).total_seconds() >= 6.4 * 3600
-
     new = [by_id[i] for i in recorded.values()]
     full = sum(1 for r in new if _full_session(r))
     d0 = datetime.fromisoformat(dates[0]).date(); d1 = datetime.fromisoformat(dates[-1]).date()
-    runs = json.loads((STATE_DIR / "recording-runs.json").read_text())["runs"]
 
     out = {
         "stage": "acceptance", "universe_id": UNIVERSE_ID, "at": _utc(),
         "planned_pairs": len(expected), "recorded_pairs": n,
-        "disclosed_failures": [list(p) for p in disclosed],
+        "unrecovered_disclosed_vendor_failures": [list(p) for p in disclosed],
         "tr4_batch_verification": tr4,
+        "legacy_collisions_present": len(collisions),
+        "legacy_collisions_counted_as_j06": 0,
         "legacy_collisions_excluded_from_tranche": collisions,
+        "genuine_j06_recorded_pairs": len(recorded),
         "distinct_symbols": len(symbols), "symbols": symbols,
         "pg_present": "PG" in symbols, "spy_present": "SPY" in symbols,
         "resolved_tier_b_present": sorted(set(symbols) & {"AG", "LYFT", "WULF"}),
@@ -484,6 +608,9 @@ def stage_verify() -> dict:
         "schema_basis_distribution": {str(k): v for k, v in Counter(r.get("schema_basis") for r in new).items()},
         "quote_size_unit_distribution": {str(k): v for k, v in Counter(r.get("quote_size_unit") for r in new).items()},
         "split_distribution": {str(k): v for k, v in Counter(r.get("split") for r in new).items()},
+        "preservation_capability_present": all(
+            r.get("schema_basis") == J06_SCHEMA_BASIS for r in new),
+        "quote_size_unit_present": all(r.get("quote_size_unit") for r in new),
         "hmac_selected_total": len(hmac_selected),
         "hmac_selected_recorded": len(selected_recorded),
         "sealed_shard_rows": len(sealed_ids),
@@ -491,11 +618,32 @@ def stage_verify() -> dict:
         "unsealed_selected_recorded": [list(p) for p in selected_recorded if p not in sealed_selected],
         "universe_registrations": len([r for r in uled.verified_rows()
                                        if r.get("universe_id") == UNIVERSE_ID]),
+        # the §7 same-universe invariants, read back from the ledger itself rather than from the
+        # registration artifact, so a rewritten artifact could not fake them
+        "registered_at": universe["registered_at"],
+        "rule_hash": universe["rule_hash"],
+        "rule_commitment": universe["rule_commitment"],
+        "vault_secret_commitment": universe["vault_secret_commitment"],
+        "configured_secret_matches_registered_commitment":
+            universe["vault_secret_commitment"] == vault.commit_vault_secret(secret),
+        "symbol_rule_unchanged": universe["symbol_rule"] == SYMBOL_RULE,
+        "date_rule_unchanged": universe["date_rule"] == DATE_RULE,
         "screen_provenance_bound": vault.find_screen_provenance(sled, SCREEN_ID) is not None,
+        "screening_acts": len(sled.verified_rows()),
+        "disclosure_incidents": len(dled.verified_rows()),
+        "disclosed_positions": len(disclosed_positions),
+        "disclosed_positions_with_any_shard_row": len(
+            [p for p in disclosed_positions if p in recorded and recorded[p] in tracked_ids]),
+        "disclosure_ledger_chain_ok": dled.verify_chain()["ok"],
         "universe_ledger_chain_ok": uled.verify_chain()["ok"],
         "shard_ledger_chain_ok": shled.verify_chain()["ok"],
         "screen_provenance_chain_ok": sled.verify_chain()["ok"],
         "duplicate_dataset_ids": len(recorded) - len(set(recorded.values())),
+        "duplicate_seal_rows": len([r for r in shard_rows
+                                    if r.get("exposure_state") == vault.STATE_SEALED])
+                               - len(sealed_ids),
+        "legacy_dataset_ids_with_shard_rows": len(
+            {c["dataset_id"] for c in collisions} & tracked_ids),
         "recording_runs": len(runs),
         "cooperative_cancel_observed": any(r["cancelled_cooperatively"] for r in runs),
         "legacy_datasets_untouched": len(records) - n,
@@ -505,9 +653,174 @@ def stage_verify() -> dict:
     return out
 
 
+# === the pool-position disclosure incident + its TR-2 re-analysis =================================
+
+DISCLOSURE_INCIDENT_ID = "j06-operator-report-pool-position-2026-08-22"
+#: The operator report that made the disclosure, located in this session's own transcript.
+DISCLOSURE_PROVENANCE = {
+    "channel": "operator report (assistant turn, Claude Code session)",
+    "session_id": "10421d4e-9e80-4737-b7d7-02a38eafa132",
+    "message_uuid": "d3ee23a0-2996-48bd-8851-d92745c2eecd",
+    "occurred_at": "2026-08-22T00:55:23Z",
+    "quoted_text": "NVDA 2026-07-08 is not HMAC-selected, so nothing legacy was ever sealed",
+}
+DISCLOSED_PAIRS = [("NVDA", "2026-07-08")]
+
+
+def stage_disclosure() -> dict:
+    """Records the named, immutable pool-position disclosure incident.
+
+    The §14 operator report stated in plain text that one registered pair is NOT HMAC-selected.
+    That is a real leak of one bit of the hidden partition, and it has already happened -- so it is
+    recorded as an incident rather than glossed. It is a NON-sealed-side disclosure: no sealed
+    member's identity was revealed, and no second member is disclosed to "balance" it."""
+    uled, shled, _sled, store, ddir = _ledgers()
+    if vault.find_universe(uled, UNIVERSE_ID) is None:
+        raise SystemExit("STOP: no registered universe")
+    dled = vault.disclosure_incident_ledger_for_dataset_dir(ddir)
+    row = vault.record_disclosure_incident(
+        dled,
+        incident_id=DISCLOSURE_INCIDENT_ID,
+        disclosure_type=vault.DISCLOSURE_NON_SEALED_POOL_POSITION,
+        universe_id=UNIVERSE_ID,
+        pairs=DISCLOSED_PAIRS,
+        source="operator report to the owner (see provenance)",
+        occurred_at=DISCLOSURE_PROVENANCE["occurred_at"],
+        sealed_member_identity_disclosed=False,
+        evidence_consequence=(
+            "PERMANENT. The disclosed pool position may never receive sealed, blind or "
+            "historical_oos credit: `vault.assign_shard` refuses it for the lifetime of this vault "
+            "directory, and the J-06 recorder walk refuses to seal it. Its dataset remains a "
+            "lawful member of the recorded tranche for corpus-size and coverage purposes only."),
+        provenance=DISCLOSURE_PROVENANCE,
+    )
+    # the consequence is proven against the REAL ledgers, not asserted in prose: the pair is in the
+    # set `assign_shard` reads, and no dataset at that pair carries any shard-lifecycle row at all.
+    disclosed = vault.disclosed_pool_positions(dled, UNIVERSE_ID)
+    records, _errors = store.list()
+    tracked = {r["dataset_id"] for r in shled.verified_rows() if r.get("dataset_id")}
+    proof = {}
+    for pair in DISCLOSED_PAIRS:
+        at_pair = [r["id"] for r in records
+                   if (r["symbol"], _session_date_of(r)) == pair]
+        proof[f"{pair[0]} {pair[1]}"] = {
+            "in_disclosure_ledger_assign_shard_reads": pair in disclosed,
+            "datasets_at_this_pair": len(at_pair),
+            "shard_lifecycle_rows_for_those_datasets": len(set(at_pair) & tracked),
+        }
+    out = {"stage": "pool_position_disclosure", "incident_id": DISCLOSURE_INCIDENT_ID,
+           "row_index": row.get("row_index"), "disclosed_positions": len(disclosed),
+           "sealed_member_identity_disclosed": False,
+           "chain_ok": dled.verify_chain()["ok"], "refusal_proof": proof, "at": _utc()}
+    _write("pool-position-disclosure.json", out)
+    return out
+
+
+def residual_pool_uncertainty(
+    universe_pairs: int, selected_count: int, disclosed_non_selected: int, exposed_count: int = 0
+) -> dict:
+    """The attacker's residual candidate space for the hidden HMAC partition, given the registered
+    universe size, the publicly published selected COUNT, and however many pool positions have been
+    disclosed as non-selected.
+
+    Certainty arrives in exactly two ways, and both are computed rather than assumed: the unknown
+    positions shrink to the number still selected (the whole hidden set is then pinned), or fewer
+    than two candidate identities remain for a shard. Pure arithmetic, so the non-vacuity
+    counter-case (disclose enough positions and certainty DOES arrive) is testable."""
+    from math import comb
+
+    unknown = universe_pairs - disclosed_non_selected
+    still_unexposed = selected_count - exposed_count
+    determined = unknown == selected_count
+    return {
+        "universe_pairs": universe_pairs,
+        "publicly_published_selected_count": selected_count,
+        "disclosed_non_selected_positions": disclosed_non_selected,
+        "unknown_positions": unknown,
+        "still_unexposed_selected_shards": still_unexposed,
+        "feasible_selection_assignments": comb(unknown, selected_count) if unknown >= selected_count else 0,
+        "candidate_identities_per_unexposed_selected_shard": unknown,
+        "hidden_set_fully_determined": determined,
+        "any_identity_certain": determined or unknown < 2,
+    }
+
+
+def stage_tr2() -> dict:
+    """TR-2 re-run with the disclosure treated as attacker-known public information.
+
+    Two independent halves, because the leak has two shapes:
+
+    (1) COMBINATORIAL. The attacker knows the registered universe (80 pairs), the publicly
+        published selected COUNT, and now that one specific position is non-selected. Certainty
+        about any still-unexposed selected shard requires the residual candidate space to collapse
+        -- either the unknown positions shrink to exactly the remaining selected count (the whole
+        hidden set is then determined), or some position becomes the unique candidate for a given
+        sealed row. Both are computed here, not asserted.
+
+    (2) OBSERVATIONAL. Every genuine J-06 dataset must still be withheld from the served surfaces
+        by the shared opaque-pool predicate, so no listing can be differenced against the universe.
+    """
+    uled, shled, _sled, store, ddir = _ledgers()
+    universe = vault.find_universe(uled, UNIVERSE_ID)
+    secret = vault.load_vault_secret()
+    expected = sorted(vault.expected_recording_pairs(universe))
+    selected = [p for p in expected if vault.compute_seal(secret, *p)]
+    dled = vault.disclosure_incident_ledger_for_dataset_dir(ddir)
+    disclosed = vault.disclosed_pool_positions(dled, UNIVERSE_ID)
+
+    # a disclosed position that turned out to BE selected would be a graver, different incident
+    wrongly = [p for p in disclosed if p in set(selected)]
+    if wrongly:
+        raise SystemExit("STOP: a disclosed position is HMAC-SELECTED -- that is a sealed-member "
+                         "identity leak, which this model has no lawful containment for")
+
+    exposed_rows = [r for r in shled.verified_rows()
+                    if r.get("universe_id") == UNIVERSE_ID
+                    and r.get("exposure_state") == vault.STATE_EXPOSED]
+    combinatorial = residual_pool_uncertainty(
+        len(expected), len(selected), len(disclosed), len(exposed_rows))
+
+    # --- (2) the observational half, against the REAL store ------------------------------------
+    records, _errors = store.list()
+    by_id = {r["id"]: r for r in records}
+    recorded = _recorded_pairs(store, universe, records=records)
+    tuples = [(r["id"], r["symbol"], _session_date_of(r), r.get("created_utc") or "")
+              for r in records]
+    withheld = vault.unresolved_pool_dataset_ids(shled, uled, tuples)
+    j06_ids = set(recorded.values())
+    served_j06 = sorted(j06_ids - set(withheld))
+    observational = {
+        "genuine_j06_datasets": len(j06_ids),
+        "withheld_from_served_surfaces": len(j06_ids & set(withheld)),
+        "leaked_to_served_surfaces": len(served_j06),
+        # Pre-registration legacy datasets stay visible BY DESIGN (`created_utc >= registered_at`
+        # guard): they existed before the universe did, so their visibility cannot be differenced
+        # against it. Counted, so the number is on the record rather than implied.
+        "legacy_datasets_visible_by_design": len(by_id) - len(withheld),
+    }
+
+    ok = (not combinatorial["any_identity_certain"]
+          and combinatorial["candidate_identities_per_unexposed_selected_shard"] >= 2
+          and observational["leaked_to_served_surfaces"] == 0)
+    out = {"stage": "tr2_disclosure_analysis", "universe_id": UNIVERSE_ID, "at": _utc(),
+           "attacker_knowledge": [
+               "the registered universe rule (8 symbols x 10 dates = 80 pairs)",
+               "every served/public artifact, including the published selected COUNT",
+               "the legacy-dataset collision at one registered pair",
+               f"the disclosed non-selected pool position(s): {len(disclosed)}",
+               "readiness / dataset / run / UI / MCP surfaces"],
+           "combinatorial": combinatorial, "observational": observational,
+           "no_identity_determinable_with_certainty": ok}
+    _write("tr2-disclosure-analysis.json", out)
+    if not ok:
+        raise SystemExit(f"STOP: TR-2 fails under the disclosure: {json.dumps(out)}")
+    return out
+
+
 _STAGES = {"provenance": stage_provenance, "register": stage_register,
            "preflight": stage_preflight, "record": stage_record,
-           "bars": stage_bars, "verify": stage_verify}
+           "bars": stage_bars, "verify": stage_verify,
+           "disclosure": stage_disclosure, "tr2": stage_tr2}
 
 
 def main() -> int:

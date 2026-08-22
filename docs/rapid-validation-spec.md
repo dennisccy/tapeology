@@ -189,6 +189,25 @@
 > untouched, and the rerun recomputes from those SAME frozen artifacts — the universe is never
 > re-cut after partial results were seen. Detail → §7.2.1 (d), §7.1. Traps → TR-32.
 
+> **Revision r12 (2026-08-22, owner ruling — TR-4 may not manufacture its own failure provenance,
+> and a disclosed pool position is permanently spent).** The J-06 starter tranche came back 79/80
+> and was REFUSED as lawful completion. Two defects, both structural. **(1) TR-4 was laundering
+> itself.** The J-06 caller computed `disclosed_failures = expected − recorded` and handed that set
+> to the generic verifier, so ANY missing pair classified itself as a disclosed vendor failure
+> merely by being missing and the check could never fail. §7.2's "net of disclosed vendor failures"
+> means failures with real recorder provenance — never arithmetic. **(2) A legacy dataset could
+> short-circuit the recorder.** The recorder walk treated any dataset at a registered `(symbol,
+> session_date)` as already-recorded, so a pre-existing partial-window dataset made a registered
+> pair silently skip. A legacy collision is now its OWN typed condition that blocks acceptance
+> outright and can never be converted into a vendor failure. The repair is completion, never
+> substitution: the SAME already-registered universe, the SAME nonce, rule commitment, vault-secret
+> commitment and HMAC assignment, and a genuine full-session recording of the SAME registered pair.
+> **(3) The operator report leaked one pool position** (naming a registered pair as NOT
+> HMAC-selected). Already-happened leaks are recorded, not glossed: a fourth vault ledger holds
+> named, immutable pool-position disclosure incidents, and the consequence is permanent — the
+> disclosed position can never take sealed / blind / historical-OOS credit again. Nothing is
+> disclosed to "balance" it. Detail → §7.2.2. Traps → TR-4, TR-2.
+
 ---
 
 ## 0. Shared conventions
@@ -811,6 +830,59 @@ per-criterion pass/fail, all failures, the deterministic ordering, and any `unre
 is persisted and immutable before the resolved list may become the Tier-B portion of `symbol_rule`.
 No hidden manual exclusions.
 
+### 7.2.2 Batch verification is TYPED, and a disclosed pool position is spent (r12)
+
+**Disclosed vendor failures must carry provenance.** §7.2's verifier recomputes the expected set
+and accepts the batch only net of disclosed vendor failures. Those failures are an INPUT backed by
+recorder run evidence — a terminal, unrecovered per-chunk/per-symbol failure recorded by the run
+that hit it — never a set computed from what happens to be missing. A caller that derives
+`disclosed_failures` by subtracting the recorded set from the expected set has written a check that
+cannot fail; that is not TR-4. The generic verifier stays a primitive that validates a batch against
+a rule net of failures its caller VOUCHES for; the vouching belongs to the caller, and for a
+recording universe the caller must derive it from run evidence and expose no parameter for it.
+
+**Every registered pair without a genuine shard has exactly one typed condition:**
+
+| condition | meaning | acceptance |
+|---|---|---|
+| `unrecovered_vendor_failure` | a terminal vendor failure, with the run's own failure detail as evidence, never later recovered | the ONE lawful disclosure (§7.2) |
+| `legacy_dataset_collision` | the pair is occupied by a dataset this recorder did not write | **blocks** |
+| `unexplained` | no genuine shard and no evidence of any kind | **blocks** |
+
+A collision DOMINATES vendor-failure evidence for the same pair: otherwise one vendor hiccup on a
+collided pair would restore the laundering route. Acceptance is false while any registered pair
+lacks a genuine shard for any reason other than the first row.
+
+**What counts as a genuine shard** is ONE predicate shared by the recorder walk (what may be
+skipped as already-recorded) and by acceptance (what may be counted): the recorder's own
+`schema_basis`, the exact registered `(symbol, session_date)`, the required full regular-session
+window, a valid content checksum, and a healthy store record. Two definitions is how a legacy
+partial came to be counted as "already recorded" by one and rejected by the other.
+
+**Repairing an already-registered universe.** A collision discovered after registration is repaired
+by COMPLETION, never substitution and never a second universe: record the same registered pair
+genuinely, through the same recorder, into the same universe, with the original nonce, rule
+commitment, vault-secret commitment and HMAC assignment untouched. The colliding legacy dataset is
+immutable, stays on disk, stays permanently exploratory, and stays reported as a collision — it is
+never deleted, rewritten, relabelled, or counted. The pre-registration STOP is unchanged and
+unweakened for every FUTURE registration.
+
+**Pool-position disclosure incidents.** Revealing whether a specific pool member is or is not
+HMAC-selected, outside the `sealed → assigned → exposed` lifecycle, is a leak even when the position
+is NOT selected — it is public information an attacker may condition on. Such a disclosure is
+recorded as a named, immutable incident in its own hash-chained ledger (a fourth chain, for the same
+structural reason the screen-provenance chain is separate: an incident row must never resolve as a
+universe registration or a lifecycle transition). Recording an incident moves no shard's exposure
+state — no new lifecycle transition exists. The consequence is PERMANENT: the disclosed position may
+never receive sealed, blind or historical-OOS credit, enforced at `assign_shard`, which is the
+transition that grants that credit. Its dataset remains a lawful member of the recorded tranche for
+corpus-size and coverage purposes only. **No second member is ever disclosed to "balance" a leak.**
+A disclosure of a SEALED member's identity has NO lawful representation here and must not be
+recorded as if contained — it escalates to the owner. After any incident, TR-2 is re-run with the
+disclosure treated as attacker-known: no still-unexposed selected shard's identity may become
+determinable with certainty, which requires strictly more unknown positions than remaining selected
+shards (otherwise the hidden set is pinned) and at least two candidate identities per sealed row.
+
 ### 7.3 Split vs seal — two independent assignments
 - **Split** (train/holdout tag, Card 5.2's published rule, unchanged): `holdout` iff the last hex
   digit of `sha256(f"{symbol}:{YYYY-MM-DD}")` ∈ {0,1,2}.
@@ -1089,9 +1161,9 @@ boundary by its `observed_through`.
 | Trap | Asserts |
 |---|---|
 | TR-1 prefix/tail | Truncated-dataset snapshot rows byte-identical to the full run's prefix (3 cut points incl. i=1); appending one tail event changes no prior row |
-| TR-2 sealed sweep (r3: join-resistance; r5: inference trap) | Every registered route + MCP tool serves only §7.5 metadata (or a typed refusal) for a sealed shard — AND the sweep is adversarial, not a whitelist review: seal a fixture shard, collect every value any surface serves for it pre-exposure, and assert none equals, contains, or derives the dataset id, raw `content_checksum`, symbol, window, or event counts. Explicitly includes `/research/datasets{,/{id}}`, the `datasets` MCP tool, `get_endpoint`, `micro_readiness` (no per-shard row at all, EITHER side) and the recorder progress path. **r5 inference trap** — the decisive assertion: record a fixture pool under a registered universe (§7.2) whose symbol rule and date rule the trap KNOWS, expose a proper subset, then assert that the union of every public artifact (readiness, recorder progress, datasets, backtests, PnL ledger, Scout, walk-forward, graduation, MCP, UI) plus that known universe leaves ≥2 candidate identities for every still-unexposed vault-eligible shard — i.e. no unexposed shard is identifiable with certainty, and no complete identity-labelled exploratory/sealed partition is derivable by subtraction |
+| TR-2 sealed sweep (r3: join-resistance; r5: inference trap) | Every registered route + MCP tool serves only §7.5 metadata (or a typed refusal) for a sealed shard — AND the sweep is adversarial, not a whitelist review: seal a fixture shard, collect every value any surface serves for it pre-exposure, and assert none equals, contains, or derives the dataset id, raw `content_checksum`, symbol, window, or event counts. Explicitly includes `/research/datasets{,/{id}}`, the `datasets` MCP tool, `get_endpoint`, `micro_readiness` (no per-shard row at all, EITHER side) and the recorder progress path. **r5 inference trap** — the decisive assertion: record a fixture pool under a registered universe (§7.2) whose symbol rule and date rule the trap KNOWS, expose a proper subset, then assert that the union of every public artifact (readiness, recorder progress, datasets, backtests, PnL ledger, Scout, walk-forward, graduation, MCP, UI) plus that known universe leaves ≥2 candidate identities for every still-unexposed vault-eligible shard — i.e. no unexposed shard is identifiable with certainty, and no complete identity-labelled exploratory/sealed partition is derivable by subtraction · **r12 composed disclosure**: with one pool position publicly disclosed as NOT selected (§7.2.2), no served surface starts identifying pool pairs, the incident record itself is never served, and the residual space still leaves strictly more unknown positions than remaining selected shards — counter-case: disclosing every non-selected position DOES pin the hidden set |
 | TR-3 accessor fence | Origin-T accessor refuses reads > T with a typed error; corpus aggregates exclude > T exactly; import-ban: only `micro_accessor` opens snapshot/vault data paths |
-| TR-4 cherry-pick refusal | A recording batch ≠ its universe rule's computed set (net of disclosed failures) is refused |
+| TR-4 cherry-pick refusal | A recording batch ≠ its universe rule's computed set (net of disclosed failures) is refused. **r12 — the disclosed set may not be manufactured by arithmetic:** a registered expected pair + a legacy-dataset collision + ZERO vendor-failure evidence + no genuine shard must NOT pass by inserting that pair into a caller-supplied `disclosed_failures` set through the production verification path (the production caller exposes no such parameter and derives the set from recorder run evidence) · a pair that failed and was later recorded is not an unrecovered failure · a collision DOMINATES vendor-failure evidence for the same pair · counter-test: the pre-fix subtraction, run directly against the generic primitive, DOES pass — so the refusal is a fix, not a tautology |
 | TR-5 class mixing | Pooling `historical_exposed_diagnostic` with `historical_oos` rows in one statistic is refused; diagnostic folds contribute zero to graduation |
 | TR-6 purge exactness | A planted label crossing a fold boundary fails the build; session-truncation asserted per fold |
 | TR-7 stale identity | Snapshot cache MISSES on a changed fingerprint-relevant config field and on a mutated feature-module byte (source-hash) |
@@ -1107,6 +1179,7 @@ boundary by its `observed_through`.
 | TR-17 future-event availability | (a) every row with `observed_through` after `anchor_at` has `available_at` = the `observed_through` instant; (b) truncating a dataset at T reproduces byte-identically exactly the rows with `available_at` ≤ T — none later; (c) a planted outcome starting before its conditioning set's max `available_at` is refused by the outcome join |
 | TR-18 units gate | A fixture with `quote_size_unit: "unverified"` (and a mixed-unit pool) refuses every cross-basis feature with a typed error; the verified twin serves them; no silent normalization path exists (source-scan) |
 | TR-19 preservation prerequisite | The recorder refuses to start any universe recording unless the row schema carries the Card-5.1 preservation fields and the §2.6 stamping; a freshly captured fixture round-trips conditions/exchange; every legacy fixture loads byte-identically with its checksum verifying |
+| TR-33 pool-position disclosure (r12 §7.2.2) | `assign_shard` refuses a disclosed pool position permanently, while an undisclosed one still assigns normally · an incident is idempotent on its id and refuses a conflicting rewrite · a claimed SEALED-member leak is REFUSED rather than recorded as contained · the incident chain is a fourth, separate ledger that no universe/shard predicate can resolve |
 | TR-20 root lineage | A re-registered family with the same (feature family, context kind, outcome family) triple COMPUTES the same `family_root_id` (the rename attack is refused at the sealed door); a genuinely different triple computes a different root |
 | TR-21 process label | A sequence containing a logged operator selection after any fold reveal is `operator_process` and is refused at `walkforward_survivor`; a pre-reveal registered shortlist keeps `rule_process` |
 | TR-22 exposure registry | A spec registered after a logged serving of its validation window is auto-classed `historical_exposed_diagnostic`; the registry's r2 initialization marks every playbook-corpus and legacy-tick window exposed |

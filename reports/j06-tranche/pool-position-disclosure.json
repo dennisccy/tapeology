@@ -1,0 +1,16 @@
+{
+  "at": "2026-08-22T10:37:07Z",
+  "chain_ok": true,
+  "disclosed_positions": 1,
+  "incident_id": "j06-operator-report-pool-position-2026-08-22",
+  "refusal_proof": {
+    "NVDA 2026-07-08": {
+      "datasets_at_this_pair": 1,
+      "in_disclosure_ledger_assign_shard_reads": true,
+      "shard_lifecycle_rows_for_those_datasets": 0
+    }
+  },
+  "row_index": 0,
+  "sealed_member_identity_disclosed": false,
+  "stage": "pool_position_disclosure"
+}

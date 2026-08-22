@@ -1629,6 +1629,500 @@
       "sealed_this_run": 0,
       "stage": "recording",
       "universe_id": "rapid-microscope-j06-starter"
+    },
+    {
+      "already_recorded": 79,
+      "at": "2026-08-22T10:53:17Z",
+      "cancelled_cooperatively": false,
+      "elapsed_seconds": 180.0,
+      "failed": 0,
+      "outcomes": [
+        {
+          "dataset_id": "e5cba33b0dae4ce49c1ac04f728d6caa",
+          "date": "2026-06-10",
+          "outcome": "already_recorded",
+          "symbol": "AAPL"
+        },
+        {
+          "dataset_id": "be74abe2a5ef45559b68c068813eb08a",
+          "date": "2026-06-17",
+          "outcome": "already_recorded",
+          "symbol": "AAPL"
+        },
+        {
+          "dataset_id": "e86f6afb021e421194c6687171994b6a",
+          "date": "2026-06-24",
+          "outcome": "already_recorded",
+          "symbol": "AAPL"
+        },
+        {
+          "dataset_id": "522824467f7945a8b4151af556d0fc76",
+          "date": "2026-07-01",
+          "outcome": "already_recorded",
+          "symbol": "AAPL"
+        },
+        {
+          "dataset_id": "89529f6d4442480aa94bb078ddccd810",
+          "date": "2026-07-08",
+          "outcome": "already_recorded",
+          "symbol": "AAPL"
+        },
+        {
+          "dataset_id": "1c20a6817620421baea09453324d4dce",
+          "date": "2026-07-15",
+          "outcome": "already_recorded",
+          "symbol": "AAPL"
+        },
+        {
+          "dataset_id": "2e06f4a88fbf43d895ac35b89bc69335",
+          "date": "2026-07-22",
+          "outcome": "already_recorded",
+          "symbol": "AAPL"
+        },
+        {
+          "dataset_id": "6fd5e8cd695d44a7add79afa3312d599",
+          "date": "2026-07-29",
+          "outcome": "already_recorded",
+          "symbol": "AAPL"
+        },
+        {
+          "dataset_id": "054d24857f454c53a2d9370be1e15530",
+          "date": "2026-08-05",
+          "outcome": "already_recorded",
+          "symbol": "AAPL"
+        },
+        {
+          "dataset_id": "9c65d99560d447e8b27e359aed266e00",
+          "date": "2026-08-12",
+          "outcome": "already_recorded",
+          "symbol": "AAPL"
+        },
+        {
+          "dataset_id": "a5077129a3c847638aca4a2b0600a98a",
+          "date": "2026-06-10",
+          "outcome": "already_recorded",
+          "symbol": "AG"
+        },
+        {
+          "dataset_id": "db94f36fef074c0380aa0b52be66a5de",
+          "date": "2026-06-17",
+          "outcome": "already_recorded",
+          "symbol": "AG"
+        },
+        {
+          "dataset_id": "813bee72bcad4186a28a94407960e03f",
+          "date": "2026-06-24",
+          "outcome": "already_recorded",
+          "symbol": "AG"
+        },
+        {
+          "dataset_id": "ee22364d463b4f78bbae8c2be9a91412",
+          "date": "2026-07-01",
+          "outcome": "already_recorded",
+          "symbol": "AG"
+        },
+        {
+          "dataset_id": "a07efdcae4ea46e9adbbf43db8e22078",
+          "date": "2026-07-08",
+          "outcome": "already_recorded",
+          "symbol": "AG"
+        },
+        {
+          "dataset_id": "102b946ff9664dbba6f0a7b0294c2dbe",
+          "date": "2026-07-15",
+          "outcome": "already_recorded",
+          "symbol": "AG"
+        },
+        {
+          "dataset_id": "ade209ece41441b393d5904780ae544b",
+          "date": "2026-07-22",
+          "outcome": "already_recorded",
+          "symbol": "AG"
+        },
+        {
+          "dataset_id": "578c1e4d1c5d4df8b9f87ca30cc323da",
+          "date": "2026-07-29",
+          "outcome": "already_recorded",
+          "symbol": "AG"
+        },
+        {
+          "dataset_id": "a3bba425103a473099695edbfcd2e035",
+          "date": "2026-08-05",
+          "outcome": "already_recorded",
+          "symbol": "AG"
+        },
+        {
+          "dataset_id": "7003f94d068f4e598ceb04c76596bc6c",
+          "date": "2026-08-12",
+          "outcome": "already_recorded",
+          "symbol": "AG"
+        },
+        {
+          "dataset_id": "043116b1cd2449d9948141a8b6cbf404",
+          "date": "2026-06-10",
+          "outcome": "already_recorded",
+          "symbol": "LYFT"
+        },
+        {
+          "dataset_id": "0e2272d7a40e486fa560d76a2fa15093",
+          "date": "2026-06-17",
+          "outcome": "already_recorded",
+          "symbol": "LYFT"
+        },
+        {
+          "dataset_id": "2daaf4ee26994279ae060ad8e7da5cd9",
+          "date": "2026-06-24",
+          "outcome": "already_recorded",
+          "symbol": "LYFT"
+        },
+        {
+          "dataset_id": "cac4343bbad844cb95f84f8bca404a73",
+          "date": "2026-07-01",
+          "outcome": "already_recorded",
+          "symbol": "LYFT"
+        },
+        {
+          "dataset_id": "2d6c5ae844e345319173da1da10cb95c",
+          "date": "2026-07-08",
+          "outcome": "already_recorded",
+          "symbol": "LYFT"
+        },
+        {
+          "dataset_id": "472808b0755843a598f7e278fb7108b9",
+          "date": "2026-07-15",
+          "outcome": "already_recorded",
+          "symbol": "LYFT"
+        },
+        {
+          "dataset_id": "2bc0875aac6e479980b2f6ba259fd050",
+          "date": "2026-07-22",
+          "outcome": "already_recorded",
+          "symbol": "LYFT"
+        },
+        {
+          "dataset_id": "1b7f4da75e57482fb7d91a98306bf9ff",
+          "date": "2026-07-29",
+          "outcome": "already_recorded",
+          "symbol": "LYFT"
+        },
+        {
+          "dataset_id": "a36e74380b5440708fb09ba0c6ebc77a",
+          "date": "2026-08-05",
+          "outcome": "already_recorded",
+          "symbol": "LYFT"
+        },
+        {
+          "dataset_id": "adec159b25c547c2bb4152e589d86d20",
+          "date": "2026-08-12",
+          "outcome": "already_recorded",
+          "symbol": "LYFT"
+        },
+        {
+          "dataset_id": "e3f9680d3f8647c995695883242df005",
+          "date": "2026-06-10",
+          "outcome": "already_recorded",
+          "symbol": "MSFT"
+        },
+        {
+          "dataset_id": "564fc40bc7f34fcfbdc9133a8f0bfa57",
+          "date": "2026-06-17",
+          "outcome": "already_recorded",
+          "symbol": "MSFT"
+        },
+        {
+          "dataset_id": "934644c7626a4943a523384d509e51f1",
+          "date": "2026-06-24",
+          "outcome": "already_recorded",
+          "symbol": "MSFT"
+        },
+        {
+          "dataset_id": "1aeef47a87624a26a97a9e7d3f5e4c39",
+          "date": "2026-07-01",
+          "outcome": "already_recorded",
+          "symbol": "MSFT"
+        },
+        {
+          "dataset_id": "3d9a88ea648c4729be0fa502085dd6f0",
+          "date": "2026-07-08",
+          "outcome": "already_recorded",
+          "symbol": "MSFT"
+        },
+        {
+          "dataset_id": "a15a91de80bb4b61be2fa015c8b90deb",
+          "date": "2026-07-15",
+          "outcome": "already_recorded",
+          "symbol": "MSFT"
+        },
+        {
+          "dataset_id": "6c9e24244c6c4ea7950de419ad5479bb",
+          "date": "2026-07-22",
+          "outcome": "already_recorded",
+          "symbol": "MSFT"
+        },
+        {
+          "dataset_id": "9d46249089dc46b5bfe396e498be4ac0",
+          "date": "2026-07-29",
+          "outcome": "already_recorded",
+          "symbol": "MSFT"
+        },
+        {
+          "dataset_id": "63018552fd10495c9d66980419673dcb",
+          "date": "2026-08-05",
+          "outcome": "already_recorded",
+          "symbol": "MSFT"
+        },
+        {
+          "dataset_id": "da9a1a64e07043e781e9ecd66efa416a",
+          "date": "2026-08-12",
+          "outcome": "already_recorded",
+          "symbol": "MSFT"
+        },
+        {
+          "dataset_id": "324b65ee01c9499a9af1051cc032eaab",
+          "date": "2026-06-10",
+          "outcome": "already_recorded",
+          "symbol": "NVDA"
+        },
+        {
+          "dataset_id": "c47e27a6efc64bcbafe439a6679bcd37",
+          "date": "2026-06-17",
+          "outcome": "already_recorded",
+          "symbol": "NVDA"
+        },
+        {
+          "dataset_id": "abef062229f9491b89e1267c39d278de",
+          "date": "2026-06-24",
+          "outcome": "already_recorded",
+          "symbol": "NVDA"
+        },
+        {
+          "dataset_id": "f194091268404196be1228c55562f03b",
+          "date": "2026-07-01",
+          "outcome": "already_recorded",
+          "symbol": "NVDA"
+        },
+        {
+          "dataset_id": "ee10348c245b4748a2d2f9b3c6ab543f",
+          "date": "2026-07-08",
+          "outcome": "recorded",
+          "symbol": "NVDA"
+        },
+        {
+          "dataset_id": "91770358cfcf4c9e9287cf92e40231f0",
+          "date": "2026-07-15",
+          "outcome": "already_recorded",
+          "symbol": "NVDA"
+        },
+        {
+          "dataset_id": "af1d6d4a16bd4b569f156583cce0546e",
+          "date": "2026-07-22",
+          "outcome": "already_recorded",
+          "symbol": "NVDA"
+        },
+        {
+          "dataset_id": "7f496510ba6f4ab8adb7441faf981074",
+          "date": "2026-07-29",
+          "outcome": "already_recorded",
+          "symbol": "NVDA"
+        },
+        {
+          "dataset_id": "8c40eae0db52449bba5cfdf220dd300c",
+          "date": "2026-08-05",
+          "outcome": "already_recorded",
+          "symbol": "NVDA"
+        },
+        {
+          "dataset_id": "a23442c99fb04590abf6805aa13b3326",
+          "date": "2026-08-12",
+          "outcome": "already_recorded",
+          "symbol": "NVDA"
+        },
+        {
+          "dataset_id": "64c48c58abb14d089c8bcc710d53884a",
+          "date": "2026-06-10",
+          "outcome": "already_recorded",
+          "symbol": "PG"
+        },
+        {
+          "dataset_id": "e5d38ac1db0f45cd9ef9e9abc221bfcb",
+          "date": "2026-06-17",
+          "outcome": "already_recorded",
+          "symbol": "PG"
+        },
+        {
+          "dataset_id": "ac0aba04d2e440caa58d4e0c1c241406",
+          "date": "2026-06-24",
+          "outcome": "already_recorded",
+          "symbol": "PG"
+        },
+        {
+          "dataset_id": "e484e96a3f454ef4948c210490076a87",
+          "date": "2026-07-01",
+          "outcome": "already_recorded",
+          "symbol": "PG"
+        },
+        {
+          "dataset_id": "41a591ea6e274f40a4961a9e4c9a2f30",
+          "date": "2026-07-08",
+          "outcome": "already_recorded",
+          "symbol": "PG"
+        },
+        {
+          "dataset_id": "608c2268205846dea15d314c6d8de64d",
+          "date": "2026-07-15",
+          "outcome": "already_recorded",
+          "symbol": "PG"
+        },
+        {
+          "dataset_id": "412c0c3ad93547b6b11b20fe7c5cde93",
+          "date": "2026-07-22",
+          "outcome": "already_recorded",
+          "symbol": "PG"
+        },
+        {
+          "dataset_id": "407c262b585c47bd97ba3e6418d2c60b",
+          "date": "2026-07-29",
+          "outcome": "already_recorded",
+          "symbol": "PG"
+        },
+        {
+          "dataset_id": "6735b471c6064fe9aac4b914824a037c",
+          "date": "2026-08-05",
+          "outcome": "already_recorded",
+          "symbol": "PG"
+        },
+        {
+          "dataset_id": "56b88f7342fc4fae8d2fdabac1751563",
+          "date": "2026-08-12",
+          "outcome": "already_recorded",
+          "symbol": "PG"
+        },
+        {
+          "dataset_id": "755d915686ef4961b1e0dba229f07324",
+          "date": "2026-06-10",
+          "outcome": "already_recorded",
+          "symbol": "SPY"
+        },
+        {
+          "dataset_id": "7c84e559312049918eda2253040dbaff",
+          "date": "2026-06-17",
+          "outcome": "already_recorded",
+          "symbol": "SPY"
+        },
+        {
+          "dataset_id": "dbfa30ebb5034affb027eded679e0be4",
+          "date": "2026-06-24",
+          "outcome": "already_recorded",
+          "symbol": "SPY"
+        },
+        {
+          "dataset_id": "e6c794426444401baf901958209f4839",
+          "date": "2026-07-01",
+          "outcome": "already_recorded",
+          "symbol": "SPY"
+        },
+        {
+          "dataset_id": "b19db0fab6484910ae6008065c7a0a59",
+          "date": "2026-07-08",
+          "outcome": "already_recorded",
+          "symbol": "SPY"
+        },
+        {
+          "dataset_id": "1e9bbfea43814311834aab954aa961e1",
+          "date": "2026-07-15",
+          "outcome": "already_recorded",
+          "symbol": "SPY"
+        },
+        {
+          "dataset_id": "9d77e6b38590456ebaa9d7f56302bfdf",
+          "date": "2026-07-22",
+          "outcome": "already_recorded",
+          "symbol": "SPY"
+        },
+        {
+          "dataset_id": "eefb458d5ac94d54bc4c82febe229559",
+          "date": "2026-07-29",
+          "outcome": "already_recorded",
+          "symbol": "SPY"
+        },
+        {
+          "dataset_id": "7814240dc0ff4abc92893665061eb115",
+          "date": "2026-08-05",
+          "outcome": "already_recorded",
+          "symbol": "SPY"
+        },
+        {
+          "dataset_id": "cf57d55fa37748e2b539feb6442469db",
+          "date": "2026-08-12",
+          "outcome": "already_recorded",
+          "symbol": "SPY"
+        },
+        {
+          "dataset_id": "159abd3b12414c379706498e3b63d9a4",
+          "date": "2026-06-10",
+          "outcome": "already_recorded",
+          "symbol": "WULF"
+        },
+        {
+          "dataset_id": "28d88054908a461ca3a326d492df2dfc",
+          "date": "2026-06-17",
+          "outcome": "already_recorded",
+          "symbol": "WULF"
+        },
+        {
+          "dataset_id": "e51dc7471499480ab3b3a307b87e1b41",
+          "date": "2026-06-24",
+          "outcome": "already_recorded",
+          "symbol": "WULF"
+        },
+        {
+          "dataset_id": "ae38311c5d154554a7bf81335d0a4241",
+          "date": "2026-07-01",
+          "outcome": "already_recorded",
+          "symbol": "WULF"
+        },
+        {
+          "dataset_id": "77ac1654cbc54e6186373e4d77a8d867",
+          "date": "2026-07-08",
+          "outcome": "already_recorded",
+          "symbol": "WULF"
+        },
+        {
+          "dataset_id": "504217fd03334e0caa2f3fff84012779",
+          "date": "2026-07-15",
+          "outcome": "already_recorded",
+          "symbol": "WULF"
+        },
+        {
+          "dataset_id": "8c82a4cf0a4c400ea8469a3f798f5637",
+          "date": "2026-07-22",
+          "outcome": "already_recorded",
+          "symbol": "WULF"
+        },
+        {
+          "dataset_id": "cbf1abe974dc4d13b1177342f6bc8312",
+          "date": "2026-07-29",
+          "outcome": "already_recorded",
+          "symbol": "WULF"
+        },
+        {
+          "dataset_id": "688559b24177475486b1cef39227a11c",
+          "date": "2026-08-05",
+          "outcome": "already_recorded",
+          "symbol": "WULF"
+        },
+        {
+          "dataset_id": "7127516c693143e58737905a6c41b4b4",
+          "date": "2026-08-12",
+          "outcome": "already_recorded",
+          "symbol": "WULF"
+        }
+      ],
+      "pairs_attempted": 80,
+      "recorded": 1,
+      "sealed_this_run": 0,
+      "stage": "recording",
+      "universe_id": "rapid-microscope-j06-starter"
     }
   ]
 }

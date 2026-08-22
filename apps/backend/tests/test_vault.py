@@ -2843,3 +2843,228 @@ def test_the_screen_provenance_chain_verifies(tmp_path):
     vault.record_screen_provenance(sled, **_screen_kwargs())
     assert sled.verify_chain()["ok"] is True
     assert sled.verified_rows()[0]["resolution_artifact_sha256"] == "fb89c5a2"
+
+
+# =====================================================================================================
+# TR-33 — pool-position disclosure incidents (spec r12 §7.2.2, owner repair ruling 2026-08-22).
+#
+# The J-06 §14 operator report stated in plain text that one registered pair is NOT HMAC-selected.
+# That is a real, already-happened leak of one bit of the hidden partition. It is recorded rather
+# than glossed, and it carries a permanent evidence consequence: `assign_shard` -- the transition
+# that grants a shard blind/historical-OOS credit -- refuses that pool position forever.
+# =====================================================================================================
+
+
+def _disclose(ledger, pair, *, incident_id="inc-1", universe_id="u1"):
+    return vault.record_disclosure_incident(
+        ledger,
+        incident_id=incident_id,
+        disclosure_type=vault.DISCLOSURE_NON_SEALED_POOL_POSITION,
+        universe_id=universe_id,
+        pairs=[pair],
+        source="operator report to the owner",
+        occurred_at="2026-08-22T00:55:23Z",
+        sealed_member_identity_disclosed=False,
+        evidence_consequence="PERMANENT: never sealed/blind/historical_oos credit",
+    )
+
+
+def test_assign_shard_refuses_a_disclosed_pool_position(tmp_path):
+    """The permanent consequence, enforced where the credit is actually granted. The incident
+    ledger is resolved from the shard ledger's OWN root dir, so no caller can opt out by simply
+    not passing it."""
+    shard_ledger = vault.VaultShardLedger(str(tmp_path))
+    disclosure_ledger = vault.VaultDisclosureIncidentLedger(str(tmp_path))
+    root = vault.compute_family_root_id("impact_efficiency_trend", "band_wall_touch", "trades_20")
+    for dataset_id in ("d-disclosed", "d-clean"):
+        vault.seal_shard(
+            shard_ledger, dataset_id=dataset_id, universe_id="u1", content_checksum="a" * 64,
+            event_count=1000, vault_secret=_FIXTURE_SECRET,
+        )
+    _disclose(disclosure_ledger, ("NVDA", "2026-07-08"))
+
+    with pytest.raises(vault.DisclosedPoolPositionError) as excinfo:
+        vault.assign_shard(shard_ledger, dataset_id="d-disclosed", family_root_id=root,
+                           symbol="NVDA", session_date="2026-07-08")
+    assert excinfo.value.incident_id == "inc-1"
+    assert vault._latest_shard_row(shard_ledger, "d-disclosed")["exposure_state"] == vault.STATE_SEALED
+
+    # counter-test: an undisclosed pool position still assigns normally, so the refusal above is
+    # the disclosure biting and not the lifecycle check firing for an unrelated reason.
+    row = vault.assign_shard(shard_ledger, dataset_id="d-clean", family_root_id=root,
+                             symbol="NVDA", session_date="2026-07-15")
+    assert row["exposure_state"] == vault.STATE_ASSIGNED
+
+
+def test_record_disclosure_incident_refuses_to_represent_a_sealed_member_leak(tmp_path):
+    """A leaked SEALED member's identity is a graver event with no containment in this model.
+    Recording one here would silently imply containment exists, so it is refused outright -- the
+    owner's own "if there is no lawful way to represent it, STOP and report" instruction, made
+    structural."""
+    ledger = vault.VaultDisclosureIncidentLedger(str(tmp_path))
+    with pytest.raises(ValueError, match="escalated, never recorded as contained"):
+        vault.record_disclosure_incident(
+            ledger, incident_id="bad", disclosure_type=vault.DISCLOSURE_NON_SEALED_POOL_POSITION,
+            universe_id="u1", pairs=[("NVDA", "2026-07-08")], source="x",
+            occurred_at="2026-08-22T00:00:00Z", sealed_member_identity_disclosed=True,
+            evidence_consequence="y",
+        )
+    assert ledger.all_rows() == []
+
+
+def test_an_unknown_disclosure_type_is_refused_rather_than_recorded_as_handled(tmp_path):
+    ledger = vault.VaultDisclosureIncidentLedger(str(tmp_path))
+    with pytest.raises(ValueError, match="unknown disclosure_type"):
+        vault.record_disclosure_incident(
+            ledger, incident_id="bad", disclosure_type="sealed_member_identity",
+            universe_id="u1", pairs=[("NVDA", "2026-07-08")], source="x",
+            occurred_at="2026-08-22T00:00:00Z", sealed_member_identity_disclosed=False,
+            evidence_consequence="y",
+        )
+    assert ledger.all_rows() == []
+
+
+def test_a_disclosure_incident_is_idempotent_but_can_never_be_quietly_rewritten(tmp_path):
+    ledger = vault.VaultDisclosureIncidentLedger(str(tmp_path))
+    first = _disclose(ledger, ("NVDA", "2026-07-08"))
+    again = _disclose(ledger, ("NVDA", "2026-07-08"))
+    assert again["row_index"] == first["row_index"]
+    assert len(ledger.all_rows()) == 1
+    with pytest.raises(vault.VaultUniverseAlreadyRegisteredError):
+        _disclose(ledger, ("AAPL", "2026-07-08"))
+    assert len(ledger.all_rows()) == 1
+    assert ledger.verify_chain()["ok"] is True
+
+
+def test_the_disclosure_ledger_is_a_fourth_separate_chain(tmp_path):
+    """Same structural reason the screen-provenance ledger is separate: an incident row must never
+    be resolvable as a universe registration or a shard-lifecycle transition."""
+    root = str(tmp_path)
+    ledgers = {
+        "universe": vault.VaultUniverseLedger(root).path,
+        "shard": vault.VaultShardLedger(root).path,
+        "screen": vault.VaultScreenProvenanceLedger(root).path,
+        "disclosure": vault.VaultDisclosureIncidentLedger(root).path,
+    }
+    assert len({str(p) for p in ledgers.values()}) == 4
+    disclosure_ledger = vault.VaultDisclosureIncidentLedger(root)
+    _disclose(disclosure_ledger, ("NVDA", "2026-07-08"))
+    assert vault.VaultUniverseLedger(root).all_rows() == []
+    assert vault.VaultShardLedger(root).all_rows() == []
+    assert vault.find_universe(vault.VaultUniverseLedger(root), "u1") is None
+    assert vault.disclosed_pool_positions(disclosure_ledger, "u1") == {("NVDA", "2026-07-08"): "inc-1"}
+    assert vault.disclosed_pool_positions(disclosure_ledger, "other-universe") == {}
+
+
+def test_tr2_holds_when_one_non_selected_pool_position_is_publicly_disclosed(tmp_path, monkeypatch):
+    """TR-2, re-run with the disclosure treated as attacker-known public information.
+
+    The attacker is granted: the registered universe rule, every served/public artifact, the
+    published selected COUNT, and the fact that one specific pool position is NOT selected. The
+    claim under test is that no still-unexposed selected shard's identity becomes determinable.
+
+    Two independent halves, because a disclosure can bite in two ways. OBSERVATIONALLY: the
+    disclosure must not make the system itself start serving pool identities -- the swept union of
+    every registered GET route (plus the `datasets` MCP path) still identifies none of the pool's
+    pairs, and the incident record itself is never served. COMBINATORIALLY: conditioning on one
+    non-selected position leaves strictly more unknown positions than remaining selected shards, so
+    the hidden set is not pinned and every sealed row keeps >= 2 candidate identities.
+
+    Non-vacuous by construction: the fixture's HMAC split is asserted to be a real split (both
+    sides non-empty), the compute acts run FIRST and are asserted to have measured the two real PG
+    fixture datasets, and the counter-case -- disclosing every non-selected position WOULD pin the
+    hidden set -- is computed in the same arithmetic."""
+    _scope_everything_to(tmp_path, monkeypatch)
+    store = _combined_fixture_store(tmp_path)
+
+    symbols, dates = ["ZQXDISC1", "ZQXDISC2", "ZQXDISC3"], ["2031-07-01", "2031-07-02"]
+    expected_pairs = frozenset((s, d) for s in symbols for d in dates)
+    vault_dir = str(tmp_path / "micro_vault")
+    universe_ledger = vault.VaultUniverseLedger(vault_dir)
+    vault.register_universe(
+        universe_ledger, universe_id="pool-disc", symbol_rule=symbols, date_rule=dates,
+        vault_secret_commitment=vault.commit_vault_secret(_FIXTURE_SECRET),
+    )
+    shard_ledger = vault.VaultShardLedger(vault_dir)
+    disclosure_ledger = vault.VaultDisclosureIncidentLedger(vault_dir)
+
+    metas = {}
+    for s_index, symbol in enumerate(symbols):
+        for d_index, session_date in enumerate(dates):
+            metas[(symbol, session_date)] = _record_pool_dataset(
+                store, symbol=symbol, session_date=session_date, nonce=s_index * 10 + d_index)
+
+    selected = [p for p in sorted(expected_pairs) if vault.compute_seal(_FIXTURE_SECRET, *p)]
+    non_selected = [p for p in sorted(expected_pairs) if p not in set(selected)]
+    assert selected and len(non_selected) >= 2, "the fixture's HMAC split must be a real split"
+    for pair in selected:
+        meta = metas[pair]
+        vault.seal_shard(
+            shard_ledger, dataset_id=meta["id"], universe_id="pool-disc",
+            content_checksum=meta["checksum"], event_count=meta["event_counts"]["total"],
+            vault_secret=_FIXTURE_SECRET,
+        )
+
+    disclosed_pair = non_selected[0]
+    _disclose(disclosure_ledger, disclosed_pair, incident_id="inc-disc", universe_id="pool-disc")
+
+    from app.config import CONFIG
+    from app.mcp import _STATIC_PATHS
+    from app.research import edge_report
+    from app.research.store import JournalStore
+
+    with TestClient(app) as client:
+        assert client.post("/research/desk/micro/snapshots/compute").json()["state"] == "running"
+        assert _poll_compute(client, "/research/desk/micro/snapshots/compute")["state"] == "done"
+        assert client.post("/research/desk/micro/scout/compute").json()["state"] == "running"
+        assert _poll_compute(client, "/research/desk/micro/scout/compute")["state"] == "done"
+
+        journal = JournalStore(CONFIG.journal_db_path_resolved(), CONFIG)
+        try:
+            report = edge_report.run_edge_report(journal, store, CONFIG)
+        finally:
+            journal.close()
+        measured = {r["dataset_id"] for r in report["train"]["datasets"] + report["holdout"]["datasets"]}
+        assert measured, "the compute acts must have measured SOMETHING -- else the sweep is vacuous"
+        assert not (measured & {m["id"] for m in metas.values()})
+        assert report["withheld_excluded"] == len(expected_pairs)
+
+        swept = {}
+        for path in _sweepable_get_paths():
+            if "{" in path:
+                continue
+            response = client.get(path)
+            try:
+                swept[path] = response.json()
+            except ValueError:
+                swept[path] = response.text
+        assert len(swept) >= 50, f"the sweep only reached {len(swept)} routes"
+        assert _STATIC_PATHS["datasets"] in swept
+        served_text = json.dumps(swept, sort_keys=True, default=str)
+
+        # --- observational half -------------------------------------------------------------
+        datasets_body = swept["/research/datasets"]
+        assert len(datasets_body["datasets"]) >= 2, "the two real PG fixtures must still be served"
+        served_pairs = {
+            (row["symbol"], _et_session_date(row["window_start_utc"]))
+            for row in datasets_body["datasets"]
+        }
+        assert served_pairs & expected_pairs == frozenset(), "a pool pair became identifiable"
+        for pair, meta in metas.items():
+            assert meta["id"] not in served_text, f"{pair}'s dataset id leaked"
+            assert meta["checksum"] not in served_text, f"{pair}'s raw checksum leaked"
+        # the incident itself is an internal audit record, never a served surface -- publishing it
+        # would re-broadcast the very pool position it exists to contain.
+        assert "inc-disc" not in served_text
+        assert "pool_position_disclosure_incident" not in served_text
+        assert disclosed_pair[0] not in served_text
+
+    # --- combinatorial half -----------------------------------------------------------------
+    unknown = len(expected_pairs) - 1                      # conditioned on the one disclosure
+    still_selected = len(selected)                          # none exposed in this fixture
+    assert unknown > still_selected, "the hidden set would be fully determined"
+    assert unknown - still_selected >= 1
+    assert unknown >= 2, "at least 2 candidate identities must remain for every sealed row"
+    # the counter-case, in the same arithmetic: disclose every non-selected position and certainty
+    # DOES arrive -- so the assertion above is a measurement, not a tautology.
+    assert len(expected_pairs) - len(non_selected) == still_selected
