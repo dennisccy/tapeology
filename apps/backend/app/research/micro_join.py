@@ -584,7 +584,11 @@ def _band_touch_not_enumerated() -> dict:
 
 
 def joinable_corpus_counts(
-    dataset_store: DatasetStore, playbook_store, *, resolver: "BandMapResolver | None" = None
+    dataset_store: DatasetStore,
+    playbook_store,
+    *,
+    resolver: "BandMapResolver | None" = None,
+    band_touch_cache=None,
 ) -> dict:
     """``total``/``playbook_signal_count``/``band_touch_count``/``by_setup_id``/
     ``playbook_integrity_errors`` -- every recorded playbook signal whose ``(symbol, trigger_ts)``
@@ -610,7 +614,27 @@ def joinable_corpus_counts(
     available evidence, so counting its window as joinable would make this number disagree with
     ``micro_readiness``' own ``totals.distinct_datasets`` (which already excludes it) inside one
     payload. ``withheld_excluded`` carries the COUNT -- never the ids -- so the shrink is never
-    silent. Byte-identical (``0``) while nothing is sealed."""
+    silent. Byte-identical (``0``) while nothing is sealed.
+
+    ``band_touch_cache`` (iter-26, ``micro_readiness.MicroBandTouchCache``) is OPTIONAL and
+    defaults to ``None`` -- byte-identical to today's uncached compute (every existing caller)
+    when omitted. When given (and ``resolver`` is also given -- band touches are only ever
+    enumerated with a resolver in hand), each record's touch count is looked up, or computed once
+    and published, keyed on the COMPOSITE ``(dataset_meta["checksum"], resolver.map_key(symbol,
+    window_start_epoch))`` -- never the checksum alone, so a re-warmed/changed band map (a new
+    ``map_key``) is a genuine miss, never a stale hit under the old map (this module's own
+    ``enumerate_band_touches`` already resolves the SAME map at the SAME instant internally, so the
+    externally-computed ``map_key`` here can never disagree with what that function's own
+    ``resolver.resolve`` call would key on). A cache miss still computes through
+    ``enumerate_band_touches`` -- this never fabricates a placeholder count -- and the resolved
+    value is published before moving to the next record. Only a record whose map ACTUALLY RESOLVES
+    is cached at all (iter-26 audit B1): ``map_key`` names the map REQUEST, not its answer, so an
+    unresolved map's honest ``0`` shares the very key the operator's later tradability warm
+    publishes under, and caching it would serve that ``0`` forever -- the phase's own "publish ONLY
+    a resolved count, never a placeholder" rail. An unresolved record therefore stays on the
+    uncached path, which costs only the resolver's own memoized lookup (never the event load).
+    Only warm-path LATENCY changes; the summed ``total_band_touches`` is unaffected
+    (TC-2/TC-3/TC-4)."""
     records, _errors = dataset_store.list()
     records, withheld_excluded = exclude_withheld(records, dataset_store)
     total_playbook = 0
@@ -636,9 +660,31 @@ def joinable_corpus_counts(
     if resolver is None:
         band_touch_count = _band_touch_not_enumerated()
     else:
-        total_band_touches = sum(
-            len(enumerate_band_touches(meta, dataset_store, resolver)) for meta in records
-        )
+        total_band_touches = 0
+        for meta in records:
+            symbol = meta.get("symbol")
+            cacheable = False
+            if band_touch_cache is not None and symbol:
+                window_start_epoch = parse_utc_epoch(meta["window_start_utc"])
+                # Only a RESOLVED map's count may ever enter the cache (iter-26 audit B1).
+                # `map_key` names the map REQUEST -- (symbol, basis day, store signature, config
+                # hash) -- NOT its answer, so the key an UNRESOLVED map produces is byte-identical
+                # to the one the operator's own later tradability warm publishes under. Caching the
+                # honest `0` an unresolved map yields would therefore serve that `0` forever once
+                # the map exists. `resolver.resolve` memoizes per `(symbol, basis day)`, so this is
+                # the SAME lookup `enumerate_band_touches` makes below, not a second one -- and an
+                # unresolved map still costs only that lookup, never the event load.
+                cacheable = resolver.resolve(symbol, window_start_epoch) is not None
+            if cacheable:
+                checksum = meta["checksum"]
+                map_key = resolver.map_key(symbol, window_start_epoch)
+                touch_count = band_touch_cache.lookup(checksum, map_key)
+                if touch_count is None:
+                    touch_count = len(enumerate_band_touches(meta, dataset_store, resolver))
+                    band_touch_cache.publish(checksum, map_key, touch_count)
+            else:
+                touch_count = len(enumerate_band_touches(meta, dataset_store, resolver))
+            total_band_touches += touch_count
         band_touch_count = {"status": BAND_TOUCH_STATUS_ENUMERATED, "count": total_band_touches}
 
     return {

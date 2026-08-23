@@ -1014,3 +1014,62 @@ journeys-all-passing as "nothing to do" here would contradict the evaluator's ow
 verdict, which nothing in the goal-decomposer's instructions authorizes overriding.
 **Reversible:** yes — if this reading is wrong, a later round can revert to the one-line stub; no
 code this iteration's plan commits to depends on that choice being right.
+
+## iter-26 — goal-evaluator
+
+**Ambiguity:** whether a browser capture taken EARLIER in the iteration, on the delivered build,
+still counts as this iteration's evidence after the auditor changed product code later in the same
+iteration. Methodology A.6 (durability) is written for code that is unchanged; here `micro_join.py`
+DID change after the capture. Iteration 24 met the mirror-image case (capture predates a fix and
+shows the DEFECT) and scored `partial`; nothing names this case, where the capture predates the fix
+and shows the CORRECT state.
+**We chose:** accept `TC-7-microscope-readiness.png` (11:49, pre-fix build) as J-01's fresh evidence
+and score J-01 `passing` at iter-26. Grounds, each checked rather than inherited: (a) I opened the
+image and it shows the acceptance state — Corpus Totals 2/3/1.75/0.0045/150, the `hand_assign…`
+split-provenance column, all three floors `floor_unmet`; (b) the audit's fix cannot alter what that
+image shows — it only stops an UNRESOLVED map's `0` being written to the cache; the rendered value
+in that rig is `0` either way, and the auditor's post-fix live route returned byte-identical totals
+and the same `band_touch_count {status: enumerated, count: 0}`; (c) I verified the guard myself
+(break-then-restore, md5-identical restore) so the final code is the one I am scoring, not a
+promise. The iter-24 precedent is NOT contradicted: there the only fresh picture showed wrong
+behaviour, which is a failure, not a capture question.
+**Reversible:** yes — a fresh post-fix capture of the same panel would confirm, not overturn, this;
+it is already recommended as a passenger task for the next round.
+
+## iter-26 — goal-evaluator (second)
+
+**Ambiguity:** whether J-08 may be scored `passing` at iter-26 when the element capture its own
+Definition-of-Done named (TC-8, the Scout Ledger family rows + "variants tried" line) is cut off at
+the section header and shows none of it. A.7 covers a "badly cropped" capture as a capture defect,
+but A.7's own rail says it never applies when the asserted BEHAVIOR is unmet — and a blank crop
+proves nothing either way.
+**We chose:** `passing` at iter-26 with `evidence_makeup: true`, scored from a DIFFERENT journey's
+capture of the same surface. Grounds: (a) `J-04-verify.png` (11:45, machine-driven replay on the
+post-dedup build) shows the Scout Ledger expanded with "Ledger chain verification: ok", the family
+row and "1 variants tried" — the exact content TC-8 asserts, captured this iteration by a lane that
+cannot flatter itself; (b) the auditor's live `GET /research/desk/micro/scout` returned the same
+family with `variants_tried: 1`; (c) I executed `_pilot_selectors_by_kind` myself and got byte-identical
+membership to the pre-iteration literals, so no classification outcome can have shifted; (d) the
+sections of J-08 this iteration did not touch (Walk-Forward, Validation Vault, the 26-tool contract)
+rest on durable iter-25 evidence, unchanged code. I record that citing a sibling journey's screenshot
+for J-08's `last_evidence_path` is unusual and is flagged rather than hidden; the make-up capture is
+scheduled as a passenger task, never as an iteration goal.
+**Reversible:** yes — one in-frame capture of the Scout Ledger restores an ordinary citation with no
+other change.
+
+## iter-26 — goal-evaluator (third)
+
+**Ambiguity:** whether a critical anti-goal violation that was INTRODUCED and REPAIRED inside the
+same iteration forces the REGRESSION halt. The decision tree halts on a critical violation that is
+"unresolved"; my agent rules say "do not mark GOAL_ACHIEVED if any anti-goal violation is
+unresolved" — neither text says what a same-round repair means for the verdict.
+**We chose:** record the band-touch placeholder defect as a `critical` violation with
+`resolved: true`, and do NOT halt. Grounds: the shipped tree carries the guard (I read it, and
+proved it bites by breaking and restoring it, md5-identical); a regression test pins it; the defect
+never reached the operator's store (`apps/backend/.data/micro_band_touch_cache.db` does not exist and
+the store-scope guard recorded 11,395 files unchanged); and halting for human review would ask the
+owner to adjudicate something already fixed and independently re-verified. The entry is written at
+CRITICAL severity, not softened to minor, precisely so the era's record shows what the delivered
+build contained and which lane caught it.
+**Reversible:** yes — if a later round finds the guard incomplete (e.g. another producing input that
+can be absent), the entry can be reopened without disturbing any journey status.

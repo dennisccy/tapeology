@@ -1,40 +1,40 @@
 # Iteration State — rapid-microscope
 
-**After iteration:** 25 · **Date:** 2026-08-23 · **Verdict:** ESCALATE
+**After iteration:** 26 · **Date:** 2026-08-23 · **Verdict:** CONTINUE
 
 ## Journeys
 
-**10 passing (J-01..J-10)** · 0 partial/failing/unknown. J-06 closed (fresh Vault photograph +
-expose-flip probe). All iter-25-stamped except J-07 (iter-24; no golden by design, diff-durable).
+**10 passing (J-01..J-10)** · 0 failing/partial/unknown. iter-26-stamped but J-07 (iter-24, no
+golden by design). J-08 has `evidence_makeup` — TC-8's crop missed the Scout Ledger rows.
 
 ## Active blockers
 
-- **Era NOT certifiable while 8 minor anti-goal items stay open** (0 critical). Verbatim text + evidence: `state/journey-history.json` → `anti_goal_violations` idx 17, 21, 29, 35, 37, 39, 44, 45.
-- **Golden coverage (dev).** Replay lane drove 8/9 — it is scoped to Required-still-passing, which
-  EXCLUDES the target journey, so `J-06.json`'s new Vault assertion has only run dev-locally. Drive
-  all nine in ONE recorded run (3rd round with this finding).
-- **Desk readiness ~22s on the real store (dev).** `micro_routes.py:108` → `micro_join.py:639-643`,
-  no cache. Fix = durable per-dataset touch count keyed on (dataset checksum, resolver map key),
-  publishing ONLY a resolved answer, never "none". The one item the operator actually feels.
-- **Duplicated pilot-selector frozensets (dev).** `micro_routes.py:284-287` restates `scout.py:1684-1689`'s `_PILOT_GRID_SELECTORS`. One line: derive, don't restate.
-- **Referee disclosure + guard never built (dev).** Owner ruled r5 pt 7 (KEEP THE FREEZE, DISCLOSE) 2026-08-18; freeze holds (6/6 hashes re-checked iter-25), the disclosure does not exist.
-- **Owner-owned:** chain-ledger identity commitment — its "minor" grounds EXPIRED at iter-23 (store
-  now holds 21 sealed shards; `micro_chain_ledger.py:184-190` still verifies a DELETED ledger as
-  clean; r8 forbids designing it ad hoc). Passenger: `desk_micro_readiness` MCP times out on the
-  real store (10s vs ~13.5s); money floor; the ~150-symbol-day gate reads unmet at 80 (passing).
+- **Era NOT certifiable: 7 minor anti-goal items open** (0 critical; the iter-26 critical was fixed
+  in-round). Verbatim text: `state/journey-history.json` → `anti_goal_violations`.
+- **Suite unrunnable / non-hermetic (dev) — NEW, root cause of this round's damage. DO FIRST.**
+  `test_micro_readiness.py:456-471` + `test_micro_join.py:951,975` walk the real ~26 GB
+  `.data/datasets` cold every run; ONE file did not finish in 520s → starved the backend mid-round
+  → 6 browser checks + demo came back empty, QA's log dead at 59% yet recording `EXIT_CODE=0`.
+  Fix: durable reused cache path or corpus cap.
+- **2 make-up captures owed (dev, passenger, NEVER a goal):** Desk readiness figures; Scout Ledger family row + "variants tried" line IN FRAME.
+- **Referee disclosure + guard never built (dev).** Owner ruled r5 pt 7 (KEEP THE FREEZE, DISCLOSE)
+  2026-08-18; freeze holds (6/6 hashes re-checked). Largest non-owner job left.
+- **Framework-owned, NOT product (ask owner if these still count):** QA certifies unchecked work (4th time); `closure_gate.py` ignores the browser verdict;
+  `replay-lane.sh:269` can never run a round's own Target goldens (9/9 unreachable, 7/7 ceiling).
+- **Owner-owned, blocking nothing:** chain-ledger identity commitment (r8); judge's money floor.
 
 ## Last 2 verdicts
 
-- iter 25: ESCALATE — J-06 green; refused GOAL_ACHIEVED on 8 open minor items, one of which lost
-  the factual premise its severity rested on.
-- iter 24: CONTINUE — seal-time leak closed, but the round shipped a wrong-date Vault cell, fixed
-  and never re-photographed → J-06 partial.
+- iter 26: CONTINUE — 2 fixes landed and closed 2 open items, but the delivered cache would have
+  served a permanent wrong `0`; the auditor caught+fixed it (12th catch) and I re-proved it.
+- iter 25: ESCALATE — J-06 green; refused GOAL_ACHIEVED on open minor items.
 
 ## Do not redo
 
-- **J-06 is DONE** (`reports/qa/goal-rapid-microscope-iter-25-evidence/UT-J-06-result.png`). Do not re-shoot.
-- **Keep the iter-25 sealed fixture:** `seed_micro_vault_iter25_sealed_fixture.py` + launcher wire-up + `test_vault.py` TC-1/TC-8 (proven non-vacuous).
-- **`J-08.json` step 3 / `J-10.json` step 12 assert `"variants tried"`** (grep-unique, order-independent) — do not revert.
-- **Do NOT re-record tape, expose/assign any sealed shard, or run J-09's studies on the real corpus;** `recording-runs.json` stays byte-untouched.
-- **Readiness serving `80` (whole pool), not `21`, is CORRECT** (r5 anti-subtraction); **J-07 cannot have a golden** (iter-19).
-- **`page.tsx:6807` `formatDayMarker` + `vault.py:1486-1497` coarsening are correct and pinned;** `assigned_at`/`exposed_at` keep the instant formatter (their "20:00 ET" is a real midnight-UTC fixture value, verified iter-25).
+- **Band-touch cache DONE** — `MicroBandTouchCache` + `micro_join.py:660-688`; the
+  `cacheable = resolver.resolve(...) is not None` guard is LOAD-BEARING (`test_audit_b1_…` pins it).
+- **Pilot-selector dedup DONE** — `_pilot_selectors_by_kind` filters `scout._PILOT_GRID_SELECTORS`
+  at call time; never re-add a frozen literal. **J-06's Vault golden ran (UT-J-06 PASS).**
+- **Do NOT re-record tape, expose/assign a sealed shard, run J-09's studies on the real corpus, edit any `referee_*.py` (6/6 re-verified), or move fingerprint `08e471b10130e1e2`.**
+- **`J-08.json` step 3 / `J-10.json` step 12 assert `"variants tried"`; J-07 cannot have a golden**
+  (iter-19); readiness serving `80` (whole pool) not `21` is CORRECT (r5 anti-subtraction).

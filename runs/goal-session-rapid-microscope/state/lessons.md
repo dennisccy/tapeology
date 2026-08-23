@@ -422,3 +422,38 @@ finding (iter-24 T2, iter-25 reviewer MINOR #1). Either the round after must re-
 the lane needs the target journey added.
 **Applies to:** any iteration whose Definition-of-Done asserts a stored `journey-scripts/J-XX.json`
 passed via `demo_runner.py --mode verify`, where J-XX is that iteration's own target journey.
+
+## iter-26 — 2026-08-23T14:40:00Z
+
+**Verdict:** CONTINUE
+**Lesson:** A cache key that names a REQUEST rather than an ANSWER silently collides "answer
+absent" with "answer present": `BandMapResolver.map_key(symbol, epoch)` is (symbol, basis day,
+store signature, config hash), so an unresolved band map's honest `0` was published under the very
+key the operator's later tradability warm publishes under — a permanent wrong `0` on
+`/desk`. The rule that falls out: only ever cache a value whose PRODUCING INPUT was actually
+present (`micro_join.py:666-687`, `cacheable = resolver.resolve(...) is not None`), and check
+whether a new cache is the first in its family to have a second, mutable input — the
+`MicroReadinessCache` precedent it was copied from has only one (immutable dataset events), which
+is exactly why the copy looked safe. Second, independent lesson from the same round: a delivered
+test that ASSERTS the defect (`assert lookup(...) == 0`) is why both the reviewer and the QA lane
+saw green — when reviewing a new cache, read what its invalidation test asserts, not just that it
+passes.
+**Applies to:** any iteration adding a durable cache in `apps/backend/app/research/` (especially
+one keyed on a resolver/map/store identity rather than pure content), and any reviewer/auditor pass
+over a new `*Cache` class.
+
+## iter-26 — 2026-08-23T14:40:00Z (second)
+
+**Verdict:** CONTINUE
+**Lesson:** Test fixtures that read the operator's real `.data` store are a slow-acting
+infrastructure bomb: `tests/test_micro_readiness.py:456-471`'s module-scoped `real_readiness`
+fixture walks `CONFIG.dataset_dir` from a cold cache every run, and that corpus grew ~0.92 GB →
+~26 GB during the era. Consequence measured this round: one test FILE would not finish in 520s,
+the QA lane's suite log died at 59% (and still recorded `EXIT_CODE=0`), the CPU starvation almost
+certainly killed the backend mid-round, and six browser checks plus the demo capture came back as
+empty "Backend unreachable" shells while every prose report still read PASS. Any lane's "full suite
+green" claim in this repo is now unverifiable until those fixtures get a durable cache path or a
+corpus cap.
+**Applies to:** any iteration touching `apps/backend/tests/test_micro_*.py`, any lane asserting a
+full-suite result, and any round whose browser evidence goes missing without an obvious cause —
+check for a stalled pytest pinning the CPU before blaming the browser rig.

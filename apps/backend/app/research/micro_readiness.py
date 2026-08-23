@@ -91,6 +91,8 @@ __all__ = [
     "EXPOSURE_STATE_EXPLORATORY",
     "MicroReadinessCache",
     "resolve_micro_readiness_cache_db_path",
+    "MicroBandTouchCache",
+    "resolve_micro_band_touch_cache_db_path",
     "build_readiness",
 ]
 
@@ -290,6 +292,111 @@ class MicroReadinessCache:
             pass
 
 
+# --- the band-touch count cache (iter-26): the SAME durable-cache contract as MicroReadinessCache
+# above, applied to `micro_join.enumerate_band_touches`'s per-dataset touch count instead of
+# `fallback_frac` -- that walk over every record's own event stream is the ~22s-and-growing
+# uncached cost `joinable_corpus_counts` pays on every warm GET once a resolver is supplied
+# (`micro_join.py`'s own `enumerate_band_touches` docstring: "the expensive event load"). Keyed on
+# the COMPOSITE `(dataset checksum, resolver.map_key(symbol, window_start_epoch))` -- never the
+# checksum alone -- because a dataset's own bytes never change (immutability, rail 9) but the BAND
+# MAP a resolver serves for it can (a re-warmed tradability cache under a new store signature), and
+# a stale hit under the old map would silently under/over-count touches against bands that no
+# longer describe that basis day. Deliberately its own env var, distinct from every sibling durable
+# cache's (the `MicroReadinessCache` docstring above: "the TAPEOLOGY_MICRO_* family").
+_BAND_TOUCH_CACHE_DB_ENV = "TAPEOLOGY_MICRO_BAND_TOUCH_CACHE_DB"
+
+_BAND_TOUCH_SCHEMA = """
+CREATE TABLE IF NOT EXISTS micro_band_touch_cache (
+    checksum     TEXT NOT NULL,
+    map_key      TEXT NOT NULL,
+    touch_count  INTEGER NOT NULL,
+    created_utc  TEXT NOT NULL,
+    PRIMARY KEY (checksum, map_key)
+)
+"""
+
+
+def resolve_micro_band_touch_cache_db_path(dataset_dir: str) -> str:
+    """The band-touch cache DB path resolution policy -- the IDENTICAL env-else-sibling shape
+    ``resolve_micro_readiness_cache_db_path`` above uses, under its own env var:
+    ``TAPEOLOGY_MICRO_BAND_TOUCH_CACHE_DB`` if set, else ``micro_band_touch_cache.db`` co-located as
+    a SIBLING of the caller's dataset-store directory."""
+    override = os.environ.get(_BAND_TOUCH_CACHE_DB_ENV)
+    if override:
+        return override
+    return str(Path(dataset_dir).parent / "micro_band_touch_cache.db")
+
+
+class MicroBandTouchCache:
+    """One durable SQLite row per ``(dataset checksum, resolver.map_key(symbol,
+    window_start_epoch))`` composite key -> its enumerated band-touch COUNT --
+    ``MicroReadinessCache``'s own contract (this module's docstring, above class), applied to a
+    per-record touch count instead of a per-shard ``fallback_frac``. A miss NEVER computes --
+    ``lookup`` has no ``compute_fn``; a corrupted/unreadable DB is a full miss, never a crash; a
+    ``publish`` failure is swallowed, never propagated -- the caller is still holding its own
+    freshly-computed count. Publishes ONLY a resolved count, never a placeholder (goal.md IN SCOPE
+    item 1)."""
+
+    def __init__(self, db_path: str) -> None:
+        self._db_path = str(db_path)
+        if self._db_path != ":memory:":
+            Path(self._db_path).parent.mkdir(parents=True, exist_ok=True)
+        try:
+            conn = self._connect()
+            try:
+                with conn:
+                    conn.execute(_BAND_TOUCH_SCHEMA)
+            finally:
+                conn.close()
+        except sqlite3.Error:
+            pass  # self-heals: every subsequent lookup/publish independently re-attempts
+
+    @property
+    def db_path(self) -> str:
+        return self._db_path
+
+    def _connect(self) -> sqlite3.Connection:
+        """A FRESH, short-lived connection per call (the ``MicroReadinessCache._connect``/
+        ``TradabilityCache._connect`` precedent)."""
+        conn = sqlite3.connect(
+            self._db_path, check_same_thread=False, timeout=_BUSY_TIMEOUT_MS / 1000.0
+        )
+        conn.row_factory = sqlite3.Row
+        if self._db_path != ":memory:":
+            conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute(f"PRAGMA busy_timeout={_BUSY_TIMEOUT_MS}")
+        return conn
+
+    def lookup(self, checksum: str, map_key: str) -> int | None:
+        try:
+            conn = self._connect()
+            try:
+                row = conn.execute(
+                    "SELECT touch_count FROM micro_band_touch_cache WHERE checksum=? AND map_key=?",
+                    (checksum, map_key),
+                ).fetchone()
+            finally:
+                conn.close()
+        except sqlite3.Error:
+            return None
+        return None if row is None else int(row["touch_count"])
+
+    def publish(self, checksum: str, map_key: str, touch_count: int) -> None:
+        try:
+            conn = self._connect()
+            try:
+                with conn:
+                    conn.execute(
+                        "INSERT OR REPLACE INTO micro_band_touch_cache "
+                        "(checksum, map_key, touch_count, created_utc) VALUES (?,?,?,?)",
+                        (checksum, map_key, touch_count, _iso_utc_now()),
+                    )
+            finally:
+                conn.close()
+        except sqlite3.Error:
+            pass
+
+
 # --- the whole readiness aggregation -----------------------------------------------------------------
 
 
@@ -300,6 +407,7 @@ def build_readiness(
     dataset_dir: str,
     playbook_store=None,
     resolver: "BandMapResolver | None" = None,
+    band_touch_cache: "MicroBandTouchCache | None" = None,
 ) -> dict:
     """The whole ``GET /research/desk/micro/readiness`` body -- a pure aggregation over
     ``DatasetStore.list()``'s already-verified records (module docstring). Deterministic and
@@ -320,6 +428,12 @@ def build_readiness(
     real enumerated int (``micro_join.py``'s own docstring). Only consulted when ``playbook_store``
     is also given -- the ``playbook_store is None`` branch below already answers "nothing was
     checked" honestly for BOTH counts at once, never a mixed state.
+
+    ``band_touch_cache`` (iter-26, ``MicroBandTouchCache`` above) is likewise OPTIONAL, passed
+    straight through to ``micro_join.joinable_corpus_counts`` -- omitting it (every pre-iter-26
+    caller) keeps today's uncached per-record ``enumerate_band_touches`` walk byte-identical;
+    supplying one only changes warm-path LATENCY, never the served ``band_touch_count`` value
+    (goal.md IN SCOPE item 1).
 
     **Sealed-tranche AGGREGATES only (iter-9, spec section 7.5 point 4, r3; widened iteration 11,
     point 7, r5).** A dataset that is part of an UNRESOLVED registered-universe pool gets NO
@@ -490,7 +604,9 @@ def build_readiness(
             "withheld_excluded": 0,
         }
     else:
-        joinable_corpus = joinable_corpus_counts(store, playbook_store, resolver=resolver)
+        joinable_corpus = joinable_corpus_counts(
+            store, playbook_store, resolver=resolver, band_touch_cache=band_touch_cache
+        )
 
     sealed_tranche = {
         "shard_count": sealed_shard_count,

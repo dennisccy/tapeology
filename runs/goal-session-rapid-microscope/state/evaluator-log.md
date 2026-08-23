@@ -1798,3 +1798,93 @@ named wrong-data risk (a cache that could remember "no touches" and serve you a 
 touches a deliberately frozen file. In this era the independent checker has caught something after
 both the review and the quality check passed the same work eleven times. If you read this differently
 from me, tell the next round to run light — nothing else in this evaluation changes.
+
+## Iteration 26 — goal-rapid-microscope-iter-26
+
+**Date:** 2026-08-23T14:40:00Z
+**Verdict:** CONTINUE
+**Depth dispatched:** full (mandatory — my own round-25 ESCALATE granted it outright)
+**Journey deltas:**
+- Newly passing: none — all ten were already green when the round began.
+- Newly failing: none. Regressed: none.
+- Re-verified this round by their own stored checks, all green, driven by the machine: J-02,
+  J-03, J-04, J-05, J-06, J-09, J-10 — seven, including **J-06's own check**, which closes a
+  complaint this session has made three rounds running.
+- J-01 and J-08 (this round's two Target journeys): kept green, but NOT by the lane that owns
+  them — every on-screen check it ran was skipped against a dead backend. I scored them from
+  pictures taken earlier in the round while services were alive, and from evidence I re-obtained
+  myself. J-08's own picture is unusable and a replacement is owed.
+- NOT re-tested: J-07 "Graduation" — no stored check by an earlier ruling, and nothing it depends
+  on changed (its three modules are byte-unchanged). Keeps its green status and its round-24 stamp.
+- Anti-goal violations: **one critical, introduced and repaired inside this same round** (see
+  below); one new minor opened by me; two older minor items CLOSED, both proved closed by my own
+  hands. Seven stay open, two of them yours.
+
+**Reasoning:** I did not take a single lane's word for the round's main claim. The job was to stop
+the Desk's readiness panel re-counting every recording's wall touches on every page load by
+remembering the answer. The delivered version remembered the WRONG answer: it wrote down "no wall
+touches" from a moment when no wall map existed yet, and it filed that under a name the real map
+later reuses — so once you warmed a map, the panel would have shown you zero forever. The code
+reviewer passed it. The quality lane passed it. One of the round's own new tests actually wrote
+the defect down as the expected result, which is exactly why both lanes saw green. The independent
+checker found it, proved it live, and repaired it. I did not take the repair on trust either: I
+put the defect back by hand, watched precisely the two tests go red with the exact wrong-number
+signature, restored the file byte-identical (same md5 before and after), and re-ran eleven tests
+green. This is the twelfth time in this era the checker has caught something after both earlier
+lanes passed the same work, and the first time it caught a wrong number rather than a missing
+proof. Nothing reached your own store: the file that would hold the bad memory does not exist
+there, and the guard that watches your store recorded 11,395 files identical before and after.
+
+The second job — collapsing the duplicated pilot-study list — is genuinely done, and I checked it
+by running it rather than by reading the diff: the one surviving list produces exactly the two sets
+the two hand-written copies used to hold, so no study can have been classified differently. That
+closes an open complaint from round 22. The first job closes the round-21 complaint too, and it
+closes it to the letter, because that complaint had written its own closing condition: "cached on
+(dataset checksum, resolver map key), published only on a resolved map" — the second half of which
+existed only after the checker's repair. I re-derived the frozen things by hand as well: the
+settings fingerprint prints 08e471b10130e1e2, all six judge files hash byte-identical to the era's
+opening record, your real vault still holds 21 recordings, all sealed, none assigned, none
+revealed, untouched since 21 August.
+
+Two findings are mine and decide how I scored the round. First, the quality lane again certified
+what it had not checked — the fourth time this era. It ticked both on-screen checks as passed; I
+opened both pictures. One is real and shows the figures. The other is the same page one scroll
+further on, cut off at the section heading, with no family row and no "variants tried" line
+anywhere in it — nothing the claim rests on. That lane's own test log stops dead at 59% with no
+result line at all, yet ends with "exit code 0", and its report labels the numbers it quotes as
+coming "from dev handoff documentation". Second, and this is the root cause of most of the round's
+damage: the tests read your real 26 GB store from scratch on every run. I measured it myself —
+ONE test file did not finish in nine minutes. That is almost certainly what starved the backend
+mid-round, which is why six on-screen checks and the demo capture came back empty, and it is why
+no lane can honestly claim "all tests pass" any more. I opened that as a new complaint.
+
+I want one judgement on the record because it decides the verdict rather than the scoring. All ten
+journeys are green and the structure check passed, so the only thing standing between this era and
+"finished" is the list of open complaints — and three of the seven are not about your product at
+all. They are about the dev chain's own honesty: a quality lane that certifies unchecked work, a
+closing gate that never reads the browser lane's verdict, and a replay harness that structurally
+cannot run a round's own target journeys' stored checks. Those live in framework files this era's
+own scope rules hand to you, not to the machine. If they stay on the list, the era can never
+certify itself. That is your call to make, and I have written it into the next planner's digest as
+a question rather than as work.
+
+**Next-step recommendation:** One more round, small, in this order. (1) Make the test suite
+finishable — give the fixtures that read your real 26 GB store a saved, reused cache or a size cap;
+this is the root cause of the dead backend, the blank pictures and the unverifiable "all tests
+pass". (2) Re-take the two photographs with services healthy: the Desk readiness figures, and the
+Scout Ledger's family row with its "variants tried" line actually in frame. (3) Build the referee
+disclosure and its guard — your own ruling of 18 August, the biggest job left that needs nobody's
+permission, open since round 9. Still do not record more real tape, do not reveal or assign any
+sealed recording, and do not run the three studies against your real recorded corpus. Two items
+stay yours and block nothing: the chain-ledger identity question and the sealed judge's money floor.
+
+I am writing "continue", not "escalate", and I want the reason on the record because the last two
+rounds went the other way. This round overran its budget six-fold (3,600s allowed, 21,964s used),
+and I have read the engine's rule myself: a budget overrun plus "continue" sends the next round out
+light, with no independent checker, while "escalate" grants the heavy round outright. So I know
+exactly what my verdict costs. I am writing it anyway, because my own rules for "escalate" are
+about a LIGHT round turning something up, and this was a heavy one — claiming it here would be
+inventing a clause, which is the same governor bypass round 24 correctly refused. What I will do
+instead is say plainly what I would prefer: the checker is the lane that caught this round's wrong
+number after two other lanes passed it, and the next round edits test code that reads your real
+store. If you want it present, the switch is yours to set: CHAIN_REQUIRE_FULL_DEPTH.

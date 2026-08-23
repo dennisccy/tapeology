@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import hashlib
 import inspect
+import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -31,6 +32,7 @@ from app.providers.base import QuoteEvent, Side, TradeEvent
 from app.research import desk_playbook as desk_playbook_module
 from app.research import desk_playbook_context as desk_playbook_context_module
 from app.research import micro_join
+from app.research import micro_readiness as micro_readiness_module
 from app.research import vault
 from app.research.datasets import DatasetStore, parse_utc_epoch
 from app.research.desk_playbook import PlaybookStore, playbook_parameters
@@ -544,6 +546,169 @@ def test_tc9_joinable_corpus_counts_excludes_a_withheld_shard_from_band_touch_co
 
     assert counts["band_touch_count"] == {"status": micro_join.BAND_TOUCH_STATUS_ENUMERATED, "count": 0}
     assert counts["withheld_excluded"] == 1
+
+
+# --- iter-26: the band-touch cache wired into joinable_corpus_counts (TC-2/TC-3/TC-4) ----------------
+
+
+class _StubBarStore:
+    """A ``BandMapResolver`` dependency stub whose ``list()`` output is fully caller-controlled --
+    lets a test construct TWO resolvers with genuinely different store signatures (hence genuinely
+    different ``map_key``s) without depending on ``BandMapResolver``'s own internal signature
+    formula (``_EmptyBarStore`` above is the degenerate, always-empty special case of this)."""
+
+    def __init__(self, records: list[dict]):
+        self.root = "/tmp/does-not-exist-micro-join-test"
+        self._records = records
+
+    def list(self):
+        return list(self._records), []
+
+
+def test_tc2_a_cold_lookup_computes_and_publishes_exactly_one_row_for_the_composite_key(tmp_path):
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    meta = _plant_touch_timeline(dataset_store)
+    playbook_store = PlaybookStore(tmp_path / "playbook")
+    resolver = _resolver(tmp_path)
+    window_start_epoch = parse_utc_epoch(meta["window_start_utc"])
+    map_key = resolver.map_key("TQE", window_start_epoch)
+    resolver._cache.publish(map_key, {"basis_day": "2026-06-08", "bands": [_TOUCH_BAND]})
+    band_touch_cache = micro_readiness_module.MicroBandTouchCache(str(tmp_path / "band_touch_cache.db"))
+    assert band_touch_cache.lookup(meta["checksum"], map_key) is None  # cold
+
+    counts = micro_join.joinable_corpus_counts(
+        dataset_store, playbook_store, resolver=resolver, band_touch_cache=band_touch_cache
+    )
+
+    # The hand-computed touch count for this fixture's known band map (the SAME 3 touches
+    # ``test_tc9_joinable_corpus_counts_materializes_band_touch_count_with_a_resolver`` above
+    # asserts uncached).
+    assert counts["band_touch_count"] == {"status": micro_join.BAND_TOUCH_STATUS_ENUMERATED, "count": 3}
+    assert band_touch_cache.lookup(meta["checksum"], map_key) == 3
+
+    conn = sqlite3.connect(band_touch_cache.db_path)
+    try:
+        row_count = conn.execute("SELECT COUNT(*) FROM micro_band_touch_cache").fetchone()[0]
+    finally:
+        conn.close()
+    assert row_count == 1  # exactly one row for this single-dataset corpus
+
+
+def test_tc3_a_warm_second_call_skips_load_events_and_serves_the_unchanged_count(tmp_path, monkeypatch):
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    meta = _plant_touch_timeline(dataset_store)
+    playbook_store = PlaybookStore(tmp_path / "playbook")
+    resolver = _resolver(tmp_path)
+    window_start_epoch = parse_utc_epoch(meta["window_start_utc"])
+    resolver._cache.publish(
+        resolver.map_key("TQE", window_start_epoch), {"basis_day": "2026-06-08", "bands": [_TOUCH_BAND]}
+    )
+    band_touch_cache = micro_readiness_module.MicroBandTouchCache(str(tmp_path / "band_touch_cache.db"))
+
+    original_load_events = dataset_store.load_events
+    call_count = {"n": 0}
+
+    def _spy_load_events(dataset_id):
+        call_count["n"] += 1
+        return original_load_events(dataset_id)
+
+    monkeypatch.setattr(dataset_store, "load_events", _spy_load_events)
+
+    first = micro_join.joinable_corpus_counts(
+        dataset_store, playbook_store, resolver=resolver, band_touch_cache=band_touch_cache
+    )
+    assert call_count["n"] == 1
+    assert first["band_touch_count"] == {"status": micro_join.BAND_TOUCH_STATUS_ENUMERATED, "count": 3}
+
+    second = micro_join.joinable_corpus_counts(
+        dataset_store, playbook_store, resolver=resolver, band_touch_cache=band_touch_cache
+    )
+    assert call_count["n"] == 1  # warm -- no second event read
+    assert second["band_touch_count"] == first["band_touch_count"]
+
+
+def test_tc4_a_re_warmed_map_key_is_a_genuine_miss_never_a_stale_serve(tmp_path):
+    """A dataset's band map re-warmed under a NEW ``resolver.map_key`` -- a genuinely different
+    bar-store signature, the same mechanism a real tradability re-warm produces -- is never served
+    the OLD key's stale cached count; the old key's own row stays intact and untouched."""
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    meta = _plant_touch_timeline(dataset_store)
+    playbook_store = PlaybookStore(tmp_path / "playbook")
+    shared_trad_cache = TradabilityCache(str(tmp_path / "trad.db"))
+    band_touch_cache = micro_readiness_module.MicroBandTouchCache(str(tmp_path / "band_touch_cache.db"))
+    window_start_epoch = parse_utc_epoch(meta["window_start_utc"])
+
+    resolver_v1 = BandMapResolver(_StubBarStore([]), CONFIG, cache=shared_trad_cache)
+    map_key_v1 = resolver_v1.map_key("TQE", window_start_epoch)
+    resolver_v1._cache.publish(map_key_v1, {"basis_day": "2026-06-08", "bands": [_TOUCH_BAND]})
+
+    first = micro_join.joinable_corpus_counts(
+        dataset_store, playbook_store, resolver=resolver_v1, band_touch_cache=band_touch_cache
+    )
+    assert first["band_touch_count"] == {"status": micro_join.BAND_TOUCH_STATUS_ENUMERATED, "count": 3}
+    assert band_touch_cache.lookup(meta["checksum"], map_key_v1) == 3
+
+    # Re-warm: a genuinely different bar-store signature for the SAME symbol -> a genuinely
+    # different map_key (never the checksum alone -- the dataset's own bytes never changed).
+    resolver_v2 = BandMapResolver(
+        _StubBarStore([{"symbol": "TQE", "timeframe": "1d", "id": "bar-1", "checksum": "c1"}]),
+        CONFIG, cache=shared_trad_cache,
+    )
+    map_key_v2 = resolver_v2.map_key("TQE", window_start_epoch)
+    assert map_key_v2 != map_key_v1
+    assert band_touch_cache.lookup(meta["checksum"], map_key_v2) is None  # a genuine miss
+
+    # Nothing published under the new key -- an honest re-resolve (never a fabricated wall).
+    second = micro_join.joinable_corpus_counts(
+        dataset_store, playbook_store, resolver=resolver_v2, band_touch_cache=band_touch_cache
+    )
+
+    assert second["band_touch_count"] == {"status": micro_join.BAND_TOUCH_STATUS_ENUMERATED, "count": 0}
+    # The new key resolves NO map, so its honest 0 is never published (iter-26 audit B1 below):
+    # `map_key` names the map REQUEST, not its answer, and the operator warm that later resolves
+    # it publishes under this SAME key.
+    assert band_touch_cache.lookup(meta["checksum"], map_key_v2) is None
+    assert band_touch_cache.lookup(meta["checksum"], map_key_v1) == 3  # untouched, old key intact
+
+
+def test_audit_b1_an_unresolved_band_map_never_publishes_a_cached_zero_that_survives_a_warm(tmp_path):
+    """iter-26 audit B1. ``resolver.map_key`` names the map REQUEST (symbol, basis day, store
+    signature, config hash) -- NOT its answer -- so the key an UNRESOLVED map produces is
+    byte-identical to the key the operator's own later tradability warm publishes under. Caching
+    the honest ``0`` an unresolved map yields would therefore serve that ``0`` forever once the map
+    exists (the phase spec's own "publishing ONLY a resolved count, never a placeholder" rail).
+    Only a RESOLVED map's count may enter the cache."""
+    dataset_store = DatasetStore(tmp_path / "datasets")
+    meta = _plant_touch_timeline(dataset_store)
+    playbook_store = PlaybookStore(tmp_path / "playbook")
+    shared_trad_cache = TradabilityCache(str(tmp_path / "trad.db"))
+    band_touch_cache = micro_readiness_module.MicroBandTouchCache(str(tmp_path / "band_touch_cache.db"))
+    window_start_epoch = parse_utc_epoch(meta["window_start_utc"])
+
+    # 1) A cold GET while no tradability map exists yet -- the common case (`enumerate_band_touches`'
+    #    own docstring: "most symbol/dates have no operator-warmed tradability map").
+    cold = micro_join.joinable_corpus_counts(
+        dataset_store, playbook_store,
+        resolver=BandMapResolver(_EmptyBarStore(), CONFIG, cache=shared_trad_cache),
+        band_touch_cache=band_touch_cache,
+    )
+    assert cold["band_touch_count"] == {"status": micro_join.BAND_TOUCH_STATUS_ENUMERATED, "count": 0}
+    map_key = BandMapResolver(_EmptyBarStore(), CONFIG, cache=shared_trad_cache).map_key(
+        "TQE", window_start_epoch
+    )
+    assert band_touch_cache.lookup(meta["checksum"], map_key) is None  # nothing published
+
+    # 2) The operator warms that very map -- the SAME key, unchanged bars, unchanged config.
+    shared_trad_cache.publish(map_key, {"basis_day": "2026-06-08", "bands": [_TOUCH_BAND]})
+
+    # 3) The next GET must serve the REAL count, never the earlier unresolved run's 0.
+    warm = micro_join.joinable_corpus_counts(
+        dataset_store, playbook_store,
+        resolver=BandMapResolver(_EmptyBarStore(), CONFIG, cache=shared_trad_cache),
+        band_touch_cache=band_touch_cache,
+    )
+    assert warm["band_touch_count"] == {"status": micro_join.BAND_TOUCH_STATUS_ENUMERATED, "count": 3}
+    assert band_touch_cache.lookup(meta["checksum"], map_key) == 3  # now a genuinely resolved count
 
 
 # --- joinable_corpus_counts (micro_readiness.py's new field; TC-5's own computation) -----------------

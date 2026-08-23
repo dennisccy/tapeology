@@ -10,6 +10,7 @@ codebase uses throughout (``test_micro_features.py``'s own precedent)."""
 
 from __future__ import annotations
 
+import inspect
 import json
 import shutil
 import tempfile
@@ -28,6 +29,7 @@ from app.research import scout, scout_ledger
 from app.research.datasets import DatasetStore, parse_utc_epoch
 from app.research.desk_playbook import PlaybookStore, playbook_parameters
 from app.research.desk_playbook_context import BandMapResolver
+from app.research import micro_routes
 from app.research.micro_routes import (
     get_scout_compute_manager,
     get_scout_ledger_dir,
@@ -1869,3 +1871,60 @@ def test_iter22_cli_range_wall_pilot_grid_produces_the_screen_and_floor_check_ro
     assert screen_row["structure_context"]["kind"] == "band_touch"
     assert wf_row["stage"] == "walkforward_floor_check"
     assert wf_row["candidate_id"] == screen_row["candidate_id"]
+
+
+# --- iter-26 TC-6: the pilot selector->kind table is derived, not restated -------------------------
+#
+# micro_routes.py used to hand-restate scout._PILOT_GRID_SELECTORS as two separate hand-written
+# frozensets (_BAND_TOUCH_PILOT_SELECTORS / _PLAYBOOK_SIGNAL_PILOT_SELECTORS). It now derives both
+# by filtering the ONE canonical table at call time via micro_routes._pilot_selectors_by_kind
+# (single source of truth, rail 6).
+
+
+def test_tc6a_derived_selector_sets_equal_todays_known_selector_sets():
+    """(a) the derived frozensets equal today's known selector sets."""
+    assert micro_routes._pilot_selectors_by_kind("band_touch") == {
+        scout.GRID_SELECTOR_RANGE_WALL_PILOT,
+        scout.GRID_SELECTOR_DELTA_DIVERGENCE_PILOT,
+    }
+    assert micro_routes._pilot_selectors_by_kind("playbook_signal") == {
+        scout.GRID_SELECTOR_CAPITULATION_PILOT,
+    }
+
+
+def test_tc6b_a_synthetic_third_entry_in_a_local_copy_grows_the_derived_set():
+    """(b) a synthetic third `kind="band_touch"` entry, added to a LOCAL COPY of
+    ``scout._PILOT_GRID_SELECTORS`` (never the real module table -- this test never monkeypatches
+    ``scout`` itself), is reflected in the derived frozenset when that copy is passed explicitly as
+    ``source`` -- proving genuine runtime derivation, not a frozen-at-import constant that only
+    happens to equal today's values."""
+    local_copy = dict(scout._PILOT_GRID_SELECTORS)
+    local_copy["synthetic_band_touch_pilot"] = ("synthetic_study", "band_touch")
+
+    derived = micro_routes._pilot_selectors_by_kind("band_touch", source=local_copy)
+
+    assert derived == {
+        scout.GRID_SELECTOR_RANGE_WALL_PILOT,
+        scout.GRID_SELECTOR_DELTA_DIVERGENCE_PILOT,
+        "synthetic_band_touch_pilot",
+    }
+    # The REAL route path (no explicit source) is untouched by the local copy above -- it still
+    # reads only the two genuine band_touch selectors.
+    assert micro_routes._pilot_selectors_by_kind("band_touch") == {
+        scout.GRID_SELECTOR_RANGE_WALL_PILOT,
+        scout.GRID_SELECTOR_DELTA_DIVERGENCE_PILOT,
+    }
+
+
+def test_tc6c_micro_routes_has_no_second_hand_written_selector_literal():
+    """(c) a source-scan guard: ``micro_routes.py`` never hardcodes a second copy of any pilot
+    selector's own string id -- the ONLY legitimate way this route module may know a selector's
+    identity is by reading it, at runtime, off the one canonical
+    ``scout._PILOT_GRID_SELECTORS`` table (via ``_pilot_selectors_by_kind``), never by restating
+    its literal value."""
+    source = Path(inspect.getsourcefile(micro_routes)).read_text()
+    for grid_selector_value in scout._PILOT_GRID_SELECTORS:
+        assert grid_selector_value not in source, (
+            f"micro_routes.py hand-restates the selector literal {grid_selector_value!r} -- it "
+            "must only ever be read off scout._PILOT_GRID_SELECTORS"
+        )

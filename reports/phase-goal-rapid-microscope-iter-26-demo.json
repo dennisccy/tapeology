@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-rapid-microscope-iter-26",
+  "base_url": "http://localhost:3301",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the Desk page",
+      "narration": "Navigate to the Desk page, which displays research readiness data and pilot studies.",
+      "point_out": "The 'Desk' link in the top nav is highlighted, and you see section headers below for 'Microscope Readiness' and 'Scout Ledger'.",
+      "journey": "",
+      "new": false,
+      "verified": false,
+      "section": "highlights",
+      "action": {"type": "goto", "url": "/desk"},
+      "expect": {"text": "Playbook Signals"}
+    },
+    {
+      "n": 2,
+      "title": "Expand the Microscope Readiness section",
+      "narration": "Click the Microscope Readiness section to see the corpus totals and band-touch count. This data now loads faster on repeat views thanks to internal caching.",
+      "point_out": "The section expands to show 'Corpus Totals' table with figures like distinct symbol-days, datasets, and RTH minutes. Below that is the 'Joinable corpus — band touches' value.",
+      "journey": "J-01",
+      "new": false,
+      "verified": false,
+      "section": "highlights",
+      "action": {"type": "click", "target": {"testid": "desk-section-expand-microReadiness"}}
+    },
+    {
+      "n": 3,
+      "title": "Collapse and re-expand to verify stability",
+      "narration": "Click the header again to collapse, then expand once more. The band-touch value remains identical—this confirms the caching change preserves correctness.",
+      "point_out": "The 'Joinable corpus — band touches' value is the same both times you open the section.",
+      "journey": "J-01",
+      "new": false,
+      "verified": false,
+      "section": "highlights",
+      "action": {"type": "click", "target": {"testid": "desk-section-expand-microReadiness"}}
+    },
+    {
+      "n": 4,
+      "title": "Expand Scout Ledger",
+      "narration": "Scroll down and open the Scout Ledger section to view pilot-study families and their trial variants. The selector table has been consolidated internally.",
+      "point_out": "The section shows a 'Ledger chain verification: ok' line, followed by pilot-study family blocks with headers and trial-row tables.",
+      "journey": "J-08",
+      "new": false,
+      "verified": false,
+      "section": "highlights",
+      "action": {"type": "click", "target": {"testid": "desk-section-expand-scoutLedger"}}
+    }
+  ]
+}

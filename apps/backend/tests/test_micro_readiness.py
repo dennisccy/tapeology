@@ -32,8 +32,10 @@ from app.research.micro_readiness import (
     SPLIT_PROVENANCE_HAND_ASSIGNED,
     WF_TEST_MIN_SESSIONS,
     WF_TRAIN_MIN_SESSIONS,
+    MicroBandTouchCache,
     MicroReadinessCache,
     build_readiness,
+    resolve_micro_band_touch_cache_db_path,
     resolve_micro_readiness_cache_db_path,
 )
 from app.research.bars import BarStore
@@ -41,7 +43,7 @@ from app.research.desk_playbook import PlaybookStore, playbook_parameters
 from app.research.desk_playbook_context import BandMapResolver
 from app.research.desk_routes import get_playbook_store
 from app.research.micro_join import BAND_TOUCH_STATUS_ENUMERATED, joinable_corpus_counts
-from app.research.micro_routes import get_micro_readiness_cache
+from app.research.micro_routes import get_micro_band_touch_cache, get_micro_readiness_cache
 from app.research.referee_evidence import REFEREE_TICK_GATE_SYMBOL_DAYS
 from app.research.routes import get_bar_store, get_dataset_store
 from app.research.tradability_cache import TradabilityCache, resolve_tradability_cache_db_path
@@ -91,6 +93,10 @@ def _plant_dataset(
 def client(tmp_path):
     dataset_store = DatasetStore(tmp_path / "datasets")
     cache = MicroReadinessCache(str(tmp_path / "cache.db"))
+    # iter-26: the route now also depends on the band-touch cache -- a tmp_path-scoped one, the
+    # SAME hermeticity discipline as every other override below (never the real, ambient
+    # `.data`-sibling `micro_band_touch_cache.db`).
+    band_touch_cache = MicroBandTouchCache(str(tmp_path / "band_touch_cache.db"))
     # J-03: the route now also depends on a playbook store (the joinable_corpus field) -- a
     # tmp_path-scoped, empty-by-default one, so this fixture's existing hermeticity contract is
     # unaffected (never the real, ambient .data/playbook directory).
@@ -102,12 +108,14 @@ def client(tmp_path):
     bar_store = BarStore(tmp_path / "bars")
     app.dependency_overrides[get_dataset_store] = lambda: dataset_store
     app.dependency_overrides[get_micro_readiness_cache] = lambda: cache
+    app.dependency_overrides[get_micro_band_touch_cache] = lambda: band_touch_cache
     app.dependency_overrides[get_playbook_store] = lambda: playbook_store
     app.dependency_overrides[get_bar_store] = lambda: bar_store
     with TestClient(app) as c:
         yield c, dataset_store, cache
     app.dependency_overrides.pop(get_dataset_store, None)
     app.dependency_overrides.pop(get_micro_readiness_cache, None)
+    app.dependency_overrides.pop(get_micro_band_touch_cache, None)
     app.dependency_overrides.pop(get_playbook_store, None)
     app.dependency_overrides.pop(get_bar_store, None)
 
@@ -257,6 +265,71 @@ def test_cache_survives_a_corrupted_db_file_as_a_full_miss(tmp_path):
     cache = MicroReadinessCache(str(db_path))
     assert cache.lookup("anything") is None
     cache.publish("anything", 0.5)  # swallowed, never raises
+
+
+# --- iter-26: MicroBandTouchCache -- composite-key lookup/publish round trip (TC-2/TC-4/TC-5) --------
+
+
+def test_resolve_micro_band_touch_cache_db_path_defaults_to_a_sibling_file(tmp_path):
+    assert resolve_micro_band_touch_cache_db_path(str(tmp_path / "datasets")) == str(
+        tmp_path / "micro_band_touch_cache.db"
+    )
+
+
+def test_resolve_micro_band_touch_cache_db_path_honors_the_env_override(tmp_path, monkeypatch):
+    override = str(tmp_path / "elsewhere" / "band_touch_cache.db")
+    monkeypatch.setenv("TAPEOLOGY_MICRO_BAND_TOUCH_CACHE_DB", override)
+    assert resolve_micro_band_touch_cache_db_path(str(tmp_path / "datasets")) == override
+
+
+def test_band_touch_cache_lookup_is_none_on_a_genuine_miss(tmp_path):
+    cache = MicroBandTouchCache(str(tmp_path / "band_touch_cache.db"))
+    assert cache.lookup("no-such-checksum", "no-such-map-key") is None
+
+
+def test_band_touch_cache_publish_then_lookup_round_trips(tmp_path):
+    cache = MicroBandTouchCache(str(tmp_path / "band_touch_cache.db"))
+    cache.publish("checksum-a", "map-key-a", 3)
+    assert cache.lookup("checksum-a", "map-key-a") == 3
+
+
+def test_band_touch_cache_keys_on_the_composite_never_the_checksum_alone(tmp_path):
+    """TC-4's own claim, at the class level: a genuinely different ``map_key`` under the SAME
+    checksum is a fresh miss -- the whole reason this cache is keyed on the composite
+    ``(checksum, map_key)``, never the checksum alone (a dataset's own bytes never change, but the
+    band map a resolver serves for it can)."""
+    cache = MicroBandTouchCache(str(tmp_path / "band_touch_cache.db"))
+    cache.publish("checksum-a", "map-key-old", 3)
+    assert cache.lookup("checksum-a", "map-key-new") is None
+    cache.publish("checksum-a", "map-key-new", 7)
+    assert cache.lookup("checksum-a", "map-key-old") == 3  # untouched
+    assert cache.lookup("checksum-a", "map-key-new") == 7
+
+
+def test_band_touch_cache_survives_a_corrupted_db_file_as_a_full_miss(tmp_path):
+    db_path = tmp_path / "band_touch_cache.db"
+    db_path.write_text("not a sqlite file")
+    cache = MicroBandTouchCache(str(db_path))
+    assert cache.lookup("anything", "any-key") is None
+    cache.publish("anything", "any-key", 5)  # swallowed, never raises
+
+
+def test_readiness_route_survives_a_corrupted_band_touch_cache_db_as_a_full_miss(client, tmp_path):
+    """TC-5's route-level claim: a corrupted band-touch cache DB file never turns
+    ``GET /research/desk/micro/readiness`` into a 500 -- the request still returns HTTP 200 with a
+    freshly-computed ``band_touch_count`` (mirroring ``MicroReadinessCache``'s own self-heal
+    contract, proven at the route above for ``fallback_frac``)."""
+    c, store, _cache = client
+    _plant_dataset(store, symbol="AAPL")
+    db_path = tmp_path / "band_touch_cache.db"
+    db_path.write_text("not a sqlite file")
+
+    resp = c.get("/research/desk/micro/readiness")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["joinable_corpus"]["band_touch_count"]["status"] == BAND_TOUCH_STATUS_ENUMERATED
+    assert body["joinable_corpus"]["band_touch_count"]["count"] == 0  # honest -- no band map published
 
 
 # --- TC-6: a hand-corrupted legacy dataset is surfaced, never dropped, never a crash -----------------

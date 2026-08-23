@@ -48,7 +48,13 @@ from .desk_routes import get_playbook_store, get_universe_store
 from .desk_universe import UniverseStore
 from .micro_accessor import ExposureRegistry, resolve_micro_exposure_registry_dir
 from .micro_graduation import EMPTY_LEDGER_MESSAGE, GraduationLedger, list_graduation_families, resolve_micro_graduation_dir
-from .micro_readiness import MicroReadinessCache, build_readiness, resolve_micro_readiness_cache_db_path
+from .micro_readiness import (
+    MicroBandTouchCache,
+    MicroReadinessCache,
+    build_readiness,
+    resolve_micro_band_touch_cache_db_path,
+    resolve_micro_readiness_cache_db_path,
+)
 from .micro_snapshots import (
     MicroSnapshotComputeManager,
     list_snapshot_meta,
@@ -57,11 +63,9 @@ from .micro_snapshots import (
 )
 from .routes import get_bar_index, get_bar_store, get_dataset_store, get_registry, get_study_market_adapter
 from .scout import (
-    GRID_SELECTOR_CAPITULATION_PILOT,
-    GRID_SELECTOR_DELTA_DIVERGENCE_PILOT,
-    GRID_SELECTOR_RANGE_WALL_PILOT,
     ScoutComputeManager,
     list_scout_families,
+    _PILOT_GRID_SELECTORS,
 )
 from .scout_ledger import ScoutLedger, resolve_scout_ledger_dir
 from .tick_recorder import (
@@ -87,10 +91,23 @@ def get_micro_readiness_cache() -> MicroReadinessCache:
     return MicroReadinessCache(resolve_micro_readiness_cache_db_path(CONFIG.dataset_dir_resolved()))
 
 
+def get_micro_band_touch_cache() -> MicroBandTouchCache:
+    """iter-26: the durable per-``(dataset checksum, resolver.map_key(...))`` band-touch-count
+    cache -- the SAME config-derived, env-overridable path shape as
+    ``get_micro_readiness_cache`` above, under its own ``TAPEOLOGY_MICRO_BAND_TOUCH_CACHE_DB`` env
+    var (never reusing that sibling's env var -- ``micro_readiness.py``'s own module docstring, the
+    ``TAPEOLOGY_MICRO_*`` family). A FastAPI dependency so tests can override it outright or point
+    it at a temp path via the env var -- the established pattern."""
+    return MicroBandTouchCache(
+        resolve_micro_band_touch_cache_db_path(CONFIG.dataset_dir_resolved())
+    )
+
+
 @router.get("/readiness")
 def get_micro_readiness(
     dataset_store: DatasetStore = Depends(get_dataset_store),
     cache: MicroReadinessCache = Depends(get_micro_readiness_cache),
+    band_touch_cache: MicroBandTouchCache = Depends(get_micro_band_touch_cache),
     playbook_store: PlaybookStore = Depends(get_playbook_store),
     bar_store: BarStore = Depends(get_bar_store),
 ) -> dict:
@@ -110,7 +127,12 @@ def get_micro_readiness(
     OWN construction call, verbatim (``BandMapResolver(bar_store, CONFIG)`` defaults to
     ``compute=False``, so this GET never computes a tradable map it does not already hold -- T-8).
     It materializes ``joinable_corpus.band_touch_count`` from the ``not_enumerated`` sentinel to a
-    real int (``micro_join.py``'s own docstring); nothing else in this payload changes shape."""
+    real int (``micro_join.py``'s own docstring); nothing else in this payload changes shape.
+
+    iter-26: ``band_touch_cache`` is threaded straight through to ``build_readiness`` -- only the
+    warm-path LATENCY of that materialization changes (the ~22s-and-growing uncached
+    ``enumerate_band_touches`` walk over every joinable dataset's raw event stream); the served
+    ``band_touch_count`` value is byte-identical either way."""
     resolver = BandMapResolver(bar_store, CONFIG)
     return build_readiness(
         dataset_store,
@@ -118,6 +140,7 @@ def get_micro_readiness(
         dataset_dir=CONFIG.dataset_dir_resolved(),
         playbook_store=playbook_store,
         resolver=resolver,
+        band_touch_cache=band_touch_cache,
     )
 
 
@@ -277,14 +300,25 @@ class ScoutComputeRequest(BaseModel):
 
 
 # grid_selector -> which of resolver/playbook_store this route must construct for it -- the SAME
-# structure_context.kind split ``scout._PILOT_GRID_SELECTORS`` already encodes, read here by VALUE
-# (never a second, independently-maintained selector->kind table) so the route stays selector-aware
-# rather than "any non-default selector gets a resolver", which stopped being true the moment a
-# playbook_signal-kind selector existed.
-_BAND_TOUCH_PILOT_SELECTORS = frozenset(
-    {GRID_SELECTOR_RANGE_WALL_PILOT, GRID_SELECTOR_DELTA_DIVERGENCE_PILOT}
-)
-_PLAYBOOK_SIGNAL_PILOT_SELECTORS = frozenset({GRID_SELECTOR_CAPITULATION_PILOT})
+# structure_context.kind split ``scout._PILOT_GRID_SELECTORS`` already encodes. iter-26: derived by
+# FILTERING that one canonical table (never a second, independently-maintained selector->kind
+# literal -- rail 6, single source of truth) so the route stays selector-aware rather than "any
+# non-default selector gets a resolver", which stopped being true the moment a playbook_signal-kind
+# selector existed.
+def _pilot_selectors_by_kind(
+    kind: str, source: "dict[str, tuple[str, str]] | None" = None
+) -> frozenset[str]:
+    """The selector set for one ``structure_context.kind``, filter-derived from ``source`` (default
+    ``None`` -- the LIVE ``scout._PILOT_GRID_SELECTORS`` table, the real route path) each time it
+    is called. Deliberately a function called at each use site, never a module-level literal
+    computed once at import -- a frozen-at-import constant would only happen to equal today's
+    values rather than genuinely tracking the source table (a test extending a LOCAL COPY of
+    ``scout._PILOT_GRID_SELECTORS`` and passing it as ``source`` proves this: the derived set grows
+    to include the synthetic entry, which a constant snapshot could never do)."""
+    table = _PILOT_GRID_SELECTORS if source is None else source
+    return frozenset(
+        selector for selector, (_study_id, selector_kind) in table.items() if selector_kind == kind
+    )
 
 
 @router.post("/scout/compute")
@@ -317,9 +351,13 @@ def trigger_scout_compute(
     goal.md IN SCOPE item 6 requires -- previously that stage existed in source but ran only inside
     a unit test."""
     grid_selector = body.grid if body is not None else None
-    resolver = BandMapResolver(bar_store, CONFIG) if grid_selector in _BAND_TOUCH_PILOT_SELECTORS else None
+    resolver = (
+        BandMapResolver(bar_store, CONFIG)
+        if grid_selector in _pilot_selectors_by_kind("band_touch")
+        else None
+    )
     playbook_store_for_trigger = (
-        playbook_store if grid_selector in _PLAYBOOK_SIGNAL_PILOT_SELECTORS else None
+        playbook_store if grid_selector in _pilot_selectors_by_kind("playbook_signal") else None
     )
     # iter-21 audit fix B1: the pilot run's walk-forward floor-check stage reads the SAME durable
     # exposure registry `POST /walkforward/compute` already depends on (never a second, differently
