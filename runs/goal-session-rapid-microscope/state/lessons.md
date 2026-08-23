@@ -158,176 +158,55 @@ a spec clause is unsatisfiable at the unit the code actually operates on (here, 
 2-symbol floors against §7.3's one-symbol-day shard), that is an owner ruling, not a fix — the
 auditor's refusal to improvise was correct and produced spec revision r9 the same day.
 
-## iter-18 — 2026-08-20T13:05:00Z
-
-**Verdict:** ESCALATE
-**Lesson:** A change to a SHARED QA seeding rig is a change to every journey that rig serves.
-This round appended `seed_micro_graduation_iter18_fixture.py` to
-`apps/backend/scripts/qa_playbook_iter7_fixture_scoped_backend.sh` — the one launcher every
-browser/replay pass in this era drives — purely to make J-07's proof discriminating. It took the
-rig's vault from 0 shards to 1, which silently falsified the `"No shards recorded."` assertion in
-BOTH `journey-scripts/J-08.json` (step 5) and `J-10.json` (step 12). Neither was noticed until the
-independent auditor ran the replay lane by hand. Rule: when a round writes into the browser rig,
-re-run the FULL replay set before calling it done.
+## iter-18 — 2026-08-20T13:05:00Z  [condensed: body → lessons.md.archive.md]
 **Applies to:** any iteration touching `apps/backend/scripts/qa_playbook_iter7_fixture_scoped_backend.sh`,
 `start_scoped_qa_backend.sh`, or any seed script under `apps/backend/scripts/seed_*`.
 
-## iter-18 — 2026-08-20T13:06:00Z
-
-**Verdict:** ESCALATE
-**Lesson:** `Frontend Present: no` in a spec whose DEFINITION OF DONE names `browser-qa-agent` is a
-self-cancelling spec: the metadata switches off the UI chain (all five artifacts become one-line
-"N/A" stubs, `ui-test-results.md` becomes `Browser QA Verdict: SKIPPED` with zero journey rows,
-`status.json` records `browser_checks_run: false`), and the DoD items that name that lane then pass
-review and QA with nothing behind them. Full depth does NOT protect against this — a full iteration
-with `Frontend Present: no` skips the same lanes. The decomposer must set `Frontend Present: yes`
-whenever the DoD names a browser check, even for a backend-only code change.
+## iter-18 — 2026-08-20T13:06:00Z  [condensed: body → lessons.md.archive.md]
 **Applies to:** every goal-decomposer writing a spec; every evaluator reading a `SKIPPED`
 `ui-test-results.md` (read the auditor's evidence directory instead of concluding "not tested").
 
-## iter-18 — 2026-08-20T13:07:00Z
-
-**Verdict:** ESCALATE
-**Lesson:** A golden replay script whose only step is `goto /desk` + expect one unrelated section
-heading is a regression check that cannot fail. `journey-scripts/J-02/J-03/J-04/J-05.json` each
-assert `"Top-up Runs"` / `"Index Reconciliation"` / `"Screen Runs"` / `"Playbook Signals"` — all
-pre-existing Era-B Desk headings, none related to the micro observer, the structure×flow join, the
-Scout ledger or the walk-forward engine. `demo_runner.py` captures no console errors either, so
-those rows verify only that `/desk` renders. The tell was in the artifacts: all four journeys'
-`-verify.png` files are byte-identical (same md5). Diagnostic to reuse: when N journeys' replay
-screenshots share one md5, read their scripts — the checks are probably measuring the same nothing.
+## iter-18 — 2026-08-20T13:07:00Z  [condensed: body → lessons.md.archive.md]
 **Applies to:** any iteration or evaluator relying on `regression-replay-results.md` /
 `auditor-regression-replay-results.md` rows as journey re-verification.
 
-## iter-19 — 2026-08-20T16:35:00Z
-
-**Verdict:** CONTINUE
-**Lesson:** A determinism ("same input, same output") comparison over a SATURATED statistic is
-blind by construction, and the standard mutation-proof will never reveal it. In
-`test_micro_deterministic_rerun.py`'s TC-2, the fixture screened `_planted_effect_anchors()` at
-`effect=3.0`, which saturates the 2,000-draw block-permutation null in `scout.py:141`, pinning
-`p_screen` to the floor `1/2001` in every run — so replacing `scout.scout_stream` with an unseeded
-`random.Random()` left the whole compared payload byte-identical and all eight landed tests green
-(I reproduced this myself in the real file, then restored it md5-identical). TC-4-style
-mutation-proofs cannot catch it because they perturb the comparison's INPUT, not the COMPUTATION;
-the mutation that discriminates is the one applied to the SEED LINEAGE. Rule for any future
-determinism check: pick a fixture whose statistic lands strictly INSIDE the null distribution, and
-mutation-proof the seeded stream itself, not just the comparator.
+## iter-19 — 2026-08-20T16:35:00Z  [condensed: body → lessons.md.archive.md]
 **Applies to:** any iteration adding a determinism / byte-identity / "reruns match" assertion, and
 any change touching `scout.py`, `walkforward.py`, or `micro_snapshots.py` seeded streams.
 
-## iter-19 (second) — 2026-08-20T16:35:00Z
-
-**Verdict:** CONTINUE
-**Lesson:** J-07 "Graduation" can NEVER have a stored golden replay script with the current
-harness, so the SPEED-23 nudge (and the iter-19 audit's §5 recommendation to "author its golden
-script") is chasing something impossible. Three independent reasons, all verified:
-`demo_runner.normalize_url()` (`incredible_auto_dev/scripts/automation/lib/demo_runner.py:39-57`)
-rewrites ANY localhost URL onto the FRONTEND base, so a step targeting `:8301` silently lands on
-`:3301`; there is no frontend rewrite/proxy for `/research/*`; and `/desk` renders no graduation
-content at all (`grep -c graduation apps/frontend/app/desk/page.tsx` returns 0). Its LLM lane is a
-design consequence, not an oversight — which also means J-07 is the journey most likely to be shed
-by a wall-clock trim, because the LLM lane is the expensive one.
+## iter-19 (second) — 2026-08-20T16:35:00Z  [condensed: body → lessons.md.archive.md]
 **Applies to:** any iteration planning J-07 verification, reacting to a `state/golden-gaps` nudge,
 or considering harness work to make backend-only journeys replayable.
 
-## iter-20 — 2026-08-20T17:35:00Z
-
-**Verdict:** ESCALATE
-**Lesson:** A "human-blocked" label, once written into `iteration-state.md`'s Active blockers, is
-copied forward by every later round and stops being questioned. J-09 carried "blocked entirely by
-the sealed judge's econ-floor ruling" for two rounds; re-testing it against the goal text took ten
-minutes and it did not survive — J-09's own acceptance says no study output feeds any gate or
-certificate, `grep -rn evaluate_sealed_verdict apps/backend/app/` finds zero production callers,
-the legacy 12 symbol-days are permanently `exploratory` so "evidence classes never mix" bars them
-from the sealed judge by construction, and the Scout derives its OWN economic floor from measured
-spreads (`scout.py:1016-1021`, `ECON_FLOOR_SPREAD_MULTIPLE * family_median_spread_bps`) rather than
-taking a caller's. Re-derive an inherited blocker before deferring a journey on it a third time.
+## iter-20 — 2026-08-20T17:35:00Z  [condensed: body → lessons.md.archive.md]
 **Applies to:** any evaluator or decomposer about to defer a journey because a prior round's
 `iteration-state.md` lists it as human-blocked — especially when the same journey has been deferred
 3+ consecutive iterations without ever being attempted.
 
-## iter-20 — 2026-08-20T17:36:00Z
-
-**Verdict:** ESCALATE
-**Lesson:** The depth-recommendation line is NOT symmetric. `run-goal.sh:2440-2451` treats an
-evaluator recommendation of `lean`/`evidence` as BINDING (that is why iteration 19's `evidence` ask
-was honoured verbatim), but a recommendation of `full` falls through to the legacy allowlist at
-`:2478-2494`, which grants full depth only for a prior ESCALATE/REGRESSION verdict, a prior
-coherence FAIL, a machine-parseable `Full trigger:` line in the next spec, or a due hardening
-cadence — and this session runs with the cadence disabled at 0. So a `CONTINUE` + "Depth
-Recommendation: full" is silently demoted to lean unless the decomposer happens to write the
-trigger line. Iterations 12–18 were empirically right that only the verdict line reliably buys the
-independent audit lane; the mechanism, not folklore, is the reason.
+## iter-20 — 2026-08-20T17:36:00Z  [condensed: body → lessons.md.archive.md]
 **Applies to:** any evaluator choosing between CONTINUE-with-full and ESCALATE when the next
 iteration's work genuinely warrants the audit lane.
 
-## iter-21 — 2026-08-20T22:10:00Z
-
-**Verdict:** ESCALATE
-**Lesson:** A spec'd flow can pass review AND QA while being reachable by NOTHING but a unit test.
-`register_screen_and_walkforward_check` / `walkforward.scout_candidate_walkforward_floor_check`
-had zero non-test callers — `ScoutComputeManager.trigger` → `run_scout_grid_and_record` only ever
-called `register_and_screen_candidate` — so the ledger row the spec promised could never be
-produced by the route, the CLI, or the UI. The cheap detector is one grep per new public entry
-point: `grep -rn "<new_function>" app/ tests/` and require at least one hit under `app/`.
+## iter-21 — 2026-08-20T22:10:00Z  [condensed: body → lessons.md.archive.md]
 **Applies to:** any iteration that adds a new orchestration/entry-point function whose only
 exercise is a pytest fixture — especially `scout.py`, `walkforward.py`, `vault.py`, and anything
 whose acceptance says "recorded in the ledger" or "rendered in section X".
 
-## iter-21 (second) — 2026-08-20T22:10:00Z
-
-**Verdict:** ESCALATE
-**Lesson:** The iter-18 rig rule ("a change to the shared QA rig is a change to every journey it
-serves") was applied to the replay + browser lanes only, and the DEMO lane — which runs last, after
-the ledger-populating browser tests — was forgotten: its step-03 `No candidates ledgered` assert
-failed and was "recorded anyway". Any lane that reads the scoped rig must be inside the sequencing
-rule, or the empty-state asserts (`J-08.json` step 3, `J-10.json` step 12) must be made
-order-independent.
+## iter-21 (second) — 2026-08-20T22:10:00Z  [condensed: body → lessons.md.archive.md]
 **Applies to:** any iteration whose browser tests POST to `/research/desk/micro/scout/compute` (or
 any other rig-mutating endpoint) — check `reports/phase-*-demo-results.md` soft notes before
 believing the round was clean.
 
-## iter-21 (third) — 2026-08-20T22:10:00Z
-
-**Verdict:** ESCALATE
-**Lesson:** A merged **browser-QA verdict of FAIL does not gate the round** — `closure_gate.py`
-cross-checks the UX-regression verdict and artifact presence but never the browser verdict, so
-iteration 21 closed `CLOSURE-PASS` with a live UT-04 FAIL. Only the auditor turned that FAIL into a
-fix. Do not read `CLOSURE-PASS` as "every lane agreed"; open
-`reports/phase-<iter>-ui-test-results.md` and read its verdict line directly.
+## iter-21 (third) — 2026-08-20T22:10:00Z  [condensed: body → lessons.md.archive.md]
 **Applies to:** every evaluator, every iteration; and to any framework change touching
 `scripts/automation/lib/closure_gate.py`.
 
-## iter-22 — 2026-08-21T04:10:00Z
-
-**Verdict:** STALLED
-**Lesson:** A "does this really screen anything?" test can be blind in a way the usual
-break-tests miss: `test_iter22_study3_capitulation_screens_with_real_playbook_signal_anchor`
-(`apps/backend/tests/test_scout.py:1676`) asserts only that a decision is in the closed vocabulary
-and that a floor-check row exists — both of which are produced identically by a hollow ZERO-anchor
-pass-through. I proved it by pushing `_plant_capitulation_signal`'s `trigger_ts` 5e9 seconds
-outside the dataset window (so no signal could join) and watching the test stay green. Its Study-1
-twin at `:1664` has the one line that closes it: `screen_result["n_candidate"] +
-screen_result["n_comparator"] > 0`. The general shape: whenever a screen/join can legitimately end
-in "insufficient_n", the honest-refusal path and the never-saw-any-data path produce the SAME
-assertions, so every such test needs an explicit non-vacuity assertion on the joined count — a
-sibling test having it is not evidence that this one does.
+## iter-22 — 2026-08-21T04:10:00Z  [condensed: body → lessons.md.archive.md]
 **Applies to:** any iteration adding or editing a Scout/screen/join test whose acceptable outcome
 includes `insufficient_n` / `no survivor` / a floor refusal — i.e. anything under
 `apps/backend/tests/test_scout.py`, `test_walkforward*.py`, or new `micro_*` join tests.
 
-## iter-22 — 2026-08-21T04:10:00Z (second)
-
-**Verdict:** STALLED
-**Lesson:** The showcase walkthrough lane cannot photograph a backend research address at all: it
-rewrites every URL onto the frontend port (`:3301`), which has no pass-through, so
-`reports/demo/goal-rapid-microscope-iter-22/step-07.png` is a Next.js 404 for the graduation
-surface even though the browser-QA lane's own `UT-08-result.png` shows the full body. Do NOT open
-an `evidence_makeup` make-up ride for a demo step of this shape — a re-capture through the same
-lane reproduces the identical 404. Either write the demo step against a page-served surface, or
-accept the soft note. (Round 19 recorded the same mechanism for J-07's replay script; this is the
-demo lane's version of it.)
+## iter-22 — 2026-08-21T04:10:00Z (second)  [condensed: body → lessons.md.archive.md]
 **Applies to:** any iteration whose demo script includes a step on a `GET /research/...` address
 rather than a `/cockpit`, `/structure` or `/desk` page.
 
@@ -484,3 +363,29 @@ verifiable; stitched full-page shots of this page are not. Verify a full-page ca
 and reading it before accepting any claim about what it contains.
 **Applies to:** any iteration citing a full-page `/desk` screenshot as journey evidence, and any
 browser-qa lane claiming a make-up capture rode passenger on another journey's pass.
+
+## iter-28 — 2026-08-23T23:10:00Z
+
+**Verdict:** STALLED
+**Lesson:** The deterministic closing gate (`scripts/automation/lib/closure_gate.py:87-90`) matches
+the bare substring `backend-only` ANYWHERE in `phase-<iter>-user-visible-changes.md` and, if any
+frontend file changed, emits a blocking CLOSURE-FAIL. Iter-28's document was correct and detailed —
+it quoted the new sentence, named its new `data-testid` and its exact DOM position — but its "Not
+Visible Yet" section described a new test as "a backend-only regression guard", and that phrase
+alone failed the round (`status.json` = blocked / closure_failed, showcase tail never finished).
+**Applies to:** any frontend-touching iteration whose `user-visible-changes.md` mentions
+"backend-only", "no user-visible" or "no visible changes" while describing something OTHER than the
+iteration itself — phrase those lines as "no UI surface" until the gate is scoped, and never read a
+CLOSURE-FAIL on this rule as a product defect without opening the document first.
+
+## iter-28 — 2026-08-23T23:12:00Z
+
+**Verdict:** STALLED
+**Lesson:** A SPEED-15 rung-2 budget trim that sheds a no-golden Required-still-passing journey
+writes a `DEFERRED-BUDGET` row, and `goal_gate.py` counts that cell as blocking — so an ordinary
+wall-clock overrun can silently make GOAL_ACHIEVED mechanically impossible even when every journey
+is green. Iter-28 shed J-07 (no stored golden by an earlier binding decision, so replay structurally
+cannot cover it, and the LLM lane was not given it either); its own fixture suite runs in 1.48s.
+**Applies to:** any journey that has no stored golden and rides the Required-still-passing list —
+give it a golden, or route it to the lane that can actually run it, before a round that is likely to
+overrun; and any evaluator scoring a round that certified everything except one shed row.

@@ -1,0 +1,158 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-rapid-microscope-iter-28",
+  "base_url": "http://localhost:3301",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the Desk page",
+      "narration": "The Desk page is the command center for all research journeys. It brings together playbook signals, microscope readiness, scout ledger, walk-forward results, and the referee registry—everything you need to evaluate a live strategy.",
+      "point_out": "The page title 'Desk' at the top and 'Playbook Signals' section visible below.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "goto",
+        "url": "/desk"
+      },
+      "expect": {
+        "text": "Playbook Signals"
+      }
+    },
+    {
+      "n": 2,
+      "title": "Expand the Microscope Readiness section",
+      "narration": "The Microscope Readiness section shows the corpus totals and pilot-study floor status. This is where we verify the era transition is working and the sealed tranche has been recorded correctly.",
+      "point_out": "The Microscope Readiness section expands and you can see the corpus totals and tranche data.",
+      "journey": "J-01",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "css": "[data-testid=\"desk-section-expand-microReadiness\"]"
+        }
+      },
+      "expect": {
+        "text": "hand_assigned"
+      }
+    },
+    {
+      "n": 3,
+      "title": "Expand the Referee Registry section",
+      "narration": "The Referee Registry holds the evidence metrics and strategy families. A new disclosure has been added here to clarify an important limit in the legacy readiness count.",
+      "point_out": "The Referee Registry section expands to reveal its subsections.",
+      "journey": "J-10",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "css": "[data-testid=\"desk-section-expand-refereeRegistry\"]"
+        }
+      },
+      "expect": {
+        "text": "config fingerprint"
+      }
+    },
+    {
+      "n": 4,
+      "title": "Locate the new seal-unaware caveat in Strategy Family",
+      "narration": "Inside the Referee Registry's Evidence Readiness section, the Strategy Family block now includes a disclosure: the legacy readiness metric is seal-unaware in the Rapid Microscope era. It may include withheld shards and must not be used as the canonical readiness count. This protects against misinterpreting the numbers.",
+      "point_out": "The new disclosure line appears directly below the tick-gate statement and above the basis caveats, styled as small gray text to match the surrounding disclosures.",
+      "journey": "J-10",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "css": "[data-testid=\"referee-evidence-strategy-seal-unaware-caveat\"]"
+        }
+      },
+      "expect": {
+        "text": "Legacy Referee readiness metric"
+      }
+    },
+    {
+      "n": 5,
+      "title": "Expand the Scout Ledger section",
+      "narration": "The Scout Ledger shows every trial family that was evaluated during the structured grid search. Each row lists how many variants were tried for that family.",
+      "point_out": "The Scout Ledger section expands and shows the family entries with their variant counts.",
+      "journey": "J-10",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "css": "[data-testid=\"desk-section-expand-scoutLedger\"]"
+        }
+      },
+      "expect": {
+        "text": "variants tried"
+      }
+    },
+    {
+      "n": 6,
+      "title": "View the Walk-Forward Diagnostic",
+      "narration": "The Walk-Forward Engine shows the diagnostic runs registered for this session. Each run traces through time in historical order, respecting fold boundaries and chronology.",
+      "point_out": "The Walk-Forward section expands, confirming the structure is in place.",
+      "journey": "J-05",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": {
+        "type": "click",
+        "target": {
+          "css": "[data-testid=\"desk-section-expand-walkForward\"]"
+        }
+      },
+      "expect": {
+        "text": "No fold specs registered"
+      }
+    },
+    {
+      "n": 7,
+      "title": "Confirm the Validation Vault is intact",
+      "narration": "The Validation Vault stores the sealed evaluation records. It remains protected and read-only, holding the truth about which variants were valid on unseen data.",
+      "point_out": "The Validation Vault section expands with its integrity status visible.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": {
+        "type": "click",
+        "target": {
+          "css": "[data-testid=\"desk-section-expand-validationVault\"]"
+        }
+      },
+      "expect": {
+        "text": "iter18-qa-universe"
+      }
+    },
+    {
+      "n": 8,
+      "title": "Check the Referee Runs section",
+      "narration": "The Referee Runs section records any past evaluations. In this session, none have been recorded yet, confirming we are still in the exploration and validation phase.",
+      "point_out": "The Referee Runs section is present and shows its initial state.",
+      "journey": "J-10",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": {
+        "type": "click",
+        "target": {
+          "css": "[data-testid=\"desk-section-expand-refereeRuns\"]"
+        }
+      },
+      "expect": {
+        "text": "No evaluation runs recorded yet"
+      }
+    }
+  ]
+}

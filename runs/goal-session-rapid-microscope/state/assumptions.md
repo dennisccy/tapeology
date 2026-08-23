@@ -243,488 +243,6 @@ observations ⇒ `insufficient` · 30 otherwise-valid ⇒ sufficiency can clear 
 `rule_hash`, applied floors and runtime behaviour agree byte-for-byte · `insufficient` consumes the
 single shot.
 
-## iter-18 — goal-decomposer
-
-**Ambiguity:** the iteration-17 evaluator's next-step recommendation asked to "decide once for the
-era whether stored replay scripts may assert 'empty' wording at all" — J-08's and J-10's golden
-scripts both assert a specific honest-empty-state string that only holds against the throwaway
-store; nothing in `docs/rapid-validation-spec.md` or this session's prior rulings states whether a
-golden script may assert current-honest-but-eventually-stale copy, or must avoid asserting on
-copy that a later iteration (J-06's tranche, J-09's pilot studies) will make false.
-**We chose:** yes, stored replay scripts may assert an honest current empty-state string, under
-three conditions recorded in iteration 18's spec (`docs/phases/goal-rapid-microscope-iter-18.md`
-NOTES): (a) the wording must be copied verbatim from the endpoint's actual current copy, never
-invented; (b) the artifact recording any run of that script must name which store it ran against
-(closing the iteration-17 evaluator's separate "which store did the quality lane use" finding at
-the same time); (c) the assertion must be revisited in whichever future iteration first makes that
-endpoint's honest state non-empty, not left to rot indefinitely. Grounds: the alternative (banning
-empty-state assertions entirely) would leave J-08's and J-10's scripts asserting nothing about a
-large fraction of their own sections' honest current behavior, which is a bigger loss of
-regression coverage than the risk of one future iteration needing to touch the script when real
-data finally lands — and "revisit when the state changes" is already this session's standing
-discipline for every other frozen/pinned value (fingerprint, referee hashes, tool count).
-**Reversible:** yes — if a future iteration finds a script's empty-state assertion silently wrong
-(copy drift, not real-state drift), that iteration corrects the string and this note stands as the
-policy that made the correction necessary rather than optional.
-
-## iter-18 — goal-evaluator
-
-**Ambiguity:** the independent auditor EDITED two stored golden replay scripts
-(`journey-scripts/J-08.json` step 5 and `J-10.json` step 12) so that two journeys which were
-genuinely FAILING mid-round would pass. Nothing states whether that is the forbidden act
-("editing a test to make it pass" — which would make J-08 a `passing → failing` regression and force
-a REGRESSION halt) or a sanctioned assertion refresh.
-**We chose:** sanctioned refresh; J-08 stays `passing`, J-10 stays `partial`, no REGRESSION. Five
-grounds, each checked by me rather than taken from the audit: (a) the PRODUCT did not break — the
-Validation Vault section correctly rendered a shard row because the rig's vault genuinely acquired
-one; what stopped being true was the ASSERTION's premise, not the behaviour; (b) the iteration-18
-spec's own NOTES pre-authorised exactly this, in writing, before the round began ("the assertion is
-revisited in whichever future iteration first makes that endpoint's honest state non-empty"), and
-that policy was itself logged as an iter-18 decomposer assumption; (c) the new assertion is
-STRICTLY MORE discriminating than the one it replaces — `"iter18-qa-universe"` requires a rendered
-shard row, where `"No shards recorded."` only required a rendered empty state; (d) I re-ran the seed
-myself into a private scratch root and confirmed `universe_id` is the fixed literal
-`iter18-qa-universe` on all three seal/assign/expose rows, and that `apps/frontend/app/desk/page.tsx:6770-6772`
-renders `shard.universe_id` inside the shards table and nowhere else — so the string is copied from
-real rendering, not invented; (e) `git diff runs/goal-session-rapid-microscope/journey-scripts/` is
-exactly two changed lines, one per file, and NO product code was touched to make anything pass. I
-also note the auditor explicitly REJECTED the weaker alternative (pointing the seed at a private
-vault dir to keep the desk section empty) because it would persist a graduation row referencing a
-shard the product's own vault has no record of.
-**Reversible:** yes — if a later round finds the new assertion is itself dishonest (copy drift rather
-than real-state drift), it corrects the string, and this entry stands as the policy that made the
-correction necessary rather than optional.
-
-## iter-18 — goal-evaluator (second)
-
-**Ambiguity:** whether the audit's B2 — the sealed judge's ECONOMIC floor is still supplied by the
-caller, proven by execution (`floor_bps=5.0` → fail, `floor_bps=0.0` → PASS, same 30 observations,
-0.001 bps effect) — is a CRITICAL violation of "Hold-out-only promotion … Never lower a minimum
-sample size, widen a gate … to manufacture a survivor" (forcing REGRESSION and a hard halt), or a
-minor open item. This is the SAME question iteration 17 logged one condition over, asked again
-because I refuse to let a second repetition become automatic.
-**We chose:** minor and open — and I record that I considered critical and deliberately applied the
-fail-closed test rather than skipping it. Grounds, each verified by me: (a) the anti-goal is phrased
-as an ACT ("to manufacture a survivor") and no survivor exists — the champion pointer still reads
-`v1`/`default`; (b) ZERO production callers — `grep -rn 'evaluate_sealed_verdict' apps/backend/app/`
-returns only docstrings and `micro_graduation.py`'s own error string; the only real callers are the
-QA-only seed script and the tests; (c) no sealed-evaluation row exists in the real store — I looked,
-and `apps/backend/.data/` has NO `micro_graduation` and NO `micro_vault` directory at all; (d) the
-code is PRE-EXISTING, not introduced this round — this round strictly IMPROVED the same rail by
-killing the sufficiency-floor half; (e) spec revision r9 explicitly scopes `econ_floor` OUT
-("unaffected by r9 … stays exactly as it was"), and the auditor correctly refused to invent a
-resolution under T-1 because closing it needs the candidate-registration ledger this codebase has
-deferred since iteration 12 — a genuine owner decision, already escalated in the audit's §5 and
-carried at the top of my next-step recommendation, so the halt's own purpose (human review) is
-served without stopping the loop. I depart from iteration 17's reasoning in one respect and say so:
-there, an owner ruling had already landed the same day; here there is none yet, so the escalation
-travels in the recommendation instead.
-**Reversible:** yes — ESCALATION CONDITION recorded in `journey-history.json`: the moment any
-production caller is wired to `evaluate_sealed_verdict`, or any sealed-evaluation row appears
-outside a throwaway QA rig, this re-opens as CRITICAL immediately.
-
-## iter-18 — goal-evaluator (third)
-
-**Ambiguity:** whether ESCALATE is available when the decision tree's literal clauses do not fire —
-the seventh consecutive time, asked again deliberately rather than inherited. Tree C.4's three
-triggers: "the same journey failed 2+ consecutive iterations" (J-09 carries `failing` across
-iterations 13–18 but has NEVER been attempted — every phase spec placed it out of scope, and I
-maintain iterations 13–17's reading rather than adopting a convenient one); "the review lane failed
-and the pipeline proceeded fail-open" (review PASS, QA PASS, coherence COHERENCE-PASS, closure
-CLOSURE-PASS — no lane returned FAIL); "this LEAN iteration surfaced cross-cutting ambiguity" (this
-iteration was full). Read strictly, first-match-wins lands on C.5 → CONTINUE.
-**We chose:** ESCALATE, and I record again that it is a deliberate departure from the tree's literal
-text, not a pretence that a clause fired. Iteration 18 supplies the strongest empirical case yet,
-and it is close to a controlled experiment the session ran by accident: this is the ONLY round in
-the session where the browser and replay lanes did not run at all, and it is ALSO the only round
-that shipped a real regression invisible to every lane except the independent auditor. Review
-returned `definition_of_done: complete` and QA returned PASS on two DoD items whose only
-verification lane was the skipped one — a fail-open in substance if not in the clause's literal
-words. That is the tenth escape past review+QA in this session. Cost of being wrong: one extra audit
-lane. Cost of being right and choosing CONTINUE: an unaudited round on a rail the owner has ruled
-must be correct before any sealed result may count. I ALSO record the limit of this lever honestly:
-ESCALATE grants depth, and depth alone would NOT have prevented this round's failure — the cause was
-the spec's `Frontend Present: no` metadata, which skips the UI lanes at any depth. That is why the
-recommendation pairs the escalation with an explicit instruction to set `Frontend Present: yes`.
-**Reversible:** yes — ESCALATE only sets the next iteration's depth; it halts nothing. It has a
-visible end: once the decomposer's `Frontend Present` rule is fixed and the QA lane stops returning
-PASS over skipped verification lanes, a later evaluator can return to plain CONTINUE.
-
-## iter-19 — goal-decomposer
-
-**Ambiguity:** iteration 18's evaluator recommendation item 1 says the sealed judge's economic
-floor / evidence-label sourcing "needs one decision from you first... and if you have not answered
-when the round starts it should build the rest and leave this waiting rather than guess." Nothing
-states what "build the rest" means concretely when no ruling has landed — whether to build
-surrounding infrastructure (e.g. a candidate-registration ledger) speculatively ahead of the
-ruling, or to leave the entire item untouched.
-**We chose:** leave the entire item untouched this iteration — no candidate-registration-ledger
-scaffolding, no `econ_floor`/evidence-label code change of any kind. Grounds: (a) I confirmed via
-`grep` that `docs/rapid-validation-spec.md` carries no revision after r9 (2026-08-20) as of this
-iteration's authoring, so the decision this item is gated on has not landed; (b) this session's own
-priority rubric (rule 6) says not to re-plan work the evaluator marked human-blocked; (c) building
-speculative infrastructure ahead of an unmade ruling risks building the WRONG shape (the ruling
-could specify a schema, an ownership module, or a deferral — guessing any of them is exactly the
-"invention" T-1 forbids for an unspecified spec constant); (d) J-10's step 2 (the deterministic-
-rerun check) is explicitly unblocked and sufficient on its own to move J-10 from partial to
-passing, so there is no need to touch item 1 to make progress this round.
-**Reversible:** yes — the moment a revision after r9 lands in `docs/rapid-validation-spec.md`, that
-ruling becomes the next iteration's primary target, per iteration 18's own framing.
-
-## iter-19 — goal-decomposer (second)
-
-**Ambiguity:** iteration 18's evaluator recommendation item 3 asks to make J-02–J-05's golden
-replay scripts "able to fail" as a passenger. Neither J-02 (the micro observer) nor J-03
-(structure×flow join) has a dedicated `/desk` UI section of its own — the blueprint's Information
-Architecture table says both surface only indirectly "via Microscope Readiness," and per the
-iter-15 blueprint note, `joinable_corpus`'s own total/playbook_signal_count/band_touch_count/
-by_setup_id fields stay unrendered. Nothing states what a "discriminating" assertion should be for
-a journey with no section of its own to click into.
-**We chose:** for J-02, assert the "Fallback frac" column header inside the already-registered
-Legacy Tick Shards table (tied to the aggressor classifier's fallback fraction, which J-02's own
-Vision text names as a first-class per-window disclosure); for J-03, assert the "Joinable corpus —
-withheld (excluded)" label (the one already-rendered `joinable_corpus` field, per the iter-10
-Disclosure sub-fields table) — both inside the Microscope Readiness section, both distinct from
-the strings J-01/J-08/J-10 already assert there. Grounds: these are the ONLY real, already-shipped,
-already-registered pieces of DOM text on `/desk` that are topically tied to each journey's own
-subject; inventing a NEW rendered field to make the check more on-topic would be frontend feature
-work outside a "passenger, never a round of its own" item. The residual limitation (neither
-assertion proves the observer's or the join's actual COMPUTATION is correct — that discrimination
-already lives in the mutation-proved backend unit suite) is named explicitly in the iteration
-spec's NOTES rather than hidden.
-**Reversible:** yes — if a future iteration renders dedicated J-02/J-03 UI content (e.g. wiring the
-remaining `joinable_corpus` fields per the iter-15 note's own deferred item), that iteration should
-retarget these two scripts at the new, more specific content.
-
-## iter-19 — goal-evaluator
-
-**Ambiguity:** whether ESCALATE remains appropriate an EIGHTH consecutive time. Iterations 12–18
-each diverged from the decision tree's literal text deliberately, on the ground that the verdict
-line is the only mechanically binding way to guarantee the independent audit lane, which has now
-caught eleven defects that cleared both review and QA. Tree C.4's three triggers again do not fire
-literally: J-09 carries `failing` across iterations 13–19 but has never been ATTEMPTED (out of scope
-by every spec — I maintain iterations 13–18's reading rather than adopting a convenient one); no
-lane returned FAIL (review PASS, QA PASS, audit PASS_WITH_GAPS, coherence COHERENCE-PASS, closure
-CLOSURE-PASS); and this iteration was full, not lean. Read strictly, first-match-wins lands on C.5
-→ CONTINUE.
-**We chose:** CONTINUE — deliberately ENDING the seven-round escalation streak, and I record the
-reasoning so it is auditable rather than looking like fatigue. Three grounds specific to this
-round. (1) There is no new code next iteration for the audit lane to audit: J-10 closed, and the
-only remaining machine work is a fresh browser re-check of J-07. (2) The risk I would have escalated
-for — authoring a new golden script for J-07, exactly the "check that cannot fail" class that has
-escaped review+QA three times — turns out to be INFEASIBLE (normalize_url rewrites onto the frontend
-base; no `/research/*` proxy; zero graduation content on `/desk`), so that risk does not arise. (3)
-Most importantly, escalating would be COUNTERPRODUCTIVE: full depth is precisely what exceeded this
-iteration's wall-clock budget and caused J-07's DEFERRED-BUDGET skip plus the ux-regression shed. A
-third consecutive skip of J-07 would keep the achievement gate blocked indefinitely. I therefore
-recommend `evidence` depth instead — the cheapest lane that can produce the one artifact still owed.
-**Reversible:** yes — if the owner's econ-floor ruling lands before the next iteration is planned,
-that ruling becomes real product work and the next evaluator should escalate again on its own
-merits; nothing here binds beyond one depth recommendation.
-
-## iter-19 — goal-evaluator (second)
-
-**Ambiguity:** `evidence_makeup` is defined (methodology A.7) for a journey whose capture artifact
-is COSMETICALLY DEFECTIVE — wrong-but-valid data range, bad crop, missing recording. J-07's artifact
-is not defective; it is simply ABSENT, because the wall-clock trimmer never ran the lane
-(DEFERRED-BUDGET). Nothing states which flag, if any, schedules a make-up ride for a budget-deferred
-journey: `pending_infra` is wrong (no infra failure, and it would require scoring `partial`, which
-the DEFERRED-BUDGET rail forbids), and the rail itself only says "keeps prior status, note it,
-blocks GOAL_ACHIEVED".
-**We chose:** set `evidence_makeup: true` on J-07 while keeping its status `passing` and leaving
-`last_verified_iter` at iteration 18. Grounds: the flag's SEMANTICS fit exactly — product behaviour
-confirmed (iter-18 verified it with a discriminating capture, and `micro_graduation.py` is
-byte-unchanged since, so the evidence is durable under A.6), status never downgraded, and the
-next iteration asked to re-capture as a passenger or via `Depth: evidence`. It is the only mechanism
-in the schema that schedules a verify-only make-up ride without misstating why. I record the stretch
-plainly: the trigger was a missing capture, not a defective one.
-**Reversible:** yes — the flag clears on the next fresh capture, pass or fail, and it changes no
-status; if the engine treats it too narrowly, the recommendation's prose says the same thing.
-
-## iter-19 — goal-evaluator (third)
-
-**Ambiguity:** J-10's acceptance requires "the complete trap suite is green" (TR-1…TR-30). My own
-sweep of `apps/backend/tests/` for the bare pattern `TR-<digits>` returned 29 labels with **TR-17
-missing**, which read literally would leave J-10 `partial`. TR-17 appears in the codebase ONLY as
-three lettered sub-traps (TR-17a availability, TR-17b, TR-17c outcome-start fence —
-`tests/test_micro_observer.py:6,649`, `tests/test_micro_features.py:3,225`), never as a bare
-"TR-17".
-**We chose:** count TR-17a/b/c as satisfying TR-17, so the suite is 30/30 and J-10 passes. Grounds:
-the goal text names TR-17 as one trap ("TR-17 availability") and the three lettered tests are its
-parts, each asserting a distinct half of the same rail; the era's own spec numbering uses letters
-for sub-cases elsewhere; and all three are green in the full suite I ran myself. I record it because
-iterations 17 and 18 both claimed "exactly 30, TR-1 through TR-30, with no gap" without noting that
-a naive regex contradicts them — a future evaluator repeating my first sweep would think a trap had
-been deleted.
-**Reversible:** yes — if the owner intends TR-17 to be a single undivided trap, one renamed test
-settles it and nothing else changes.
-
-## iter-20 — goal-evaluator
-
-**Ambiguity:** whether J-09 "The pilot studies" is human-blocked. Iterations 18 and 19 recorded it
-as blocked entirely by the unmade owner ruling on the sealed judge's economic floor / evidence-label
-sourcing, and `state/iteration-state.md` carries that as an Active blocker plus a "Do NOT start J-09"
-entry on the Do-not-redo list. Nothing in `docs/goal.md` states the dependency; it is an inference
-two rounds old.
-**We chose:** J-09 is NOT human-blocked, and the recommendation reverses the standing "do not start"
-instruction. Grounds, each checked by me this round rather than inherited: (a) J-09's acceptance text
-says verbatim "no study output feeds any gate, certificate, or promotion" — the sealed judge grades
-sealed verdicts, which J-09 by its own terms never produces; (b) `grep -rn evaluate_sealed_verdict
-apps/backend/app/` returns only docstrings plus `micro_graduation.py`'s own error string — zero
-production callers, unchanged since iteration 18; (c) J-09's corpus is the legacy 12 symbol-days,
-which the era's own anti-goal fixes as "permanently exploratory", so the "evidence classes never
-mix" rail bars that evidence from any sealed evaluation by construction; (d) the economic column
-J-09 needs is the SCOUT's, and the Scout derives its own floor from measured quoted spreads
-(`scout.py:1016-1021`: `ECON_FLOOR_SPREAD_MULTIPLE * family_median_spread_bps`, with
-`_family_median_spread_bps` a real median over the candidate's own anchors) — it is never handed a
-caller's number, so the `micro_sealed_evaluation.py` hole does not reach it; (e) the walk-forward
-floors (40 train / 20 test sessions) are unmeetable on ~3 session-equivalents, and J-09's own
-acceptance names `insufficient_n` and "no survivor" as acceptable end states, so the honest result
-is reachable today. I record the residual risk plainly: J-09 step 1's predeclarations are permanent
-hash-chained records, so building it wrong is costly to undo — which is exactly why the
-recommendation pairs the reversal with a FULL round and the independent auditor, and instructs the
-next planner to write down any dependency it finds rather than silently deferring again.
-**Reversible:** yes — if the next iteration's planner or auditor identifies a concrete dependency on
-the unmade ruling, it records that in the spec and J-09 returns to the blocked list with a written
-reason instead of an inherited one; no permanent record is created by this note itself.
-
-## iter-20 — goal-evaluator (second)
-
-**Ambiguity:** whether ESCALATE is available when the decision tree's literal clauses do not fire.
-Tree C.4's three triggers again do not fire literally: "the same journey failed 2+ consecutive
-iterations" (J-09 carries `failing` across iterations 13–20 but has NEVER been attempted — every
-spec placed it out of scope, and I maintain iterations 13–19's reading rather than adopting a
-convenient one); "the review lane failed and the pipeline proceeded fail-open" (no lane returned
-FAIL — review PASS, browser-qa PASS, coherence COHERENCE-PASS); "this LEAN iteration surfaced
-cross-cutting ambiguity" (this iteration was `evidence`, which is lighter than lean — the spirit
-fires, the literal word does not). Read strictly, first-match-wins lands on C.5 → CONTINUE.
-Iteration 19 deliberately ENDED a seven-round escalation streak, so re-starting it needs a reason
-specific to this round, not inertia.
-**We chose:** ESCALATE, recorded again as a deliberate departure from the tree's literal text rather
-than a pretence that a clause fired. Two grounds specific to this round, both new. (1) Iteration
-19's reasons for ending the streak were explicitly round-19 reasons and have expired: it said "there
-is no new code next round for the audit lane to audit" — next round is J-09, the largest new-code
-round of the era, creating permanent hash-chained predeclarations and a wall-touch enumeration rule
-that exists nowhere yet. (2) I read the engine's own depth logic this round instead of repeating the
-session's folklore, and it settles the question mechanically: `run-goal.sh:2440-2451` makes an
-evaluator's `lean`/`evidence` recommendation BINDING, but a `full` recommendation falls through to
-the legacy allowlist at `:2478-2494`, which grants full only for a prior ESCALATE/REGRESSION verdict,
-a prior coherence FAIL, a `Full trigger:` line the next decomposer may or may not write, or a due
-hardening cadence — and this session runs the cadence disabled at 0. So CONTINUE + "Depth: full" is
-demoted to lean by default; only the verdict line guarantees the audit lane. Cost of being wrong:
-one extra lane and a longer round. Cost of being right and writing CONTINUE: the era's biggest
-new-code round, writing permanent records, ships unaudited after twelve prior escapes past
-review+QA. I also state plainly that this round itself was CLEAN — the escalation is forward-looking,
-not a complaint about iteration 20.
-**Reversible:** yes — ESCALATE only sets the next iteration's depth; it halts nothing. Once J-09 is
-built and audited, a later evaluator returns to plain CONTINUE on its own merits.
-
-## iter-21 — goal-decomposer
-
-**Ambiguity:** whether goal.md J-09 step 1's "predeclare... in priority order" binds the SCREENING
-(Scout-run) order, or only the order the three frozen specs are written/registered in source. The
-era's own Success Criteria explicitly permits deferring "up to two of the three pilot studies"
-under scope pressure, which is in tension with a strict reading that all three must be screened
-together in stated order.
-**We chose:** freeze all three specs in stated priority order (1 range-wall failed aggression, 2
-delta divergence, 3 capitulation exhaustion) in source this iteration, but take only Study 2
-(delta divergence at level tests) through a full Scout screen + walk-forward floor check to a
-recorded ledger decision. Grounds: Study 2's formula (`divergence_at_level()`,
-`DIVERGENCE_TRAILING_SECONDS`, `DIVERGENCE_DELTA_VOLUME_FRACTION`) is already 100% coded and
-spec-frozen, so it carries the LEAST T-1 invention risk of the three; Studies 1 and 3, while also
-buildable from already-frozen primitives (`failed_aggression_score`, `refill_consistent`), need
-additional co-occurrence/stratification design the developer has not yet built. Deferring them is
-explicitly sanctioned by the Success Criteria's own scope-pressure order.
-**Reversible:** yes — a later iteration screens Studies 1 and 3 in either order; nothing about
-Study 2's already-recorded decision changes when that happens.
-
-## iter-21 — goal-decomposer (second)
-
-**Ambiguity:** `docs/rapid-validation-spec.md` §10 point 7 (r5 owner ruling, ordered iter-9) says
-the "seal-unaware `strategy_trade_readiness`" caveat sentence must be served "wherever that metric
-is served." Its only current serving surface is `referee_evidence.py`'s `strategy_trade_readiness`
-function, consumed exclusively by the byte-frozen `GET /research/desk/referee/evidence` route
-behind the shipped, unchanged Referee Registry `/desk` section. Foundation invariant #5 says every
-shipped `/desk` section "keeps working exactly as shipped... no shipped section, column, or
-behavior changes," and `referee_*.py` modules must stay byte-identical this whole era. Nothing
-states how to reconcile a spec-level disclosure requirement against a section/module the era
-otherwise freezes.
-**We chose:** split the item. Built this iteration: the guard/source-scan proving zero
-Rapid-Microscope-module (`micro_*.py`/`scout*.py`/`walkforward*.py`/`vault.py`) callers of
-`strategy_trade_readiness`/`referee_evidence` — this is unambiguous, touches nothing frozen, and
-directly satisfies the spec clause "no Scout, walk-forward, vault, graduation, or readiness-floor
-decision may consume it." Dropped this iteration (T-1: ambiguous or unimplementable ⇒ drop,
-record, surface for a ruling): the UI-caveat half, because its only current surface would require
-either editing the byte-frozen `referee_evidence.py` or changing the shipped Referee Registry
-section's rendered content — either reading breaches a separate *(critical)* rail, and zero
-Rapid-Microscope surface currently consumes the value at all (confirmed via grep), so there is no
-non-frozen surface to attach the caveat to yet.
-**Reversible:** yes — if a future iteration wires `strategy_trade_readiness` into any NEW
-(non-frozen) Rapid-Microscope surface, that surface must carry the caveat from day one; if the
-owner rules that additive disclosure text beside a shipped section does not breach invariant #5,
-that ruling unblocks building the dropped half directly.
-
-## iter-21 — goal-decomposer (third)
-
-**Ambiguity:** J-09's acceptance text says three ledgered study families "EXIST with predeclared
-specs" (present tense) — unclear whether this requires a real production Scout-ledger write, or is
-satisfied by frozen, versioned, reviewable source-code specs (the same pattern J-04's
-`default_fixture_grid()` has always used, where the real production ledger stays empty and J-10's
-own golden script still asserts "No candidates ledgered." even after J-04 shipped).
-**We chose:** the source-code-frozen reading, matching J-04/J-05/J-06's own established
-precedent — real production Scout/fold runs are an explicit future operator act, not something the
-goal-mode agent triggers against the live `.data/` store. This keeps J-10's golden script assertion
-intact and avoids an unplanned, unreviewed production write the same round it registers permanent
-hash-chained ledger rows.
-**Reversible:** yes — the moment the owner runs the pilot grid for real (operator act, like J-06's
-tranche recording), the production ledger reflects it and J-10's assertion updates in the SAME
-disciplined way any future Scout run would require.
-
-## iter-21 — goal-evaluator
-
-**Ambiguity:** J-09's acceptance says "three ledgered study families exist with predeclared specs
-whose registration timestamps precede their first outcome read ... each serves its screen with
-evidence class, denominators, ... and the economic column; each carries a recorded decision".
-Iteration 21's decomposer logged a reading in which frozen, versioned, reviewable SOURCE specs
-satisfy "ledgered study families EXIST" (matching `default_fixture_grid()`'s J-04 precedent), which
-would let one screened study plus two source-only specs count as satisfying step 1.
-**We chose:** I do NOT extend that reading to the journey's PASS bar. "Ledgered" plainly means a
-row in the ledger, and the phrase "EACH serves its screen ... EACH carries a recorded decision" is
-per-study, so with one of three screened J-09 is `partial`, not `passing`. I accept the
-decomposer's reading only for its narrow purpose — that writing the three specs in source, in the
-stated priority order, before any outcome was read, is a legitimate way to satisfy the
-predeclaration ORDER requirement without a production ledger write. The iteration spec's own DoD
-already set the bar at "J-09 passes as at least `partial`", so nothing rides on this beyond making
-the reason explicit for the next round.
-**Reversible:** yes — the moment Studies 1 and 3 are screened to recorded decisions, the two
-readings converge and J-09 passes on either.
-
-## iter-21 — goal-evaluator (second)
-
-**Ambiguity:** whether ESCALATE is available when the decision tree's literal clauses do not fire.
-Tree C.4's three triggers again do not fire literally: "the same journey failed 2+ consecutive
-iterations" (J-09 carried `failing` across iterations 13–20 but was never ATTEMPTED, and this
-iteration it IMPROVED to `partial`); "the review lane failed and the pipeline proceeded fail-open"
-(the REVIEW lane returned PASS_WITH_NOTES — it was the BROWSER-QA lane that returned FAIL); "this
-LEAN iteration surfaced cross-cutting ambiguity" (this iteration was `full`). Read strictly,
-first-match-wins lands on C.5 → CONTINUE.
-**We chose:** ESCALATE, recorded as a deliberate departure from the tree's literal text rather than
-a pretence that a clause fired. Three grounds, each specific to this round and each checked by me
-rather than inherited. (1) The fail-open trigger fires in SUBSTANCE: the merged browser verdict is
-FAIL (UT-04) and the round still finalized with `CLOSURE-PASS` — I read `closure_gate.py`'s own
-cross-reference block and it checks the UX-regression verdict and artifact presence but never the
-browser verdict, so a failing checking lane cannot gate a round. The methodology's A.5 signal is
-the same shape with the lanes swapped. (2) Non-self-verification: the ONLY lane that repaired UT-04
-is the audit lane, and no other lane has checked its edit; I re-proved the fix non-vacuously myself
-this round, but next round's new work (two permanent hash-chained study decisions, plus a durable
-cache whose naive form the auditor itself named a silent-wrong-data risk) would ship unaudited.
-(3) Mechanically decisive, and NEW this round: I read `run-goal.sh`'s depth arbiter (the ladder at
-~:2420-2455) and rung 3 is `budget-breached && PRIOR_VERDICT == CONTINUE → lean`. This iteration
-demonstrably exceeded its wall-clock budget (`ux-regression.md` = `UX-REGRESSION-SKIPPED`, trim rung
-3b; UT-J-07 = `DEFERRED-BUDGET`, trim rung 2), and the marker is written AFTER my verdict
-(`run-goal.sh:2877`) — so a CONTINUE here does not merely risk a lean round, it GUARANTEES one,
-while rung 1 (`prior-verdict-ESCALATE`) grants full ahead of it. The choice is "full vs certainly
-lean", not "full vs probably full". I pair the escalation with an explicit instruction to keep the
-round SMALL so the clock does not defer J-07 a third time.
-**Reversible:** yes — ESCALATE only sets the next iteration's depth; it halts nothing, and once
-Studies 1/3 are audited a later evaluator returns to plain CONTINUE on its own merits.
-
-## iter-21 — goal-evaluator (third)
-
-**Ambiguity:** how to score J-07 "Graduation", whose merged results row reads `DEFERRED-BUDGET`
-(not tested). The rail says it keeps its prior status; iteration 19 faced the same situation and
-chose `evidence_makeup: true` to schedule a make-up ride, stretching a flag defined for a
-*defective* capture to cover an *absent* one.
-**We chose:** J-07 stays `passing` with `last_verified_iter` left at iteration 20, and I set NO
-flag. Grounds: unlike iteration 19, J-07 already TOOK its make-up ride — iteration 20 produced a
-fresh, discriminating capture — and `apps/backend/app/research/micro_graduation.py` is absent from
-this iteration's 12-file diff, so under evidence durability (methodology A.6) the iteration-20
-proof remains valid and nothing is owed except a routine re-check. Adding `evidence_makeup` would
-misstate the situation as a capture defect. The deterministic achievement gate still blocks
-GOAL_ACHIEVED on the deferred row, which is the correct and sufficient consequence, and my
-recommendation names the re-check explicitly so it is not silently dropped a third time.
-**Reversible:** yes — if the next round defers J-07 again, the next evaluator should treat repeated
-budget-deferral of the same journey as a structural problem rather than carrying the status forward
-a fourth time.
-
-## iter-22 — goal-decomposer
-
-**Ambiguity:** whether J-09 Study 1's "run each through the Scout... to a recorded answer" (goal.md
-step 2) requires building the two-feature `failed_aggression_score` × opposite-side
-`refill_consistent` co-occurrence signature goal.md's own prose describes for the eventual real
-screen, or is satisfied by screening the already-frozen single-feature request
-(`failed_aggression_score >= 0.5` alone) iter-21 registered and left explicitly unbuilt-but-honest
-("T-1: genuinely unbuilt, never invented here... the co-occurrence disclosure is added when that
-joint-condition machinery is built, a future iteration's own scope").
-**We chose:** screen Study 1 on its already-frozen single-feature request this iteration, without
-inventing the co-occurrence machinery. Grounds: (a) J-09's own acceptance criterion asks only that
-"each serves its screen ... each carries a recorded decision in the closed vocabulary" — it does not
-require the co-occurrence signature specifically; (b) `docs/rapid-validation-spec.md`'s own law is
-"ambiguous or unimplementable ⇒ DROP the procedure ... never improvise" — inventing an unspecified
-two-feature joint-condition rule this round would be exactly the improvisation the spec forbids,
-and the iter-17 lesson on threshold/rule modules ("check specifically whether the fixture's numbers
-coincide anywhere the assertion depends on them") argues for extra caution before adding any new
-threshold-shaped machinery under time pressure; (c) iter-21's own decomposer already reasoned this
-exact deferral through and recorded it as reversible, future scope, not a defect.
-**Reversible:** yes — a later iteration can extend Study 1's request to the real two-feature
-co-occurrence condition and re-screen it as a NEW candidate variant (a new row, never an edit to
-this iteration's recorded decision, per the ledger's own append-only discipline).
-
-## iter-22 — goal-evaluator
-
-**Ambiguity:** how to score J-09 "The pilot studies" when its Acceptance clause is fully met but
-its STEP 2 is not. Acceptance asks for "three ledgered study families ... whose registration
-timestamps precede their first outcome read; each serves its screen with evidence class,
-denominators, concentration/ToD/fallback disclosures, and the economic column; each carries a
-recorded decision in the closed vocabulary — with `no survivor`, wrong-direction, and
-`insufficient_n` all acceptable end states". Step 2, however, says "Run each through the Scout on
-the full joinable corpus (legacy exploratory symbol-days + any EXPOSED tranche shards)". All three
-studies were screened against committed hermetic fixtures with zero (Studies 1/2) or one (Study 3)
-usable anchor; the legacy 12 symbol-days were never queried, so every answer is `insufficient_n`
-produced from an empty or near-empty anchor set (auditor finding B2).
-**We chose:** `passing`. Grounds, each checked this round rather than inherited: (a) I verified the
-Acceptance clause field by field from the raw ledger row in `UT-10-ledger.jsonl` — `evidence_class:
-historical_exposed_diagnostic`, `n_candidate`/`n_comparator`/`n_sessions_total`/`n_usable_sessions`,
-`concentration`, `fallback_tercile`, `best_of_n_disclosure`, and the economic column
-(`econ_floor.floor_bps` = 3.356 bps with its "research cost proxy" sentence) are all present and
-honestly zero/null, plus a closed-vocabulary `decision` — and `insufficient_n` is a NAMED acceptable
-end state in the journey's own text; (b) the step-2 corpus run is not the machine's to make: it
-writes permanent hash-chained rows into the live `.data/` ledger (irreversible), it would break
-J-10's own passing golden assertion "No candidates ledgered." against that store, and the iter-21
-auditor measured the anchor search as quadratic and uncancellable, which is why THIS iteration's
-spec listed it under OUT OF SCOPE as "still forbidden" — so it is owner-gated in the same way J-06's
-tranche is; (c) the iteration-20 and iteration-21 evaluators both stated in writing that three
-recorded decisions, including "not enough evidence", would make J-09 green, and iteration 22 was
-scoped to exactly that — re-raising the bar after the work was delivered to order would be the
-framework's own #1 anti-pattern (vague acceptance criteria → infinite loop). I record the residual
-risk plainly: J-09's three questions have been ASKED properly but never ANSWERED with data, and if
-the owner authorises a real-corpus run later, the results will land as new ledger rows beside these,
-never as edits to them.
-**Reversible:** yes — a later iteration (after the speed fix, and after J-10's golden assertion is
-updated to expect the rows) can run the three studies against the real corpus; the append-only
-ledger makes those new rows purely additive, and this scoring note is superseded rather than undone.
-
-## iter-22 — goal-evaluator (second)
-
-**Ambiguity:** whether STALLED is the right verdict on an iteration that MADE progress (J-09
-partial → passing) and where identifiable machine work still exists (the 22.3-second readiness
-latency fix, the duplicated selector table, Study 3's missing non-vacuity assertion). Decision tree
-C.2 fires on "every unblock path for the current blocker is a human-owned action", but the agent
-file's own note glosses STALLED as "I cannot identify productive next work" — and I can identify
-some.
-**We chose:** STALLED. The two readings diverge only because "productive" is doing double duty. The
-blocker to the GOAL is J-06 alone, and all three of its unblock paths are human-owned (authorise the
-paid-feed tranche recording and attend it; amend `docs/goal.md`'s J-06; or accept an unfinished
-era) — C.2 fires literally, and it is listed above C.4/C.5 in a first-match-wins tree. The remaining
-machine work is real but moves NO journey: it is polish on already-green surfaces, and the agent
-file forbids scoring evidence/polish-only work as progress. Spending another full round on it would
-delay, for a seventh consecutive round, the moment the owner is actually asked the one question that
-can finish the era. I therefore halt and name the polish jobs as an explicit third resume option
-rather than silently converting them into a round of their own.
-**Reversible:** yes — STALLED halts the loop but destroys nothing; `--resume` after any of the three
-choices continues from exactly this state, and the three polish jobs are carried in
-`iteration-state.md` so a resume is productive immediately.
-
 ## iter-23 — goal-decomposer
 
 **Ambiguity:** J-06's browser acceptance evidence (the Microscope Readiness / Validation Vault
@@ -1148,3 +666,53 @@ which is a failure, not a capture question. The make-up capture is scheduled as 
 never as an iteration goal.
 **Reversible:** yes — one element capture of the sentinel end state restores an ordinary citation
 with no other change.
+
+## iter-28 — goal-evaluator
+
+**Ambiguity:** whether STALLED's first branch — "every unblock path for the current blocker is a
+human-owned action" (`.claude/judgment-rubrics.md` §3: credentials, paid services, network
+allowlists, account actions, irreversible steps, or a human-owned DECISION) — reaches a blocker
+whose remaining paths are (a) an owner RULING on whether four dev-chain honesty/plumbing complaints
+count against this era, (b) two items the owner explicitly deferred, and (c) two ordinary developer
+jobs that the engine's own depth ladder will not dispatch a developer for. Branch two of STALLED
+("no actionable next step is identifiable") plainly does NOT fire — I can name the next steps.
+Nothing in my instructions says whether an engine-governor blocker counts as human-owned.
+**We chose:** STALLED, claimed strictly under branch one, with the mechanism stated in the open
+rather than implied. Grounds I checked rather than inherited: (i) I read `.claude/maintenance-
+protocol.md` §1 myself and confirmed `agents/**` and `scripts/automation/**` are in the "edit only
+with a matching approved task" class, so the four dev-chain items genuinely cannot be closed by a
+product iteration — the earlier rounds' claim was right but I did not take it on trust; (ii) I read
+the depth arbiter in `scripts/automation/run-goal.sh` (rungs: hard-required → prior ESCALATE/
+REGRESSION → prior coherence FAIL → budget-breach+CONTINUE → cadence → full-cap → evaluator-
+requested depth) plus the SPEED-9 evidence backstop at ~2745-2775, and confirmed that with a
+budget overrun (3,600s budget; telemetry `iter_budget` iter 28 records 11,738s elapsed at the
+mid-round check) and 10/10 journeys
+green, CONTINUE resolves deterministically to lean and then to `evidence` — no developer, no
+reviewer, exactly round 27; (iii) unlike ESCALATE, STALLED buys me nothing — it halts — so it
+cannot be the "verdict as a lever" that rounds 24 and 26 rightly banned. I explicitly did NOT claim
+ESCALATE: its only candidate clause needs a LIGHT round to have surfaced the issue and this round
+was full. If you read this differently, resume with `--resume` and tell the next round to continue;
+no journey status, anti-goal score or citation in this evaluation changes under either reading.
+**Reversible:** yes — a `--resume` restores the loop with every recorded status untouched.
+
+## iter-28 — goal-evaluator (second)
+
+**Ambiguity:** whether J-10's `evidence_makeup` flag may be CLEARED when this round's only fresh
+capture for it (`UT-06-result.png`) is an element-scoped crop of just the Referee Runs block, while
+its acceptance text names "the sentinel screenshots show every kept surface as shipped" — including
+the cockpit `/` and `/structure`, neither of which was photographed this round. Methodology A.7 says
+the flag clears on "any fresh capture, pass or fail", but the flag was set at iter-27 precisely
+because the capture did not show what the journey asserts.
+**We chose:** clear the flag and keep `passing`. Grounds: (a) the iter-27 defect was specifically a
+STITCHED full-page shot with a duplicated header and a mid-table truncation, and the round's own
+spec named the remedy as an element-scoped capture — that is exactly what was delivered, from a
+single atomic CDP capture cropped to the element's bounding box, which I confirmed by opening it;
+(b) the behaviour evidence is independent of the capture — all 17 sentinel steps were driven live
+and asserted individually, including the cockpit "Buyer Control" state and `/structure`'s
+300.11-302.2 band, and the goldens directory is git-clean so the assertions run are the ones the
+repo already trusts; (c) the product diff touched only backend test files and the `/desk` Referee
+Registry block, so under A.6 durability the cockpit and `/structure` captures from earlier rounds
+remain valid — no re-photograph is owed for unchanged code. I record in the journey note that no
+fresh cockpit or `/structure` photograph exists for this round, rather than hiding it.
+**Reversible:** yes — a later round photographing those two surfaces would confirm, not overturn,
+this scoring.

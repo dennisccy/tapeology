@@ -5017,6 +5017,17 @@ function RefereeHypothesesTable({
   );
 }
 
+// goal-rapid-microscope-iter-28 (J-01/J-10, spec section 10.7 r5 owner ruling): the ONE
+// deliberate, owner-authorized exception to Foundation invariant 5 -- static disclosure copy
+// only, never a computed value, never a behavior change. `referee_evidence.strategy_trade_
+// readiness` counts dataset FILES through its own enumeration and may include withheld/unexposed
+// Rapid-Microscope shards; `referee_evidence.py`/`referee_routes.py` stay byte-frozen this era
+// (never edited, never intercepted), so the caveat can ONLY be served here, at the rendering
+// layer, verbatim beside the served `strategy_trade` figures. Defined ONCE as a shared constant
+// (never duplicated ad hoc -- TC-4) so a single edit keeps every render site in sync.
+const REFEREE_EVIDENCE_SEAL_UNAWARE_CAVEAT =
+  "Legacy Referee readiness metric — seal-unaware in the Rapid Microscope era. It may include withheld/unexposed Rapid-Microscope shards and must not be used as the canonical Rapid-Microscope readiness count.";
+
 // goal-referee-iter-13 (J-12): the readiness-fold blocks -- GET /research/desk/referee/evidence's
 // FIRST direct UI reader (registered since J-01/iteration-1; previously curl/tests-only). Rendered
 // directly BELOW the shipped Registered Hypotheses table above, inside the SAME "Referee Registry"
@@ -5195,6 +5206,12 @@ function RefereeEvidenceReadinessSection({
           className="mt-2 text-[11px] text-slate-400"
         >
           {evidence.strategy_trade.tick_gate_statement}
+        </p>
+        <p
+          data-testid="referee-evidence-strategy-seal-unaware-caveat"
+          className="mt-2 text-[11px] text-slate-500"
+        >
+          {REFEREE_EVIDENCE_SEAL_UNAWARE_CAVEAT}
         </p>
         <ul
           data-testid="referee-evidence-strategy-basis-caveats"

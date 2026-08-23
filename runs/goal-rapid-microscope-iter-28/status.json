@@ -1,0 +1,21 @@
+{
+  "phase": "goal-rapid-microscope-iter-28",
+  "status": "blocked",
+  "current_step": "closure_failed",
+  "updated_at": "2026-08-23T21:56:28.722560Z",
+  "started_at": "2026-08-23T15:33:22.782524Z",
+  "cli": "claude",
+  "blockers": [],
+  "changed_files": [
+    "apps/backend/tests/test_micro_readiness.py",
+    "apps/backend/tests/test_micro_join.py",
+    "apps/backend/tests/test_micro_readiness_seal_unaware_caveat.py",
+    "apps/frontend/app/desk/page.tsx",
+    "docs/handoffs/goal-rapid-microscope-iter-28-dev.md",
+    "docs/handoffs/goal-rapid-microscope-iter-28-frontend.md",
+    "reports/phase-goal-rapid-microscope-iter-28-implementation-summary.md"
+  ],
+  "tests_run": true,
+  "browser_checks_run": true,
+  "next_action": "none"
+}

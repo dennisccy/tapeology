@@ -1,34 +1,34 @@
 # Goal Session Summary — rapid-microscope
 
-**Final verdict:** STALLED
-**Total iterations:** 23
-**Wall time (seconds):** 60109
+**Final verdict:** AWAITING_PUMP
+**Total iterations:** 28
+**Wall time (seconds):** 20
 **Quota pauses:** 0
 **Started:** 2026-08-16T22:25:35.904129Z
-**Finished:** 2026-08-21T00:53:10.111647Z
+**Finished:** 2026-08-23T21:16:32.345944Z
 
 ## Branch
 
 This session pushed iteration commits to `goal/rapid-microscope`. Open a PR with:
 
     gh pr create --base main --head goal/rapid-microscope \
-      --title "feat: rapid-microscope — STALLED" \
+      --title "feat: rapid-microscope — AWAITING_PUMP" \
       --body-file runs/goal-session-rapid-microscope/summary.md
 
 ## Final journey state
 
 | Journey | Status | Last passing iter |
 |---|---|---|
-| J-01 | passing | goal-rapid-microscope-iter-22 |
-| J-02 | passing | goal-rapid-microscope-iter-22 |
-| J-03 | passing | goal-rapid-microscope-iter-22 |
-| J-04 | passing | goal-rapid-microscope-iter-22 |
-| J-05 | passing | goal-rapid-microscope-iter-22 |
-| J-06 | partial | - |
-| J-07 | passing | goal-rapid-microscope-iter-22 |
-| J-08 | passing | goal-rapid-microscope-iter-22 |
-| J-09 | passing | goal-rapid-microscope-iter-22 |
-| J-10 | passing | goal-rapid-microscope-iter-22 |
+| J-01 | passing | goal-rapid-microscope-iter-27 |
+| J-02 | passing | goal-rapid-microscope-iter-27 |
+| J-03 | passing | goal-rapid-microscope-iter-27 |
+| J-04 | passing | goal-rapid-microscope-iter-27 |
+| J-05 | passing | goal-rapid-microscope-iter-27 |
+| J-06 | passing | goal-rapid-microscope-iter-27 |
+| J-07 | passing | goal-rapid-microscope-iter-24 |
+| J-08 | passing | goal-rapid-microscope-iter-27 |
+| J-09 | passing | goal-rapid-microscope-iter-27 |
+| J-10 | passing | goal-rapid-microscope-iter-27 |
 
 ## Anti-goal violations
 
@@ -74,6 +74,13 @@ This session pushed iteration commits to `goal/rapid-microscope`. Open a PR with
 - [minor] Single source of truth - each shared value is computed once, owned by one canonical endpoint, and read verbatim by REST/WS/UI/MCP/reports. The coherence-auditor hard-fails violations. (critical) (iter goal-rapid-microscope-iter-22)
 - [minor] Browser evidence - every browser acceptance needs a screenshot - none => `unknown`, never `passing` (T-10) (iter goal-rapid-microscope-iter-22)
 - [minor] Hermetic tests: keyless on committed fixtures (synthetic corpora with known truth; the spec's oracle vectors; fixture shards) (iter goal-rapid-microscope-iter-22)
+- [minor] A recorded tranche is one opaque research pool until its shards are exposed. ... Unexposed pool members stay mutually indistinguishable; identity becomes public only at real exposure or assignment. The governing test is the TR-2 inference trap: given the registered universe plus every public artifact, no still-unexposed vault-eligible shard is identifiable with certainty. *(critical - spec r5)* (iter goal-rapid-microscope-iter-23)
+- [minor] Fabricated / substituted data -- no value is presented to a reader that was never in the record (framework anti-goal category; cf. goal.md's 'No value is served before it exists' and the project's own apps/frontend/lib/datetime.ts:132-148 day-marker warning). (iter goal-rapid-microscope-iter-24)
+- [minor] Constraints -- 'T-10 Evidence honesty. No screenshot => unknown, never passing; operator acts are reported run-or-not-run' -- a lane may not certify what it did not check. (iter goal-rapid-microscope-iter-24)
+- [minor] Constraints -- T-10 Evidence honesty, applied to stored golden coverage: a Definition-of-Done item may not be certified by a dev-local claim the harness never executed. (iter goal-rapid-microscope-iter-24)
+- [critical] Foundation invariants -- 'no fabricated data' / Single source of truth: each shared value is computed once and read verbatim, so a cached copy may never disagree with the canonical computation. *(critical)* (iter goal-rapid-microscope-iter-26)
+- [minor] Constraints -- 'the suite stays keyless and hermetic' (Era-B/B2 rail, binding) and Success Criteria #1 'Nothing kept regresses -- full backend suite green ... every iteration'. A suite that reads the operator's own mutable multi-gigabyte store is neither hermetic nor runnable, so no lane can honestly evidence criterion #1. (iter goal-rapid-microscope-iter-26)
+- [minor] Constraints -- 'T-10 Evidence honesty. No screenshot => unknown, never passing; operator acts are reported run-or-not-run' -- a lane may not certify, NARRATE, or claim as captured what it did not check. (iter goal-rapid-microscope-iter-27)
 
 ## Telemetry
 
@@ -501,22 +508,120 @@ See `runs/goal-session-rapid-microscope/telemetry.jsonl` for the structured even
       pump-wait                  0.4m
       OVER BUDGET at post-dev-fanout: 4237s > 3600s (mode=trim)
       overlap saved             35.3m  (parallel steps)
-  session: 23 completed iteration(s), mean wall 224.4m
-      total developer                 2052.1m
-      total reviewer                   705.7m
-      total coherence-auditor          586.7m
-      total goal-evaluator             584.4m
-      total auditor                    578.7m
-      total browser-qa-agent           503.2m
-      total goal-decomposer            474.4m
-      total qa                         361.6m
-      total iteration-summarizer       289.1m
-      total ui-impact-analyst          131.6m
-      total orchestrator               121.3m
-      total demo-narrator              107.3m
+  goal-rapid-microscope-iter-23  depth=lean  verdict=ESCALATE  wall=268.7m
+      developer                  191.4m  calls=1
+      goal-evaluator              28.1m  calls=1
+      browser-qa-agent            19.9m  calls=1
+      goal-decomposer             19.1m  calls=1
+      coherence-auditor           10.4m  calls=1
+      reviewer                    10.1m  calls=1
+      browser-qa-replay            1.2m  calls=1
+      [engine] lean-pipeline     221.5m  (contains agent time above)
+      [engine] showcase-join       0.0m  (contains agent time above)
+      (resume-skipped: coherence-auditor)
+      pump-wait                  0.3m
+      OVER BUDGET at browser-qa: 13235s > 3600s (mode=trim)
+      overlap saved             11.6m  (parallel steps)
+  goal-rapid-microscope-iter-24  depth=full  verdict=CONTINUE  wall=201.4m
+      developer                   55.4m  calls=1
+      browser-qa-agent            28.7m  calls=1
+      auditor                     28.1m  calls=1
+      qa                          19.6m  calls=1
+      goal-decomposer             19.3m  calls=1
+      goal-evaluator              19.1m  calls=1
+      reviewer                    10.2m  calls=1
+      coherence-auditor           10.0m  calls=1
+      orchestrator                 9.9m  calls=1
+      ui-impact-analyst            9.9m  calls=1
+      demo-narrator                9.8m  calls=1
+      iteration-summarizer         9.8m  calls=1
+      [engine] full-pipeline     153.0m  (contains agent time above)
+      [engine] showcase-join       0.1m  (contains agent time above)
+      (resume-skipped: ui-test-design, ux-regression)
+      pump-wait                 19.6m
+      OVER BUDGET at post-dev-fanout: 5692s > 3600s (mode=trim)
+      overlap saved             28.3m  (parallel steps)
+  goal-rapid-microscope-iter-25  depth=lean  verdict=ESCALATE  wall=123.7m
+      developer                   64.4m  calls=1
+      reviewer                    19.4m  calls=1
+      goal-evaluator              19.2m  calls=1
+      coherence-auditor           10.6m  calls=1
+      browser-qa-agent            10.5m  calls=1
+      iteration-summarizer        10.0m  calls=1
+      goal-decomposer              9.9m  calls=1
+      browser-qa-replay            1.2m  calls=1
+      [engine] lean-pipeline      94.4m  (contains agent time above)
+      [engine] showcase-join       0.1m  (contains agent time above)
+      (resume-skipped: coherence-auditor)
+      pump-wait                  0.2m
+      OVER BUDGET at browser-qa: 5634s > 3600s (mode=trim)
+      overlap saved             21.6m  (parallel steps)
+  goal-rapid-microscope-iter-26  depth=full  verdict=CONTINUE  wall=413.8m
+      developer                  156.1m  calls=1
+      auditor                     92.4m  calls=1
+      qa                          47.5m  calls=1
+      browser-qa-agent            47.5m  calls=1
+      goal-evaluator              37.5m  calls=1
+      goal-decomposer             28.9m  calls=1
+      reviewer                    10.2m  calls=1
+      coherence-auditor           10.2m  calls=1
+      ui-impact-analyst           10.1m  calls=1
+      orchestrator                10.0m  calls=1
+      demo-narrator                9.9m  calls=1
+      iteration-summarizer         9.8m  calls=1
+      [engine] full-pipeline     337.1m  (contains agent time above)
+      [engine] showcase-join       0.1m  (contains agent time above)
+      (resume-skipped: ui-test-design, ux-regression)
+      pump-wait                 57.3m
+      OVER BUDGET at post-dev-fanout: 12315s > 3600s (mode=trim)
+      overlap saved             56.3m  (parallel steps)
+  goal-rapid-microscope-iter-27  depth=lean  verdict=ESCALATE  wall=79.0m
+      goal-decomposer             29.0m  calls=1
+      goal-evaluator              28.6m  calls=1
+      browser-qa-agent            10.1m  calls=1
+      demo-narrator                9.9m  calls=1
+      iteration-summarizer         9.8m  calls=1
+      [engine] evidence-pipeline    21.3m  (contains agent time above)
+      [engine] showcase-join       0.1m  (contains agent time above)
+      (resume-skipped: developer, reviewer, coherence-auditor)
+      pump-wait                 10.0m
+      overlap saved              8.4m  (parallel steps)
+  goal-rapid-microscope-iter-28  depth=full  verdict=?  wall=?  (incomplete/interrupted attempt)
+      developer                  165.3m  calls=1
+      qa                          48.3m  calls=1
+      browser-qa-agent            19.1m  calls=1
+      goal-decomposer             10.2m  calls=1
+      iteration-summarizer        10.2m  calls=1
+      orchestrator                10.1m  calls=1
+      reviewer                     9.9m  calls=1
+      ui-impact-analyst            9.9m  calls=1
+      demo-narrator                9.9m  calls=1
+      [engine] showcase-join       0.1m  (contains agent time above)
+      (resume-skipped: ui-test-design, ux-regression)
+      pump-wait                 19.2m
+      OVER BUDGET at post-dev-fanout: 11738s > 3600s (mode=trim)
+  goal-rapid-microscope-iter-28  depth=full  verdict=?  wall=?  (incomplete/interrupted attempt)
+      auditor                      0.2m  calls=1  failures=1
+      [engine] full-pipeline       0.2m  (contains agent time above)
+      [engine] showcase-join       0.0m  (contains agent time above)
+      (resume-skipped: goal-decomposer)
+      pump-wait                  0.2m
+  session: 28 completed iteration(s), mean wall 223.1m
+      total developer                 2684.8m
+      total reviewer                   765.5m
+      total goal-evaluator             716.9m
+      total auditor                    699.5m
+      total browser-qa-agent           639.0m
+      total coherence-auditor          627.9m
+      total goal-decomposer            590.7m
+      total qa                         477.1m
+      total iteration-summarizer       338.6m
+      total ui-impact-analyst          161.5m
+      total orchestrator               151.3m
+      total demo-narrator              146.9m
       total readme-maintainer           12.1m
       total ui-test-designer             8.9m
-      total browser-qa-replay            4.0m
+      total browser-qa-replay            6.5m
       total AWAITING_PUMP paused gaps: 2.3m
-      halts: AWAITING_PUMP, AWAITING_PUMP, AWAITING_PUMP, STALLED
+      halts: AWAITING_PUMP, AWAITING_PUMP, AWAITING_PUMP, STALLED, AWAITING_PUMP
 ```

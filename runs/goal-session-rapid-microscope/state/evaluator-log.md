@@ -1977,3 +1977,78 @@ work waiting to be done edits a shipped, rule-sensitive screen and test files th
 store. In this era the independent checker has caught something after both the review and the
 quality check passed the same work twelve times. If you read this differently from me, tell the next
 round to run light — nothing else in this evaluation changes.
+
+## Iteration 28 — goal-rapid-microscope-iter-28
+
+**Date:** 2026-08-23T23:10:00Z
+**Verdict:** STALLED
+**Depth dispatched:** full (mandatory — the round-27 ESCALATE granted it outright)
+**Journey deltas:**
+- Newly passing: none — all ten were green when the round began and all ten are green now.
+- Newly failing: none. Regressed: none.
+- Re-checked by their own stored checks, machine-driven, all green: J-02, J-03, J-04, J-05, J-06,
+  J-08, J-09 (seven).
+- Re-checked live in a real browser, both green: J-01 "The era transition stands" and J-10 "The kept
+  product stands". I opened both pictures myself.
+- Two owed pictures DELIVERED and their flags cleared: J-08's Scout Ledger family row with
+  "1 variants tried" in frame, and J-10's element-scoped sentinel shot (round 27's stitched
+  full-page shot is replaced).
+- NOT tested at all: J-07 "Graduation" — the clock cut it, and the results table says so plainly
+  ("DEFERRED-BUDGET / not run this iteration"). It keeps its green status and its round-24 stamp.
+- Anti-goal violations: none critical, none introduced. ONE older item CLOSED and proved closed by
+  me. Two new items opened and both repaired inside the round. One new item opened and still open.
+  Eight stay open, none critical.
+
+**Reasoning:** I checked this round's two headline claims by doing them again rather than reading
+about them. The two slow test files really are fixed: I ran them and timed them myself — 99 tests in
+9.19 seconds, against the 14 minutes 38 seconds and 27 minutes 57 seconds the developer recorded
+before. The owner's warning sentence really is on the page: I opened two separate pictures of the
+running site and read it there, then extracted the sentence from both the written rule and the page
+source and compared them letter by letter — 205 characters, identical, em dash included. I also
+re-derived the frozen things by hand: all six referee files hash byte-identical to the era's opening
+record, the goldens folder is untouched, your real store is unchanged (11,395 files identical, vault
+still 21 shards, all sealed, last written 21 August), and the two cache files the new tests share
+with the live backend were never written this round — their timestamps predate the round's start.
+
+Two findings decide how I scored things and neither came from a lane. First, the closing gate marked
+this round a failure, and the gate is wrong: it matched the bare words "backend-only" inside a
+sentence describing a TEST, in a document that in fact describes the visible change correctly and at
+length. I opened both the document and the gate's rule. The round's genuinely good work is filed as
+a closure failure and the showcase tail never finished. Second, J-07 was shed for time. It is on this
+round's must-still-pass list, it has no stored check by an earlier decision, and instead of being
+handed to the live browser lane it was simply dropped. So a must-still-pass journey got no check of
+any kind, and because the automatic finishing gate treats that one dropped row as blocking, it alone
+now bars a "finished" result. I ran J-07's own fixture suite myself — 23 passed in 1.48 seconds, and
+its code is byte-unchanged since round 17 — but I deliberately did not use that to move its stamp,
+because the lane did not check it. The independent checker also earned its place again: it proved
+this round's new safety test could not fail for the reason it claimed, measured that the property the
+test names is actually false for one path, wrote a replacement and proved the replacement bites. That
+is the thirteenth time in this era it has caught something after the review and the quality check
+both passed the same work. It also caught the quality lane citing a 721-byte blank image as proof of
+the new sentence — the sixth time this era a lane has claimed something its own picture does not
+show, in the very round whose plan made that lesson binding.
+
+**Next-step recommendation:** Nothing further can move without three decisions from you. (1) Rule on
+the four open complaints that are about this build system rather than your product — a quality lane
+that ticks off checks it did not run, a closing gate that never reads the browser lane's verdict, a
+replay harness that cannot re-check a round's own target journeys, and now that same gate failing
+correct work on a word match. All four live in files this project's own maintenance rules put outside
+a product round's authority; I re-read that rule tonight rather than trusting the earlier note. If
+they do not count against the era, the era is two small jobs away from finished. (2) Decide the two
+items you already set aside — the chain-ledger identity question and the sealed judge's money floor.
+Neither blocks a journey. (3) If you want the last two developer jobs done — give the third slow test
+file the same one-line fix that worked twice today, and re-check J-07 so the finishing gate stops
+blocking — resume with CHAIN_REQUIRE_FULL_DEPTH=true.
+
+I am writing "stalled" rather than "continue", and I want the reason on the record because it ends a
+four-round argument. I read the engine's depth rules myself tonight in run-goal.sh. A round that
+overruns its clock and then receives a plain "continue" is forced out light; a light round whose
+target journeys are all already green is cut again to the lightest setting, which has no developer
+and no reviewer. This round overran badly (3,600s budget; 11,738s already elapsed at the mid-round check; it ran
+15:33 to 21:56) and all ten journeys are green, so both cuts apply and "continue" provably buys another round that cannot build anything — precisely what round 27
+was. I will not write "escalate" to dodge that: my rule for "escalate" needs a LIGHT round to have
+surfaced something, and this was a heavy one, so claiming it would be inventing a clause, which
+rounds 24 and 26 both refused for good reason. "Stalled" buys me nothing — it stops the run. That is
+the point. Rounds 26 and 27 both wrote that this question was yours and then kept going so you never
+had to answer it. This one stops so you can. Your work this round is parked as a local commit and not
+pushed, which is what the engine does on a halt.

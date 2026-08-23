@@ -14,6 +14,7 @@ cost is paid once for the whole file. Every OTHER test builds its own small, her
 from __future__ import annotations
 
 import json
+import os
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
@@ -384,6 +385,108 @@ def test_corrupted_dataset_surfaces_through_the_route_too(client, tmp_path):
     assert [s["dataset_id"] for s in body["shards"]] == [healthy["id"]]
 
 
+# --- iter-28 TC-10: a warm durable index shared with a DIFFERENT store's content must never mask
+# a checksum failure in a brand-new store's own files -- ``DatasetIndex.lookup`` keys on the
+# absolute file path (``dataset_index.py``), so a scratch copy's never-before-seen path is always
+# a genuine miss regardless of what else is warm in the shared index db.
+
+
+def test_tc10_corrupted_dataset_surfaces_with_a_warm_durable_index_from_a_different_store(tmp_path):
+    shared_index_db = str(tmp_path / "shared_dataset_index.db")
+
+    # Warm the shared index db against a FIRST, unrelated, healthy store.
+    other_store = DatasetStore(tmp_path / "other_datasets", index_db_path=shared_index_db)
+    _plant_dataset(other_store, symbol="GOOG")
+    other_store.list()  # populate the durable index for the OTHER store's own paths
+
+    # A brand-new scratch store (a distinct root -> distinct absolute paths) pointed at the SAME
+    # now-warm index db.
+    store = DatasetStore(tmp_path / "scratch_datasets", index_db_path=shared_index_db)
+    healthy = _plant_dataset(store, symbol="AAPL")
+    corrupted = _plant_dataset(
+        store, symbol="MSFT",
+        window_start_utc="2026-06-10T13:00:00Z", window_end_utc="2026-06-10T13:01:00Z",
+    )
+    path = tmp_path / "scratch_datasets" / f"{corrupted['id']}.json"
+    payload = json.loads(path.read_text())
+    payload["record"]["meta"]["checksum"] = "deadbeef" * 8
+    path.write_text(json.dumps(payload))
+
+    cache = MicroReadinessCache(str(tmp_path / "readiness_cache.db"))
+    result = build_readiness(store, cache, dataset_dir=str(tmp_path / "scratch_datasets"))
+
+    assert len(result["integrity_errors"]) == 1
+    assert result["integrity_errors"][0]["file"] == f"{corrupted['id']}.json"
+    assert result["totals"]["distinct_datasets"] == 1
+    assert [s["dataset_id"] for s in result["shards"]] == [healthy["id"]]
+
+
+# --- iter-28 AUDIT (TC-10 reinforcement): the TC-10 test above plants its corrupted file in a
+# scratch store whose absolute paths were NEVER written to the shared index, so
+# ``DatasetIndex.lookup`` (``dataset_index.py``, keyed on ``(path, size, mtime_ns)``) is a
+# guaranteed miss and the "warm index" premise cannot make that test fail -- it passes identically
+# with the warming removed. The case that CAN exercise the cache is a warm row for the SAME path.
+# This test pins that real boundary in all three directions, changing no production behaviour:
+# (a) METADATA may legitimately be served from a warm row whenever the stat is byte-identical, so
+# the one tamper shape that preserves BOTH size and mtime_ns is not surfaced by ``list()`` -- the
+# stat IS the documented key; (b) dataset CONTENT is never served from any cache -- the full
+# verifier runs on EVERY ``load_events``/``replay`` call with no bypass; (c) ANY stat difference
+# re-runs the verifier and surfaces the integrity error explicitly.
+
+
+def test_tc10b_warm_same_path_index_row_never_serves_tampered_content_and_re_verifies_on_any_stat_change(
+    tmp_path,
+):
+    import app.research.datasets as datasets_module
+    from app.research.datasets import DatasetIntegrityError
+
+    index_db = str(tmp_path / "shared_dataset_index.db")
+    root = tmp_path / "datasets"
+    store = DatasetStore(root, index_db_path=index_db)
+    record = _plant_dataset(store, symbol="AAPL")
+    path = root / f"{record['id']}.json"
+
+    # Age the file past the racy-write guard so it is publishable to the durable index, then warm
+    # a REAL row for THIS exact path.
+    st = os.stat(path)
+    os.utime(path, ns=(st.st_atime_ns - 10_000_000_000, st.st_mtime_ns - 10_000_000_000))
+    records, errors = store.list()
+    assert errors == []
+    assert len(records) == 1
+    warm_stat = os.stat(path)
+
+    # Tamper with the CONTENT while restoring the exact (size, mtime_ns) the warm row is keyed on:
+    # a sha256 hex digest is swapped for another 64-character hex string, so the byte size is
+    # unchanged by construction.
+    original = path.read_text()
+    assert original.count(record["checksum"]) == 1
+    path.write_text(original.replace(record["checksum"], "deadbeef" * 8))
+    os.utime(path, ns=(warm_stat.st_atime_ns, warm_stat.st_mtime_ns))
+    tampered_stat = os.stat(path)
+    assert tampered_stat.st_size == warm_stat.st_size
+    assert tampered_stat.st_mtime_ns == warm_stat.st_mtime_ns
+
+    datasets_module._reset_verified_cache_for_tests()
+    warm_store = DatasetStore(root, index_db_path=index_db)
+
+    # (a) the documented boundary, pinned honestly rather than left unknown.
+    warm_records, warm_errors = warm_store.list()
+    assert warm_errors == []
+    assert len(warm_records) == 1
+
+    # (b) CONTENT is never served from a cache -- the full verifier runs on every read.
+    with pytest.raises(DatasetIntegrityError):
+        warm_store.load_events(record["id"])
+
+    # (c) ANY stat difference re-runs the verifier and surfaces the corruption explicitly.
+    os.utime(path, ns=(tampered_stat.st_atime_ns, tampered_stat.st_mtime_ns - 20_000_000_000))
+    datasets_module._reset_verified_cache_for_tests()
+    restat_store = DatasetStore(root, index_db_path=index_db)
+    restat_records, restat_errors = restat_store.list()
+    assert [e["file"] for e in restat_errors] == [f"{record['id']}.json"]
+    assert restat_records == []
+
+
 # --- TC-7: a repeat call/GET never re-classifies, and the response is byte-identical ----------------
 
 
@@ -458,20 +561,38 @@ def test_zero_corpus_is_an_honest_200_with_three_unmet_floor_rows(client):
 
 
 @pytest.fixture(scope="module")
-def real_readiness(tmp_path_factory):
+def real_readiness():
     # CONFIG.dataset_dir (never `_resolved()`) is the un-overridden package default -- the
     # committed real corpus, independent of any ambient TAPEOLOGY_DATASET_DIR the environment
     # might carry.
+    #
+    # iter-28: a fresh `tmp_path_factory` dir every pytest invocation forced a full re-parse +
+    # re-checksum of the whole real store (26 GB / 98 files at this era's corpus size) on every
+    # single run. Point BOTH the `MicroReadinessCache` DB and the `DatasetStore`'s own metadata
+    # index at their PRODUCTION durable-cache paths instead of a throwaway dir -- the exact same
+    # `resolve_micro_readiness_cache_db_path` / `TAPEOLOGY_DATASET_INDEX_DB`-env-or-sibling
+    # primitives `get_dataset_store()` already wires in `routes.py` for the live backend. Both
+    # caches are content-checksum-keyed (`Store discipline`: "no second mutable input to go
+    # stale") -- sharing them with the running backend is exactly the intended reuse, not a new
+    # cache mechanism, and both files already live under the gitignored `.data/` tree.
     dataset_dir = CONFIG.dataset_dir
-    store = DatasetStore(dataset_dir)
-    cache_dir = tmp_path_factory.mktemp("micro_readiness_real_cache")
-    cache = MicroReadinessCache(str(cache_dir / "cache.db"))
+    index_db_override = os.environ.get("TAPEOLOGY_DATASET_INDEX_DB")
+    index_db_path = index_db_override or os.path.join(
+        os.path.dirname(dataset_dir), "dataset_index.db"
+    )
+    store = DatasetStore(dataset_dir, index_db_path=index_db_path)
+    cache = MicroReadinessCache(resolve_micro_readiness_cache_db_path(dataset_dir))
     return build_readiness(store, cache, dataset_dir=dataset_dir)
 
 
 @pytest.fixture(scope="module")
 def real_dataset_records():
-    store = DatasetStore(CONFIG.dataset_dir)
+    dataset_dir = CONFIG.dataset_dir
+    index_db_override = os.environ.get("TAPEOLOGY_DATASET_INDEX_DB")
+    index_db_path = index_db_override or os.path.join(
+        os.path.dirname(dataset_dir), "dataset_index.db"
+    )
+    store = DatasetStore(dataset_dir, index_db_path=index_db_path)
     records, errors = store.list()
     assert errors == []  # the committed corpus is healthy -- a real integrity error here would
     # be a repo-hygiene regression, not something this iteration's tests should silently paper

@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import hashlib
 import inspect
+import os
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -48,6 +49,20 @@ def _iso(epoch: float) -> str:
     return datetime.fromtimestamp(epoch, tz=timezone.utc).isoformat(timespec="microseconds").replace(
         "+00:00", "Z"
     )
+
+
+def _real_corpus_dataset_store() -> DatasetStore:
+    """iter-28: a ``DatasetStore`` over the real ``.data/datasets`` corpus wired with the SAME
+    durable ``index_db_path=`` primitive the live backend's own ``get_dataset_store()``
+    (``routes.py``) already uses -- ``TAPEOLOGY_DATASET_INDEX_DB`` env-or-sibling
+    ``dataset_index.db``. Without this, the two real-corpus tests below re-parsed and
+    re-checksummed the whole real corpus from scratch on every single test run; the index is a
+    content-checksum-keyed, "owns nothing" derived cache, so sharing it with the running backend
+    is the intended reuse, never a new mechanism."""
+    dataset_dir = CONFIG.dataset_dir_resolved()
+    override = os.environ.get("TAPEOLOGY_DATASET_INDEX_DB")
+    index_db_path = override or os.path.join(os.path.dirname(dataset_dir), "dataset_index.db")
+    return DatasetStore(dataset_dir, index_db_path=index_db_path)
 
 
 # --- shared fixture: the real PG snapshot, built once per module (577 trades -- cheap) -------------
@@ -948,7 +963,7 @@ def test_tc16_real_corpus_joinable_corpus_arithmetic_is_unchanged_by_the_passeng
     enumerated arithmetic itself."""
     from app.research.desk_playbook import resolve_desk_playbook_dir
 
-    dataset_store = DatasetStore(CONFIG.dataset_dir_resolved())
+    dataset_store = _real_corpus_dataset_store()
     playbook_store = PlaybookStore(resolve_desk_playbook_dir(CONFIG.desk_universe_dir_resolved()))
 
     counts = micro_join.joinable_corpus_counts(dataset_store, playbook_store)
@@ -972,7 +987,7 @@ def test_tc4_real_corpus_join_playbook_signal_is_unaffected_by_the_accessor_re_p
     non-``None`` ``feature_at_trigger``, and a full closed outcome set."""
     from app.research.desk_playbook import resolve_desk_playbook_dir
 
-    dataset_store = DatasetStore(CONFIG.dataset_dir_resolved())
+    dataset_store = _real_corpus_dataset_store()
     playbook_store = PlaybookStore(resolve_desk_playbook_dir(CONFIG.desk_universe_dir_resolved()))
     snapshots_dir = resolve_micro_snapshots_dir(CONFIG.dataset_dir_resolved())
 
