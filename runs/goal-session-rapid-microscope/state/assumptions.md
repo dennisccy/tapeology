@@ -993,3 +993,24 @@ claim the other two clauses, and I wrote in the evaluation that the owner may ov
 telling the next round to run lean.
 **Reversible:** yes — the verdict changes only the next round's depth; every journey status,
 anti-goal score and citation in this evaluation stands unchanged under either depth.
+
+## iter-26 — goal-decomposer
+
+**Ambiguity:** the agent instructions say "If journey-history.json shows zero remaining FAILING
+journeys, write a one-line spec ... and let the evaluator decide. Do NOT artificially manufacture
+more work" — and this session's `journey-history.json` shows all 10 journeys `passing`. But the
+same evaluator who wrote that digest also wrote `iteration-state.md`'s Active blockers naming the
+era NOT certifiable (8 open minor anti-goal items) and gave an explicit, ordered next-step
+recommendation in a live ESCALATE verdict.
+**We chose:** treat the evaluator's own ESCALATE verdict and ordered next-step list as the binding
+scope for this iteration, not the one-line stub. Planned items (1) widen Required-still-passing to
+drive all nine stored goldens in one run, (2) the desk-readiness band-touch cache fix, and (3) the
+pilot-selector dedup; deferred (4) referee disclosure/guard and excluded (5) the chain-ledger item
+(owner-owned), matching the evaluator's own "drop 4 and 5, never 1" ordering. Grounds: the
+"zero-remaining-FAILING" shortcut exists to stop the decomposer from inventing NEW speculative scope
+when nothing genuinely remains — it is not license to override a live evaluator ESCALATE that names
+concrete, non-owner-owned dev work standing between the era and certification. Treating
+journeys-all-passing as "nothing to do" here would contradict the evaluator's own most recent
+verdict, which nothing in the goal-decomposer's instructions authorizes overriding.
+**Reversible:** yes — if this reading is wrong, a later round can revert to the one-line stub; no
+code this iteration's plan commits to depends on that choice being right.
