@@ -387,3 +387,19 @@ from its one endpoint, read verbatim by UI/MCP/reports.
      `DatasetIndex`/`MicroReadinessCache` primitives `routes.py` already wires for the live app,
      never a new cache class -- which is test-harness-only and carries no Data Contract row of its
      own (matching this file's own iter-19/24/25-note precedent for harness-only changes). -->
+
+<!-- iter-28 correction to the iter-27 note above: that note documented the PLANNED Data Contract
+     implications of iter-27's spec, written before iter-27 executed -- but the engine's SPEED-9
+     evidence backstop (all 10 journeys already `passing`) demoted the round twice, full to lean to
+     evidence-only, before any developer or reviewer ran, so iter-27's product diff was EMPTY
+     (re-verified this iteration: `grep -rl seal-unaware apps/frontend/` = nothing;
+     `grep index_db_path apps/backend/tests/test_micro_readiness.py apps/backend/tests/
+     test_micro_join.py` = nothing; the referee-evidence-strategy-block in `page.tsx` still renders
+     only Datasets/Train-Holdout/Trades/tick-gate/basis-caveats, no caveat sentence). Neither the
+     caveat sentence nor the durable test-fixture cache exists in the tree today -- the iter-27 note
+     above describes a plan, not a delivered change. Iteration 28 re-dispatches the IDENTICAL plan at
+     `full` depth (mandatory this time: iter-27's own verdict was ESCALATE). No Data Contract or
+     Information Architecture change is introduced by this correction itself -- if iter-28 delivers
+     the plan, the iter-27 note above becomes retroactively accurate and needs no further edit; if
+     iter-28 is demoted or interrupted again, a further correction will be appended here rather than
+     silently trusting the iter-27 note a second time. -->
