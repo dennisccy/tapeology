@@ -357,3 +357,18 @@ from its one endpoint, read verbatim by UI/MCP/reports.
      value, so it carries no Data Contract row (matching this file's own iter-19-note precedent for
      harness-only changes). No new page, route, MCP tool, or nav-skeleton change; no reapproval file
      written. -->
+
+<!-- iter-25 note: no Data Contract or Information Architecture change. J-06's already-registered
+     "Sealed at" / `exposure_state` sub-fields (owner `vault.py`, endpoint
+     `GET /research/desk/micro/vault`) keep their name, owner, endpoint, shape, and precision --
+     unchanged since iter-24's coarsening. This iteration only adds a SECOND real shard (via the
+     already-registered `vault.seal_shard` production function, left permanently `sealed`, never
+     assigned/exposed) to the QA fixture-scoped rig's throwaway pool, so the sealed-row opaque
+     render branch (`page.tsx:6810-6819`, shipped iter-14, unmodified this iteration) finally has
+     fixture data to exercise, and re-captures the already-fixed (iter-24) day-marker cell that had
+     never been re-photographed. `journey-scripts/J-06.json` gaining a genuine Vault assertion,
+     `journey-scripts/J-09.json` being wired into the replay run for the first time, and
+     `journey-scripts/J-08.json`/`J-10.json` getting section-unique assertion strings are all
+     replay-harness test assets, not served product values -- matching this file's own iter-19-note
+     and iter-24-note precedent for harness-only changes. No new page, route, MCP tool, or
+     nav-skeleton change; no reapproval file written. -->
