@@ -6,7 +6,7 @@
   "steps": [
     {"n": 1, "journey": "J-08", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Playbook Signals"}},
     {"n": 2, "journey": "J-08", "action": {"type": "click", "target": {"testid": "desk-section-expand-microReadiness"}}, "expect": {"text": "Sealed Tranche (Aggregate Only)"}},
-    {"n": 3, "journey": "J-08", "action": {"type": "click", "target": {"testid": "desk-section-expand-scoutLedger"}}, "expect": {"text": "Ledger chain verification:"}},
+    {"n": 3, "journey": "J-08", "action": {"type": "click", "target": {"testid": "desk-section-expand-scoutLedger"}}, "expect": {"text": "variants tried"}},
     {"n": 4, "journey": "J-08", "action": {"type": "click", "target": {"testid": "desk-section-expand-walkForward"}}, "expect": {"text": "No walk-forward sequences run."}},
     {"n": 5, "journey": "J-08", "action": {"type": "click", "target": {"testid": "desk-section-expand-validationVault"}}, "expect": {"text": "iter18-qa-universe"}}
   ]

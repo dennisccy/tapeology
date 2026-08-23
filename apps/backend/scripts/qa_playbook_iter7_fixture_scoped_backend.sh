@@ -70,6 +70,15 @@
 # browser pass recorded. Uses a symbol (PGQA) distinct from the PG tick fixtures above so the two
 # seed steps' datasets never collide.
 #
+# goal-rapid-microscope-iter-25 extends this file once more, again in place: after every seed step
+# above, it also runs seed_micro_vault_iter25_sealed_fixture.py (a plain dataset + a REAL
+# vault.seal_shard() call that is NEVER assigned/exposed, never a hand-rolled JSON blob), giving
+# this rig a SECOND vault shard that stays permanently sealed alongside the iter-18 one's exposed
+# shard. Before this, the rig's Validation Vault table only ever showed an exposed row -- the
+# sealed-row opaque render branch (page.tsx:6810-6819) and the "Sealed at" bare-date cell
+# (page.tsx:6807) had no fixture data to trigger against for three browser-QA rounds. Uses a symbol
+# (PGVAULT) distinct from every other symbol this rig's other seed scripts use.
+#
 # Usage:
 #   bash apps/backend/scripts/qa_playbook_iter7_fixture_scoped_backend.sh [root_dir] [port]
 #
@@ -135,6 +144,12 @@ export TAPEOLOGY_JOURNAL_DB="$JOURNAL_DB"
 # scout.register_screen_and_walkforward_check() production entry point -- see
 # seed_micro_scout_iter24_j09_fixture.py's own docstring for the full sequence this exercises.
 "$BACKEND_DIR/.venv/bin/python" "$SCRIPT_DIR/seed_micro_scout_iter24_j09_fixture.py" "$ROOT"
+
+# goal-rapid-microscope-iter-25 (J-06): seed ONE new REAL dataset + REAL vault.seal_shard() call
+# that is NEVER assigned/exposed -- see seed_micro_vault_iter25_sealed_fixture.py's own docstring
+# for the full reasoning. Gives this rig a second, permanently-sealed shard alongside the iter-18
+# seeder's exposed one.
+"$BACKEND_DIR/.venv/bin/python" "$SCRIPT_DIR/seed_micro_vault_iter25_sealed_fixture.py" "$ROOT"
 
 # goal-rapid-microscope-iter-19 (TC-9): the ONE list of store-root vars this launch bound the
 # backend to -- shared by the stderr echo below AND the durable manifest file, so the two can never

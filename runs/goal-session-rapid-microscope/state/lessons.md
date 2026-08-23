@@ -397,3 +397,28 @@ still open. Only the audit lane stood between a photographed, predicted renderin
 shipped iteration.
 **Applies to:** any evaluator reading a CLOSURE-PASS — treat it as "artifacts exist", not "the
 browser agreed"; always open `reports/phase-<iter>-ui-test-results.md`'s own verdict line yourself.
+
+## iter-25 — 2026-08-23T07:05:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** A "minor" severity score is a claim about the WORLD, not about the code, and the world
+moves. The iter-13 chain-ledger gap (`micro_chain_ledger.py:184-190` — anchor absent + zero rows
+verifies clean) was scored minor on the explicit premise "no micro_vault directory, zero sealed
+shards in the real store"; that premise died at iter-23 when the operator recorded the real tranche,
+and nobody re-derived it for two rounds. Re-check the GROUNDS of every carried-forward open item, not
+just whether the code changed.
+**Applies to:** any evaluator carrying an open anti-goal item forward whose severity argument cites
+the state of `apps/backend/.data` (or any other runtime store) rather than the state of the code —
+re-run the cited check before copying the score.
+
+## iter-25 (second) — 2026-08-23T07:05:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** The deterministic replay lane is scoped to the Required-still-passing list, which
+structurally EXCLUDES the iteration's own target journey — so a target journey's stored golden can
+never be executed by the harness in the round that authors or changes it, and any DoD line saying
+"the golden ran" necessarily rests on a dev-local claim. Third round running that this produced a
+finding (iter-24 T2, iter-25 reviewer MINOR #1). Either the round after must re-run the golden, or
+the lane needs the target journey added.
+**Applies to:** any iteration whose Definition-of-Done asserts a stored `journey-scripts/J-XX.json`
+passed via `demo_runner.py --mode verify`, where J-XX is that iteration's own target journey.

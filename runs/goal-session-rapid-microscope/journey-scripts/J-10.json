@@ -15,7 +15,7 @@
     {"n": 9, "journey": "J-10", "action": {"type": "click", "target": {"testid": "desk-section-expand-playbookEvidence"}}, "expect": {"text": "Built from signature:"}},
     {"n": 10, "journey": "J-10", "action": {"type": "fill", "target": {"testid": "desk-playbook-date-input"}, "text": "2026-06-22"}, "expect": {"text": "recorded signals, none hidden"}},
     {"n": 11, "journey": "J-10", "action": {"type": "click", "target": {"testid": "desk-section-expand-microReadiness"}}, "expect": {"text": "Distinct symbol-days"}},
-    {"n": 12, "journey": "J-10", "action": {"type": "click", "target": {"testid": "desk-section-expand-scoutLedger"}}, "expect": {"text": "Ledger chain verification:"}},
+    {"n": 12, "journey": "J-10", "action": {"type": "click", "target": {"testid": "desk-section-expand-scoutLedger"}}, "expect": {"text": "variants tried"}},
     {"n": 13, "journey": "J-10", "action": {"type": "click", "target": {"testid": "desk-section-expand-walkForward"}}, "expect": {"text": "No fold specs registered."}},
     {"n": 14, "journey": "J-10", "action": {"type": "click", "target": {"testid": "desk-section-expand-validationVault"}}, "expect": {"text": "iter18-qa-universe"}},
     {"n": 15, "journey": "J-10", "action": {"type": "click", "target": {"testid": "desk-section-expand-refereeRegistry"}}, "expect": {"text": "config fingerprint 08e471b10130e1e2"}},

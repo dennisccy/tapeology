@@ -1721,3 +1721,80 @@ plainly what I would prefer: this is the round that would finally certify the er
 the independent checker has caught something eleven times. If you want it present for that round,
 the honest way is to set CHAIN_REQUIRE_FULL_DEPTH for that run — that switch belongs to you, and I
 would rather ask you for it than manufacture a verdict to take it.
+
+## Iteration 25 — goal-rapid-microscope-iter-25
+
+**Date:** 2026-08-23T07:05:00Z
+**Verdict:** ESCALATE
+**Depth dispatched:** lean (as the round-24 evaluator recommended; no escape condition fired)
+**Journey deltas:**
+- **Newly passing: J-06 "The recorder and the Vault" — partial → PASSING.** The era's last
+  non-green journey. The picture that was owed now exists and I checked it myself.
+- Newly failing: none. Regressed: none.
+- Re-verified this round by their own stored checks, all green: J-01, J-02, J-03, J-04, J-05,
+  J-08, J-09, J-10 — eight, not seven, and J-09's script ran through the machine for the first
+  time ever. I opened two pictures as spot checks (J-08, J-10) and both hold.
+- NOT re-tested: J-07 "Graduation" — it has no stored check by an earlier decision, and it was
+  not on this round's re-check list. Nothing it depends on changed (zero product-code diff), so
+  it keeps its green status and its round-24 stamp, not a round-25 one.
+- Anti-goal violations: none introduced, none critical open. ONE older minor item CLOSED, proved
+  closed by me. EIGHT stay open. No new item opened, but one open item changed character — see below.
+
+**Reasoning:** I checked the round's headline claim by looking, then by experiment. I opened both
+Vault pictures and enlarged the table: the "Sealed at" cell reads a plain `2026-05-01` — no clock
+time, which is exactly the defect round 24 introduced and repaired without ever re-photographing —
+and the new second recording, which is still sealed, shows the words "sealed — opaque" in all seven
+columns that could name it, sitting beside the released recording that shows its real symbol, dates
+and checksum. Then I went past the picture. I ran the round's two new tests (5 passed) and then ran
+my own experiment that nobody asked for: I planted the same sealed recording and confirmed the
+service hands out only six harmless fields and answers 403 to a direct download; then I formally
+released that same recording through the real product functions and watched both flip — thirteen
+fields including the symbol, and a 200. So the secrecy is a working switch, not a still image of one.
+I also re-derived the frozen things by hand rather than inheriting them: all six referee files hash
+byte-identical to the era's opening record, the settings fingerprint prints 08e471b10130e1e2, the
+product code has literally zero diff this round, and your real store is untouched — its vault ledger
+still holds 21 recordings, all sealed, last written on 21 August.
+
+The finding that matters most is mine and no lane raised it. Three rounds ago this session excused a
+known defect — deleting a ledger file together with its anchor makes the product announce "chain ok"
+and forget which recordings are sealed — as minor, on the written grounds that your real store then
+held no sealed recordings at all, so nothing could be hurt. I checked that premise today instead of
+copying it forward, and it has expired: your store now holds twenty-one sealed recordings, and the
+code that decides which recordings are secret reads exactly the file that can be deleted. I kept the
+score minor after thinking about it — the trick needs write access to your own disk, and anyone with
+that can already read the raw recordings straight out of the folder, so it grants no new access — but
+the excuse is gone, and the instruction written at the time ("close this before the real recording
+happens") was overtaken by events: the recording happened at round 23 with the fix still deferred.
+Second finding, this one shared with the code reviewer: the machine drove eight of the nine stored
+checks, and the one it skipped was J-06's own — because the replay lane is wired to re-check only the
+journeys a round is NOT about. So this round's own promise that "all nine ran through the machine"
+again rests on a laptop run whose record was overwritten. The journey itself is not in doubt; the
+stored check's new assertion is.
+
+**Next-step recommendation:** One more round, with the independent checker, kept small, in this
+order: (1) drive all nine stored checks in one recorded run, including J-06's own — the same hole has
+now produced a complaint three rounds running; (2) fix the twenty-two-second wait on the Desk's
+readiness panel, the one item on this list you would actually feel, by remembering each recording's
+wall-touch count on disk keyed to that recording's checksum AND its wall map, and only ever
+remembering a real answer, never "none"; (3) collapse the duplicated pilot-study list into the one
+list that already owns it (one line); (4) build the disclosure and the guard you already ruled for at
+the referee metric — keep the frozen code frozen, serve the caveat beside the number, and prove the
+caveat is really there; (5) decide what to do about the chain-ledger gap now that twenty-one real
+sealed recordings exist — that one is yours, because the project's own rule forbids designing the fix
+casually. If the clock bites, drop 4 and 5, never 1. Still do not record more real tape, do not reveal
+or assign any sealed recording, and do not run the three studies against your real recorded corpus.
+
+I am writing "escalate" rather than "continue", and because the last round drew a bright line against
+using this verdict as a lever, I want my reasoning checked rather than assumed. I read the engine's
+depth ladder myself this round (run-goal.sh, the arbiter block): this round overran its time budget —
+3,600s allowed, 6,267s used, and the marker is on disk — and a budget overrun plus a plain "continue"
+sends the next round out light with no independent checker, while "escalate" grants the heavy round
+outright. So I am aware of exactly what the verdict buys. What makes it honest rather than a lever is
+that one of my own rules genuinely fires: a light round that turns up a cross-cutting safety issue
+earns the full pipeline, and this light round turned one up — a defect touching two of your strictest
+rules whose "it cannot hurt anything today" excuse expired the moment your real store started holding
+sealed recordings. The next round's own work points the same way: it edits real product code with a
+named wrong-data risk (a cache that could remember "no touches" and serve you a wrong number) and it
+touches a deliberately frozen file. In this era the independent checker has caught something after
+both the review and the quality check passed the same work eleven times. If you read this differently
+from me, tell the next round to run light — nothing else in this evaluation changes.

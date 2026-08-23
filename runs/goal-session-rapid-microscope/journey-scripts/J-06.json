@@ -5,6 +5,7 @@
   "default_timeout_ms": 10000,
   "steps": [
     {"n": 1, "journey": "J-06", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Playbook Signals"}},
-    {"n": 2, "journey": "J-06", "action": {"type": "click", "target": {"testid": "desk-section-expand-microReadiness"}}, "expect": {"text": "No integrity errors."}}
+    {"n": 2, "journey": "J-06", "action": {"type": "click", "target": {"testid": "desk-section-expand-microReadiness"}}, "expect": {"text": "No integrity errors."}},
+    {"n": 3, "journey": "J-06", "action": {"type": "click", "target": {"testid": "desk-section-expand-validationVault"}}, "expect": {"text": "sealed — opaque"}}
   ]
 }

@@ -905,3 +905,91 @@ DURABLE under A.6 because `micro_graduation.py` and `micro_sealed_evaluation.py`
 on durable bundle evidence PLUS a fresh on-point look, not on the table row alone.
 **Reversible:** yes — if a later round wants the bundle body re-captured directly, that is an
 additive capture; it would confirm, not overturn, this scoring.
+
+## iter-25 — developer
+
+**Ambiguity 1 (the section-unique replacement string).** The spec's IN SCOPE item asks
+`journey-scripts/J-08.json` step 3 and `J-10.json` step 12 to assert something "section-unique"
+in place of the ambiguous shared "Ledger chain verification:" text, with no specific string named.
+The obvious first candidate, "No candidates ledgered." (the Scout Ledger empty state, already
+grep-unique), is now WRONG: the iter-24 seeder plants a real Study-3 family into every fixture rig
+launch, so that empty state never renders on this rig any more (this is exactly why iter-24 moved
+J-08/J-10 off it in the first place, per its own dev handoff).
+**We chose:** `"variants tried"` — the literal substring inside `{family.variants_tried} variants
+tried` (`page.tsx`, Scout Ledger family header). Grounds: (a) grep count 1 in `page.tsx`, confirmed
+before committing to it (TC-6's own requirement); (b) it renders precisely WHEN a family exists,
+which is now always true on this rig (the iter-24 seed step runs on every launch) — so the
+assertion is non-vacuous going forward, not merely true today; (c) verified live: a deliberate
+skip-then-restore proof (temporarily replacing J-08 step 3's `click` action with a no-op `expect`
+action, leaving the Scout Ledger section collapsed) makes the "variants tried" assertion FAIL
+(`demo_runner.py --mode verify` verdict FAIL, "expect not satisfied"); restoring the real script
+(the unmodified `click` step) passes again, confirmed by the full 9/9 run. I performed this proof
+once (J-08), not twice — J-10 step 12 targets the identical testid/section/assertion text, so a
+second independent proof would exercise the same DOM branch, not a different one.
+**Reversible:** yes — a future round can swap the assertion string again independently of
+everything else this iteration touched.
+
+**Ambiguity 2 (how much of TC-8's "every non-Vault surface" sweep needs re-proving for the new
+fixture shard).** TC-8 asks that the sealed-shard refusal be "proven non-vacuously" against the
+iteration's new fixture shard specifically, naming "dataset listing route, MCP proxy, readiness
+per-shard enumeration, direct accessor read." The existing `test_vault.py` TR-2 suite already
+proves the REST half generically (any distinctively-shaped sealed shard, not a hardcoded identity)
+and separately proves the MCP surface coincides with the REST route set STRUCTURALLY
+(`test_tr2_the_mcp_surface_is_closed_structurally_not_route_by_route` — a route-set-equivalence
+proof that holds for ANY shard, this one included, not a per-shard join-resistance check).
+**We chose:** add two new tests exercising the LITERAL production seeder this iteration wires into
+the QA rig (`scripts/seed_micro_vault_iter25_sealed_fixture.py`, imported directly, never a second
+construction) — one asserting the served opaque projection shape (TC-1), one re-running the
+REST route sweep plus a direct `MicroAccessor` read against this shard's own id/symbol (TC-8) — and
+did NOT re-run the MCP structural test a second time, since it is shard-identity-independent by
+construction and re-running it would prove nothing the existing pass doesn't already cover. The
+readiness per-shard-enumeration clause is covered by the same REST sweep (readiness is one of the
+~50+ swept GET routes; the forbidden-substring check would catch a leak there exactly as anywhere
+else) rather than a bespoke third test.
+**Reversible:** yes — a future round could still add a shard-identity-parametrized MCP test without
+touching anything built this iteration; nothing here forecloses that.
+
+## iter-25 — goal-evaluator
+
+**Ambiguity:** J-06's acceptance text is about the REAL recorded tranche (the §7.6 minimums, the TR-2
+inference trap against its own registered universe). This iteration's fresh browser evidence is
+entirely from the throwaway QA fixture rig — a second, purpose-planted sealed shard under
+`iter25-qa-sealed-only-universe`, not one of the operator's 21 real sealed shards. Nothing in the
+goal says whether a fixture-rig capture can close a journey whose acceptance names the real tranche.
+**We chose:** accept it, and score J-06 `passing` on a COMPOSITION: (a) the real-tranche half rests on
+durable prior verification — iter-23 read the 21 sealed rows off disk, iter-24 re-proved the
+`sealed_at` coarsening against those same real records — and I re-checked today that the real ledger
+is byte-untouched (21 rows, all `sealed`, mtime 2026-08-21 20:20), so methodology A.6 durability
+holds; (b) the ONLY thing iter-24 left owed was a photograph of the repaired render path, and a
+render path is symbol-agnostic — it cannot tell a fixture shard from a real one; (c) this iteration's
+own spec defines exactly which photograph closes it (TC-2/TC-3), and both were produced; (d) I did
+not take the rig on trust — I re-planted the shard myself and proved the opacity flips on a real
+`assign_shard`+`expose_shard`, so the branch is a live conditional, not a fixture constant. I did NOT
+extend this to the real tranche's own opacity: no real sealed shard was rendered, exposed or read
+this round, and I would not accept fixture evidence for anything about the real pool's CONTENTS.
+**Reversible:** yes — if a later round or the owner wants the real tranche's own sealed rows
+photographed, that is an additive capture against the real store; it would confirm, not overturn,
+this scoring.
+
+## iter-25 — goal-evaluator (second)
+
+**Ambiguity:** whether ESCALATE may be written when the engine's depth ladder makes it the only route
+to a full round. Iteration 24 drew an explicit line against this ("using the verdict as a lever a
+fourth time would be the same governor bypass"), and my own tree's ESCALATE clauses are narrow: a
+journey failing twice running (no), a FAIL review the pipeline walked past (no — review was
+PASS_WITH_NOTES), or a lean round surfacing cross-cutting ambiguity/complexity warranting the audit
+lane (the only candidate).
+**We chose:** ESCALATE, claimed strictly under the third clause, and recorded as such rather than as
+a depth request. Grounds I checked rather than inherited: I read the arbiter block in
+`scripts/automation/run-goal.sh` (rungs: hard-required → prior ESCALATE/REGRESSION → prior coherence
+FAIL → budget-breach+CONTINUE → …) and confirmed both that iter-25 carries a `budget-breached` marker
+(3,600s budget, 6,267s elapsed) and that CONTINUE would therefore force lean — so I state plainly
+that I know what the verdict buys. The clause fires on a substantive finding, not a pretext: an open
+item touching two *(critical)* rails lost the factual premise its MINOR score was built on, which is
+"an issue that warrants the full pipeline (audit)" in my agent instructions' own words. Secondary
+support: the next round's planned work edits production code with a named silent-wrong-data risk (the
+wall-touch cache) and a frozen-by-rail surface (the referee disclosure guard). I explicitly did NOT
+claim the other two clauses, and I wrote in the evaluation that the owner may overrule this by
+telling the next round to run lean.
+**Reversible:** yes — the verdict changes only the next round's depth; every journey status,
+anti-goal score and citation in this evaluation stands unchanged under either depth.
