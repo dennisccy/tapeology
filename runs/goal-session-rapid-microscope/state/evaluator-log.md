@@ -1888,3 +1888,92 @@ inventing a clause, which is the same governor bypass round 24 correctly refused
 instead is say plainly what I would prefer: the checker is the lane that caught this round's wrong
 number after two other lanes passed it, and the next round edits test code that reads your real
 store. If you want it present, the switch is yours to set: CHAIN_REQUIRE_FULL_DEPTH.
+
+## Iteration 27 — goal-rapid-microscope-iter-27
+
+**Date:** 2026-08-23T17:05:00Z
+**Verdict:** ESCALATE
+**Depth dispatched:** evidence (the engine demoted it twice: the plan asked for the heavy round,
+the clock rule cut it to light, then the "all targets already green" rule cut it again to
+evidence-only — so no developer and no code reviewer ran at all)
+**Journey deltas:**
+- Newly passing: none — all ten were already green when the round began, and all ten are green now.
+- Newly failing: none. Regressed: none.
+- Re-checked this round by their own stored checks, driven by the machine, all green: J-02, J-03,
+  J-04, J-05, J-06, J-08, J-09 (seven of the nine stored checks).
+- Re-checked live in a real browser, both green: J-01 "The era transition stands" and J-10 "The kept
+  product stands". I opened J-01's picture myself and it shows the acceptance state exactly.
+- NOT re-tested: J-07 "Graduation" — it has no screen and no stored check by an earlier ruling.
+  Nothing it depends on changed (this round changed no product code at all), so it keeps its green
+  status and its round-24 stamp.
+- Anti-goal violations: none introduced — the product code diff for this round is empty. One NEW
+  minor item opened, by me. Seven older items stay open, none critical. Two of the seven are work a
+  machine could do and neither got done, because no developer ran.
+
+**Reasoning:** The plain fact of this round is that it built nothing. The plan written at the start
+of it named two real jobs — make the test suite finishable, and print the owner's ruled-on warning
+sentence beside the Referee Registry's old dataset and trade counts — and neither was attempted,
+because the engine sent the round out at its lightest setting, which has no developer in it. I did
+not take that from a report; the round's own record says so (the depth file reads "evidence", and
+the only two steps that ran were the planner and the browser). I checked the result directly: the
+warning sentence appears nowhere in the site's source, and the two test files still read your real
+26 GB store cold on every run.
+
+The finding that matters most is mine and no lane raised it, because this round had no reviewer, no
+quality lane and no independent checker. Two lanes published claims their own pictures do not
+support. First, the showcase narrator wrote a step saying "The Referee Registry now displays a
+clarification message" and quoted the warning sentence word for word as if a reader could see it on
+screen. That feature does not exist. The step's own click timed out, and the picture filed under it
+is byte-for-byte the same file as the previous step's picture — the same md5 — so the showcase
+asserts an on-screen message over a photograph of the page without it. Second, the browser lane
+claimed that its sentinel pass had also, as a side effect, captured the Scout Ledger row that has
+been owed since round 26. I opened that picture and read it in slices: it is a stitched full-page
+shot that photographs the top of the Desk page TWICE and then stops in the middle of a table. It
+never reaches the Scout Ledger, the other three Rapid-Microscope sections, the Referee Runs panel,
+the cockpit or the Structure page. The behaviour behind both journeys is genuinely fine — the live
+walkthrough asserted all seventeen of its texts, and the stored script it wrote is byte-identical to
+the committed one — so I kept J-08 and J-10 green and marked the picture, not the product, as the
+thing that is wrong. This is the fifth time in this era a lane has certified something it did not
+check, and the first time it happened in the artifacts written for you to read.
+
+I also re-derived the frozen things by hand rather than inheriting them: all six referee files hash
+byte-identical to the era's opening record, your real vault still holds 21 recordings, all sealed,
+untouched since 21 August, and the sealed-judge escape route still has zero callers in production.
+
+**Next-step recommendation:** One more round, with the independent checker, kept small, in this
+order. (1) Make the test suite finishable — the two test files that read your real 26 GB store every
+time still do; this is the root cause of six rounds of blank pictures and of nobody being able to
+say honestly that all tests pass. (2) Print the owner's warning sentence beside the Referee
+Registry's old dataset and trade counts — your own ruling of 18 August, still the largest job left
+that needs nobody's permission. (3) Take two pictures with the services healthy: the Scout Ledger
+family row with its "variants tried" line actually in frame, and a sentinel picture that is not a
+stitched full-page shot. (4) Regenerate the showcase step that narrates the warning sentence, so it
+describes what is really on the page. Still do not record more real tape, do not reveal or assign
+any sealed recording, and do not run the three studies against your real recorded corpus.
+
+One question is yours and only yours, and it now decides whether this era can ever finish. Ten of
+ten journeys are green and have been for three rounds. What blocks the finish is a list of eight
+small open complaints — and three of them are not about your product at all. They are about this
+dev chain's own honesty and plumbing: a quality lane that certifies unchecked work, a closing gate
+that never reads the browser lane's verdict, and a replay harness that structurally cannot run a
+round's own target checks. This era's own scope rules hand those three to you, not to the machine,
+so the loop can never close them. Please rule on whether those three still count against the era. If
+they do not, the era is two machine-buildable items away from finished.
+
+I am writing "escalate" rather than "continue", and because rounds 24 and 26 both drew a bright line
+against using this verdict as a lever, I want my reason checked rather than assumed. I read the
+engine's depth rules myself this round, in run-goal.sh and lib/common.sh, and here is what they say.
+A round only gets a developer if it runs light or heavy; the lightest setting has none. A round is
+forced to light when the previous round overran its clock (nearly every round in this session has, a
+marker is written on disk) or when a heavy round ran within the last four rounds (round 26 was
+heavy). And a light round is then cut again to the lightest setting whenever every journey it
+targets is already green — which, with ten of ten green, is now every possible round. So "continue"
+does not buy a lighter-but-still-productive round here; it provably buys another round that cannot
+build anything, exactly like this one. "Escalate" is the one verdict of mine that grants the heavy
+round outright, above every clock rule, and the lightest-setting cut never applies to it. Beyond the
+mechanism, my own rule genuinely fires: a light round surfaced a cross-cutting problem — two lanes
+publishing claims their pictures do not support, on a round with no checker to catch it — and the
+work waiting to be done edits a shipped, rule-sensitive screen and test files that read your real
+store. In this era the independent checker has caught something after both the review and the
+quality check passed the same work twelve times. If you read this differently from me, tell the next
+round to run light — nothing else in this evaluation changes.

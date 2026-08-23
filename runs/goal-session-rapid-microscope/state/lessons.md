@@ -457,3 +457,30 @@ corpus cap.
 **Applies to:** any iteration touching `apps/backend/tests/test_micro_*.py`, any lane asserting a
 full-suite result, and any round whose browser evidence goes missing without an obvious cause —
 check for a stalled pytest pinning the CPU before blaming the browser rig.
+
+## iter-27 — 2026-08-23T17:05:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** With every journey recorded `passing`, the engine's depth ladder becomes a trap: the
+budget-breach/full-cap rungs demote `full`→`lean`, and SPEED-9's evidence backstop then demotes
+`lean`→`evidence` because every target journey is already green (`run-goal.sh` ~2745-2775,
+`goal_full_ran_in_window` in `lib/common.sh`). The result is a round with no developer and no
+reviewer dispatched against a spec that planned real production work — iter-27 spent ~4,300s and
+produced a zero-byte product diff. Only ESCALATE/REGRESSION (or an operator `CHAIN_REQUIRE_FULL_DEPTH`)
+escapes it, so a late-era session whose remaining work is NOT journey-shaped must plan for that.
+**Applies to:** any goal session where journey-history shows zero failing journeys but the
+evaluator's open anti-goal ledger still names machine-buildable dev work — check the depth ladder
+BEFORE recommending `lean`/`evidence`.
+
+## iter-27 (second) — 2026-08-23T17:05:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** A Chrome full-page capture of `/desk` is not trustworthy evidence: `J-10-result.png`
+(1668x24776) stitched the page header in TWICE (y=107 and y~16491) and truncated inside the Playbook
+Evidence table, so it silently omitted the four Rapid-Microscope sections, Referee Runs, the cockpit
+and `/structure` — while the lane's prose claimed it captured the Scout Ledger make-up. Element
+captures (`J-01-result.png`, an extracted `[data-testid="micro-readiness-section"]`) are on-point and
+verifiable; stitched full-page shots of this page are not. Verify a full-page capture by cropping
+and reading it before accepting any claim about what it contains.
+**Applies to:** any iteration citing a full-page `/desk` screenshot as journey evidence, and any
+browser-qa lane claiming a make-up capture rode passenger on another journey's pass.

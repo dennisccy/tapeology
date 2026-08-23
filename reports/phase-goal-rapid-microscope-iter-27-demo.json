@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-rapid-microscope-iter-27",
+  "base_url": "http://localhost:3301",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the Desk page",
+      "narration": "Navigate to the Desk page, which displays research readiness data and pilot study information.",
+      "point_out": "The page loads with 'Playbook Signals' as the main heading. Below are collapsible sections for Microscope Readiness, Scout Ledger, and other research tools.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "goto", "url": "/desk"},
+      "expect": {"text": "Playbook Signals"}
+    },
+    {
+      "n": 2,
+      "title": "Expand Microscope Readiness to view corpus data",
+      "narration": "Click the Microscope Readiness section to see the corpus totals and readiness figures. This data now loads faster on repeat views thanks to improved caching.",
+      "point_out": "The section expands to show a 'Corpus Totals' table with values like distinct symbol-days, datasets, RTH minutes, and session-equivalents.",
+      "journey": "J-01",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "click", "target": {"testid": "desk-section-expand-microReadiness"}},
+      "expect": {"text": "Distinct symbol-days"}
+    },
+    {
+      "n": 3,
+      "title": "Scroll to the Referee Registry section",
+      "narration": "Scroll down to find the Referee Registry section. This section shows the legacy readiness metric and pilot-study strategy information.",
+      "point_out": "You see section headers for Referee Registry, Referee Adjudications, and Referee Runs. The page structure remains unchanged from previous iterations.",
+      "journey": "J-10",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "click", "target": {"testid": "desk-section-expand-refereeRegistry"}},
+      "expect": {"text": "Referee Registry"}
+    },
+    {
+      "n": 4,
+      "title": "View the disclosure about the legacy readiness metric",
+      "narration": "The Referee Registry now displays a clarification message. This explains that the legacy metric may include withheld Rapid Microscope shards and must not be used as the canonical readiness count.",
+      "point_out": "Inside the Strategy Family block, you see the new disclosure text: 'Legacy Referee readiness metric — seal-unaware in the Rapid Microscope era. It may include withheld/unexposed Rapid-Microscope shards and must not be used as the canonical Rapid-Microscope readiness count.' This text appears beside the Datasets and Trades figures.",
+      "journey": "J-10",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "click", "target": {"testid": "referee-evidence-seal-aware-caveat-disclosure"}}
+    },
+    {
+      "n": 5,
+      "title": "Expand Scout Ledger to verify pilot studies",
+      "narration": "Scroll back up and open the Scout Ledger section. It shows the pilot-study families and their trial variants, now rendered with consolidated internal wiring.",
+      "point_out": "The section displays 'Ledger chain verification: ok' followed by pilot-study family rows. Each row shows the family name, root ID, and variants tried.",
+      "journey": "J-08",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": {"type": "click", "target": {"testid": "desk-section-expand-scoutLedger"}},
+      "expect": {"text": "Ledger chain verification"}
+    },
+    {
+      "n": 6,
+      "title": "Expand Walk-Forward section to verify fold integrity",
+      "narration": "Click the Walk-Forward section to view the diagnostic fold results. This section demonstrates the chronological and integrity checks that run during the analysis.",
+      "point_out": "The Walk-Forward section shows fold specifications and verification status. You see the section displays cleanly with no errors.",
+      "journey": "J-05",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": {"type": "click", "target": {"testid": "desk-section-expand-walkForward"}},
+      "expect": {"text": "No fold specs"}
+    },
+    {
+      "n": 7,
+      "title": "Expand Validation Vault to view sealed tranche",
+      "narration": "Open the Validation Vault section to see the sealed-at dates and exposure status. This section records which datasets have been sealed for validation.",
+      "point_out": "The Validation Vault shows registered datasets with their sealed status. All sections render correctly with no blank panels or errors.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": {"type": "click", "target": {"testid": "desk-section-expand-validationVault"}},
+      "expect": {"text": "No sealed datasets"}
+    },
+    {
+      "n": 8,
+      "title": "Verify Referee Adjudications is ready",
+      "narration": "Expand the Referee Adjudications section. It tracks hypotheses registered for evaluation and remains empty until pilot studies are fully registered.",
+      "point_out": "The Referee Adjudications section displays 'No hypotheses registered.' This is the expected state for the current test corpus.",
+      "journey": "J-10",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "click", "target": {"testid": "desk-section-expand-refereeAdjudications"}},
+      "expect": {"text": "No hypotheses"}
+    }
+  ]
+}

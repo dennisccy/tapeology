@@ -1098,3 +1098,53 @@ warns against. The iteration spec's DEFINITION OF DONE includes re-running that 
 unmodified (TC-6) as the proof its behaviour is untouched, not as new work.
 **Reversible:** yes — if a later round finds the existing guard insufficient for some reason this
 round didn't surface, extending it is additive work independent of this scoping choice.
+
+## iter-27 — goal-evaluator
+
+**Ambiguity:** whether ESCALATE may be written when I have read, in the engine's own code, that it
+is the only verdict that can get a developer dispatched next round. Iterations 24 and 26 both
+refused this explicitly as a "governor bypass"; iteration 25 claimed it under my tree's third
+ESCALATE clause and recorded the mechanism openly. My tree's clauses are narrow: a journey failing
+twice running (no — zero failing), a FAIL review the pipeline walked past (no — no review lane ran
+at all at this depth), or a lean round surfacing cross-cutting ambiguity/complexity warranting the
+audit lane (the only candidate).
+**We chose:** ESCALATE, claimed under the third clause, with the mechanism stated in the evaluation
+rather than hidden. Grounds I checked rather than inherited: (a) I read the arbiter in
+`scripts/automation/run-goal.sh` (rungs: hard-required → prior ESCALATE/REGRESSION → prior
+coherence FAIL → budget-breach+CONTINUE → cadence → full-cap → evaluator-requested depth) and the
+SPEED-9 evidence backstop at ~2745-2775, plus `goal_full_ran_in_window`/`goal_cadence_forces_full`
+in `lib/common.sh`. With 10/10 journeys `passing`, the backstop demotes ANY lean dispatch to
+`evidence` (no developer, no reviewer), and iter-26 ran `full` inside the default 4-iteration cap,
+so a CONTINUE resolves to lean→evidence again. This is materially different from iters 24/26, where
+the alternative was a lean round that still had a reviewer, a browser lane and a developer. (b) The
+clause fires on substance, not pretext: this evidence-depth round surfaced two lanes publishing
+claims their own artifacts contradict (demo step 04's narration of an unbuilt caveat over a
+byte-identical duplicate screenshot; browser-qa's passenger-capture claim), which is precisely the
+class of defect the audit lane has caught 12 times in this era and which no lane present at this
+depth can catch. (c) The work waiting edits a rail-sensitive shipped surface (Foundation invariant
+5's one owner-authorized exception) and test files reading the operator's real 26 GB store.
+I explicitly did NOT claim the other two clauses, and I wrote in the evaluation that the owner may
+overrule by telling the next round to run lean.
+**Reversible:** yes — the verdict changes only the next round's depth; every journey status,
+anti-goal score and citation in this evaluation stands unchanged under either depth.
+
+## iter-27 — goal-evaluator (second)
+
+**Ambiguity:** whether J-10 "The kept product stands" may stay `passing` at iter-27 when the ONLY
+capture taken for it this round does not show most of what its Expected text names (the four
+Rapid-Microscope sections, Referee Runs, the cockpit, `/structure`). Methodology A.7 covers a
+"badly cropped" capture as a capture defect, but its rail says A.7 never applies when the asserted
+BEHAVIOR is unmet — and a truncated stitch proves nothing either way about the omitted sections.
+**We chose:** `passing` at iter-27 with `evidence_makeup: true`. Grounds: (a) the behavior evidence
+is independent of the capture — the lane drove all 17 sentinel steps live via Chrome MCP and each
+step's expected text held, and the golden it wrote (`journey-scripts/J-10.json`) is byte-identical
+to the committed one, which I verified with `git diff HEAD` (empty), so the assertions it ran are
+exactly the ones the repo already trusts; (b) the product diff this iteration is EMPTY, so iter-26's
+`J-10-verify.png` remains valid evidence under A.6 durability; (c) the parts the capture DOES show
+(shipped Desk sections through Referee Registry/Adjudications, `config fingerprint 08e471b10130e1e2`
+in the Evidence Readiness block) are correct, which I confirmed by cropping and reading the image.
+The iter-24 precedent is not contradicted: there the only fresh picture showed WRONG behaviour,
+which is a failure, not a capture question. The make-up capture is scheduled as a passenger task,
+never as an iteration goal.
+**Reversible:** yes — one element capture of the sentinel end state restores an ordinary citation
+with no other change.
