@@ -1073,3 +1073,28 @@ CRITICAL severity, not softened to minor, precisely so the era's record shows wh
 build contained and which lane caught it.
 **Reversible:** yes — if a later round finds the guard incomplete (e.g. another producing input that
 can be absent), the entry can be reopened without disturbing any journey status.
+
+## iter-27 — goal-decomposer
+
+**Ambiguity:** `iteration-state.md`'s Active blockers list carries the item "Referee disclosure +
+guard never built (dev)" verbatim from the r5-point-7 owner ruling's own wording ("Serve the
+verbatim caveat beside the metric ... add a guard/source-scan proving the gates read only the
+seal-aware owner"). Reading the codebase directly, `apps/backend/tests/test_micro_no_referee_
+evidence_guard.py` (committed at iter-21, `git log` confirms; 4/4 passing today, re-run myself)
+already IS that exact guard/source-scan — its own docstring cites spec section 10.7/r5 by name and
+proves both banned reference shapes are caught plus the one legitimate constant import is not
+flagged. So the ruling's two clauses ("serve the caveat" and "add the guard") are NOT one
+undone item; only the caveat-serving half is actually unbuilt. The carried-forward digest text
+either predates iter-21's guard landing or was never re-derived against the code, the same failure
+mode iter-25's first entry names generally ("re-check the GROUNDS of every carried-forward open
+item, not just whether the code changed").
+**We chose:** scope iter-27's referee-disclosure work to ONLY the caveat-serving half (a static,
+verbatim copy string added beside the Referee Registry's Strategy Family figures in
+`apps/frontend/app/desk/page.tsx`, sourced from `docs/rapid-validation-spec.md` section 10.7) plus
+a small presence-proving test, and explicitly did NOT re-build or duplicate the import-ban
+guard `test_micro_no_referee_evidence_guard.py` already provides — re-deriving it a second time
+would be exactly the kind of redundant second implementation the "single source of truth" rail
+warns against. The iteration spec's DEFINITION OF DONE includes re-running that existing guard
+unmodified (TC-6) as the proof its behaviour is untouched, not as new work.
+**Reversible:** yes — if a later round finds the existing guard insufficient for some reason this
+round didn't surface, extending it is additive work independent of this scoping choice.

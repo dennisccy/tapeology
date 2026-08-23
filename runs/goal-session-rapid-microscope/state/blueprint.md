@@ -372,3 +372,18 @@ from its one endpoint, read verbatim by UI/MCP/reports.
      replay-harness test assets, not served product values -- matching this file's own iter-19-note
      and iter-24-note precedent for harness-only changes. No new page, route, MCP tool, or
      nav-skeleton change; no reapproval file written. -->
+
+<!-- iter-27 note: no Data Contract or Information Architecture change; no new page, route, MCP
+     tool, or nav-skeleton change; no reapproval file written. This iteration adds the spec section
+     10 point 7 (r5) disclosure sentence to the ALREADY-shipped Referee Registry -> Strategy Family
+     block on `/desk` (owner `referee_evidence.py`/`referee_routes.py`, "Unchanged owners" row
+     above -- byte-frozen this era, not edited). The caveat is a STATIC, non-computed copy string
+     (verbatim from `docs/rapid-validation-spec.md` section 10.7), rendered by the frontend beside
+     the already-registered `strategy_trade.dataset_count`/`trade_count`/`tick_gate_statement`
+     fields -- it introduces no new served field, no new computation, and no second path to any
+     value already in this table; the underlying metric's owner and endpoint are unchanged. The
+     iteration also gives two real-corpus backend test fixtures (`test_micro_readiness.py`,
+     `test_micro_join.py`) a durable cache path -- reusing the ALREADY-registered
+     `DatasetIndex`/`MicroReadinessCache` primitives `routes.py` already wires for the live app,
+     never a new cache class -- which is test-harness-only and carries no Data Contract row of its
+     own (matching this file's own iter-19/24/25-note precedent for harness-only changes). -->
