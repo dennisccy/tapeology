@@ -340,3 +340,20 @@ from its one endpoint, read verbatim by UI/MCP/reports.
      iteration -- the two-feature `refill_consistent` co-occurrence machinery goal.md's prose
      describes remains genuinely unbuilt (T-1), unchanged from iter-21's own disclosed deferral.
      No new page, route, MCP tool, or nav-skeleton change; no reapproval file written. -->
+
+<!-- iter-24 note: no Data Contract or Information Architecture change. The already-registered
+     `sealed_at` sub-field of the "Vault shards, universes, exposure ledger" row (owner `vault.py`,
+     endpoint `GET /research/desk/micro/vault`) keeps its name, owner, endpoint, and string type --
+     only its SERVED precision narrows, from full ISO timestamp to date-only, in the opaque
+     projection (`_serialize_shard`, uniformly across `sealed`/`assigned`/`exposed` states). The
+     underlying shard-ledger row's stored `sealed_at` value is untouched (serve-time-only change,
+     counter-tested). This closes the iter-23-found sealing-time leak (served `sealed_at` joined
+     against the committed `reports/j06-tranche/recording-runs.json` per-run seal counts narrowed
+     one shard's candidate identity from 79 to 4) by narrowing the disclosed channel itself; the
+     companion fix widens `j06_operator.py`'s `stage_tr2()` to model this exact join going forward
+     against the SAME existing r5 certainty floor (`>= 2`) already enforced by its combinatorial
+     half -- no new floor number invented. J-09 also gains its first stored golden replay script
+     (`journey-scripts/J-09.json`) this iteration; a replay-harness test asset, not a served product
+     value, so it carries no Data Contract row (matching this file's own iter-19-note precedent for
+     harness-only changes). No new page, route, MCP tool, or nav-skeleton change; no reapproval file
+     written. -->

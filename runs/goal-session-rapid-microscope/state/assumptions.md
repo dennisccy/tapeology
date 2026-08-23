@@ -782,3 +782,29 @@ violation is unresolved") means it must be closed before the era can be certifie
 **Reversible:** yes — if the owner or a later auditor reads the "mutually indistinguishable" sentence
 as independently binding, the same finding is re-scored critical and the fix is unchanged; nothing
 about this round's evidence depends on the severity label.
+
+## iter-24 — goal-decomposer
+
+**Ambiguity:** iter-23's evaluator recommended closing the sealing-time leak with an explicit "or":
+"stop publishing the per-run seal count, OR serve the sealing time only coarsely" -- both offered,
+neither chosen, and each has a different blast radius. The first would mean editing the already-
+committed `reports/j06-tranche/recording-runs.json`'s five historical `sealed_this_run` entries
+(0/0/1/13/7, real, on disk); the second means narrowing the served `sealed_at` precision on
+`GET /research/desk/micro/vault` going forward, touching a still-live serving path instead.
+**We chose:** coarsen the served `sealed_at` field (option two), and explicitly leave
+`recording-runs.json`'s historical entries untouched. Grounds: this project's foundation invariant
+is "record integrity" -- no legacy file is ever rewritten or reserialized -- and while
+`recording-runs.json` is an operator report rather than a store record, rewriting its already-
+committed historical numbers in place sits closer to that discipline's spirit than narrowing a
+still-live SERVED field's precision does; the served field is the ongoing, currently-open channel
+(every future GET keeps disclosing full precision until fixed), while the historical report is a
+closed, dated snapshot of five specific runs that already happened. I also verified the r5 anti-
+goal's actual governing test ("no still-unexposed vault-eligible shard is identifiable with
+certainty," i.e. never fewer than 2 candidates) is not currently violated -- the iter-23 evaluator's
+own worst case was 4, and the codebase's existing `stage_tr2()` combinatorial half already enforces
+exactly a `>= 2` floor (`j06_operator.py:803`) -- so the widened check reuses that SAME floor rather
+than inventing a new number, consistent with the project's own "no magic numbers" invariant.
+**Reversible:** yes -- if a later round or the owner decides the committed report's historical
+per-run counts should also be redacted/bucketed, that is a separate, additive edit to
+`recording-runs.json` (or a documented policy note beside it); nothing about this round's vault.py
+change or the widened `stage_tr2()` check depends on that choice being made this way.
