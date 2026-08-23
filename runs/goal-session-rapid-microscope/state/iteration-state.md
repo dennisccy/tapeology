@@ -1,26 +1,37 @@
 # Iteration State — rapid-microscope
 
-**After iteration:** 22 · **Date:** 2026-08-21 · **Verdict:** STALLED
+**After iteration:** 23 · **Date:** 2026-08-23 · **Verdict:** ESCALATE
 
 ## Journeys
 
-9 passing (J-01 J-02 J-03 J-04 J-05 J-07 J-08 J-09 J-10) · 1 partial (J-06) — 10 total
+10 passing (J-01..J-10) · 0 failing · 0 unknown — 10 total. But J-07 + J-09 were NOT tested this
+round (`DEFERRED-BUDGET`, keep iter-22 stamps), so the deterministic gate still blocks GOAL_ACHIEVED.
 
 ## Active blockers
 
-- **J-06 "The recorder and the Vault" — OWNER-BLOCKED (human).** Steps 1-3 built (`tick_recorder.py`, `vault.py`). Step 4 (screen+freeze Tier-B, record real Alpaca trades+quotes to spec §7.6 minimums, seal at birth) is an operator act needing the paid feed, owner attendance, and sanction for a one-way seal; step 5 depends on it. Unblock: authorise the recording · amend `docs/goal.md` J-06 · resume unfinished on polish only.
-- Owner ruling open, blocks NO journey: source of a candidate's money floor / evidence label (`micro_sealed_evaluation.py:316`).
-- Machine work available, moves NO journey (polish; needs nobody's permission): (1) Desk readiness 22.3s/load — `micro_routes.py:108` rebuilds a BandMapResolver per GET; cache per dataset checksum AND band map, never cache a "no touches" answer. (2) `micro_routes.py:284-287` duplicates `scout.py:1684-1689`'s selector→kind table — derive it. (3) `tests/test_scout.py:1676` cannot fail — add `screen_result["n_candidate"] + screen_result["n_comparator"] > 0` (mirrors `:1664`).
+- **J-07 "Graduation" + J-09 "The pilot studies" need a fresh browser re-check FIRST** (dev/QA). Both green and unchanged; the clock cut them (rows in `reports/phase-goal-rapid-microscope-iter-23-ui-test-results.md`).
+  Neither has a golden (`journey-scripts/` = J-01..J-06, J-08, J-10) so both ride the slow LLM lane — write a J-09 golden; J-07 cannot have one (iter-19 finding).
+- **NEW open minor anti-goal item (dev)** — seal-time leak: served per-shard `sealed_at` (`vault.py:380`) joined with per-run `sealed_this_run` in `reports/j06-tranche/recording-runs.json`
+  splits the 21 seals 7/13/1/0/0, proving 3 pool members unsealed and cutting one shard from 79 candidates to 4. Close before GOAL_ACHIEVED. 7 older minor items also open.
+- **4,191 lines of operator code (`08534e8`,`76e7a70`) never read by any adversarial lane** — the
+  `full-cap` rung cut the auditor from the round meant to check it; the spec needs
+  `Depth enforcement: required`, not just `Full trigger:`.
+- **`desk_micro_readiness` MCP tool times out against the real store** — 10s cap
+  (`apps/backend/app/mcp/__init__.py:57`) vs ~13.5s warm / ~13min cold. Fails closed. Passenger fix.
+- Owner-owned, blocking no journey: sealed judge's money-floor source (`micro_sealed_evaluation.py:316`); the ~150-symbol-day gate reads unmet at 80 — a passing state.
 
 ## Last 2 verdicts
 
-- iter 22: STALLED — J-09 finished (three studies recorded + operator-reachable) and J-07 re-photographed; J-06's owner-only tape recording is the sole remaining blocker.
-- iter 21: ESCALATE — Study 2 screened (J-09 failing→partial); audit repaired a floor-check row that nothing but a unit test could produce.
+- iter 23: ESCALATE — J-06 green on real-store browser evidence I opened myself; a budget overrun
+  deferred J-07/J-09, and the checker must read the never-audited operator code.
+- iter 22: STALLED — J-06's last step was an operator-only tape recording; the owner has since done it.
 
 ## Do not redo
 
-- **J-09 DONE, passing** — three families screened to closed-vocabulary decisions + floor-check rows via `POST /research/desk/micro/scout/compute {"grid":…}` AND `python -m app.research.scout --grid …`. Do NOT re-screen; do NOT run them against the real `.data/` corpus (owner-gated: permanent rows, breaks J-10's "No candidates ledgered." golden, search is quadratic).
-- **J-07 re-verified fresh** (`UT-08-result.png`, iter-22) — no make-up capture owed; the demo lane's step-07 404 is the runner rewriting research URLs onto `:3301`, never schedule a re-record.
-- **Study 1 stays single-feature** (`failed_aggression_score >= 0.5`) — `refill_consistent` co-occurrence is a disclosed T-1 deferral. Do NOT record real tape; do NOT touch the sealed judge's money floor.
-- **Rig rule (binding):** run the golden-replay set BEFORE any lane POSTing into the shared QA rig (J-08 step 3 / J-10 step 12 assert "No candidates ledgered.").
-- Baseline: 3,322 pass / 8 skip / 0 fail; fingerprint `08e471b10130e1e2`; no `referee_*` diff.
+- **J-06 is DONE and verified** — 80-shard pool + 21 sealed rows render on `/desk`; evidence
+  `reports/qa/goal-rapid-microscope-iter-23-evidence/J-06-result.png` + `J-06-vault-shards.png`.
+- **Do NOT re-record tape** (80/80 on disk), **do NOT expose/assign any sealed shard** (all 21 stay
+  `sealed`), **do NOT run J-09's studies on the real corpus** (irreversible; breaks J-10's golden).
+- **Study-3 non-vacuity assertion is DONE and proved non-vacuous** (`test_scout.py`; perturbation
+  re-run by the evaluator) — do not re-open. **Readiness serving `80` (whole pool), not `21`, is
+  CORRECT** (r5 anti-subtraction; the `21` belongs on the vault surface) — do not "fix" it.

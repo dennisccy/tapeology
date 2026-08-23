@@ -1555,3 +1555,84 @@ one list that already owns it, and add the missing line to Study 3's test so it 
 three are written into the next planner's digest; none of them turns a journey green, and I have
 deliberately not dressed them up as progress. Still do not touch the sealed judge's money floor —
 that ruling remains yours and nothing now waits on it.
+
+## Iteration 23 — goal-rapid-microscope-iter-23
+
+**Date:** 2026-08-23T03:05:00Z
+**Verdict:** ESCALATE
+**Depth dispatched:** lean (the plan asked for the independent checker in writing and gave its
+reason; the engine's cost ladder demoted it — telemetry `depth_demoted`, reason `full-cap`)
+**Journey deltas:**
+- **Newly passing: J-06 "The recorder and the Vault" — partial → PASSING.** The era's last
+  non-green journey. You recorded the real tape yourself between rounds; this round the machine
+  checked your work rather than taking your word for it, and I checked the machine.
+- Newly failing: none. Regressed: none.
+- Re-verified this round by their own stored checks, all green: J-01, J-02, J-03, J-04, J-05,
+  J-08, J-10.
+- NOT tested: J-07 "Graduation" and J-09 "The pilot studies" — the clock cut both (rows read
+  `DEFERRED-BUDGET`). They keep their green status and their round-22 stamps. I opened one
+  picture from each as a spot check and both hold.
+- Anti-goal violations: no critical ones, introduced or open. ONE older minor item CLOSED, and I
+  proved it closed myself. ONE NEW minor item opened — my own finding, raised by no lane. Eight
+  stay open, none waiting on you.
+
+**Reasoning:** I did not take the reports on trust, but I also did not repeat my habit of re-running
+the whole test set, and I am saying so plainly rather than implying otherwise: the data store grew
+from about 0.9 GB to about 23 GB between rounds and the suite now costs roughly two hours. Instead I
+ran 224 targeted tests myself covering every safety trap this round's acceptance names — the vault
+set and the operator set (111 passed), and the tool-list, recorder and study-3 sets (113 passed) —
+with zero failures. I re-computed the frozen things by hand: the settings fingerprint prints
+08e471b10130e1e2, all six judge files hash byte-identical to the era's opening record, and the tool
+list still reads exactly 26.
+
+The round's real work is done and I proved it by looking. I opened the picture: the Desk page's
+recording section really shows a live pool of 80 symbol-days under the universe
+`rapid-microscope-j06-starter` — the first time that section has ever shown anything but zeros — and
+the Vault section really lists 21 sealed recordings by made-up code name only, with no company name
+and no date anywhere, and only sha256 fingerprints where the rule and the secret would be. I then
+went past the picture: I read the 21 rows straight off disk (all sealed, none assigned, none
+revealed), and I read the serving code, which is a positive allow-list — it only ever reveals a name
+and a date in the two states that earned it, so an unknown state fails closed rather than leaking. I
+also derived the "a restart mid-run resumed cleanly" claim myself from the recording report: run 0
+stopped cooperatively, run 1 then found 20 already recorded and re-recorded none, with zero duplicates.
+And I closed an old complaint properly: the study-3 test that could not fail now can — I moved the
+planted signal outside the data window, watched exactly the new line go red, put the file back
+byte-identical, and watched it pass.
+
+The finding that matters most is mine, and no lane raised it — this round had no independent checker.
+The Vault page shows a sealing TIME for each sealed recording, and the project also carries a
+committed report listing, for each recording run, both which company-days that run recorded and how
+many it sealed. Join the two and the pool stops being fully opaque: the 21 sealing times fall
+7/13/1/0/0 across the five runs, exactly matching the published counts, so three recordings are
+provably NOT sealed and one sealed recording has only four possible identities instead of the 79 the
+project's own analysis publishes for every one. I scored this minor rather than serious, and the
+reason is specific: the rule names its own test — "identifiable with certainty" — and that test
+genuinely still holds, since the smallest set I could build is four, never one. What is weakened is
+the sentence beside it and the honesty of the published figure. The operator script says the intent
+in its own words, "the hidden partition is kept OUT of reports" — and the per-run seal counts are
+exactly what partly undoes that.
+
+**Next-step recommendation:** One more round, with the independent checker, kept SMALL, in this
+order. (1) Re-check J-07 "Graduation" and J-09 "The pilot studies" FIRST, before anything else — they
+are green and nothing they rely on changed, but the clock cut their re-check and the machine's
+finishing gate will keep refusing to declare the era done until both are looked at again; while
+there, write a stored replay script for J-09 so it stops landing in the slow lane. (2) Close the
+sealing-time leak: stop publishing the per-run seal count, or serve the sealing time only coarsely,
+then widen the leak test so it computes run-aware candidate sets and fails below a written floor.
+(3) Let the checker read the 4,200 lines of recording code you committed yourself — no adversarial
+lane has ever read it. If the clock bites, drop (3), then (2), never (1).
+
+I am writing "escalate" rather than "continue" for a mechanism I read in the engine's own code this
+round, not one I inherited: this round overran its budget (3,600s allowed, 14,435s used), and the
+depth ladder demotes a budget-overrun round that ends in "continue" to a light round with no checker
+at all, while an "escalate" verdict grants the heavy round outright, above that rung. This round was
+itself demoted to light by that same ladder even though its plan asked for the checker in writing.
+So the choice is "with a checker" against "certainly without one", and the thing most needing a
+check is code no adversarial lane has read, on the round that would certify the era.
+
+One thing you would actually feel, worth a passenger fix: against your real data store the
+`desk_micro_readiness` tool now times out — the tool waits 10 seconds and the answer takes about 13.5
+seconds warm (about 13 minutes on a cold start). It fails safely, showing nothing rather than
+something wrong, but one of your 26 tools is effectively unavailable from a Claude session pointed at
+the real store. Nothing else waits on you: the ~150-symbol-day research gate honestly reads unmet at
+80, which the goal itself calls a passing state, and the money-floor ruling still blocks no journey.

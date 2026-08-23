@@ -102,176 +102,55 @@ four `/desk` sections plus its four MCP proxies.
 **Applies to:** every iteration whose spec carries an "open owner questions" or "deferred, awaiting
 ruling" list, and every evaluation that reads a browser-QA evidence directory.
 
-## iter-12 — 2026-08-19T11:30:00Z
-
-**Verdict:** ESCALATE
-**Lesson:** A recovery/repair primitive can satisfy every written test and still break the
-invariant it exists to protect, because the tests only cover entities the damaged artifact can
-still NAME. `vault.recover_shard_ledger`'s unprovable branch correctly marks the shards visible
-in the surviving prefix `exposure_unknown`, but a shard whose only row lived in the destroyed
-suffix silently leaves the withheld set entirely — and `rewrite_from_recovery` then regenerates
-the tail anchor, so `verify_chain()` reports `ok: True` again and the loss becomes undetectable
-from the vault's own state. The durable anchor knew the row count (3) versus the survivors (2),
-so a fail-closed refusal was available and simply was not taken. When auditing a
-recover-from-damage path, always probe the entity whose ONLY record was destroyed, and always
-re-run the integrity check AFTER the repair to see whether the repair erased the evidence.
+## iter-12 — 2026-08-19T11:30:00Z  [condensed: body → lessons.md.archive.md]
 **Applies to:** any iteration touching `vault.py`'s recovery/epoch machinery, or adding a repair
 / reconstruction path to any hash-chained ledger (`micro_chain_ledger.py` and its
 `ExposureRegistry` / `WalkForwardLedger` consumers); and any J-06 step-4 work that would let real
 sealed tape reach this code.
-
-**Lesson (process):** A `full`-depth request expressed only in the evaluator's *prose* is not
-binding — the engine's arbiter reads the VERDICT LINE. My iteration-11 CONTINUE + "run full next
-time" was demoted to lean, and the one lane that has found a real integrity defect in every full
-iteration of this era did not run on the iteration that shipped security-critical machinery. If
-the next iteration genuinely needs the auditor, the verdict must be ESCALATE, not CONTINUE with a
-recommendation.
 **Applies to:** every future evaluation in this session that wants the independent audit lane.
 
-## iter-13 — 2026-08-19T17:05:00Z
-
-**Verdict:** ESCALATE
-**Lesson:** A comment asserting that a race window is harmless is the best place to attack, not a
-reason to stop. `micro_chain_ledger.append_row` writes the row BEFORE its tail anchor and its own
-comment calls the gap "benign -- never falsely short"; that sentence is exactly why three passes
-(dev self-attack, reviewer, my own iter-12 probe) all missed that with the anchor lagging one row, a
-**byte-genuine** reconstruction of the anchor-length history satisfies every conjunct and
-`rewrite_from_recovery` truncates a real sealed shard away — no attacker needed, a power loss plus an
-honest operator reproduces it. The audit caught it only by ignoring the comment and executing the
-crash state. Corollary confirmed by my own probes: the same window also lets a recovery revert a
-recorded EXPOSURE, so the harm class was broader than the one instance anybody reported.
+## iter-13 — 2026-08-19T17:05:00Z  [condensed: body → lessons.md.archive.md]
 **Applies to:** any iteration touching `micro_chain_ledger.py`, `vault.py`'s recovery/lifecycle
 paths, or any append-only store whose durable summary (anchor, checkpoint, manifest, count cache) is
 written in a separate step from the data it commits to — attack the crash state between the two
 writes, and never accept an in-code claim that the window is benign.
 
-## iter-13 — 2026-08-19T17:06:00Z
-
-**Verdict:** ESCALATE
-**Lesson:** The deterministic replay lane emitted five PASS rows citing
-`reports/qa/goal-rapid-microscope-iter-13-evidence/J-0{1..5}-verify.png` and wrote **none of them**
-(iters 11 and 12 both did). A results row is not evidence — open the file. Paired with the third
-auto-deletion of `state/golden-gaps`, the harness has now twice this era produced artifacts whose
-absence silently reads as coverage.
+## iter-13 — 2026-08-19T17:06:00Z  [condensed: body → lessons.md.archive.md]
 **Applies to:** every evaluation — verify each cited evidence path exists on disk before scoring
 from it; and any framework work on `replay-lane.sh` / `demo_runner.py --mode verify`.
 
-## iter-14 — 2026-08-19T20:45:00Z
-
-**Verdict:** ESCALATE
-**Lesson:** A framed screenshot carries evidence nobody wrote down. The Next.js dev-overlay badge
-in `UT-03-result.png` / `UT-04-result.png` reads "5 Issues" while the same page's earlier captures
-(`UT-01`, `UT-02`) and later fresh loads (`UT-11`, `UT-12`, `UT-17`) show no badge at all — which
-localises a brand-new defect to the exact click that expanded Walk-Forward. It is a `<details>` +
-`<pre>` nested inside a `<p>` at `apps/frontend/app/desk/page.tsx:6461-6472`, invalid HTML that
-React reports as a hydration error; a whole-file scan proved it is the ONLY such site in the
-12,000-line Desk page, so it is unambiguously this iteration's. Review, QA, browser-QA, coherence
-AND the independent auditor all passed it, because every lane asserted on DOM *content* and none
-asserted on console cleanliness AFTER expanding a section (UT-01 only checked the collapsed load).
+## iter-14 — 2026-08-19T20:45:00Z  [condensed: body → lessons.md.archive.md]
 **Applies to:** any iteration adding a `/desk` or `/structure` section — assert a clean console
 *after* each new section is expanded, not only on first page load; and read the dev-overlay badge
 in every full-page capture as a first-class signal rather than page furniture.
 
-## iter-14 — 2026-08-19T20:45:00Z (second)
-
-**Verdict:** ESCALATE
-**Lesson:** Rendered-vs-stored equality is cheap to prove and worth proving every time a "reads
-verbatim, never recomputes" claim is made. Reading the five fold rows off `UT-03-result.png` and
-diffing them against `.data/micro_walkforward/walkforward_ledger.jsonl` matched exactly — including
-`0.019176079727258294` and `-0.007730667002689608` — which converts "no client-side arithmetic"
-from a regex guard's word into a measured fact in about two minutes. The full-precision floats are
-what make it decisive: any rounding, formatting or recomputation in the browser would have shown.
+## iter-14 — 2026-08-19T20:45:00Z (second)  [condensed: body → lessons.md.archive.md]
 **Applies to:** any iteration whose spec says a UI section renders an endpoint "verbatim" — pull
 the underlying store/ledger file and compare the longest-precision numeric on screen, rather than
 relying on the `_PRICE_ARITHMETIC_FIELDS` sweep alone.
 
-## iter-15 — 2026-08-20T00:20:00Z
-
-**Verdict:** ESCALATE
-**Lesson:** A regression test can be structurally unable to fail while looking perfectly green.
-This round's own opaque-pool sweep (`tests/test_mcp_server.py`
-`test_tr2_the_new_mcp_tools_leak_nothing_about_a_sealed_shard`) sealed its shard under an
-*unregistered* universe — inherited from every member of `test_vault.py`'s TR-2 family — so
-`vault._serialize_universe`'s committed/revealed branch never executed and the sweep was blind to
-the single most direct de-anonymisation the spec names. It was caught only by mutation-proof
-(patch production to leak; watch the old test still pass), not by reading the test. Every new trap
-test in this era needs a non-vacuity assertion proving the state it sweeps is genuinely populated
-in the branch under test — the fix added five (`test_mcp_server.py:1292-1299`).
+## iter-15 — 2026-08-20T00:20:00Z  [condensed: body → lessons.md.archive.md]
 **Applies to:** any iteration adding or editing a TR-* trap test, any test that "sweeps every
 route/tool for a forbidden string", and specifically the five remaining traps (TR-3, TR-22, TR-23,
 TR-24, TR-26).
 
-## iter-15 (second) — 2026-08-20T00:20:00Z
-
-**Verdict:** ESCALATE
-**Lesson:** Three browser-QA rows this round were graded PASS on a client-side `window.fetch`
-substitution (UT-04), a direct source read (UT-05, UT-07 Part C), and one optional non-zero-fixture
-check was SKIPPED outright (UT-12) — each honestly disclosed inside its own row, which is a real
-improvement over iteration 14. But the substance only became evidence when the independent auditor
-seeded the non-zero state and rendered it live. When the real store's honest state is all-zero, the
-browser lane structurally cannot exercise the non-zero render path; plan for a second seeded rig
-(or accept that the auditor is the lane that closes it) rather than treating a source read as a
-browser pass.
+## iter-15 (second) — 2026-08-20T00:20:00Z  [condensed: body → lessons.md.archive.md]
 **Applies to:** any iteration whose new UI renders a value the real `.data` store currently has
 none of (vault shards, scout families, walk-forward sequences, graduation bundles).
 
-## iter-15 (third) — 2026-08-20T00:20:00Z
-
-**Verdict:** ESCALATE
-**Lesson:** `reports/qa/goal-rapid-microscope-iter-15-evidence/J-0{2,3,4,5}-verify.png` are
-md5-identical (`28403a00c2da3d7ec9b3b0957a9afe93`) because their golden scripts
-(`runs/goal-session-rapid-microscope/journey-scripts/J-0{2..5}.json`) are one step each — `goto
-/desk` plus one collapsed-heading assertion. "6/6 replay journeys passed" therefore carries almost
-no regression weight for four of the six. This is NOT a capture defect (a re-capture yields the
-same picture) — it is script depth, and it should be fixed by deepening the scripts, not by
-re-shooting them.
+## iter-15 (third) — 2026-08-20T00:20:00Z  [condensed: body → lessons.md.archive.md]
 **Applies to:** any future evaluator reading a green replay table; and the harness owner, when
 J-02–J-05's golden scripts are next touched.
 
-## iter-16 — 2026-08-20T04:35:00Z
-
-**Verdict:** ESCALATE
-**Lesson:** A mutation-proof only proves the ASSERTION can fail — it does not prove the FIXTURE
-can discriminate. TR-26's fix shipped with `_depletion_events()` whose revealing quote carried ask
-size 300, byte-identical to the size the run already held, so `value == 200.0` held under BOTH the
-correct rule (`500 − 300`) and the corrupt one (fold the revealing quote in first). The dev's
-genuine RED→GREEN TDD transcript, the reviewer's own direct mutation of production source, and the
-pump's framing of the round all missed it; only the auditor's `micro_observer.py:646` mutation
-(`run["current_size"] = size`) exposed it — the whole file stayed green. I reproduced it myself:
-under that mutation exactly one test fails (the auditor's new twin-fixture test, with the predicted
-`-400`) and every other test in the file passes. Rule for every future trap: build fixture numbers
-that are deliberately all different, so no assertion can hold for the wrong reason — and check
-specifically whether the fixture's numbers COINCIDE anywhere the assertion depends on them.
+## iter-16 — 2026-08-20T04:35:00Z  [condensed: body → lessons.md.archive.md]
 **Applies to:** any iteration adding or amending a TR-N trap test, any fixture whose assertion is
 an arithmetic identity (`a − b == c`), and any round whose acceptance says "X stays unaffected"
 
-## iter-16 (second) — 2026-08-20T04:35:00Z
-
-**Verdict:** ESCALATE
-**Lesson:** A journey's stored golden replay script can be rewritten, linted, and shipped WITHOUT
-ever being executed, and nothing in the pipeline notices: `runs/.../journey-scripts/J-10.json` is a
-tracked file that `status.json`'s `changed_files` does not track, so the reviewer's and QA's
-"exactly 6 files changed" certifications were both computed against a list that structurally cannot
-contain it. In this round the rewrite also silently DROPPED two data-bearing assertions (real
-playbook evidence) in favour of four empty-state ones — replacing "this value is right" with "this
-list is empty" — in the very round where that journey was the target. Check the full
-`git status --porcelain` yourself, not `status.json`, whenever a lane certifies a file count.
+## iter-16 (second) — 2026-08-20T04:35:00Z  [condensed: body → lessons.md.archive.md]
 **Applies to:** any iteration whose target journey has a stored golden script; any lane certifying
 "exactly N files changed"; the harness itself (journey scripts belong in `changed_files`)
 
-## iter-17 — 2026-08-20T10:20:00Z
-
-**Verdict:** ESCALATE
-**Lesson:** A round can retire a caller-supplied ANSWER and still leave the caller supplying the one
-INPUT the spec pins as a constant — and that hole survives a dev TDD proof, an independent reviewer
-mutation, and a full QA pass, because every committed fixture narrows the same constant. Iteration
-17's `micro_sealed_evaluation.py:203-215` `_resolved_floors` read `candidate_spec["floors"]`, so
-`floors={1,1,1}` + one observation produced a permanent `verdict: "pass"` under a `rule_hash`
-certifying 30/8/2; audit mutation AM-7 showed FOUR committed tests flip to `insufficient` the moment
-the pinned floors are actually applied — i.e. every PASS/FAIL in the new suite existed only because
-its fixture narrowed the floor. The tell is mechanical, not intuitive: when a new rule module accepts
-ANY threshold-shaped argument, run one mutation that forces the spec-pinned value and count how many
-tests change verdict. If the answer is "several", the constant is not pinned, it is negotiated.
+## iter-17 — 2026-08-20T10:20:00Z  [condensed: body → lessons.md.archive.md]
 **Applies to:** any iteration adding or editing a rule/verdict module that takes thresholds, floors,
 minimum sample sizes, or grids as arguments — `micro_sealed_evaluation.py`, `walkforward.py`'s
 survivor/sequence rules, `scout.py`'s kill rules, and any future Referee-facing predicate. Also: when
@@ -451,3 +330,30 @@ accept the soft note. (Round 19 recorded the same mechanism for J-07's replay sc
 demo lane's version of it.)
 **Applies to:** any iteration whose demo script includes a step on a `GET /research/...` address
 rather than a `/cockpit`, `/structure` or `/desk` page.
+
+## iter-23 — 2026-08-23T03:05:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** An "opaque pool" leaks through its own bookkeeping, not through its serving layer. The
+vault's serving code is a correct positive allow-list and TR-2 passes, yet joining the per-shard
+`sealed_at` the vault route serves (`vault.py:380` `_OPAQUE_SHARD_KEYS`) against the per-run
+`sealed_this_run` counts published in the committed `reports/j06-tranche/recording-runs.json`
+partitions the 21 seals 7/13/1/0/0 across the five recorder runs — proving 3 pool members unsealed
+and cutting one shard's candidate set from 79 to 4. An inference trap that models only the SERVED
+surfaces will keep passing while the operator's own committed run reports do the leaking.
+**Applies to:** any iteration that adds a served per-item timestamp/ordinal to a withheld set, or
+that commits a per-run progress artifact beside one — check the JOIN, and make the trap's
+combinatorial model consume every artifact its own attacker-knowledge list claims.
+
+## iter-23 — 2026-08-23T03:05:00Z (second)
+
+**Verdict:** ESCALATE
+**Lesson:** The depth arbiter's `full-cap` rung (one full per cadence window) silently cut the
+audit lane out of the ONE iteration whose entire declared purpose was independently verifying
+4,191 lines of never-reviewed operator code — the spec said so in writing, with a qualifying
+`Full trigger:` line, and the cost ladder overrode it anyway (telemetry `depth_demoted`, reason
+`full-cap`). Only a hard `Depth enforcement: required` line outranks a cost rung; a mere
+`Full trigger:` does not.
+**Applies to:** any iteration whose purpose is independent verification of code that entered the
+repo outside goal-mode — the decomposer must write `Depth enforcement: required`, not just
+`Full trigger:`, or plan for the checker to be cut.
