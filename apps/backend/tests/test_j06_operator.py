@@ -23,6 +23,8 @@ Every trap here carries its own counter-test: the pre-fix behaviour is exercised
 passing assertion proves the fix bites rather than that the scenario never arises.
 """
 
+from datetime import datetime, timedelta, timezone
+
 import pytest
 
 from app.research import vault
@@ -267,6 +269,124 @@ def test_disclosing_every_non_selected_position_WOULD_determine_the_hidden_set()
 def test_uncertainty_holds_for_every_disclosure_count_short_of_the_collapse_point(disclosed):
     r = op.residual_pool_uncertainty(80, 21, disclosed_non_selected=disclosed)
     assert r["any_identity_certain"] is False
+
+
+# === §4 widened, iteration 24: the run-aware half that closes the sealing-time leak ================
+#
+# The combinatorial half above never reads `reports/j06-tranche/recording-runs.json` at all -- the
+# iter-23 audit's own genuine finding. These tests exercise the widened check against the REAL
+# committed run report (`op._load_recording_runs()`, no fixture stand-in -- its 7/13/1/0/0 split
+# and four `2026-08-21` + one `2026-08-22` run timestamps are read directly off disk) crossed with
+# a served-`sealed_at` list built the SAME way the real route builds it: through the real, production
+# `vault._coarsen_sealed_at_to_date` function, never a hand-rolled slice reimplemented in the test.
+
+
+def test_iter24_run_aware_check_passes_against_the_real_recording_runs_and_coarsened_sealed_at():
+    """(a) TC-3's own contract: given the REAL committed run report and sealed_at served at the
+    REAL (iteration-24, date-only) precision, every run-time-bucket's residual candidate count is
+    `>= 2` and the check reports no violation. Reproduces today's actual shape -- all four
+    2026-08-21 runs collapse into ONE date bucket (7+13+1+0=21 candidates), comfortably above the
+    floor; the fifth run's 2026-08-22 bucket sealed nothing (`sealed_this_run=0`) so it contributes
+    no bucket at all."""
+    runs = op._load_recording_runs()
+    assert [r["sealed_this_run"] for r in runs] == [7, 13, 1, 0, 0]  # today's real, on-record split
+
+    served_sealed_at_values = []
+    for run in runs:
+        coarsened = vault._coarsen_sealed_at_to_date(run["at"])
+        served_sealed_at_values.extend([coarsened] * run["sealed_this_run"])
+    assert len(served_sealed_at_values) == 21
+
+    result = op.residual_pool_uncertainty_by_run_time_bucket(runs, served_sealed_at_values)
+
+    assert result["any_bucket_below_floor"] is False
+    assert result["worst_bucket_candidates"] >= 2
+    assert result["buckets"] == {
+        "2026-08-21": {
+            "sealed_this_run_total": 21,
+            "currently_sealed_served_count": 21,
+            "candidate_identities_per_unexposed_selected_shard": 21,
+        }
+    }
+
+
+def test_iter24_the_same_widened_check_correctly_FAILS_against_the_old_full_precision_join():
+    """(b) The non-vacuity counter-test (the Study-3 break-then-restore precedent, applied to a
+    check rather than a fix): feed the SAME widened logic a synthetic reproduction of the OLD,
+    pre-iteration-24 full-precision `sealed_at` -- each shard's served value literally equal to its
+    OWN run's `at` timestamp, joined against the SAME real 7/13/1/0/0 split -- and prove it
+    correctly reports a violation. Without this, `any_bucket_below_floor is False` above would be
+    unfalsifiable -- it could be `False` because the check never actually looks, not because the
+    real data is safe."""
+    runs = op._load_recording_runs()
+
+    served_full_precision_sealed_at_values = []
+    for run in runs:
+        served_full_precision_sealed_at_values.extend([run["at"]] * run["sealed_this_run"])
+    assert len(served_full_precision_sealed_at_values) == 21
+
+    result = op.residual_pool_uncertainty_by_run_time_bucket(runs, served_full_precision_sealed_at_values)
+
+    assert result["any_bucket_below_floor"] is True
+    # the third 2026-08-21 run sealed exactly one shard -- under full precision that shard is the
+    # UNIQUE candidate in its own bucket, the exact identification the r5 floor exists to prevent.
+    assert result["worst_bucket_candidates"] == 1
+    third_run_at = runs[2]["at"]
+    assert runs[2]["sealed_this_run"] == 1
+    assert result["buckets"][third_run_at]["candidate_identities_per_unexposed_selected_shard"] == 1
+
+
+def test_iter24audit_the_widened_check_also_fails_against_a_REALISTIC_old_full_precision_shape():
+    """Iteration-24 audit finding B1 -- the counter-test above is necessary but NOT sufficient: it
+    feeds each shard's served value as its own run's ``at`` string, an alignment that cannot occur
+    in production. A run's ``at`` is stamped once at the END of the run by
+    ``j06_operator._utc()`` (SECOND precision, ``2026-08-21T16:43:09Z``), while each shard's
+    ``sealed_at`` is stamped per-seal by ``vault._iso_utc_now()`` (MICROSECOND precision,
+    ``2026-08-21T16:42:19.876544Z``) -- so under the genuine pre-iteration-24 served shape no
+    served value ever equalled a run key.
+
+    Against the ORIGINAL implementation (which walked the RUN buckets and skipped any bucket a run
+    did not claim) that meant zero buckets, ``any_bucket_below_floor: False`` -- the widened check
+    reporting "safe" against exactly the leak it was built to catch. Keyed on the SERVED bucket
+    instead, each distinct full-precision instant is its own anonymity set of ONE, and the floor
+    correctly bites."""
+    runs = op._load_recording_runs()
+
+    # a faithful reconstruction of what `seal_shard` actually wrote per shard: distinct
+    # microsecond-precision instants shortly BEFORE their own run's `at`, never equal to it.
+    served_realistic_old_shape = []
+    for run in runs:
+        run_end = datetime.strptime(run["at"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+        n = run["sealed_this_run"]
+        for i in range(n):
+            instant = run_end - timedelta(seconds=(n - i) * 7, microseconds=123456 + i)
+            served_realistic_old_shape.append(
+                instant.isoformat(timespec="microseconds").replace("+00:00", "Z")
+            )
+    assert len(served_realistic_old_shape) == 21
+    assert len(set(served_realistic_old_shape)) == 21           # every instant distinct...
+    assert not set(served_realistic_old_shape) & {r["at"] for r in runs}   # ...and none is a run key
+
+    result = op.residual_pool_uncertainty_by_run_time_bucket(runs, served_realistic_old_shape)
+
+    assert result["any_bucket_below_floor"] is True
+    assert result["worst_bucket_candidates"] == 1
+    assert len(result["buckets"]) == 21
+    assert all(
+        b["candidate_identities_per_unexposed_selected_shard"] == 1 for b in result["buckets"].values()
+    )
+
+
+def test_iter24_stage_tr2_source_wires_the_run_aware_half_into_its_own_ok_gate():
+    """Structural companion (the `test_the_preflight_stop_is_not_weakened...` precedent above): pins
+    that `stage_tr2`'s own pass/fail gate actually consults the widened check's verdict, rather than
+    computing it and discarding the result -- the failure mode a passing test-suite could otherwise
+    hide."""
+    import inspect
+
+    source = inspect.getsource(op.stage_tr2)
+    assert "residual_pool_uncertainty_by_run_time_bucket" in source
+    assert 'not run_aware["any_bucket_below_floor"]' in source
 
 
 def test_the_recorder_walk_derives_already_recorded_from_the_genuine_shard_predicate():

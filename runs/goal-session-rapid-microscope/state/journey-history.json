@@ -4,111 +4,112 @@
       "id": "J-01",
       "name": "The era transition stands — the corpus truth on the record",
       "status": "passing",
-      "last_verified_iter": "goal-rapid-microscope-iter-23",
-      "last_passing_iter": "goal-rapid-microscope-iter-23",
+      "last_verified_iter": "goal-rapid-microscope-iter-24",
+      "last_passing_iter": "goal-rapid-microscope-iter-24",
       "first_seen_iter": "goal-rapid-microscope-iter-0",
-      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-23-evidence/J-01-verify.png",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-24-evidence/J-01-verify.png",
       "spec_hash": "1791ebcd14c10fa789e1048509f8f8af20a7696fe11a7de4bf946b446d4fbb52",
-      "note": "iter-22: re-verified GREEN by the deterministic golden-replay lane (0 failed steps; reports/phase-goal-rapid-microscope-iter-22-regression-replay-results.md, 7/7). The replay ran at 22:41:33Z-22:42:06Z, BEFORE the first rig-mutating POST at 22:44:01Z, so the ledger-empty assertions were evaluated against a clean rig (auditor T5, timestamps re-checked by the evaluator). Evaluator opened J-01-verify.png: the /desk Microscope Readiness section renders the rig's honest corpus arithmetic (2 distinct symbol-days, 3 datasets, 1.75 RTH minutes, 0.0045 session-equivalents, referee tick-gate 150) plus the aggregate-only Sealed Tranche block. NOTE (evidence-quality, pre-existing and unchanged since iter-21): J-01/J-02/J-03's verify captures are byte-identical to one another (md5 644e5bce591d14335c602c9cba14227c) because all three scripts end on the same page; the per-step expectations, not the final frame, are what discriminate."
+      "note": "iter-24: re-verified GREEN by the deterministic golden-replay lane (7/7, 0 failed steps; reports/phase-goal-rapid-microscope-iter-24-regression-replay-results.md, merged into reports/phase-goal-rapid-microscope-iter-24-ui-test-results.md). Evaluator SPOT-CHECK: opened J-01-verify.png myself -- /desk Microscope Readiness renders the rig's honest corpus arithmetic (2 distinct symbol-days, 3 datasets, 1.75 RTH minutes, 0.0045 session-equivalents, referee tick-gate 150) plus the aggregate-only Sealed Tranche block with its r5 disclosure sentence. Holds. NOTE (pre-existing, unchanged since iter-21): J-01/J-02/J-03 verify captures are byte-identical (md5 644e5bce591d14335c602c9cba14227c) because all three scripts end on the same page; the per-step expectations discriminate, not the final frame."
     },
     "J-02": {
       "id": "J-02",
       "name": "The micro observer — one pass, prefix-honest, benchmarked",
       "status": "passing",
-      "last_verified_iter": "goal-rapid-microscope-iter-23",
-      "last_passing_iter": "goal-rapid-microscope-iter-23",
+      "last_verified_iter": "goal-rapid-microscope-iter-24",
+      "last_passing_iter": "goal-rapid-microscope-iter-24",
       "first_seen_iter": "goal-rapid-microscope-iter-0",
-      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-23-evidence/J-02-verify.png",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-24-evidence/J-02-verify.png",
       "spec_hash": "01f4f43564cba7431118d4a504b9dbeb20f1a994fdb52be5ceded15529d8b27a",
-      "note": "iter-22: re-verified GREEN by the deterministic golden-replay lane (0 failed steps; reports/phase-goal-rapid-microscope-iter-22-regression-replay-results.md, 7/7). The replay ran at 22:41:33Z-22:42:06Z, BEFORE the first rig-mutating POST at 22:44:01Z, so the ledger-empty assertions were evaluated against a clean rig (auditor T5, timestamps re-checked by the evaluator). Screenshot is the shared final frame described on J-01."
+      "note": "iter-24: re-verified GREEN by the deterministic golden-replay lane (7/7, 0 failed steps; reports/phase-goal-rapid-microscope-iter-24-regression-replay-results.md, merged into reports/phase-goal-rapid-microscope-iter-24-ui-test-results.md). Screenshot is the shared final frame described on J-01."
     },
     "J-03": {
       "id": "J-03",
       "name": "Structure x flow — the join that never looks ahead",
       "status": "passing",
-      "last_verified_iter": "goal-rapid-microscope-iter-23",
-      "last_passing_iter": "goal-rapid-microscope-iter-23",
+      "last_verified_iter": "goal-rapid-microscope-iter-24",
+      "last_passing_iter": "goal-rapid-microscope-iter-24",
       "first_seen_iter": "goal-rapid-microscope-iter-0",
-      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-23-evidence/J-03-verify.png",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-24-evidence/J-03-verify.png",
       "spec_hash": "a671f63835247f7fca66a41a2dc48ec4fe3e83fe0bda85d3703ef385cb20de83",
-      "note": "iter-22: re-verified GREEN by the deterministic golden-replay lane (0 failed steps; reports/phase-goal-rapid-microscope-iter-22-regression-replay-results.md, 7/7). The replay ran at 22:41:33Z-22:42:06Z, BEFORE the first rig-mutating POST at 22:44:01Z, so the ledger-empty assertions were evaluated against a clean rig (auditor T5, timestamps re-checked by the evaluator). Screenshot is the shared final frame described on J-01."
+      "note": "iter-24: re-verified GREEN by the deterministic golden-replay lane (7/7, 0 failed steps; reports/phase-goal-rapid-microscope-iter-24-regression-replay-results.md, merged into reports/phase-goal-rapid-microscope-iter-24-ui-test-results.md). Screenshot is the shared final frame described on J-01."
     },
     "J-04": {
       "id": "J-04",
       "name": "The Scout and the ledger — every trial on the record",
       "status": "passing",
-      "last_verified_iter": "goal-rapid-microscope-iter-23",
-      "last_passing_iter": "goal-rapid-microscope-iter-23",
+      "last_verified_iter": "goal-rapid-microscope-iter-24",
+      "last_passing_iter": "goal-rapid-microscope-iter-24",
       "first_seen_iter": "goal-rapid-microscope-iter-0",
-      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-23-evidence/J-04-verify.png",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-24-evidence/J-04-verify.png",
       "spec_hash": "d188d138b6c84c4ff7302bf60f5da2f95b247b58a6cd7c42874d740801bc19d0",
-      "note": "iter-22: re-verified GREEN by the deterministic golden-replay lane (0 failed steps; reports/phase-goal-rapid-microscope-iter-22-regression-replay-results.md, 7/7). The replay ran at 22:41:33Z-22:42:06Z, BEFORE the first rig-mutating POST at 22:44:01Z, so the ledger-empty assertions were evaluated against a clean rig (auditor T5, timestamps re-checked by the evaluator). Evaluator SPOT-CHECK: opened J-04-verify.png -- /desk Scout Ledger expanded, 'Ledger chain verification: ok', empty-state below (the pre-POST clean rig). Holds."
+      "note": "iter-24: re-verified GREEN by the deterministic golden-replay lane (7/7, 0 failed steps; reports/phase-goal-rapid-microscope-iter-24-regression-replay-results.md, merged into reports/phase-goal-rapid-microscope-iter-24-ui-test-results.md). Not spot-checked this round (J-01 and J-10 were); status rests on the replay row."
     },
     "J-05": {
       "id": "J-05",
       "name": "The walk-forward engine — chronology, fences, and the diagnostic run",
       "status": "passing",
-      "last_verified_iter": "goal-rapid-microscope-iter-23",
-      "last_passing_iter": "goal-rapid-microscope-iter-23",
+      "last_verified_iter": "goal-rapid-microscope-iter-24",
+      "last_passing_iter": "goal-rapid-microscope-iter-24",
       "first_seen_iter": "goal-rapid-microscope-iter-0",
-      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-23-evidence/J-05-verify.png",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-24-evidence/J-05-verify.png",
       "spec_hash": "1b84144912ebd9de2f4731f2209f6f7354ac8e563f633f14825644d2f838fa1e",
-      "note": "iter-22: re-verified GREEN by the deterministic golden-replay lane (0 failed steps; reports/phase-goal-rapid-microscope-iter-22-regression-replay-results.md, 7/7). The replay ran at 22:41:33Z-22:42:06Z, BEFORE the first rig-mutating POST at 22:44:01Z, so the ledger-empty assertions were evaluated against a clean rig (auditor T5, timestamps re-checked by the evaluator)."
+      "note": "iter-24: re-verified GREEN by the deterministic golden-replay lane (7/7, 0 failed steps; reports/phase-goal-rapid-microscope-iter-24-regression-replay-results.md, merged into reports/phase-goal-rapid-microscope-iter-24-ui-test-results.md). Not spot-checked this round (J-01 and J-10 were); status rests on the replay row."
     },
     "J-06": {
       "id": "J-06",
       "name": "The recorder and the Vault — new tape, sealed at birth",
-      "status": "passing",
-      "last_verified_iter": "goal-rapid-microscope-iter-23",
+      "status": "partial",
+      "last_verified_iter": "goal-rapid-microscope-iter-24",
       "last_passing_iter": "goal-rapid-microscope-iter-23",
       "first_seen_iter": "goal-rapid-microscope-iter-0",
-      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-23-evidence/J-06-result.png",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-24-evidence/UT-03-fail.png",
       "spec_hash": "436653d6b7824775afe28e19de9266a60c63c3a69f3b9eda09d9dddfb0cfaae1",
-      "note": "iter-19: shipped portion re-verified by the replay lane (UT-J-06 PASS; step 2 expands microReadiness and asserts \"No integrity errors.\"). vault.py and tick_recorder.py are byte-untouched this iteration (evaluator confirmed: git diff <snapshot>..HEAD -- apps/backend/app apps/frontend is EMPTY). Still `partial` for ONE unchanged reason: step 4 is an operator-attended act -- recording real Alpaca tape to the spec 7.6 minimums -- which every iteration spec since iter-13 has forbidden. HUMAN-OWNED BLOCKER. || iter-22: NOT tested this iteration and deliberately out of scope -- status carries over unchanged at partial (last verified iter-21). Steps 1-3 are built (tick_recorder.py and vault.py both present on disk, evaluator-confirmed); step 4, the real-Alpaca Tier-B tranche recording, and step 5, the readiness refresh that depends on it, are an OPERATOR ACT goal.md itself names as such and the owner has repeatedly withheld. This is the era's only remaining blocker and every unblock path is human-owned."
+      "note": "iter-24: passing -> PARTIAL. This iteration changed J-06's own served surface (vault.py's _serialize_shard coarsens the served sealed_at to date-only) AND its display (page.tsx). The ONE fresh browser look at that cell FAILED: UT-03 photographed '2026-04-30 20:00 ET' while GET /research/desk/micro/vault serves '2026-05-01' -- a calendar day too early plus a clock time that was never in any record (evidence reports/qa/goal-rapid-microscope-iter-24-evidence/UT-03-fail.png, opened by the evaluator). The auditor then fixed it (page.tsx:6807 formatDateTimeET -> formatDayMarker) and nobody has re-opened the page since, so the fix has NO photograph (auditor F2). Evaluator-verified independently, not taken on trust: (a) read the fixed call site at page.tsx:6807 myself; (b) ran tests/test_desk_vault_sealed_at_day_marker_guard.py -> 3 passed; (c) read .data/micro_vault/vault_shard_ledger.jsonl directly -- 21 sealed shards, 21 DISTINCT stored microsecond sealed_at values preserved (append-only holds), all collapsing to one served bucket {'2026-08-21': 21}, so the iter-23 seal-time leak is genuinely closed on the channel side; (d) ran residual_pool_uncertainty_by_run_time_bucket myself against the real committed recording-runs.json -- coarsened shape worst-bucket 21 (safe), realistic old full-precision shape worst-bucket 1 over 21 buckets (correctly below the >=2 floor), so the widened check is non-vacuous. SECOND, NON-CAPTURE GAP: UT-05 (the r5 'sealed rows stay opaque' assertion, J-06's core property) was SKIPPED for the third round running because the QA fixture rig holds exactly ONE shard and it is already 'exposed' (auditor T3). The property is covered server-side by green tests, but has never been browser-provable. THIRD: J-06.json (the stored golden) asserts only 'No integrity errors.' in Microscope Readiness -- the evaluator read the file; it never touches the Validation Vault, and the replay lane did not run it this iteration anyway (auditor T2). TO RESTORE PASSING: re-photograph the fixed 'Sealed at' cell. evidence_makeup is set because the product behaviour is confirmed and only the capture is stale -- the re-capture rides as a passenger task, never as an iteration goal.",
+      "evidence_makeup": true
     },
     "J-07": {
       "id": "J-07",
       "name": "Graduation — provenance in, nothing laundered out",
       "status": "passing",
-      "last_verified_iter": "goal-rapid-microscope-iter-22",
-      "last_passing_iter": "goal-rapid-microscope-iter-22",
+      "last_verified_iter": "goal-rapid-microscope-iter-24",
+      "last_passing_iter": "goal-rapid-microscope-iter-24",
       "first_seen_iter": "goal-rapid-microscope-iter-0",
-      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-22-evidence/UT-08-result.png",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-24-evidence/UT-08-result.png",
       "spec_hash": "6bd325e2c1511b9d2745bdcd612a12d2142f32498a7aa85055d31209c9e46b28",
-      "note": "iter-22: RE-VERIFIED with a fresh, iter-22-dated capture (UT-08), closing the DEFERRED-BUDGET skip of iter-21. Evaluator opened UT-08-result.png itself: the graduation surface answers with a full body -- family_root_id 240dd966c1aceca2, state 'exploratory', sealed_evaluations[0].verdict 'pass', n 30, n_sessions 1, rule_id SEALED_PASS_RULE_V1, rule_hash 8aaea80b53c56805a396a3f8456ae79702e6527b8b4c9aeb5f009a54ff58d115, floors_applied min_signal_sessions/min_symbols = 'not_applicable_single_shard' (the iter-17 owner ruling), chain_verification ok:true. Distinct from iter-20's capture (md5 5cc50f177ae23e601e21d7e6fb16171f vs abe0c70c6c83c73921c84bffa245699b) -- a genuinely fresh look, not a reused asset. micro_graduation.py is absent from this iteration's 3-file product diff. CAVEAT (showcase lane only, not product): the walkthrough recording's step-07 is a Next.js 404, because the demo runner rewrites research addresses onto the frontend port :3301 which has no pass-through for them -- the same mechanism iteration 19 recorded; no evidence_makeup flag is set because a re-capture through that lane would reproduce the identical 404."
+      "note": "iter-24: RE-VERIFIED with a fresh, iter-24-dated capture (UT-08 PASS), closing the DEFERRED-BUDGET skip of iter-23. Evaluator opened UT-08-result.png itself: the Validation Vault row carries Family root 240dd966c1aceca2 -- the SAME family root iter-22 verified through the graduation bundle -- now in 'exposed' state with Dataset, Symbol PGQA and Session date 2026-06-09 all disclosed, i.e. provenance revealed only at real exposure. Fresh, not reused: md5 98eb6825cd6539d4f26ebe6b8db056a4 vs iter-22's 5cc50f177ae23e601e21d7e6fb16171f. Evidence SHAPE differs from iter-22 (table row vs JSON bundle body) -- see the iter-24 assumption-ledger entry; the iter-22 bundle capture stays durable because micro_graduation.py and micro_sealed_evaluation.py are byte-unchanged (evaluator ran `git status` on both: empty). Every referee_*.py also byte-unchanged (evaluator-verified)."
     },
     "J-08": {
       "id": "J-08",
       "name": "The surface and MCP v6 — the funnel is visible",
       "status": "passing",
-      "last_verified_iter": "goal-rapid-microscope-iter-23",
-      "last_passing_iter": "goal-rapid-microscope-iter-23",
+      "last_verified_iter": "goal-rapid-microscope-iter-24",
+      "last_passing_iter": "goal-rapid-microscope-iter-24",
       "first_seen_iter": "goal-rapid-microscope-iter-0",
-      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-23-evidence/J-08-verify.png",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-24-evidence/J-08-verify.png",
       "spec_hash": "037874a8933089ff99b53568d5aedac2843043741d83fa4958759ba898145572",
-      "note": "iter-22: re-verified GREEN by the deterministic golden-replay lane (0 failed steps; reports/phase-goal-rapid-microscope-iter-22-regression-replay-results.md, 7/7). The replay ran at 22:41:33Z-22:42:06Z, BEFORE the first rig-mutating POST at 22:44:01Z, so the ledger-empty assertions were evaluated against a clean rig (auditor T5, timestamps re-checked by the evaluator). Evaluator SPOT-CHECK: opened J-08-verify.png -- /desk Walk-Forward section with chain verification ok and honest empty states ('No fold specs registered.', 'No walk-forward sequences run.', 'No walk-forward runs recorded yet.'), Validation Vault below. Holds."
+      "note": "iter-24: re-verified GREEN by the deterministic golden-replay lane (7/7, 0 failed steps; reports/phase-goal-rapid-microscope-iter-24-regression-replay-results.md, merged into reports/phase-goal-rapid-microscope-iter-24-ui-test-results.md). J-08.json step 3 traded its 'No candidates ledgered.' empty-state assertion for 'Ledger chain verification:' this iteration, because the new J-09 rig seeder makes the ledger non-empty at rig launch. Spec-sanctioned (TC-7) but strictly weaker: the substitute string occurs twice in page.tsx (:6282 Scout Ledger, :6518 Walk-Forward) and discriminates only because Walk-Forward is expanded in a later step (auditor T4). No journey now asserts the Scout Ledger empty state anywhere."
     },
     "J-09": {
       "id": "J-09",
       "name": "The pilot studies — three predeclared questions, honest answers",
       "status": "passing",
-      "last_verified_iter": "goal-rapid-microscope-iter-22",
-      "last_passing_iter": "goal-rapid-microscope-iter-22",
+      "last_verified_iter": "goal-rapid-microscope-iter-24",
+      "last_passing_iter": "goal-rapid-microscope-iter-24",
       "first_seen_iter": "goal-rapid-microscope-iter-0",
-      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-22-evidence/UT-07-result.png",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-24-evidence/UT-06-result.png",
       "spec_hash": "7dd99ef032e14d2c86d69962f917efb8840d2496fa07765e9488264ecbd8a58a",
-      "note": "iter-22: partial -> PASSING. All THREE predeclared pilot studies now carry a recorded, closed-vocabulary ledger decision plus a walk-forward floor-check row, reachable on the operator path (route AND CLI), not only from pytest. Evaluator-verified, not taken on trust: (a) opened UT-02-result.png -- Study 1 family failed_aggression_score__band_touch__trades_20 (root f3dce7afd1a0083c, 1 variant tried) with its screen row 'failed_aggression_score / threshold (band_touch)' decision killed_insufficient_n and its '-- / --' floor-check row; (b) opened UT-03-result.png -- Study 3 family failed_aggression_score__playbook_signal__trades_20 (root e47904f2f7f4f0e1) with the same two-row shape, Study 1's family still present (additive); (c) opened and cropped UT-07-result.png -- all three pilot families plus the three default-grid families, and Study 2's divergence_at_level_bearish__band_touch__trades_20 floor-check row registered 2026-08-20 18:47 ET, i.e. THIS iteration (the photograph iter-21 owed); (d) read the CLI's own ledger UT-10-ledger.jsonl by hand -- 2 rows under candidate_id cand-e0c665be29c930a3, the screen row carrying evidence_class historical_exposed_diagnostic, denominators, concentration, fallback_tercile, best_of_n_disclosure AND the econ_floor economic column with its proxy sentence, the second row stage walkforward_floor_check with status insufficient_n; (e) BREAK TEST: forced floor_check_registry = None at scout.py:1989 and both operator-route tests went red (test_iter22_range_wall_pilot_route..., test_iter22_capitulation_pilot_route...), then restored the file byte-identical (md5 47e06eb6a780e3dd586216c7e53fb30b) -- the reachability claim is non-vacuous. HONEST LIMIT, recorded and not hidden: every one of the three answers is 'insufficient_n' computed from committed hermetic fixtures with zero (Studies 1/2) or one (Study 3) usable anchor -- goal.md J-09 step 2's run on the FULL JOINABLE CORPUS has never happened. Scored passing against J-09's own Acceptance clause (three ledgered families with predeclared specs; each serving evidence class, denominators, disclosures and the economic column; each carrying a closed-vocabulary decision, with insufficient_n a NAMED acceptable end state; no study output feeding any gate). See the iter-22 assumption-ledger entry for why the corpus run is owner-gated rather than the machine's next task."
+      "note": "iter-24: RE-VERIFIED with a fresh, iter-24-dated capture (UT-06 PASS), closing the DEFERRED-BUDGET skip of iter-23. Evaluator opened UT-06-result.png itself: family failed_aggression_score__playbook_signal__trades_20 (root e47904f2f7f4f0e1, 1 variant tried) with its screen row 'failed_aggression_score / threshold (playbook_signal)', decision killed_insufficient_n, disclosure 'usable_sessions=0 (need >= 2), n_candidate=0, n_comparator=1', plus the walk-forward floor-refusal row with its arithmetic written out. Only ONE of the three families is visible this round -- the fixture rig is rebuilt fresh per launch and the new seeder plants only Study 3. The iter-22 three-family evidence stays DURABLE: scout.py, scout_ledger.py and micro_routes.py are absent from this iteration's 8-file product diff. A new stored golden journey-scripts/J-09.json now exists (2 steps, asserting the reproducible family_id rather than the store-nondeterministic candidate_id) -- but the replay harness did NOT execute it this iteration (auditor T2); the evaluator read the file and confirmed the assertion string matches what UT-06 photographed. The iter-22 honest limit stands unchanged: all three answers are insufficient_n from hermetic fixtures; the full-joinable-corpus run is owner-gated."
     },
     "J-10": {
       "id": "J-10",
       "name": "The kept product stands — traps armed, sentinel green",
       "status": "passing",
-      "last_verified_iter": "goal-rapid-microscope-iter-23",
-      "last_passing_iter": "goal-rapid-microscope-iter-23",
+      "last_verified_iter": "goal-rapid-microscope-iter-24",
+      "last_passing_iter": "goal-rapid-microscope-iter-24",
       "first_seen_iter": "goal-rapid-microscope-iter-0",
-      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-23-evidence/J-10-verify.png",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-24-evidence/J-10-verify.png",
       "spec_hash": "eabb7f30a96a8241a6652e7f6346073a4a302a6269b57e918b8b3720f97b762f",
-      "note": "iter-22: re-verified GREEN by the deterministic golden-replay lane (0 failed steps; reports/phase-goal-rapid-microscope-iter-22-regression-replay-results.md, 7/7). The replay ran at 22:41:33Z-22:42:06Z, BEFORE the first rig-mutating POST at 22:44:01Z, so the ledger-empty assertions were evaluated against a clean rig (auditor T5, timestamps re-checked by the evaluator). The rig-mutation sequencing rule the iter-21 evaluator recorded as standing practice WAS honoured this iteration (spec NOTES named it; auditor T5 verified the timestamps; evaluator re-read them). J-10's pass therefore still depends on lane ORDER, which remains the open iter-21 minor item."
+      "note": "iter-24: re-verified GREEN by the deterministic golden-replay lane (7/7, 0 failed steps; reports/phase-goal-rapid-microscope-iter-24-regression-replay-results.md, merged into reports/phase-goal-rapid-microscope-iter-24-ui-test-results.md). Evaluator SPOT-CHECK: opened J-10-verify.png myself -- /desk shows the Era-6 tick-corpus gate honestly unmet ('3 tick dataset(s) are registered today, 147 short of the gate'), 'No integrity errors.', and the Referee sections empty. Holds. J-10.json step 12 took the same 'Ledger chain verification:' assertion swap described on J-08 (auditor T4)."
     }
   },
   "anti_goal_violations": [
@@ -418,9 +419,30 @@
       "iter": "goal-rapid-microscope-iter-23",
       "anti_goal": "A recorded tranche is one opaque research pool until its shards are exposed. ... Unexposed pool members stay mutually indistinguishable; identity becomes public only at real exposure or assignment. The governing test is the TR-2 inference trap: given the registered universe plus every public artifact, no still-unexposed vault-eligible shard is identifiable with certainty. *(critical - spec r5)*",
       "severity": "minor",
-      "evidence": "NEW AND OPEN - the evaluator's own finding, raised by NO lane (this iteration ran lean: no auditor). A seal-time correlation channel partially de-anonymises the opaque pool. The vault route serves a per-shard `sealed_at` timestamp for every sealed shard (apps/backend/app/research/vault.py:380 `_OPAQUE_SHARD_KEYS` includes `sealed_at`; visible in reports/qa/goal-rapid-microscope-iter-23-evidence/J-06-vault-shards.png as a 'Sealed at' column). The COMMITTED public artifact reports/j06-tranche/recording-runs.json publishes, per recorder run, both a complete per-pair `outcomes` list (symbol + date + outcome) AND that run's `sealed_this_run` count. I reproduced the join myself from the on-disk ledger (apps/backend/.data/micro_vault/vault_shard_ledger.jsonl, 21 rows) against the 5 run windows [at - elapsed_seconds, at]: the 21 seal timestamps partition EXACTLY 7/13/1/0/0 across runs 0-4, matching each run's published `sealed_this_run` exactly. Consequences: (a) the 3 pairs recorded in runs 3 and 4 are PROVABLY NOT sealed - a partial identity-labelled disclosure of the non-sealed side; (b) the single shard sealed inside run 2 has only 4 candidate identities (the 4 pairs that run recorded), not the 79 that reports/j06-tranche/tr2-disclosure-analysis.json reports uniformly for every shard; (c) the true feasible-assignment count is C(19,7)*C(54,13)*C(4,1) = 2.23e17, 33x smaller (~5 bits) than the C(79,21) = 7.45e18 that same artifact publishes. NOT SCORED CRITICAL, and here is exactly why: the anti-goal names its OWN governing test - 'identifiable with certainty' - and that test genuinely still holds (the smallest candidate set I could construct is 4, never 1), so TR-2 passes as written and J-06's acceptance clause is met. What is weakened is the sentence beside it, 'unexposed pool members stay mutually indistinguishable', and the honesty of the published 79-candidate figure. Note apps/backend/scripts/j06_operator.py:193 states the intent verbatim - 'the hidden partition is kept OUT of reports/' - which is precisely what the per-run `sealed_this_run` counts partially undo. FIX (any one closes it): stop serving a per-shard `sealed_at` at coarser-than-run resolution, or drop `sealed_this_run` from the published run report, or widen the TR-2 model to compute run-partitioned candidate sets and assert a published floor. Must be closed before the era is certified GOAL_ACHIEVED.",
+      "evidence": "NEW AND OPEN - the evaluator's own finding, raised by NO lane (this iteration ran lean: no auditor). A seal-time correlation channel partially de-anonymises the opaque pool. The vault route serves a per-shard `sealed_at` timestamp for every sealed shard (apps/backend/app/research/vault.py:380 `_OPAQUE_SHARD_KEYS` includes `sealed_at`; visible in reports/qa/goal-rapid-microscope-iter-23-evidence/J-06-vault-shards.png as a 'Sealed at' column). The COMMITTED public artifact reports/j06-tranche/recording-runs.json publishes, per recorder run, both a complete per-pair `outcomes` list (symbol + date + outcome) AND that run's `sealed_this_run` count. I reproduced the join myself from the on-disk ledger (apps/backend/.data/micro_vault/vault_shard_ledger.jsonl, 21 rows) against the 5 run windows [at - elapsed_seconds, at]: the 21 seal timestamps partition EXACTLY 7/13/1/0/0 across runs 0-4, matching each run's published `sealed_this_run` exactly. Consequences: (a) the 3 pairs recorded in runs 3 and 4 are PROVABLY NOT sealed - a partial identity-labelled disclosure of the non-sealed side; (b) the single shard sealed inside run 2 has only 4 candidate identities (the 4 pairs that run recorded), not the 79 that reports/j06-tranche/tr2-disclosure-analysis.json reports uniformly for every shard; (c) the true feasible-assignment count is C(19,7)*C(54,13)*C(4,1) = 2.23e17, 33x smaller (~5 bits) than the C(79,21) = 7.45e18 that same artifact publishes. NOT SCORED CRITICAL, and here is exactly why: the anti-goal names its OWN governing test - 'identifiable with certainty' - and that test genuinely still holds (the smallest candidate set I could construct is 4, never 1), so TR-2 passes as written and J-06's acceptance clause is met. What is weakened is the sentence beside it, 'unexposed pool members stay mutually indistinguishable', and the honesty of the published 79-candidate figure. Note apps/backend/scripts/j06_operator.py:193 states the intent verbatim - 'the hidden partition is kept OUT of reports/' - which is precisely what the per-run `sealed_this_run` counts partially undo. FIX (any one closes it): stop serving a per-shard `sealed_at` at coarser-than-run resolution, or drop `sealed_this_run` from the published run report, or widen the TR-2 model to compute run-partitioned candidate sets and assert a published floor. Must be closed before the era is certified GOAL_ACHIEVED. || CLOSED by iteration 24, both halves independently re-proved by the goal-evaluator (not taken from any lane). CHANNEL: vault.py:1486-1497 `_coarsen_sealed_at_to_date` narrows the SERVED sealed_at to date-only at the single `_serialize_shard` projection point, inherited by sealed/assigned/exposed alike. Evaluator read apps/backend/.data/micro_vault/vault_shard_ledger.jsonl directly: 21 sealed shards, 21 DISTINCT stored microsecond timestamps (append-only intact), all coarsening to the ONE served bucket {'2026-08-21': 21} -- the 7/13/1/0/0 per-run join can no longer separate any shard from the other 20 (anonymity set 21, was 4). CHECK: the widened run-aware `stage_tr2()` half was VACUOUS as first shipped (auditor B1: it walked the RUN buckets and skipped unclaimed ones, so at the real old microsecond precision zero buckets existed and it reported 'safe'); the auditor re-keyed it on the SERVED buckets. Evaluator re-ran `residual_pool_uncertainty_by_run_time_bucket` against the real committed recording-runs.json: coarsened -> below_floor False, worst 21, 1 bucket; realistic old full-precision -> below_floor True, worst 1, 21 buckets. Non-vacuous, same >=2 floor, no new number invented. reports/j06-tranche/recording-runs.json is byte-untouched (`git status` empty).",
+      "resolved": true
+    },
+    {
+      "iter": "goal-rapid-microscope-iter-24",
+      "anti_goal": "Fabricated / substituted data -- no value is presented to a reader that was never in the record (framework anti-goal category; cf. goal.md's 'No value is served before it exists' and the project's own apps/frontend/lib/datetime.ts:132-148 day-marker warning).",
+      "severity": "minor",
+      "evidence": "INTRODUCED AND CLOSED WITHIN THIS ITERATION. apps/frontend/app/desk/page.tsx:6801 (pre-fix) rendered the newly date-only `sealed_at` through `formatDateTimeET`, an INSTANT formatter: `new Date('2026-05-01')` parses as UTC midnight, which in US-Eastern is the PREVIOUS day at 19:00/20:00. The Validation Vault's 'Sealed at' cell therefore showed '2026-04-30 20:00 ET' for a record holding '2026-05-01' -- a calendar day too early plus a clock time that exists in no record anywhere. Predicted in writing by the ui-impact-analyst BEFORE browser-qa ran (reports/phase-goal-rapid-microscope-iter-24-user-visible-changes.md:39-60), reproduced live by browser-qa (UT-03 FAIL, reports/qa/goal-rapid-microscope-iter-24-evidence/UT-03-fail.png, opened by the evaluator), and shipped anyway by the dev/review/QA lanes. FIXED by the auditor (F1): one call site swapped to the pre-existing lexical `formatDayMarker`; a new source-introspection guard tests/test_desk_vault_sealed_at_day_marker_guard.py pins it, with a break-then-restore proof. EVALUATOR-VERIFIED: read page.tsx:6807 myself and ran the guard (3 passed). SEVERITY REASONING, recorded because it was a judgement call: the framework lists 'fabricated data presented as real' as CRITICAL, and I considered that label. I chose minor because the fabricated value is a display-layer reformatting of a real metadata field, it fabricates no research measurement, it feeds no gate, promotion, certificate or export bundle, and it was closed inside the same iteration. Had it shipped past this iteration I would have scored it critical. RESOLVED IN CODE, NOT IN A PHOTOGRAPH: no browser evidence of the fixed rendering exists (auditor F2), which is why J-06 is scored `partial` rather than `passing` -- the journey status, not this ledger entry, is what blocks certification.",
+      "resolved": true
+    },
+    {
+      "iter": "goal-rapid-microscope-iter-24",
+      "anti_goal": "Constraints -- 'T-10 Evidence honesty. No screenshot => unknown, never passing; operator acts are reported run-or-not-run' -- a lane may not certify what it did not check.",
+      "severity": "minor",
+      "evidence": "NEW AND OPEN. Third round in this era for this same lane (cf. the iter-21 and iter-22 items). reports/qa/goal-rapid-microscope-iter-24-qa.md's UI Evolution Audit ticks 'Visibility: PASS -- sealed_at field renders correctly in Validation Vault section with date-only format (2026-05-01 confirmed via API and UI)' and 'No rendering defect observed'. The QA lane finished at 03:40:10Z; browser-qa ran AFTER it (03:30:38Z-03:59:20Z) and photographed the exact opposite (UT-03 FAIL, '2026-04-30 20:00 ET'). The same report's summary table also ticks 'Non-vacuity proof | PASS | Counter-test correctly fails on old full-precision data' -- the auditor's T1 proved that counter-test fails only on an alignment that cannot occur in production, and the auditor had to add a realistic one. Evaluator re-established both facts directly (opened the screenshot; re-ran the check against the real recording-runs.json). The lane's own verdict line still reads PASS.",
+      "resolved": false
+    },
+    {
+      "iter": "goal-rapid-microscope-iter-24",
+      "anti_goal": "Constraints -- T-10 Evidence honesty, applied to stored golden coverage: a Definition-of-Done item may not be certified by a dev-local claim the harness never executed.",
+      "severity": "minor",
+      "evidence": "NEW AND OPEN (auditor T2, re-verified by the evaluator). Nine stored goldens exist in runs/goal-session-rapid-microscope/journey-scripts/ (J-01..J-06, J-08, J-09, J-10); the replay lane executed SEVEN -- exactly the spec's Required-still-passing list (reports/phase-goal-rapid-microscope-iter-24-regression-replay-results.md 7/7; telemetry golden_coverage passing=7, missing_goldens=''). The two NOT run are the two target journeys' own goldens: J-06.json and the brand-new J-09.json. So DoD item 3 ('J-09 passes ... AND via the new stored golden replay script') and DoD item 4 ('the full stored replay set re-run after J-09.json lands') rest on the dev handoff's own claim of a local 9/9 run. Compounding it, the evaluator read J-06.json and found it asserts only 'No integrity errors.' in Microscope Readiness -- it never touches the Validation Vault, the surface J-06 exists to protect and the one this iteration changed (auditor T5). Fix is cheap: drive all nine scripts in the lane, and give J-06.json a Vault assertion.",
       "resolved": false
     }
   ],
-  "updated_at": "2026-08-23T03:05:00Z"
+  "updated_at": "2026-08-23T05:55:00Z"
 }

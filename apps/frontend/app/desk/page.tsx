@@ -6798,7 +6798,13 @@ function ValidationVaultSection({
                       {shard.checksum_commitment}
                     </td>
                     <td className="whitespace-nowrap px-1.5 py-1 font-mono text-slate-400">
-                      {formatDateTimeET(shard.sealed_at, { seconds: false })}
+                      {/* A DAY MARKER since iteration 24 (`vault._serialize_shard` coarsens the
+                          served `sealed_at` to `yyyy-MM-dd`), so it is read LEXICALLY --
+                          `formatDateTimeET` would parse the bare date as UTC midnight and
+                          render it as the PREVIOUS day plus a 19:00-20:00 ET time that was
+                          never in the record. `assigned_at`/`exposed_at` below are still
+                          genuine instants and keep the instant formatter. */}
+                      {formatDayMarker(shard.sealed_at)}
                     </td>
                     <td className="px-1.5 py-1 text-slate-300">{shard.exposure_state}</td>
                     {shard.exposure_state === "sealed" ? (

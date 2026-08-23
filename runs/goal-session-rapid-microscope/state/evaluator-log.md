@@ -1636,3 +1636,88 @@ seconds warm (about 13 minutes on a cold start). It fails safely, showing nothin
 something wrong, but one of your 26 tools is effectively unavailable from a Claude session pointed at
 the real store. Nothing else waits on you: the ~150-symbol-day research gate honestly reads unmet at
 80, which the goal itself calls a passing state, and the money-floor ruling still blocks no journey.
+
+## Iteration 24 — goal-rapid-microscope-iter-24
+
+**Date:** 2026-08-23T05:55:00Z
+**Verdict:** CONTINUE
+**Depth dispatched:** full (granted outright by my round-23 "escalate" verdict; the independent
+checker ran and earned its place an eleventh time — see below)
+**Journey deltas:**
+- Newly passing: none.
+- **Status changed: J-06 "The recorder and the Vault" — passing → PARTIAL.** Not because the
+  product is broken today, but because the one fresh photograph of the surface this round changed
+  shows it broken, and the repair has never been photographed.
+- Newly failing: none. Regressed: none.
+- **Re-checked with a genuinely fresh look, closing last round's two skips: J-07 "Graduation" and
+  J-09 "The pilot studies".** Both keep their green status and both now carry a round-24 stamp, so
+  the machine's finishing gate is no longer blocked by an unlooked-at journey.
+- Re-verified by their own stored checks, all green: J-01, J-02, J-03, J-04, J-05, J-08, J-10. I
+  opened two of the pictures myself as spot checks (J-01, J-10) and both hold.
+- Anti-goal violations: no critical ones open. **The one open item from last round — the
+  sealing-time leak — is CLOSED, and I proved both halves myself.** One new item opened and closed
+  inside the same round (the wrong-date display). Two new minor items opened. Nine stay open, none
+  waiting on you.
+
+**Reasoning:** I did not take a single lane's word for the round's main claim. The round's job was
+to stop a sealing time being readable finely enough to narrow down which recording it belongs to.
+I read the sealed records straight off disk: 21 sealed recordings, each with its own distinct
+timestamp still stored down to the microsecond — the record itself is untouched, as the rules
+demand — and every one of them now served as the same bare day. So all 21 look identical to a
+reader, where last round one of them could be narrowed to four possibilities. Then I ran the new
+automatic check myself, twice: fed today's coarse values it says "safe, worst case 21"; fed a
+faithful reproduction of the old fine-grained values it says "unsafe, worst case 1". It genuinely
+bites. I also re-checked the frozen things by hand — the settings fingerprint prints
+08e471b10130e1e2, every referee file and the committed recording report are untouched, the tool
+list still reads exactly 26 — and I ran the touched test files myself: 121 passed, none failed.
+
+The finding that decides my verdict is a real defect this round introduced on the Vault page. The
+"Sealed at" column started showing a date one calendar day earlier than the record, with a clock
+time of 20:00 attached that exists in no record anywhere. It came from reading a plain day as if it
+were an instant — a trap this project had already written down in its own code and warned about. I
+want the sequence on the record because it is the important part: the layout analyst predicted this
+defect in writing BEFORE anyone opened a browser; the code reviewer passed the work; the quality
+lane then ticked a box saying the column "renders correctly ... confirmed via API and UI" and "no
+rendering defect observed", having never opened a browser; the browser lane then ran and
+photographed the defect plainly; and the round still closed as a pass, because the closing gate
+reads the reviewer's verdict but never the browser's. The independent checker caught it at the end
+and fixed it. That is the eleventh time in this era the checker has caught something after both the
+review and the quality check passed the same work — and this round it caught two things, because
+the round's own new safety check was also unable to see the very leak it was built for, and it
+repaired that too. I verified both repairs myself rather than trusting them.
+
+So J-06 is partly-green, and I want to be exact about why, because it is a fine distinction. The
+product on disk is almost certainly correct now: I read the fixed line myself, I ran the new guard
+test that pins it, and the checker broke and restored it to prove the guard bites. What does not
+exist is a picture. Nobody has re-opened that page since the repair. My own rule says a journey is
+never green on a promise, and the only fresh picture of that cell shows it wrong. A second, quite
+separate gap sits beside it: the single check that matters most for this journey — that a sealed
+recording gives nothing away — has now been impossible to run for three rounds, because the
+practice rig's only recording is already revealed. And the journey's own stored check looks at an
+unrelated line on a different panel, so it could not have caught this either.
+
+**Next-step recommendation:** One more short round, kept small, in this order: (1) restart the
+practice rig and photograph the Vault's "Sealed at" cell — it should read a bare date such as
+2026-05-01 with no clock time, and that single picture is all that stands between J-06 and green;
+(2) put one still-sealed recording into the practice rig so the "gives nothing away" check can
+finally run, and give that journey's stored check something on the Vault to look at; (3) run all
+nine stored checks, not the seven the machine ran this round — the two it skipped belong to this
+round's own target journeys; (4) if time allows, give two stored checks a phrase that appears in
+only one place on the page. Still do NOT record more real tape, do NOT reveal or assign any sealed
+recording, and do NOT run the three studies against the real recorded corpus. Two things remain
+yours and block no journey: the sealed judge's money-floor question and the research gate that
+honestly reads unmet at 80 of about 150 symbol-days.
+
+I am writing "continue" and asking for the LIGHTER round, and I want my reason on the record
+because it breaks a three-round habit. The last three rounds each wrote "escalate" explicitly as a
+lever — they said so in plain words — because the engine grants a heavy round outright on an
+"escalate" verdict while demoting a "continue" one. None of my own decision rules actually fire for
+"escalate" here: no journey has failed twice running, the code review passed, and this round was
+already a heavy one. Using the verdict as a lever a fourth time would be the same governor bypass
+this round's own planner correctly refused to write into its plan. The remaining work is a
+photograph and a small change to test scaffolding, which the lighter round handles well — it still
+has a code reviewer, a browser lane, the stored checks and the coherence check. But I will say
+plainly what I would prefer: this is the round that would finally certify the era, and in this era
+the independent checker has caught something eleven times. If you want it present for that round,
+the honest way is to set CHAIN_REQUIRE_FULL_DEPTH for that run — that switch belongs to you, and I
+would rather ask you for it than manufacture a verdict to take it.

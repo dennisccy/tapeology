@@ -1483,6 +1483,17 @@ def unresolved_pool_dataset_ids(
 # === GET /research/desk/micro/vault (served verbatim, no second computation in the route) ==========
 
 
+def _coarsen_sealed_at_to_date(sealed_at: str) -> str:
+    """Iteration 24: the served-only precision narrowing ``_serialize_shard`` applies to
+    ``sealed_at``. ``_iso_utc_now`` always produces ``YYYY-MM-DDTHH:MM:SS.ffffffZ`` (module's own
+    ``isoformat(timespec="microseconds")`` format), so the date component is exactly the first 10
+    characters -- no parse/reformat round-trip needed, and none of the ``+00:00``/``Z`` suffix
+    handling above this function's call site can affect a slice that never reaches it. A single
+    slice point (called from exactly one place, ``_serialize_shard``) means there is nowhere else
+    for a full-precision value to leak back in."""
+    return sealed_at[:10]
+
+
 def _serialize_shard(row: dict) -> dict:
     """Section 7.5's three-stage reveal, as an explicit whitelist per stage -- never ``dict(row)``,
     so neither a ledger-internal key (``row_hash``/``prev_hash``/``row_index``) nor a sealed-side
@@ -1502,8 +1513,26 @@ def _serialize_shard(row: dict) -> dict:
     ``exposure_unknown``), which would have disclosed symbol/date for any unrecognised state; r8
     (module docstring) removed the fourth state, and the whitelist form makes the serving layer
     fail CLOSED on an unrecognised one rather than depending on the exhaustiveness of a
-    blacklist."""
+    blacklist.
+
+    **Iteration 24: ``sealed_at`` is coarsened to date-only precision at this serve-time
+    projection point, for every state alike.** The stored ledger row (written by ``seal_shard``,
+    carried forward byte-identical through ``assign_shard``/``expose_shard`` via ``_row_content``)
+    keeps its original microsecond-precision ISO timestamp forever -- append-only discipline, never
+    rewritten. Coarsening only ``opaque["sealed_at"]`` here (rather than each state's dict
+    separately) is what makes the narrowing apply uniformly to ``sealed``, ``assigned`` AND
+    ``exposed`` rows alike (TC-9): ``revealed`` below is built as ``{**opaque, ...}``, so it
+    inherits the already-coarsened value with no second call site to remember. The reason: a
+    full-precision ``sealed_at`` is itself a side channel (closed by the iter-23 audit finding) --
+    joined against the committed per-run ``sealed_this_run`` counts in
+    ``reports/j06-tranche/recording-runs.json``, a fine-grained seal instant can narrow which
+    run (and, combined with that run's small count, which few candidate identities) a given
+    still-sealed shard belongs to, in tension with the r5 opaque-pool rule this module exists to
+    enforce. Date-only precision keeps the field meaningful (still visibly grouped by day) while
+    collapsing same-day seals -- which every real run so far has been -- into one indistinguishable
+    bucket."""
     opaque = {key: row[key] for key in _OPAQUE_SHARD_KEYS}
+    opaque["sealed_at"] = _coarsen_sealed_at_to_date(opaque["sealed_at"])
     state = row["exposure_state"]
     if state not in (STATE_ASSIGNED, STATE_EXPOSED):
         return opaque

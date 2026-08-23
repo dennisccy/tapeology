@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import shutil
 import time
 from pathlib import Path
@@ -287,6 +288,84 @@ def test_tc6_a_sealed_shards_entry_carries_only_the_section_7_5_opaque_fields(tm
     # public dataset routes are keyed on, and not the raw content checksum they publish.
     assert _SEALED_DATASET_ID not in json.dumps(entry)
     assert _SEALED_CONTENT_CHECKSUM not in json.dumps(entry)
+
+
+# === Iteration 24: the sealing-time-leak close -- served `sealed_at` is coarsened to date-only,
+# while the underlying ledger row keeps its full precision (serve-time-only, never a ledger
+# rewrite). TC-1/TC-2/TC-9. ===========================================================================
+
+_DATE_ONLY_SHAPE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def test_tc1_a_sealed_rows_served_sealed_at_is_date_only_precision(tmp_path):
+    shard_ledger = _sealed_shard_ledger(tmp_path)
+    universe_ledger = vault.VaultUniverseLedger(str(tmp_path / "vault"))
+
+    entry = vault.build_vault_state(shard_ledger, universe_ledger)["shards"][0]
+
+    assert _DATE_ONLY_SHAPE.match(entry["sealed_at"]), entry["sealed_at"]
+    # the fixture's own full-precision seal instant (`_sealed_shard_ledger` lets `seal_shard`
+    # default it via `_iso_utc_now`) always starts with the served value -- proving this is a
+    # genuine coarsening of the SAME instant, not an unrelated string.
+    stored_full_precision = shard_ledger.all_rows()[0]["sealed_at"]
+    assert stored_full_precision.startswith(entry["sealed_at"])
+    assert stored_full_precision != entry["sealed_at"]  # the time-of-day component was dropped
+
+
+def test_tc2_the_underlying_ledger_rows_sealed_at_stays_full_precision_never_rewritten(tmp_path):
+    """Proves the coarsening in `_serialize_shard` is a serve-time-only projection: reading the
+    shard ledger DIRECTLY (bypassing `build_vault_state`/`_serialize_shard` entirely) must still
+    show the original microsecond-precision ISO timestamp `seal_shard` wrote -- append-only
+    discipline holds, nothing on disk was rewritten to accommodate the narrower served shape."""
+    explicit_sealed_at = "2026-06-09T14:32:07.481932Z"
+    shard_ledger = vault.VaultShardLedger(str(tmp_path / "vault"))
+    vault.seal_shard(
+        shard_ledger, dataset_id=_SEALED_DATASET_ID, universe_id="u1",
+        content_checksum=_SEALED_CONTENT_CHECKSUM, event_count=45_231,
+        vault_secret=_FIXTURE_SECRET, sealed_at=explicit_sealed_at,
+    )
+
+    stored_row = shard_ledger.all_rows()[0]
+    assert stored_row["sealed_at"] == explicit_sealed_at  # byte-identical, untouched
+
+    served_entry = vault.build_vault_state(shard_ledger, vault.VaultUniverseLedger(str(tmp_path / "vault")))["shards"][0]
+    assert served_entry["sealed_at"] == "2026-06-09"
+    assert stored_row["sealed_at"] != served_entry["sealed_at"]  # the two are genuinely different
+
+
+def test_tc9_assigned_and_exposed_rows_also_serve_a_date_only_sealed_at(tmp_path):
+    """TC-9: the coarsening is uniform across all three exposure states, not sealed-only -- an
+    `assigned` or `exposed` shard's served `sealed_at` (inherited unchanged from its original
+    sealed row, per `_row_content`) narrows exactly the same way."""
+    explicit_sealed_at = "2026-06-09T14:32:07.481932Z"
+    shard_ledger = vault.VaultShardLedger(str(tmp_path / "vault"))
+    vault.seal_shard(
+        shard_ledger, dataset_id=_SEALED_DATASET_ID, universe_id="u1",
+        content_checksum=_SEALED_CONTENT_CHECKSUM, event_count=45_231,
+        vault_secret=_FIXTURE_SECRET, sealed_at=explicit_sealed_at,
+    )
+    universe_ledger = vault.VaultUniverseLedger(str(tmp_path / "vault"))
+    family_root = vault.compute_family_root_id("impact_efficiency_trend", "band_wall_touch", "trades_20")
+
+    vault.assign_shard(
+        shard_ledger, dataset_id=_SEALED_DATASET_ID, family_root_id=family_root,
+        symbol="PG", session_date="2026-06-09",
+    )
+    assigned_entry = vault.build_vault_state(shard_ledger, universe_ledger)["shards"][0]
+    assert assigned_entry["exposure_state"] == "assigned"
+    assert _DATE_ONLY_SHAPE.match(assigned_entry["sealed_at"])
+    assert assigned_entry["sealed_at"] == "2026-06-09"
+
+    vault.expose_shard(shard_ledger, dataset_id=_SEALED_DATASET_ID, family_root_id=family_root)
+    exposed_entry = vault.build_vault_state(shard_ledger, universe_ledger)["shards"][0]
+    assert exposed_entry["exposure_state"] == "exposed"
+    assert _DATE_ONLY_SHAPE.match(exposed_entry["sealed_at"])
+    assert exposed_entry["sealed_at"] == "2026-06-09"
+
+    # the underlying ledger rows for BOTH transitions still carry the original full-precision
+    # value verbatim (`_row_content` carries it forward unchanged) -- never rewritten anywhere.
+    for stored_row in shard_ledger.all_rows():
+        assert stored_row["sealed_at"] == explicit_sealed_at
 
 
 def test_r3_the_served_shard_id_is_a_surrogate_with_no_derivable_relation_to_the_dataset_id(tmp_path):

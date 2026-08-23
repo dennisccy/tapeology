@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-rapid-microscope-iter-24",
+  "base_url": "http://localhost:3301",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the Desk",
+      "narration": "The Desk page shows sealed research in motion through four stages: readiness, screening, validation, and exposure. This iteration tightens the privacy of one timestamp.",
+      "point_out": "The page title 'Playbook Signals' and the section headers: Microscope Readiness, Scout Ledger, Walk-Forward, Validation Vault.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "goto", "url": "/desk"},
+      "expect": {"text": "Playbook Signals"}
+    },
+    {
+      "n": 2,
+      "title": "Scout Ledger — screening decisions recorded",
+      "narration": "The Scout Ledger shows every study the engine proposed and screened. This iteration seeds a pilot study row so you can see the recorded decision.",
+      "point_out": "The pilot study 'failed_aggression_score__playbook_signal__trades_20' with its decision and reason for rejection.",
+      "journey": "J-09",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "click", "target": {"css": "[data-testid='desk-section-expand-scoutLedger']"}},
+      "expect": {"text": "failed_aggression_score__playbook_signal__trades_20"}
+    },
+    {
+      "n": 3,
+      "title": "Walk-Forward — results confirmed on new data",
+      "narration": "Walk-Forward re-tests each study's results against fresh out-of-sample data. The rows show whether each meets the verification floor.",
+      "point_out": "The Walk-Forward section with its floor-check rows and verification status for each study.",
+      "journey": "J-09",
+      "new": false,
+      "verified": false,
+      "section": "highlights",
+      "action": {"type": "click", "target": {"css": "[data-testid='desk-section-expand-walkForward']"}},
+      "expect": {"text": "No walk-forward runs recorded yet."}
+    },
+    {
+      "n": 4,
+      "title": "Validation Vault — sealed research and exposure timeline",
+      "narration": "The Validation Vault tracks sealed research shards through three release stages: sealed, assigned, and exposed. Each row shows when it was sealed, its current state, and disclosure dates.",
+      "point_out": "The table with columns for Universe, Size bucket, Sealed at, State, Assigned at, Exposed at. This iteration shows only the calendar date in the Sealed at column, narrowing the privacy of sealing timestamp.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "click", "target": {"css": "[data-testid='desk-section-expand-validationVault']"}},
+      "expect": {"text": "Sealed at"}
+    }
+  ]
+}

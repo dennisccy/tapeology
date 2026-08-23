@@ -357,3 +357,43 @@ audit lane out of the ONE iteration whose entire declared purpose was independen
 **Applies to:** any iteration whose purpose is independent verification of code that entered the
 repo outside goal-mode — the decomposer must write `Depth enforcement: required`, not just
 `Full trigger:`, or plan for the checker to be cut.
+
+## iter-24 — 2026-08-23T05:55:00Z
+
+**Verdict:** CONTINUE
+**Lesson:** Narrowing a served timestamp's PRECISION is never a backend-only change: the moment
+`vault.py` started serving `sealed_at` as a bare `yyyy-MM-dd`, the Vault cell's existing
+`formatDateTimeET` parsed it as UTC midnight and rendered the PREVIOUS calendar day plus an
+invented `20:00 ET` — the exact trap `apps/frontend/lib/datetime.ts:132-148` already documents,
+with `formatDayMarker` already shipped as its answer. The spec's "Frontend: no code changes
+expected" line made three lanes stop looking, even though the ui-impact-analyst wrote the defect up
+in advance.
+**Applies to:** any iteration that changes the SHAPE or precision of an already-served date/time
+field — grep every frontend call site reading that field and check day-marker vs instant before
+declaring the frontend untouched.
+
+## iter-24 (second) — 2026-08-23T05:55:00Z
+
+**Verdict:** CONTINUE
+**Lesson:** An inference/anonymity check must be keyed on the ATTACKER's starting point, not on the
+reference side of the join. The new `stage_tr2()` run-aware half walked the RUN buckets and skipped
+any bucket no run claimed — but a run's `at` is stamped by `_utc()` at second precision while each
+shard's `sealed_at` is stamped by `vault._iso_utc_now()` at microsecond precision, so under the
+REAL old data shape no served value ever prefix-matched a run key, zero buckets existed, and the
+check reported "safe" against precisely the leak it was built for. Re-keying on the served buckets
+(skipping none) makes it bite; the counter-test that "proved" non-vacuity only proved it on an
+alignment production can never produce.
+**Applies to:** any TR-2 / join-resistance / k-anonymity check, and any "non-vacuity counter-test"
+— build the counter-fixture from what the WRITER actually wrote (read the stamping function), never
+from the reference side's own values.
+
+## iter-24 (third) — 2026-08-23T05:55:00Z
+
+**Verdict:** CONTINUE
+**Lesson:** `closure_gate.py` clears an iteration on "ui-test-results: execution evidence present
+(PASS/FAIL rows)" — it never reads the merged **Browser QA Verdict** line. This round that line
+read FAIL and the round still closed CLOSURE-PASS; iter-21 flagged the identical hole and it is
+still open. Only the audit lane stood between a photographed, predicted rendering defect and a
+shipped iteration.
+**Applies to:** any evaluator reading a CLOSURE-PASS — treat it as "artifacts exist", not "the
+browser agreed"; always open `reports/phase-<iter>-ui-test-results.md`'s own verdict line yourself.

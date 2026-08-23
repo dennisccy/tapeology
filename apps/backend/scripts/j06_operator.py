@@ -745,10 +745,81 @@ def residual_pool_uncertainty(
     }
 
 
+RECORDING_RUNS_PATH = STATE_DIR / "recording-runs.json"
+
+
+def _load_recording_runs(path: Path = RECORDING_RUNS_PATH) -> list[dict]:
+    """The committed §8 run ledger (``reports/j06-tranche/recording-runs.json``) -- read-only,
+    never written by this stage (record-integrity: iteration 24 narrows what is SERVED going
+    forward, it does not retroactively edit a committed operator report)."""
+    return json.loads(path.read_text())["runs"]
+
+
+def residual_pool_uncertainty_by_run_time_bucket(
+    runs: list[dict], served_sealed_at_values: list[str]
+) -> dict:
+    """The RUN-AWARE half of TR-2 (iteration 24, closing the sealing-time leak the iter-23 audit
+    found): the combinatorial half above never reads ``recording-runs.json`` at all, so a channel
+    that joins the committed per-run ``sealed_this_run`` counts against the SERVED per-shard
+    ``sealed_at`` values was a genuine blind spot -- a future run could narrow a still-sealed
+    shard's identity through this join without the automated check ever seeing it.
+
+    Deliberately generic over whatever PRECISION ``served_sealed_at_values`` carries -- it buckets
+    both sides by that precision (a run's own ``at`` timestamp truncated to the same length),
+    rather than hardcoding "date-only". Fed the REAL, now-coarsened (date-only) served values, every
+    run sealed on the same calendar day collapses into ONE bucket, so the residual candidate count
+    per bucket is the number of still-currently-sealed shards sharing that day -- today, all 21 fall
+    on one day, so the floor comfortably holds. Fed any full-precision reproduction of the OLD
+    served shape instead (the iter-24 non-vacuity counter-tests), the same logic instead separates
+    the runs from each other -- and since each shard's own seal instant is distinct at that
+    precision, every bucket collapses to a candidate count of 1, correctly BELOW the floor.
+
+    Asserted against the SAME existing floor ``residual_pool_uncertainty`` already enforces
+    (``candidate_identities_per_unexposed_selected_shard >= 2``) -- no new floor number invented
+    here."""
+    if not served_sealed_at_values:
+        return {"buckets": {}, "any_bucket_below_floor": False, "worst_bucket_candidates": None}
+
+    bucket_len = len(served_sealed_at_values[0])
+    run_sealed_by_bucket: dict[str, int] = {}
+    for run in runs:
+        key = str(run.get("at", ""))[:bucket_len]
+        run_sealed_by_bucket[key] = run_sealed_by_bucket.get(key, 0) + int(run.get("sealed_this_run", 0))
+
+    served_by_bucket: dict[str, int] = {}
+    for value in served_sealed_at_values:
+        served_by_bucket[value] = served_by_bucket.get(value, 0) + 1
+
+    # Iterate the SERVED buckets, not the run buckets (iteration-24 audit finding B1). The
+    # attacker's starting point is a served `sealed_at` value, so EVERY served value must sit in an
+    # anonymity set of >= 2 -- including one that no run's own bucket claims. Walking the run
+    # buckets instead (and skipping a bucket with `run_sealed_count <= 0`) made the check silently
+    # blind at fine precision: a run's `at` is stamped at the END of the run by `_utc()`
+    # (second precision) while each shard's `sealed_at` is stamped per-seal by `vault._iso_utc_now`
+    # (microsecond precision), so at full precision NO served value ever prefix-equals a run key,
+    # every bucket was skipped, and the check reported "safe" against exactly the leak it exists to
+    # catch. Keyed on the served value, the same fine precision instead gives each shard its own
+    # bucket of 1 -- correctly BELOW the floor. `sealed_this_run_total` stays in the record (0 when
+    # no run claims the bucket, itself a finding worth reading) but never gates.
+    buckets = {}
+    for key, served_count in served_by_bucket.items():
+        buckets[key] = {
+            "sealed_this_run_total": run_sealed_by_bucket.get(key, 0),
+            "currently_sealed_served_count": served_count,
+            "candidate_identities_per_unexposed_selected_shard": served_count,
+        }
+    candidate_counts = [b["candidate_identities_per_unexposed_selected_shard"] for b in buckets.values()]
+    return {
+        "buckets": buckets,
+        "any_bucket_below_floor": any(c < 2 for c in candidate_counts),
+        "worst_bucket_candidates": min(candidate_counts) if candidate_counts else None,
+    }
+
+
 def stage_tr2() -> dict:
     """TR-2 re-run with the disclosure treated as attacker-known public information.
 
-    Two independent halves, because the leak has two shapes:
+    Three independent halves, because the leak has three shapes:
 
     (1) COMBINATORIAL. The attacker knows the registered universe (80 pairs), the publicly
         published selected COUNT, and now that one specific position is non-selected. Certainty
@@ -759,6 +830,11 @@ def stage_tr2() -> dict:
 
     (2) OBSERVATIONAL. Every genuine J-06 dataset must still be withheld from the served surfaces
         by the shared opaque-pool predicate, so no listing can be differenced against the universe.
+
+    (3) RUN-AWARE (iteration 24). The committed per-run ``sealed_this_run`` counts
+        (``reports/j06-tranche/recording-runs.json``) joined against the SERVED per-shard
+        ``sealed_at`` values -- the channel (1) and (2) do not model at all. See
+        ``residual_pool_uncertainty_by_run_time_bucket`` above.
     """
     uled, shled, _sled, store, ddir = _ledgers()
     universe = vault.find_universe(uled, UNIVERSE_ID)
@@ -799,17 +875,29 @@ def stage_tr2() -> dict:
         "legacy_datasets_visible_by_design": len(by_id) - len(withheld),
     }
 
+    # --- (3) the run-aware half, against the REAL committed run report + REAL served state -------
+    runs = _load_recording_runs()
+    served_state = vault.build_vault_state(shled, uled)
+    served_sealed_at_values = [
+        entry["sealed_at"] for entry in served_state["shards"]
+        if entry.get("universe_id") == UNIVERSE_ID
+        and entry.get("exposure_state") == vault.STATE_SEALED
+    ]
+    run_aware = residual_pool_uncertainty_by_run_time_bucket(runs, served_sealed_at_values)
+
     ok = (not combinatorial["any_identity_certain"]
           and combinatorial["candidate_identities_per_unexposed_selected_shard"] >= 2
-          and observational["leaked_to_served_surfaces"] == 0)
+          and observational["leaked_to_served_surfaces"] == 0
+          and not run_aware["any_bucket_below_floor"])
     out = {"stage": "tr2_disclosure_analysis", "universe_id": UNIVERSE_ID, "at": _utc(),
            "attacker_knowledge": [
                "the registered universe rule (8 symbols x 10 dates = 80 pairs)",
                "every served/public artifact, including the published selected COUNT",
                "the legacy-dataset collision at one registered pair",
                f"the disclosed non-selected pool position(s): {len(disclosed)}",
-               "readiness / dataset / run / UI / MCP surfaces"],
-           "combinatorial": combinatorial, "observational": observational,
+               "readiness / dataset / run / UI / MCP surfaces",
+               "the committed per-run sealed_this_run counts, joined against served sealed_at"],
+           "combinatorial": combinatorial, "observational": observational, "run_aware": run_aware,
            "no_identity_determinable_with_certainty": ok}
     _write("tr2-disclosure-analysis.json", out)
     if not ok:

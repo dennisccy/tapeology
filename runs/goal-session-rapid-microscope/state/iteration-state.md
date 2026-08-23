@@ -1,37 +1,28 @@
 # Iteration State — rapid-microscope
 
-**After iteration:** 23 · **Date:** 2026-08-23 · **Verdict:** ESCALATE
+**After iteration:** 24 · **Date:** 2026-08-23 · **Verdict:** CONTINUE
 
 ## Journeys
 
-10 passing (J-01..J-10) · 0 failing · 0 unknown — 10 total. But J-07 + J-09 were NOT tested this
-round (`DEFERRED-BUDGET`, keep iter-22 stamps), so the deterministic gate still blocks GOAL_ACHIEVED.
+9 passing (J-01..J-05, J-07..J-10) · 1 partial (J-06) · 0 failing · 0 unknown — 10 total. J-07 + J-09 now carry FRESH iter-24 stamps, closing last round's two `DEFERRED-BUDGET` skips.
 
 ## Active blockers
 
-- **J-07 "Graduation" + J-09 "The pilot studies" need a fresh browser re-check FIRST** (dev/QA). Both green and unchanged; the clock cut them (rows in `reports/phase-goal-rapid-microscope-iter-23-ui-test-results.md`).
-  Neither has a golden (`journey-scripts/` = J-01..J-06, J-08, J-10) so both ride the slow LLM lane — write a J-09 golden; J-07 cannot have one (iter-19 finding).
-- **NEW open minor anti-goal item (dev)** — seal-time leak: served per-shard `sealed_at` (`vault.py:380`) joined with per-run `sealed_this_run` in `reports/j06-tranche/recording-runs.json`
-  splits the 21 seals 7/13/1/0/0, proving 3 pool members unsealed and cutting one shard from 79 candidates to 4. Close before GOAL_ACHIEVED. 7 older minor items also open.
-- **4,191 lines of operator code (`08534e8`,`76e7a70`) never read by any adversarial lane** — the
-  `full-cap` rung cut the auditor from the round meant to check it; the spec needs
-  `Depth enforcement: required`, not just `Full trigger:`.
-- **`desk_micro_readiness` MCP tool times out against the real store** — 10s cap
-  (`apps/backend/app/mcp/__init__.py:57`) vs ~13.5s warm / ~13min cold. Fails closed. Passenger fix.
-- Owner-owned, blocking no journey: sealed judge's money-floor source (`micro_sealed_evaluation.py:316`); the ~150-symbol-day gate reads unmet at 80 — a passing state.
+- **J-06 needs ONE photograph (dev/QA).** Product fixed, picture missing. Restart `apps/backend/scripts/qa_playbook_iter7_fixture_scoped_backend.sh` + frontend and re-shoot UT-03: the Vault "Sealed at" cell must read a bare date (e.g. `2026-05-01`), no clock time. Pre-fix proof: `reports/qa/goal-rapid-microscope-iter-24-evidence/UT-03-fail.png`.
+- **UT-05 (r5 "sealed rows stay opaque") unrunnable for 3 rounds (dev).** The rig's only shard is already `exposed`. Add one `seal_shard` call to the iter-18 seeder; give `journey-scripts/J-06.json` a Vault assertion (today it only asserts "No integrity errors.").
+- **Replay lane drove 7 of 9 goldens (dev).** `J-06.json` + new `J-09.json` never ran through the harness; DoD "AND via the stored golden" rests on a dev-local claim. Run all nine.
+- **`J-08.json` step 3 / `J-10.json` step 12 both assert "Ledger chain verification:"** — appears twice in `page.tsx` (`:6282`, `:6518`). Order-dependent; pick a section-unique string.
+- Passenger, unchanged: `desk_micro_readiness` MCP tool times out on the real store (10s vs ~13.5s).
+- Owner-owned, blocking no journey: sealed judge's money floor (`micro_sealed_evaluation.py:316`); the ~150-symbol-day gate reads unmet at 80 — a passing state.
 
 ## Last 2 verdicts
 
-- iter 23: ESCALATE — J-06 green on real-store browser evidence I opened myself; a budget overrun
-  deferred J-07/J-09, and the checker must read the never-audited operator code.
-- iter 22: STALLED — J-06's last step was an operator-only tape recording; the owner has since done it.
+- iter 24: CONTINUE — seal-time leak CLOSED (both halves re-proved by the evaluator), but the round introduced a wrong-date Vault display; auditor fixed it, never re-photographed → J-06 partial.
+- iter 23: ESCALATE — J-06 green on real-store evidence; the clock deferred J-07/J-09.
 
 ## Do not redo
 
-- **J-06 is DONE and verified** — 80-shard pool + 21 sealed rows render on `/desk`; evidence
-  `reports/qa/goal-rapid-microscope-iter-23-evidence/J-06-result.png` + `J-06-vault-shards.png`.
-- **Do NOT re-record tape** (80/80 on disk), **do NOT expose/assign any sealed shard** (all 21 stay
-  `sealed`), **do NOT run J-09's studies on the real corpus** (irreversible; breaks J-10's golden).
-- **Study-3 non-vacuity assertion is DONE and proved non-vacuous** (`test_scout.py`; perturbation
-  re-run by the evaluator) — do not re-open. **Readiness serving `80` (whole pool), not `21`, is
-  CORRECT** (r5 anti-subtraction; the `21` belongs on the vault surface) — do not "fix" it.
+- **Sealing-time leak CLOSED.** `vault.py:1486-1497` coarsens the SERVED `sealed_at` at one point (21 shards → one `2026-08-21` bucket); widened `stage_tr2()` keys on SERVED buckets, proven non-vacuous. Do NOT edit `reports/j06-tranche/recording-runs.json` — it stays byte-untouched.
+- **Vault "Sealed at" formatter FIXED** — `page.tsx:6807` uses `formatDayMarker`, pinned by `tests/test_desk_vault_sealed_at_day_marker_guard.py`; `assigned_at`/`exposed_at` keep the instant formatter. Do not revert either.
+- **Do NOT re-record tape** (80/80 on disk), **do NOT expose/assign any sealed shard**, **do NOT run J-09's studies on the real corpus** (irreversible; breaks J-10's golden).
+- **Readiness serving `80` (whole pool), not `21`, is CORRECT** (r5 anti-subtraction) — do not "fix". **J-07 cannot have a golden** (iter-19) — it stays on the LLM lane.

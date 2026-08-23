@@ -52,6 +52,16 @@
 # long-standing rule ("use a fresh root whenever the seeded composition changed") applies to this
 # extension exactly as it would to detector logic.
 #
+# goal-rapid-microscope-iter-24 extends this file once more, again in place: after the iter-18
+# graduation seed step, it also runs seed_micro_scout_iter24_j09_fixture.py (a real
+# setup_id="capitulation" playbook signal anchored on the already-staged real PG SIP tick dataset,
+# then a real scout.register_screen_and_walkforward_check() call — never a hand-rolled JSON blob)
+# so journey-scripts/J-09.json's own golden replay finally has a genuine, non-vacuous pilot-study
+# Scout Ledger row to assert against on this rig, instead of the honest-but-non-discriminating
+# empty state every prior pass recorded for J-09's own sections. Reuses the ALREADY-STAGED PG
+# dataset the iter-2 extension above copies in, so no new dataset (hence no new collision surface)
+# is introduced.
+#
 # goal-rapid-microscope-iter-18 extends this file once more, again in place: after the tick-dataset
 # fixtures above stage, it also runs seed_micro_graduation_iter18_fixture.py (a plain dataset +
 # vault-shard + real evaluate_sealed_verdict() call, never a hand-rolled JSON blob) so J-07's own
@@ -119,6 +129,12 @@ export TAPEOLOGY_JOURNAL_DB="$JOURNAL_DB"
 # now-fixed (r9/TR-30) evaluate_sealed_verdict() -- see seed_micro_graduation_iter18_fixture.py's
 # own docstring for the full seven-step sequence this exercises for real.
 "$BACKEND_DIR/.venv/bin/python" "$SCRIPT_DIR/seed_micro_graduation_iter18_fixture.py" "$ROOT"
+
+# goal-rapid-microscope-iter-24 (J-09): seed ONE real, non-vacuous pilot-study (Study 3,
+# capitulation_exhaustion_pilot) Scout Ledger row through the real
+# scout.register_screen_and_walkforward_check() production entry point -- see
+# seed_micro_scout_iter24_j09_fixture.py's own docstring for the full sequence this exercises.
+"$BACKEND_DIR/.venv/bin/python" "$SCRIPT_DIR/seed_micro_scout_iter24_j09_fixture.py" "$ROOT"
 
 # goal-rapid-microscope-iter-19 (TC-9): the ONE list of store-root vars this launch bound the
 # backend to -- shared by the stderr echo below AND the durable manifest file, so the two can never
