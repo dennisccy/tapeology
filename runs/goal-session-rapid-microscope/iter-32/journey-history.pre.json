@@ -4,12 +4,12 @@
       "id": "J-01",
       "name": "The era transition stands — the corpus truth on the record",
       "status": "passing",
-      "last_verified_iter": "goal-rapid-microscope-iter-32",
-      "last_passing_iter": "goal-rapid-microscope-iter-32",
+      "last_verified_iter": "goal-rapid-microscope-iter-31",
+      "last_passing_iter": "goal-rapid-microscope-iter-31",
       "first_seen_iter": "goal-rapid-microscope-iter-0",
-      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-32-evidence/J-01-verify.png",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-31-evidence/J-01-verify.png",
       "spec_hash": "1791ebcd14c10fa789e1048509f8f8af20a7696fe11a7de4bf946b446d4fbb52",
-      "note": "iter-32 re-verified by deterministic golden replay (UT-J-01 PASS, reports/phase-goal-rapid-microscope-iter-32-regression-replay-results.md 7/7, merged into ui-test-results.md 8/8). Zero production code changed this iteration (the only diff is a QA-only seed script + its test), so SPEED-9 durability also holds independently. Evaluator re-derived the frozen anchors by hand: config_fingerprint 08e471b10130e1e2, six referee_*.py sha256 byte-identical to the iter-1/iteration-0 listing, store-scope guard 11,395 protected files unchanged (re-counted after the evaluator's own full-suite run)."
+      "note": "iter-31 re-verified by deterministic golden replay (UT-J-01 PASS, reports/phase-goal-rapid-microscope-iter-31-regression-replay-results.md 7/7 and the merged ui-test-results.md 9/9). The evaluator opened J-01-verify.png. This iteration's product diff touches only app/mcp/__init__.py, three backend test files and the /desk page's new bottom section, so J-01's surface is otherwise unchanged."
     },
     "J-02": {
       "id": "J-02",
@@ -20,7 +20,7 @@
       "first_seen_iter": "goal-rapid-microscope-iter-0",
       "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-30-evidence/J-02-verify.png",
       "spec_hash": "01f4f43564cba7431118d4a504b9dbeb20f1a994fdb52be5ceded15529d8b27a",
-      "note": "NOT re-tested at iter-32 — deliberately outside this iteration's Required-still-passing set (its acceptance is a backend trap/oracle walk with no screen of its own, and this iteration changed zero production lines). Status carries over from iter-30 under SPEED-9 evidence durability; the evaluator's own full-suite run (3,503 passed / 8 skipped / 0 failed) exercised its TR-1/TR-7/TR-17/TR-18 traps. CAPTURE GAP PERSISTS (evidence_makeup): the iter-30 capture is byte-identical to J-01's and stops above the 'Fallback frac' row it asserts; the optional element close-up was offered as a passenger in the iter-32 spec and again not taken.",
+      "note": "NOT re-tested at iter-31 — deliberately outside this iteration's Required-still-passing set (keyless/automated, no /desk section of its own, unaffected by the new bottom-of-page Graduation section). Status carries over from iter-30 under SPEED-9 evidence durability: no code its acceptance depends on changed this iteration. CAPTURE GAP PERSISTS (evidence_makeup): its iter-30 capture is byte-identical to J-01's and stops above the 'Fallback frac' row it asserts; the element close-up asked for at iter-29/30 was again not planned or delivered, so the flag stays set.",
       "evidence_makeup": true
     },
     "J-03": {
@@ -32,63 +32,63 @@
       "first_seen_iter": "goal-rapid-microscope-iter-0",
       "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-30-evidence/J-03-verify.png",
       "spec_hash": "a671f63835247f7fca66a41a2dc48ec4fe3e83fe0bda85d3703ef385cb20de83",
-      "note": "NOT re-tested at iter-32 — same grounds as J-02; status carries over from iter-30 under SPEED-9 evidence durability (zero production code changed this iteration). CAPTURE GAP PERSISTS (evidence_makeup): the evaluator opened reports/qa/goal-rapid-microscope-iter-30-evidence/J-03-verify.png this round and re-confirmed it is the shared Microscope Readiness viewport shot that stops above the 'Joinable corpus — withheld (excluded)' row this journey asserts. Optional close-up still undelivered; non-blocking.",
+      "note": "NOT re-tested at iter-31 — deliberately outside this iteration's Required-still-passing set (same grounds as J-02). Status carries over from iter-30 under SPEED-9 evidence durability. CAPTURE GAP PERSISTS (evidence_makeup): its iter-30 capture is byte-identical to J-01's and stops above the 'Joinable corpus — withheld (excluded)' row it asserts; the element close-up was again not delivered, so the flag stays set.",
       "evidence_makeup": true
     },
     "J-04": {
       "id": "J-04",
       "name": "The Scout and the ledger — every trial on the record",
       "status": "passing",
-      "last_verified_iter": "goal-rapid-microscope-iter-32",
-      "last_passing_iter": "goal-rapid-microscope-iter-32",
+      "last_verified_iter": "goal-rapid-microscope-iter-31",
+      "last_passing_iter": "goal-rapid-microscope-iter-31",
       "first_seen_iter": "goal-rapid-microscope-iter-0",
-      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-32-evidence/J-04-verify.png",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-31-evidence/J-04-verify.png",
       "spec_hash": "d188d138b6c84c4ff7302bf60f5da2f95b247b58a6cd7c42874d740801bc19d0",
-      "note": "iter-32 re-verified by deterministic golden replay (UT-J-04 PASS). The iter-31 note stands: the Graduation section also prints 'Ledger chain verification:', the exact string this golden asserts; harmless while sections render collapsed, and the replay opened only this journey's own section. Weak-check note carried forward, non-blocking."
+      "note": "iter-31 re-verified by deterministic golden replay (UT-J-04 PASS). NOTE the evaluator raised this iteration: the new Graduation section also prints 'Ledger chain verification:', the exact string this golden asserts. It cannot fool the replay — CollapsibleSection renders no children while collapsed (apps/frontend/components/CollapsibleSection.tsx, `{open && …}`) and the golden expands only the Scout Ledger — but J-04 and J-05 now share a string with a third section, so a journey-unique assertion would be stronger."
     },
     "J-05": {
       "id": "J-05",
       "name": "The walk-forward engine — chronology, fences, and the diagnostic run",
       "status": "passing",
-      "last_verified_iter": "goal-rapid-microscope-iter-32",
-      "last_passing_iter": "goal-rapid-microscope-iter-32",
+      "last_verified_iter": "goal-rapid-microscope-iter-31",
+      "last_passing_iter": "goal-rapid-microscope-iter-31",
       "first_seen_iter": "goal-rapid-microscope-iter-0",
-      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-32-evidence/J-05-verify.png",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-31-evidence/J-05-verify.png",
       "spec_hash": "1b84144912ebd9de2f4731f2209f6f7354ac8e563f633f14825644d2f838fa1e",
-      "note": "iter-32 re-verified by deterministic golden replay (UT-J-05 PASS). Its only distinguishing assertion is still the shared 'Ledger chain verification:' string (now printed by Scout Ledger, Walk-Forward and Graduation). Giving J-05 a journey-unique assertion remains an OPTIONAL, non-blocking tidy-up; it was offered as a passenger in the iter-32 spec and not taken."
+      "note": "iter-31 re-verified by deterministic golden replay (UT-J-05 PASS). Same evaluator note as J-04: this golden's only distinguishing assertion, 'Ledger chain verification:', is now printed by three sections (Scout Ledger, Walk-Forward, and the new Graduation section). Harmless today (collapsed sections render nothing) but the long-standing recommendation to give J-05 its own text stands, unblocking."
     },
     "J-06": {
       "id": "J-06",
       "name": "The recorder and the Vault — new tape, sealed at birth",
       "status": "passing",
-      "last_verified_iter": "goal-rapid-microscope-iter-32",
-      "last_passing_iter": "goal-rapid-microscope-iter-32",
+      "last_verified_iter": "goal-rapid-microscope-iter-31",
+      "last_passing_iter": "goal-rapid-microscope-iter-31",
       "first_seen_iter": "goal-rapid-microscope-iter-0",
-      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-32-evidence/J-06-verify.png",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-31-evidence/J-06-verify.png",
       "spec_hash": "436653d6b7824775afe28e19de9266a60c63c3a69f3b9eda09d9dddfb0cfaae1",
-      "note": "iter-32 re-verified by deterministic golden replay (UT-J-06 PASS); the golden asserts 'No integrity errors.' and 'sealed — opaque'. The evaluator did not open this capture (spot-checks went to J-09 and J-03, both outside the replay set) but the replay row and screenshot are on file."
+      "note": "iter-31 re-verified by deterministic golden replay (UT-J-06 PASS); the golden asserts 'No integrity errors.' and 'sealed — opaque'. The evaluator opened no new capture for it this round (spot-checks went to J-08 and J-10) but the replay row and screenshot are on file at reports/qa/goal-rapid-microscope-iter-31-evidence/J-06-verify.png."
     },
     "J-07": {
       "id": "J-07",
       "name": "Graduation — provenance in, nothing laundered out",
       "status": "passing",
-      "last_verified_iter": "goal-rapid-microscope-iter-32",
-      "last_passing_iter": "goal-rapid-microscope-iter-32",
+      "last_verified_iter": "goal-rapid-microscope-iter-31",
+      "last_passing_iter": "goal-rapid-microscope-iter-31",
       "first_seen_iter": "goal-rapid-microscope-iter-0",
-      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-32-evidence/J-07-verify.png",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-31-evidence/J-07-result.png",
       "spec_hash": "6bd325e2c1511b9d2745bdcd612a12d2142f32498a7aa85055d31209c9e46b28",
-      "note": "iter-32 re-verified by deterministic golden replay (UT-J-07 PASS) against the persistent rig's DEFAULT, unscoped graduation directory. The evaluator confirmed the iteration's two scoped-root backend restarts never touched that directory: the browser lane restored the original environment and re-read the identical default payload (family 240dd966c1aceca2 — exploratory), and the four new fixture families live only under apps/backend/.data/qa-fixtures/goal-rapid-microscope-iter32-fourstage/. TC-9 satisfied."
+      "note": "iter-31: FIRST on-page surface and FIRST stored golden. The new /desk Graduation section is J-07's surface; runs/goal-session-rapid-microscope/journey-scripts/J-07.json now exists (2 steps, asserting the section's own sentence 'graduation transitions are not a UI act') and demo_runner.py --mode verify passed it. state/golden-gaps is now DELETED — the era has no disclosed golden gap left. The evaluator opened J-07-result.png (byte-identical to J-11-result.png, md5 18e8468c…: legitimately the same panel, and J-07's asserted sentence is visible in it) and ran the full backend suite twice (3,495 passed / 8 skipped / 0 failed, exit 0), which includes test_micro_graduation.py's untouched fixture walk."
     },
     "J-08": {
       "id": "J-08",
       "name": "The surface and MCP v6 — the funnel is visible",
       "status": "passing",
-      "last_verified_iter": "goal-rapid-microscope-iter-32",
-      "last_passing_iter": "goal-rapid-microscope-iter-32",
+      "last_verified_iter": "goal-rapid-microscope-iter-31",
+      "last_passing_iter": "goal-rapid-microscope-iter-31",
       "first_seen_iter": "goal-rapid-microscope-iter-0",
-      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-32-evidence/J-08-verify.png",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-31-evidence/J-08-verify.png",
       "spec_hash": "037874a8933089ff99b53568d5aedac2843043741d83fa4958759ba898145572",
-      "note": "iter-32 re-verified by deterministic golden replay (UT-J-08 PASS). The iter-31 interpretation stands (acceptance names 'the 26-tool contract test'; J-11's own goal text instructs the v6->v7 26->27 bump and the guard was EXTENDED, never weakened) — re-confirmed by the evaluator's own full-suite run this iteration (3,503 passed / 8 skipped / 0 failed)."
+      "note": "iter-31 re-verified by deterministic golden replay (UT-J-08 PASS); the evaluator opened J-08-verify.png and confirmed the Walk-Forward and Validation Vault sections render as shipped. INTERPRETATION RECORDED: J-08's acceptance text names 'the 26-tool contract test', and this iteration grew EXPECTED_TOOLS to 27. That is the supersession J-11 explicitly instructs ('bumping the MCP contract to v7 (26 → 27 tools)'), the guard was extended and never edited, and all four tools J-08 itself added are still present and still byte-identity-tested — so J-08 stays passing. See assumptions.md (iter-31 — goal-evaluator)."
     },
     "J-09": {
       "id": "J-09",
@@ -99,30 +99,29 @@
       "first_seen_iter": "goal-rapid-microscope-iter-0",
       "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-31-evidence/J-09-verify.png",
       "spec_hash": "7dd99ef032e14d2c86d69962f917efb8840d2496fa07765e9488264ecbd8a58a",
-      "note": "NOT re-tested at iter-32 — outside this iteration's Required-still-passing set. Status carries over from iter-31 under SPEED-9 evidence durability. Spot-checked by the evaluator this round: reports/qa/goal-rapid-microscope-iter-31-evidence/J-09-verify.png shows the Scout Ledger family row 'failed_aggression_score__playbook_signal__trades_20 (root e47904f2f7f4f0e1) — 1 variants tried' with its killed_insufficient_n decision, i.e. the recorded passing status is not contradicted."
+      "note": "iter-31 re-verified by deterministic golden replay (UT-J-09 PASS); the golden asserts the journey-unique family root 'failed_aggression_score__playbook_signal__trades_20'. Its capture remains byte-identical to J-04's (md5 3c5691ac…), the known and previously-accepted shared-image case — both journeys' evidence is genuinely in that one frame."
     },
     "J-10": {
       "id": "J-10",
       "name": "The kept product stands — traps armed, sentinel green",
       "status": "passing",
-      "last_verified_iter": "goal-rapid-microscope-iter-32",
-      "last_passing_iter": "goal-rapid-microscope-iter-32",
+      "last_verified_iter": "goal-rapid-microscope-iter-31",
+      "last_passing_iter": "goal-rapid-microscope-iter-31",
       "first_seen_iter": "goal-rapid-microscope-iter-0",
-      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-32-evidence/J-10-verify.png",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-31-evidence/J-10-verify.png",
       "spec_hash": "eabb7f30a96a8241a6652e7f6346073a4a302a6269b57e918b8b3720f97b762f",
-      "note": "iter-32 re-verified by deterministic golden replay (UT-J-10 PASS, the 17-step sentinel). No product surface changed this iteration, so every KEPT surface renders exactly as it did at iter-31."
+      "note": "iter-31 re-verified by deterministic golden replay (UT-J-10 PASS, the 17-step sentinel). The evaluator opened J-10-verify.png: the Referee Registry disclosures (including the owner's ruled-on clarification sentence), Referee Adjudications and Referee Runs all render as shipped, with the new Graduation section added below Validation Vault and nothing displaced."
     },
     "J-11": {
       "id": "J-11",
       "name": "Graduation gets a surface — the funnel's last state stops being invisible",
-      "status": "passing",
-      "last_verified_iter": "goal-rapid-microscope-iter-32",
-      "last_passing_iter": "goal-rapid-microscope-iter-32",
+      "status": "partial",
+      "last_verified_iter": "goal-rapid-microscope-iter-31",
+      "last_passing_iter": null,
       "first_seen_iter": "goal-rapid-microscope-iter-31",
-      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-32-evidence/J-11-capture2-fourstage.png",
+      "last_evidence_path": "reports/qa/goal-rapid-microscope-iter-31-evidence/J-11-result.png",
       "spec_hash": "4a3e4212737d2dcc3d4a4f737f8f4f1ca9de1693917812c2337091838cdae790",
-      "note": "PARTIAL -> PASSING at iter-32. The two acceptance renders that were missing at iter-31 now exist and the evaluator opened BOTH images personally. (1) reports/qa/goal-rapid-microscope-iter-32-evidence/J-11-capture1-empty.png shows the GRADUATION section against a fresh, never-seeded scoped TAPEOLOGY_MICRO_GRADUATION_DIR: 'Ledger chain verification: ok' and the served empty-state title 'No candidates ledgered.' (TC-1). (2) J-11-capture2-fourstage.png shows all four stage tokens on one screen — 14ecf3e4610456cf — exploratory, f9fb7652ae6c68ea — walkforward_survivor (with its sealed-evaluation row reading verdict 'fail', n 30, state never advanced), 0c46668c9c828643 — sealed_survivor, 45cb3a975c062bc4 — referee_handoff_ready — plus Family D's referee note beginning 'This referee_handoff_ready state does not imply the current Referee can register or adjudicate this candidate' (TC-2/TC-3/TC-4). The evaluator verified the fixture is not fabricated: apps/backend/scripts/seed_micro_graduation_iter32_fourstage_fixture.py only READS verdict/state off the results of the real evaluate_sealed_verdict / evaluate_*_transition functions (grep confirms no hand-set verdict/state/passed assignment anywhere), zero production modules changed, and the rows live in a throwaway QA root under apps/backend/.data/qa-fixtures/. OPEN, NON-BLOCKING (evidence_makeup): the '[NEW]'-flagged demo-narrator walkthrough step for the Graduation section is still not on record — the showcase lane does not run at lean depth and no iter-32 demo artifacts exist. Per methodology A.7 a missing walkthrough recording is a capture defect on confirmed behaviour, not a product gap; it must ride the closing showcase run (its narration must match its own screenshot, T-10).",
-      "evidence_makeup": true
+      "note": "NEW journey, appended by the goal-proposer inside docs/goal.md's AUTO:journeys markers (58 added lines, nothing else in the file touched; still an UNCOMMITTED working-tree change at scoring time). PARTIAL — only part of its own acceptance was exercised. VERIFIED: the Graduation section is the last <section aria-label> on /desk, directly below Validation Vault, fetches GET /research/desk/micro/graduation on expand and renders it verbatim; the evaluator opened J-11-result.png and matched every rendered value against the rig's own graduation_ledger.jsonl row (family 240dd966c1aceca2 — exploratory, 'No transitions recorded.', sealed evaluation ed6f24e0adc44171bc52af0da3f0890e / pass / n 30 / 2026-06-10T00:00:00Z rendered as '2026-06-09 20:00 ET'), plus 'Ledger chain verification: ok' and zero buttons inside the section. desk_graduation ships as a 27th read-only tool directly after desk_vault with two byte-identity tests; TR-2 sweep and MCP-closure assertions now name the route explicitly; full suite 3,495 passed / 8 skipped / 0 failed (evaluator ran it twice); fingerprint 08e471b10130e1e2 and all six referee_* hashes unchanged; pnl-history.md git-clean. NOT VERIFIED (the gap): (a) the empty-ledger render showing the served message 'No candidates ledgered.' — the shared QA rig already carries the iter-18 fixture family so its message is null; (b) the fixture-scoped four-stage render — all four stage tokens, a permanent FAILED sealed verdict, and the referee-spec-revision sentence have never been shown on screen anywhere; (c) the [NEW]-flagged walkthrough step (no showcase lane ran this round). The browser lane disclosed (a) and (b) itself under 'Known Limitation' rather than certifying them — see reports/phase-goal-rapid-microscope-iter-31-ui-test-results.llm.md. No evidence_makeup flag: this is unexercised behaviour, not a defective capture of confirmed behaviour."
     }
   },
   "anti_goal_violations": [
@@ -557,5 +556,5 @@
       "resolution": "CLOSED at iteration 29 by the OWNER's out-of-band commit f2b292f4 (2026-08-24, 'fix(closure-gate): a bare \"backend-only\" is prose, not a no-visible-surface claim'), an approved framework task under maintenance-protocol §1. Verified by the evaluator by EXECUTION, not by reading the commit message: `closure_gate.py --self-test` = 15 passed / 0 failed; `tests/automation/test-closure-gate.sh` = 29 passed / 0 failed; and `closure_gate.py claims-no-visible-surface reports/phase-goal-rapid-microscope-iter-28-user-visible-changes.md` now returns rc=1 (= this document does NOT claim a no-visible surface), which is exactly the answer whose absence produced iteration 28's false CLOSURE-FAIL. The fix requires two agreeing signals (a claim-SHAPED assertion plus no affirmative description of a visible change) instead of a bare substring, and common.sh now delegates to the same definition so the two layers cannot drift. Iteration 29's own gate returned CLOSURE-PASS."
     }
   ],
-  "updated_at": "2026-08-24T22:35:00Z"
+  "updated_at": "2026-08-24T21:10:00Z"
 }

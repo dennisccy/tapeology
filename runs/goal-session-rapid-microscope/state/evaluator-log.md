@@ -2236,3 +2236,63 @@ opens the Desk page and shows the new panel. If they are convenient, the close-u
 and J-03 and a private wording for J-05's check may ride along, but they must not delay the round.
 Nothing else: no new real tape, no revealing or assigning of any sealed recording, and no running
 of the three studies against your real recorded corpus. After that round the era is finished.
+
+## Iteration 32 — goal-rapid-microscope-iter-32
+
+**Date:** 2026-08-24T22:35:00Z
+**Verdict:** GOAL_ACHIEVED
+**Depth dispatched:** lean
+**Journey deltas:**
+- Newly passing: **J-11 "Graduation gets a surface"** — moved from partial to green. It is the
+  eleventh and last journey, and the era's last open item.
+- Newly failing: none. Regressed: none. Deferred for time: none. Skipped: none.
+- Re-checked by their own stored scripts, machine-driven, all green: J-01, J-04, J-05, J-06,
+  J-07, J-08, J-10 (seven of seven).
+- Not re-checked, by this round's own design: J-02 "The micro observer", J-03 "Structure x flow"
+  and J-09 "The pilot studies". No product line changed this round, so their earlier evidence
+  stands. I spot-checked J-09's and J-03's pictures myself; neither contradicts its status.
+- Anti-goal violations: none introduced. Six stay open, all minor, all carrying your written
+  ruling that they do not count against this era; zero blocking, zero critical.
+
+**Reasoning:** The one thing missing at the end of last round was two pictures nobody had ever
+taken, and both now exist. I opened both myself rather than reading about them. The first shows
+the Graduation panel against an empty record book, printing the served words "No candidates
+ledgered." beside "Ledger chain verification: ok". The second shows four test families, one at
+each stage — exploratory, walkforward_survivor, sealed_survivor, referee_handoff_ready — with the
+second family's judgement reading "fail" over 30 samples while its own stage word stays
+walkforward_survivor, and the fourth family carrying the sentence about the referee's future
+revision. I also checked that the test families are not invented: the new seeding script only
+reads its verdicts and stages back out of the real production functions, and a search of the
+whole file finds no place where a verdict, stage or pass flag is set by hand. No product code
+changed at all this round; the only two new files are that script and its own tests.
+
+I re-derived the frozen things instead of inheriting them. I ran the whole backend suite myself:
+3,503 passed, 8 skipped, nothing failed, and no failure or error line anywhere. The settings
+fingerprint still prints 08e471b10130e1e2 and all six judge files hash exactly as they did when
+the era opened. Your real store is untouched — 11,395 protected files, counted again after my own
+suite run — the recording vault still holds 21 sealed shards last written on 21 August, and the
+money record is unchanged. I checked that the two backend restarts used for the pictures never
+disturbed the shared rig's own records: the lane restored the original settings and re-read an
+identical payload, and J-07's stored check replayed green against it. Finally I re-tested each
+condition attached to your ruling on the six open items: the recording vault is still yours alone
+and its tapes still readable straight off disk; the sealed judge still has zero callers in the
+running product and no sealed row exists outside a throwaway test rig; and the most recent
+showcase document published to you states plainly that J-11 was unfinished and lists what was
+missing. None has come true, so nothing re-opens.
+
+One thing J-11's own text asks for is still not on record: the walkthrough step that narrates the
+new panel. The showcase lane does not run at this depth, so it produced nothing this round. I did
+not let that hold the journey back: it is a recording of behaviour two pictures already prove,
+and this framework's own rule is that a capture task never blocks and never becomes a round of
+its own. It is flagged as owed, so the closing showcase run must make it — and its narration must
+say only what its own picture shows.
+
+**Next-step recommendation:** Halt — the goal is achieved. Please confirm it. Three small tidy-up
+items remain and each is a picture or a recording of work already proven: the walkthrough step for
+the Graduation panel, close-up pictures for J-02 "The micro observer" and J-03 "Structure x flow",
+and giving J-05 "The walk-forward engine" its own wording to look for instead of sharing "Ledger
+chain verification:" with two other panels. One evidence-only round would do all three with no
+developer and no code change. One thing needs your eye: the closing report must say "finished with
+six known open items that you ruled do not count against this era" and list them — two about the
+product, four about this build system's own reporting honesty. It must never say there were no
+findings.

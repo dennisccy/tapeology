@@ -417,3 +417,19 @@ harmless only because `CollapsibleSection` renders `{open && children}`, so a co
 contributes no text. Run the T-11 static sweep against the stored scripts' EXPECT TEXTS, not just
 against testids and headings, and prefer a journey-unique string for every golden.
 **Applies to:** any iteration adding a section to `/desk` (or any page with stored replay scripts).
+
+## iter-32 — 2026-08-24T22:35:00Z
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** Two evidence traps closed together this round. (1) Chrome MCP's element-clip
+screenshot (`screenshot` with a CSS `selector`) returns an all-black PNG once the page has been
+programmatically scrolled past the `/desk` sticky header — the reliable recipe is
+`window.scrollTo(0,0)` → `fullpage:true` capture → crop the saved PNG to the element's
+`getBoundingClientRect()`; the DOM text was correct throughout, so only the pixel buffer was
+affected. (2) `list_graduation_families` only lists a family that owns at least one graduation
+ledger row, and `"exploratory"` is never an appendable `to_state`, so the ONLY code-legal way to
+photograph an `exploratory` family is to give it a real `insufficient` sealed evaluation (n < 30)
+and never call `evaluate_walkforward_survivor_transition` — hand-writing a row would have been
+fabricated data.
+**Applies to:** any iteration capturing element screenshots on `/desk` below the fold, and any
+future fixture seeding of `micro_graduation.py` / `micro_sealed_evaluation.py` states.

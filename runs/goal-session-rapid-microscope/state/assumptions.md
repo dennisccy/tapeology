@@ -772,3 +772,44 @@ it leaves the persistent rig's default directory — and therefore J-07's stored
 **Reversible:** yes — if a future round is told to use the literal current default directory
 instead, no code from this iteration depends on the reading; only the throwaway scoped root used
 for the empty capture would be discarded and a different one substituted.
+
+## iter-32 — goal-evaluator
+
+**Ambiguity:** whether J-11 may be scored `passing` while the `[NEW]`-flagged demo-narrator
+walkthrough step its own Acceptance names is still not on record — especially since the iter-31
+evaluator explicitly REFUSED the `evidence_makeup` carve-out for this same journey one round ago.
+**We chose:** `passing`, with `evidence_makeup: true` for the missing walkthrough. Grounds I
+measured rather than inherited: (a) iter-31's refusal rested on two gaps that were unexecuted CODE
+BRANCHES (`families.length === 0` and the `referee_handoff_ready` branch), never run anywhere —
+both are now executed and photographed, and I opened both images myself, so that reason is spent;
+(b) the remaining gap is a showcase narration artifact, which methodology A.7 names verbatim as a
+capture defect ("the walkthrough recording is missing or badly cropped") on behaviour already
+confirmed, and the agent contract forbids scoring an evidence-capture task as blocking or planning
+a round whose only content is a demo recording; (c) the showcase lane structurally does not run at
+lean depth (no `reports/demo/goal-rapid-microscope-iter-32/`, no demo-results file), and it runs in
+the closing tail after a GOAL_ACHIEVED halt — so the step gets made either way; (d) J-11's own
+no-screenshot rail is scoped to the empty-state RENDER ("with an element screenshot on record"),
+which is now satisfied by `J-11-capture1-empty.png`. Cost acknowledged: this certifies an era while
+one line of a journey's Acceptance is still owed, so the flag stays set and the recommendation names
+it first.
+**Reversible:** yes — the flag clears on the next capture of any kind, and if the owner reads the
+walkthrough clause as load-bearing, one evidence-depth round produces it with zero code change and
+no journey status to undo.
+
+## iter-32 — goal-evaluator (second)
+
+**Ambiguity:** whether the iter-18 finding's escalation condition — "the moment any production
+caller is wired to `evaluate_sealed_verdict`, or any sealed-evaluation row appears outside a
+throwaway QA rig, this re-opens as CRITICAL" — is tripped by this iteration, which created four
+REAL sealed-evaluation rows (one `insufficient`, one permanent `fail`, two `pass`) under
+`apps/backend/.data/qa-fixtures/goal-rapid-microscope-iter32-fourstage/micro_graduation/`.
+**We chose:** NOT tripped. Grounds: `grep -rn evaluate_sealed_verdict apps/backend/app/` still
+returns only the function's own definition/export and three docstring mentions — zero production
+callers; the writers are a QA-only script in `scripts/` and the test suite; the rows sit in a
+disposable root created solely for one browser capture, never read by a default-configured backend
+(the real `apps/backend/.data/` still has no `micro_graduation` directory at all); and the
+store-scope guard re-counted 11,395 protected files unchanged. That is exactly what "a throwaway QA
+rig" means. Noted openly because the fixture root lives INSIDE `apps/backend/.data/`, one level from
+the operator's real store, which is the closest this condition has come to firing.
+**Reversible:** yes — deleting `apps/backend/.data/qa-fixtures/goal-rapid-microscope-iter32-*`
+removes the rows entirely; no journey status depends on them after the captures exist.
