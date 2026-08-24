@@ -1,0 +1,36 @@
+{
+  "phase": "goal-rapid-microscope-iter-33",
+  "status": "in_progress",
+  "current_step": "dev_complete",
+  "updated_at": "2026-08-24T22:28:41.000000Z",
+  "started_at": "2026-08-24T22:00:00.000000Z",
+  "cli": "claude",
+  "blockers": [],
+  "changed_files": [
+    "apps/backend/app/research/micro_snapshots.py",
+    "apps/backend/app/research/micro_routes.py",
+    "apps/backend/app/mcp/__init__.py",
+    "apps/backend/tests/test_mcp_server.py",
+    "apps/backend/tests/test_desk_ui_guards.py",
+    "apps/backend/tests/test_vault.py",
+    "apps/backend/tests/test_micro_snapshots.py",
+    "apps/backend/scripts/seed_micro_snapshots_iter33_disclosure_fixture.py",
+    "apps/backend/tests/test_seed_micro_snapshots_iter33_disclosure_fixture.py",
+    "apps/frontend/lib/types.ts",
+    "apps/frontend/lib/api.ts",
+    "apps/frontend/app/desk/page.tsx",
+    "runs/goal-session-rapid-microscope/journey-scripts/J-02.json",
+    "docs/handoffs/goal-rapid-microscope-iter-33-dev.md"
+  ],
+  "tests_run": true,
+  "test_summary": "3512 passed, 8 skipped, 0 failed (iter-32 baseline: 3503 passed / 8 skipped); tsc --noEmit clean",
+  "browser_checks_run": false,
+  "next_action": "reviewer",
+  "notes": [
+    "J-12 built end to end: micro_snapshots.snapshot_meta_report() (pool-derived withheld_excluded via the shared _unresolved_pool_ids choke point, file-derived stale_excluded computed after the withheld filter) now backs GET /research/desk/micro/snapshots (existing snapshots key byte-identical, no new endpoint); desk_micro_snapshots MCP proxy added (contract v7->v8, 27->28 tools, positioned between desk_micro_readiness and desk_scout); new /desk Feature Snapshots section (testid family micro-snapshots-*) rendered directly below Graduation, read-only, fetch-on-expand; J-02's stored golden extended with a step asserting the section's static shell text 'Withheld (excluded):'.",
+    "New TC-7 counter-test (test_vault.py) proves withheld_excluded is pool-derived not snapshot-file-derived: registers a universe whose rule matches one real dataset, never seals/snapshots it, and asserts the served count is 1 while the snapshots list stays empty throughout.",
+    "New fixture-scoped seed script (scripts/seed_micro_snapshots_iter33_disclosure_fixture.py) plants one valid snapshot (real build), one stale meta (real build, then its own persisted dataset_checksum mutated -- the only faithful way to construct staleness without changing running code), and one withheld pool member (rule-matched universe, never sealed/snapshotted); self-checks its own three-way split; regression-tested.",
+    "Full backend suite green (3512 passed / 8 skipped / 0 failed, exit code 0), tsc --noEmit clean, config_fingerprint unchanged (08e471b10130e1e2), zero diff under any referee_*.py file, live service-startup check (scripts/dev.sh :8301/:3301 after rm -rf .next, GET /health + GET /research/desk/micro/snapshots [18 real snapshots, both new disclosure fields present] + GET /desk [200, section present in initial HTML] all verified) -- both processes LEFT RUNNING per the pump's operational note for the downstream browser-QA stage.",
+    "Browser-qa-agent verification (TC-1 real-store capture, TC-2 fixture-scoped valid/stale/withheld capture via the new seed script, the [NEW]-flagged demo-narrator walkthrough step, and demo_runner.py --mode verify for J-02's new step) all remain for later pipeline stages -- this backend venv has no playwright installed, so actual browser replay could not run from this agent. See dev handoff Known Issues for the exact seed-script invocation the later stage needs."
+  ]
+}

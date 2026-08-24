@@ -2296,3 +2296,62 @@ developer and no code change. One thing needs your eye: the closing report must 
 six known open items that you ruled do not count against this era" and list them — two about the
 product, four about this build system's own reporting honesty. It must never say there were no
 findings.
+
+## Iteration 33 — goal-rapid-microscope-iter-33
+
+**Date:** 2026-08-25T00:35:00Z
+**Verdict:** GOAL_ACHIEVED
+**Depth dispatched:** lean
+**Journey deltas:**
+- Newly passing: **J-12 "The observer's build truth gets a surface"** — the twelfth journey, new
+  this round, green on its first attempt. It carries an owed-picture flag (see below).
+- Newly failing: none. Regressed: none. Deferred for time: none. Skipped: none.
+- Re-checked by their own stored scripts, machine-driven, all green: J-01, J-02, J-04, J-08,
+  J-10, J-11 (six of six).
+- Not re-checked, by this round's own design: J-03, J-05, J-06, J-07, J-09. No line of their
+  code changed, so their earlier evidence stands. I spot-checked J-05's and J-07's pictures
+  myself; neither contradicts its status.
+- Anti-goal violations: none introduced. Six stay open, all minor, all carrying your written
+  ruling that they do not count against this era; zero blocking, zero serious.
+
+**Reasoning:** The new Feature Snapshots panel is real and I checked it by looking, not by
+reading. I cropped and enlarged the round's picture and read off it: three snapshot rows with
+their full dataset ids, the format name, the settings fingerprint `08e471b10130e1e2`, the line
+"Withheld (excluded): 1 · Stale (excluded): 0", and the words "No snapshot build runs recorded
+yet." — with the Graduation panel sitting directly above it, which is where the plan said the new
+panel must go. Every claim the test lane made about that picture is actually in the picture. That
+is worth saying out loud, because six times this era a lane has claimed something its own picture
+did not show.
+
+I re-derived the frozen things instead of inheriting them. I ran the whole backend suite myself,
+twice: 3,512 passed, 8 skipped, nothing failed — above the 3,503 round 32 set. The settings
+fingerprint still prints `08e471b10130e1e2` and all six sealed-judge files hash exactly as they
+did when the era opened. Your real store still holds exactly 11,395 files after my own runs; the
+recording vault still holds 21 sealed shards, untouched since 22 August; the money record is
+byte-identical. I also re-tested each condition attached to your ruling on the six open items: the
+vault is still yours alone and its tapes still readable straight off disk; the sealed judge still
+has zero callers in the running product and no sealed row exists outside round 32's throwaway test
+folders; and no showcase document was published at all this round. None has come true.
+
+One clause of the new journey was never checked and I am recording it rather than absorbing it:
+the small test set-up showing one good snapshot, one out-of-date one and one held-back one was
+never photographed, because the test lane is not allowed to restart the shared site. I did not
+score that as a product fault. The panel prints only what the server sends; the held-back case is
+already visible on the live picture (count 1, no such row); and the out-of-date case is proven by
+backend tests I re-ran myself, together with two separate tests proving the held-back count comes
+from the pool and never from which files happen to sit on disk. So the journey is green with an
+owed-picture flag, and the flag is named first in the recommendation.
+
+**Next-step recommendation:** Halt — the goal is achieved. Please confirm it. Everything left is
+a photograph or a recording of work already proven, so one evidence-only round with no developer
+would clear it: the fixture-set-up picture for the new panel, the two owed walkthrough recordings
+(the Graduation panel from round 31 and this round's panel), close-up pictures for J-02 "The micro
+observer" and J-03 "Structure x flow", and a private wording for J-05 "The walk-forward engine" to
+look for. Watch that recording lane: it last produced anything at round 28 and produced zero steps
+at round 29. Two things need your eye. The closing report must say "finished with six known open
+items that you ruled do not count against this era" and list them — two about the product, four
+about this build system's own reporting honesty — and must never say there were no findings. And
+each time this era is declared finished, the proposal step adds one more journey and the run goes
+on (J-11 after round 30, J-12 after round 32); this round's addition was a fair one, but you may
+want to say whether the loop should keep adding work or stop here. Standing bars unchanged: no new
+real tape, no revealing or assigning any sealed recording, no studies against your real corpus.

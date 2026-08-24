@@ -1,7 +1,7 @@
 {
   "extended": true,
   "n_new_journeys": 1,
-  "n_proposals": 2,
+  "n_proposals": 4,
   "dry": false,
-  "summary": "No hold-out survivor exists to propose (no pnl-scan.json; champion v1/default still n=1<5; profile/strategy/dataset work is era-frozen or barred by the owner's standing 'no new real tape / no pilot studies on the real corpus' ruling), so the cycle promotes the one uncovered Vision claim: pillar 5 / capability 8 'Graduation into the untouched Referee' -- its Data Contract row GET /research/desk/micro/graduation has 0 UI and 0 MCP readers, leaving the funnel's terminal state invisible to both Target Users and leaving J-07 as the era's only golden-replay gap; the same gap shape covers GET /research/desk/micro/snapshots (backlogged) and GET .../recorder/runs (deliberately unsurfaced, opaque-pool anti-goal)."
+  "summary": "No pnl-scan.json exists (no pre-screen hook artifact) and no data-backed candidate is even producible this era (profiles/strategies/champion/pnl_scan are frozen; the whole 81-dataset J-06 tranche is an unresolved sealed pool; new real tape is barred), so the top legal candidate is structural: promoted J-12 - render the Feature Snapshots section on /desk over GET /research/desk/micro/snapshots (+ /runs), add desk_micro_snapshots as MCP tool 28 (contract v8), and make that enumerator disclose withheld_excluded + stale_excluded instead of dropping rows silently. Vision-gap scan: every Vision pillar and all 9 Key Capabilities are journey-covered; the two claims with no rendered surface are Vision pillar 2 / capability 2's snapshot build truth (now J-12) and Target Users' recorder-run acts (deliberately opaque under the r5 opaque-pool anti-goal - NOT proposable). Also backlogged, not promoted: re-running the promotion sweep on the grown seal-filtered corpus (17 datasets vs the founding 1+1) as workstream W3."
 }

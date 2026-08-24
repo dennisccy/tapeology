@@ -22,7 +22,8 @@ Result contract (locked by ``tests/test_mcp_server.py``):
     ``desk_playbook_evidence`` at Era B2 J-09; ``desk_referee``/``desk_referee_registry`` at Era 6
     "The Referee" J-09; ``desk_micro_readiness``/``desk_scout``/``desk_walkforward``/``desk_vault``
     at Era "The Rapid Microscope" J-08, MCP contract v6 — 22 -> 26 tools; ``desk_graduation`` at
-    J-11, MCP contract v7 — 26 -> 27 tools); an allowlisted-but-UNKNOWN path (any unshipped
+    J-11, MCP contract v7 — 26 -> 27 tools; ``desk_micro_snapshots`` at J-12, MCP contract v8 —
+    27 -> 28 tools); an allowlisted-but-UNKNOWN path (any unshipped
     ``/research/*``) still surfaces the backend's honest 404 this way — never placeholder data.
   * backend unreachable — an explicit tool error naming the base URL and the failure
     (``BackendUnreachableError``); NEVER cached or fabricated data (no cache, no retry loop,
@@ -147,6 +148,13 @@ _STATIC_PATHS: dict[str, str] = {
     # snapshot/trial/fold/shard is ever built or recorded (never a 404). None exposes any
     # query-param variant -- all four routes take none.
     "desk_micro_readiness": "/research/desk/micro/readiness",
+    # `desk_micro_snapshots` (J-12, MCP contract v8 -- 27 -> 28 tools) is the IDENTICAL
+    # no-required-param shape, positioned immediately after `desk_micro_readiness` (the
+    # dependency-order sibling rule: readiness -> snapshots -> scout) and before `desk_scout`
+    # directly below. Proxies the observer's already-registered build-metadata endpoint (never a
+    # second endpoint, never a second computation path) -- an explicit HTTP 200 honest-empty
+    # payload before any snapshot is ever built (never a 404). No query-param variant.
+    "desk_micro_snapshots": "/research/desk/micro/snapshots",
     "desk_scout": "/research/desk/micro/scout",
     "desk_walkforward": "/research/desk/micro/walkforward",
     "desk_vault": "/research/desk/micro/vault",
@@ -437,6 +445,20 @@ TOOLS: tuple[types.Tool, ...] = (
             "count and distinct symbol-days per registered universe) -- JSON verbatim. A dataset "
             "caught in an unresolved sealed pool carries no per-shard row and no identity anywhere "
             "in this payload (spec section 7.5)."
+        ),
+        inputSchema=_object_schema({}),
+    ),
+    types.Tool(
+        name="desk_micro_snapshots",
+        description=(
+            "Read-only proxy of GET /research/desk/micro/snapshots -- the micro observer's "
+            "build-metadata surface: per CURRENTLY VALID snapshot its identity tuple "
+            "(dataset_id/dataset_checksum/micro_algo_version/snapshot_format_version/"
+            "feature_source_hash/config_fingerprint/params_hash), quote_size_unit, row_count, "
+            "bytes_on_disk and built_utc, beside two disclosure counts -- withheld_excluded "
+            "(pool-derived, never a snapshot-file-derived count) and stale_excluded (a present "
+            "meta file whose identity no longer re-verifies) -- JSON verbatim. Never raw "
+            "per-event feature rows. Never 404/500 on zero built snapshots."
         ),
         inputSchema=_object_schema({}),
     ),

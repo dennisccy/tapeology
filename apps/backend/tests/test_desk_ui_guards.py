@@ -342,6 +342,16 @@ _PRICE_ARITHMETIC_FIELDS = (
     # (a serialization call, never arithmetic, the `screen_result`/raw `fold_results` precedent),
     # so no per-field entry is needed for those.
     r"|evaluation\.(?:n)"
+    # goal-rapid-microscope-iter-33 (J-12): the new Feature Snapshots section's own served
+    # numerics -- GET /research/desk/micro/snapshots read verbatim for the first time in the
+    # browser (registered since era baseline; zero UI/MCP readers before this iteration). Each
+    # snapshot row's own `row_count`/`bytes_on_disk` (`FeatureSnapshotsSection`'s `snapshot.`
+    # destructured field) and the route's own two disclosure counts (`report.withheld_excluded`/
+    # `report.stale_excluded`, the fetched response body's own local binding) join this list on
+    # the same footing as every other served numeric above -- no client-side byte-to-MB
+    # conversion, no withheld/stale share arithmetic, is ever legitimate here.
+    r"|snapshot\.(?:row_count|bytes_on_disk)"
+    r"|report\.(?:withheld_excluded|stale_excluded)"
 )
 _PRICE_ARITHMETIC_PATTERN = re.compile(
     rf"({_PRICE_ARITHMETIC_FIELDS})\s*[-+*/]|[-+*/]\s*({_PRICE_ARITHMETIC_FIELDS})"
@@ -396,6 +406,18 @@ def test_desk_page_price_arithmetic_guard_catches_referee_evidence_arithmetic():
         "evidence.playbook_occurrence.distinct_sessions;"
     )
     assert _PRICE_ARITHMETIC_PATTERN.search(seeded_total) is not None
+
+
+def test_desk_page_price_arithmetic_guard_catches_feature_snapshots_arithmetic():
+    """goal-rapid-microscope-iter-33 (J-12) TC-5 counter-test: the widened guard also catches
+    arithmetic over the new Feature Snapshots numerics (GET /research/desk/micro/snapshots' first
+    UI reader), proving the widened pattern actually fails on injected client-side arithmetic --
+    not just that it passes on unmodified source."""
+    seeded_bytes = "const avgBytes = snapshot.bytes_on_disk / snapshot.row_count;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_bytes) is not None
+
+    seeded_share = "const share = report.withheld_excluded + report.stale_excluded;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_share) is not None
 
     seeded_signals = (
         "const share = evidence.playbook_occurrence.signals_at_current_basis / "

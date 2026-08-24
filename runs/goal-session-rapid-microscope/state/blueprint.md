@@ -26,8 +26,11 @@ Tapeology
         ├── Scout Ledger           (J-04; J-09 pilot-study results render here too)
         ├── Walk-Forward           (J-05; J-09 pilot-study results render here too)
         ├── Validation Vault       (J-06)
-        └── Graduation             (J-11, iter-31 — read-only, renders GET .../micro/graduation
+        ├── Graduation             (J-11, iter-31 — read-only, renders GET .../micro/graduation
                                      verbatim; no new Data Contract row, see note below)
+        └── Feature Snapshots      (J-12, iter-33 — read-only, renders GET .../micro/snapshots
+                                     verbatim; no new Data Contract row, only a new
+                                     `stale_excluded` disclosure sub-field, see note below)
 ```
 
 **Feature / journey homes** (each reachable in ≤2 clicks from the persistent nav):
@@ -35,7 +38,7 @@ Tapeology
 | Feature / journey | Canonical home (route) | Nav section |
 |---|---|---|
 | Era transition + corpus readiness truth (J-01) | `/desk` → Microscope Readiness | Desk |
-| Micro observer + snapshots (J-02) | keyless/automated; snapshot metadata surfaces via Microscope Readiness | Desk |
+| Micro observer + snapshots (J-02) | `/desk` → Feature Snapshots (iter-33; previously a loose "surfaces via Microscope Readiness" reference, corrected once the dedicated section shipped) | Desk |
 | Structure × flow join (J-03) | keyless/automated; joinable-corpus count surfaces via Microscope Readiness | Desk |
 | Scout + candidate ledger (J-04) | `/desk` → Scout Ledger | Desk |
 | Walk-forward engine + diagnostic run (J-05) | `/desk` → Walk-Forward | Desk |
@@ -45,6 +48,7 @@ Tapeology
 | Pilot studies (J-09) | `/desk` → Scout Ledger / Walk-Forward (results render through J-08's sections, no new page) | Desk |
 | Kept-product sentinel (J-10) | `/`, `/structure`, `/desk` (every existing section, unchanged) | Cockpit / Structure / Desk |
 | Graduation surface + MCP v7 (J-11) | `/desk` → Graduation (below Validation Vault) | Desk |
+| Feature Snapshots surface + MCP v8 (J-12) | `/desk` → Feature Snapshots (below Graduation) | Desk |
 
 ## Data Contract
 
@@ -71,6 +75,14 @@ audit as "served across roughly nine endpoints but not yet rows in this table"):
 | `withheld_excluded` | `int >= 0` — a count only, never the withheld ids | each already-registered parent module (`scout.py`, `walkforward.py`, `micro_join.py`, `edge_report.py`, `edge_report_cache.py`, `pnl_scan.py`, `desk_screen.py`, `micro_snapshots.py`), all via the ONE shared predicate `vault.withheld_dataset_ids()` → `micro_snapshots.exclude_withheld()` | the GET/compute routes of the module in the same row |
 | `sealed_withheld` | `int >= 0` | `datasets.py` (already-registered owner of the datasets listing) | `GET /research/datasets` |
 | `sealed_tranche` | object aggregate (shard count, total symbol-days, per-universe totals — never a per-shard row, never a per-shard `exposure_state`) | `micro_readiness.py` (already-registered owner) | `GET /research/desk/micro/readiness` |
+
+**Snapshot staleness disclosure sub-field** (registered iter-33 — sub-field of the
+ALREADY-registered "Feature snapshot metadata + build progress/runs" row, no new owner, no new
+endpoint):
+
+| Sub-field | Type/shape | Owner (already-registered parent module) | Served by (existing endpoint) |
+|---|---|---|---|
+| `stale_excluded` | `int >= 0` — a count only, never the stale meta's identity or its stale value; computed AFTER the withheld filter (never double-counting a withheld id) | `micro_snapshots.py` (`list_snapshot_meta`, already-registered owner) | `GET /research/desk/micro/snapshots` |
 
 **Recorder-progress aggregate sub-fields** (registered iter-11 — r5 closure, sub-fields of the
 ALREADY-registered "Recorder job + tranche progress/runs" row, no new owner, no new endpoint):
@@ -467,3 +479,25 @@ from its one endpoint, read verbatim by UI/MCP/reports.
      is left untouched; both new captures point the backend at separate, throwaway scoped roots for
      their own dispatch only. No new page, route, MCP tool, or nav-skeleton change; no reapproval
      file written. -->
+
+<!-- iter-33 note: J-12 wires the ALREADY-registered "Feature snapshot metadata + build
+     progress/runs" row (owner `micro_snapshots.py`, endpoint
+     `GET /research/desk/micro/snapshots`, registered since era baseline) to its first UI reader
+     (a new `/desk` Feature Snapshots section, rendered below Graduation) and its first MCP reader
+     (`desk_micro_snapshots`, a byte-identical GET proxy, MCP contract v7->v8, 27->28 tools).
+     Matching this file's own iter-15/iter-31 precedent ("an MCP tool is a transport-layer proxy of
+     an already-registered endpoint, not a second computing module or a second serving path"), the
+     new MCP tool gets no row of its own. The route also gains ONE genuinely new field,
+     `stale_excluded` (registered above as a sub-field of the same already-registered row, no new
+     owner, no new endpoint) -- `withheld_excluded` on this same route needed no new registration
+     at all, since the iter-10 "Disclosure sub-fields" table already named `micro_snapshots.py` as
+     a parent module sharing that predicate. The Information Architecture gains one new leaf
+     (Feature Snapshots) under the ALREADY-registered "Desk -> Rapid Microscope" nav section --
+     additive only, not a top-level nav-skeleton change, so no reapproval file is written. J-02's
+     own IA row is corrected in place (not a new row) from a loose "surfaces via Microscope
+     Readiness" reference to the dedicated section this iteration actually builds for it -- the
+     canonical home was always implicitly this section per Vision pillar 2 / capability 2, simply
+     unbuilt until now. J-01's/J-04's/J-08's/J-10's/J-11's own IA rows are unchanged: this
+     iteration adds a sibling section, touches no shipped section's rendering, and the MCP proxy
+     ordering places `desk_micro_snapshots` between the two already-registered dependency-order
+     siblings `desk_micro_readiness` and `desk_scout` with no shape change to either. -->

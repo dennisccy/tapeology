@@ -58,6 +58,7 @@ __all__ = [
     "read_snapshot_rows",
     "load_snapshot_meta",
     "list_snapshot_meta",
+    "snapshot_meta_report",
     "run_snapshot_build_and_record",
     "MicroSnapshotComputeManager",
     "append_run_log",
@@ -360,30 +361,68 @@ def load_snapshot_meta(
     return stored
 
 
+def snapshot_meta_report(root_dir: str, dataset_store: DatasetStore, config: Config) -> dict:
+    """The ONE walk this module's listing surface performs (goal-rapid-microscope-iter-33, J-12) --
+    ``list_snapshot_meta`` (below, existing callers, list-only) and ``GET /research/desk/micro/
+    snapshots`` (the disclosure-aware route) both read off THIS single enumeration, never two
+    divergent walks of the same directory. Returns ``{"snapshots": [...], "withheld_excluded":
+    int, "stale_excluded": int}``, sorted by ``dataset_id`` for deterministic ordering.
+
+    ``withheld_excluded`` is POOL-derived -- the SAME choke point (``_unresolved_pool_ids``) every
+    other corpus-wide enumerator in this module already shares (``withheld_dataset_ids_for_store``/
+    ``exclude_withheld``), counted over the store's FULL ``list()`` record set. It is deliberately
+    **NEVER** a count of which withheld ids happen to have a ``*.meta.json`` file present on disk:
+    a withheld shard's snapshot build never runs at all (``run_snapshot_build_and_record``'s own
+    filter), so "does a meta file exist for this withheld id" is never an honest question to ask --
+    answering it would leak sealed-pool build state (TC-7, spec section 7.5 point 6/point 3, r4/r3).
+
+    ``stale_excluded`` is computed AFTER the withheld filter, over the meta files actually present
+    on disk: a meta file whose id is withheld is silently skipped (as before -- iter-9 audit B1 --
+    it never entered the corpus this route serves at all, so it is neither a "current" row nor a
+    "stale" one, and is never counted twice). Every OTHER meta file counts as stale iff
+    ``load_snapshot_meta``'s identity re-verification misses (TR-7) -- "built, then invalidated" by
+    an algo/format/feature-source/fingerprint move, never "never built". The stale VALUE itself is
+    never carried anywhere, only its count."""
+    records, _errors = dataset_store.list()
+    # The one choke point `withheld_dataset_ids_for_store`/`exclude_withheld` already share --
+    # reused directly (never a second, divergent predicate, and never a second `dataset_store.
+    # list()` call: `records` is used AS GIVEN, the `exclude_withheld` precedent).
+    withheld = _unresolved_pool_ids(dataset_store, records)
+    withheld_excluded = sum(1 for record in records if record["id"] in withheld)
+
+    root = Path(root_dir)
+    snapshots: list[dict] = []
+    stale_excluded = 0
+    if root.exists():
+        for meta_file in sorted(root.glob("*.meta.json")):
+            dataset_id = meta_file.name[: -len(".meta.json")]
+            if dataset_id in withheld:
+                # Spec section 7.5 point 3 (r3), iter-9 audit B1: a withheld shard's meta carries
+                # its `dataset_id`, its RAW `dataset_checksum`, its exact `row_count` and
+                # `bytes_on_disk` -- the identity, counts and bytes withheld until exposure.
+                # Omitted here even if a snapshot file for it exists on disk (a shard sealed AFTER
+                # its snapshot was built), so the withholding is fail-closed rather than dependent
+                # on build order.
+                continue
+            meta = load_snapshot_meta(root_dir, dataset_store, dataset_id, config)
+            if meta is not None:
+                snapshots.append(meta)
+            else:
+                stale_excluded += 1
+    snapshots.sort(key=lambda m: m["dataset_id"])
+    return {"snapshots": snapshots, "withheld_excluded": withheld_excluded, "stale_excluded": stale_excluded}
+
+
 def list_snapshot_meta(root_dir: str, dataset_store: DatasetStore, config: Config) -> list[dict]:
     """Every CURRENTLY VALID (identity re-verified) snapshot's meta, sorted by ``dataset_id`` for
     deterministic ordering. A stale meta file (present but no longer identity-matching) is
     silently excluded -- exactly the honest "never serve stale" TR-7 discipline applied to the
-    listing surface, not merely the single-dataset loader."""
-    root = Path(root_dir)
-    if not root.exists():
-        return []
-    # Spec section 7.5 point 3 (r3), iter-9 audit B1: a withheld shard's meta carries its
-    # `dataset_id`, its RAW `dataset_checksum`, its exact `row_count` and `bytes_on_disk` -- the
-    # identity, counts and bytes withheld until exposure. Omitted here even if a snapshot file
-    # for it exists on disk (a shard sealed AFTER its snapshot was built), so the withholding is
-    # fail-closed rather than dependent on build order.
-    withheld = withheld_dataset_ids_for_store(dataset_store)
-    out: list[dict] = []
-    for meta_file in sorted(root.glob("*.meta.json")):
-        dataset_id = meta_file.name[: -len(".meta.json")]
-        if dataset_id in withheld:
-            continue
-        meta = load_snapshot_meta(root_dir, dataset_store, dataset_id, config)
-        if meta is not None:
-            out.append(meta)
-    out.sort(key=lambda m: m["dataset_id"])
-    return out
+    listing surface, not merely the single-dataset loader.
+
+    Delegates to ``snapshot_meta_report`` above (goal-rapid-microscope-iter-33, J-12) -- the SAME
+    single walk, list-only for this function's existing callers (none of which need the two
+    disclosure counts)."""
+    return snapshot_meta_report(root_dir, dataset_store, config)["snapshots"]
 
 
 # --- the run-and-record orchestration (reuse-or-build per dataset) -------------------------------

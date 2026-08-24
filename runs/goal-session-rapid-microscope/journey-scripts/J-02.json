@@ -5,6 +5,7 @@
   "default_timeout_ms": 10000,
   "steps": [
     {"n": 1, "journey": "J-02", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Playbook Signals"}},
-    {"n": 2, "journey": "J-02", "action": {"type": "click", "target": {"testid": "desk-section-expand-microReadiness"}}, "expect": {"text": "Fallback frac"}}
+    {"n": 2, "journey": "J-02", "action": {"type": "click", "target": {"testid": "desk-section-expand-microReadiness"}}, "expect": {"text": "Fallback frac"}},
+    {"n": 3, "journey": "J-02", "action": {"type": "click", "target": {"testid": "desk-section-expand-featureSnapshots"}}, "expect": {"text": "Withheld (excluded):"}}
   ]
 }

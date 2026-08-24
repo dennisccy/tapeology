@@ -63,6 +63,8 @@ import {
   fetchDeskScoutCompute,
   fetchDeskScoutRuns,
   fetchDeskGraduation,
+  fetchDeskMicroSnapshots,
+  fetchDeskMicroSnapshotsRuns,
   fetchDeskVault,
   fetchDeskWalkforward,
   fetchDeskWalkforwardCompute,
@@ -84,6 +86,8 @@ import type {
   DeskForwardRunsListResult,
   DeskForwardTouch,
   DeskGraduationResponse,
+  DeskMicroSnapshotRunsResponse,
+  DeskMicroSnapshotsResponse,
   DeskPlaybookAbsence,
   DeskPlaybookBackscanComputeSnapshot,
   DeskPlaybookBackscanOutcomeCounts,
@@ -392,7 +396,8 @@ type DeskCollapsibleSection =
   | "scoutLedger"
   | "walkForward"
   | "validationVault"
-  | "graduation";
+  | "graduation"
+  | "featureSnapshots";
 // DESK-COLLAPSED-END
 
 const PRIMARY_BUTTON_CLASS =
@@ -7135,6 +7140,178 @@ function GraduationSection({
   );
 }
 
+// goal-rapid-microscope-iter-33 (J-12): the Feature Snapshots section -- the observer's build
+// truth, rendered directly BELOW Graduation (T-11: a new `micro-snapshots-*` testid family, no
+// shipped testid/heading string reused). Read-only: no build button, no POST -- `/snapshots/
+// compute` stays UI-unreachable (T-8; a snapshot build is a heavy operator act, manager/CLI-
+// driven). Renders `GET /research/desk/micro/snapshots` verbatim: per snapshot its full
+// seven-component identity tuple, quote_size_unit, row_count, bytes_on_disk, built_utc, plus the
+// route's own `withheld_excluded`/`stale_excluded` disclosure counts -- no client-side aggregate,
+// derived count, re-ordering, or recomputation of any served value (guarded by
+// `_PRICE_ARITHMETIC_FIELDS` below) -- beside `GET .../snapshots/runs`' build-run history,
+// newest-first, exactly as served (never re-sorted client-side).
+function FeatureSnapshotsSection({
+  snapshotsResult,
+  runsResult,
+}: {
+  snapshotsResult: { ok: boolean; data: DeskMicroSnapshotsResponse | null; error?: string } | null;
+  runsResult: { ok: boolean; data: DeskMicroSnapshotRunsResponse | null; error?: string } | null;
+}) {
+  if (snapshotsResult === null) {
+    return (
+      <div data-testid="micro-snapshots-section">
+        <LoadingPanel testid="micro-snapshots-loading" />
+      </div>
+    );
+  }
+  if (!snapshotsResult.ok || snapshotsResult.data === null) {
+    return (
+      <div data-testid="micro-snapshots-section">
+        <UnavailablePanel
+          testid="micro-snapshots-unavailable"
+          message={snapshotsResult.error ?? "The feature snapshots could not be loaded."}
+        />
+      </div>
+    );
+  }
+  const report = snapshotsResult.data;
+  return (
+    <div data-testid="micro-snapshots-section">
+      <p className="mb-3 text-xs text-slate-500">
+        Feature Snapshots (GET /research/desk/micro/snapshots, read verbatim; read-only -- a
+        snapshot build is an operator/CLI act, not a UI control): the micro observer&apos;s
+        build-metadata inventory -- every currently valid snapshot&apos;s identity, plus how many
+        pool members this listing withheld or dropped as stale.
+      </p>
+
+      <p data-testid="micro-snapshots-disclosure" className="mb-4 text-[11px] text-slate-500">
+        Withheld (excluded): <span className="font-mono text-slate-300">{report.withheld_excluded}</span>
+        {" · "}
+        Stale (excluded): <span className="font-mono text-slate-300">{report.stale_excluded}</span>
+      </p>
+
+      <div data-testid="micro-snapshots-block" className="mb-4">
+        <h4 className="mb-2 text-xs font-semibold text-slate-400">Snapshots</h4>
+        {report.snapshots.length === 0 ? (
+          <EmptyState testid="micro-snapshots-empty" title="No feature snapshots built yet." />
+        ) : (
+          <div className="overflow-x-auto">
+            <table
+              data-testid="micro-snapshots-table"
+              className="w-full min-w-[1400px] border-collapse text-xs"
+            >
+              <thead>
+                <tr className="border-b border-slate-800 text-left text-slate-500">
+                  <th className="px-1.5 py-1">Dataset</th>
+                  <th className="px-1.5 py-1">Snapshot format</th>
+                  <th className="px-1.5 py-1">Algo version</th>
+                  <th className="px-1.5 py-1">Config fingerprint</th>
+                  <th className="px-1.5 py-1">Feature source hash</th>
+                  <th className="px-1.5 py-1">Params hash</th>
+                  <th className="px-1.5 py-1">Quote size unit</th>
+                  <th className="px-1.5 py-1 text-right">Row count</th>
+                  <th className="px-1.5 py-1 text-right">Bytes on disk</th>
+                  <th className="px-1.5 py-1">Built at</th>
+                </tr>
+              </thead>
+              <tbody data-testid="micro-snapshots-rows">
+                {report.snapshots.map((snapshot) => (
+                  <tr key={snapshot.dataset_id} className="border-b border-slate-900">
+                    <td className="whitespace-nowrap px-1.5 py-1 font-mono text-[10px] text-slate-500">
+                      {snapshot.dataset_id}
+                    </td>
+                    <td className="px-1.5 py-1 font-mono text-slate-300">
+                      {snapshot.snapshot_format_version}
+                    </td>
+                    <td className="px-1.5 py-1 text-right font-mono text-slate-300">
+                      {snapshot.micro_algo_version}
+                    </td>
+                    <td className="whitespace-nowrap px-1.5 py-1 font-mono text-[10px] text-slate-500">
+                      {snapshot.config_fingerprint}
+                    </td>
+                    <td className="whitespace-nowrap px-1.5 py-1 font-mono text-[10px] text-slate-500">
+                      {snapshot.feature_source_hash}
+                    </td>
+                    <td className="whitespace-nowrap px-1.5 py-1 font-mono text-[10px] text-slate-500">
+                      {snapshot.params_hash}
+                    </td>
+                    <td className="px-1.5 py-1 text-slate-300">{snapshot.quote_size_unit}</td>
+                    <td className="px-1.5 py-1 text-right font-mono text-slate-300">
+                      {snapshot.row_count}
+                    </td>
+                    <td className="px-1.5 py-1 text-right font-mono text-slate-300">
+                      {snapshot.bytes_on_disk}
+                    </td>
+                    <td className="whitespace-nowrap px-1.5 py-1 font-mono text-slate-400">
+                      {formatDateTimeET(snapshot.built_utc, { seconds: false })}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div data-testid="micro-snapshots-runs-block">
+        <h4 className="mb-2 text-xs font-semibold text-slate-400">Run History</h4>
+        {runsResult === null ? (
+          <LoadingPanel testid="micro-snapshots-runs-loading" />
+        ) : !runsResult.ok || runsResult.data === null ? (
+          <UnavailablePanel
+            testid="micro-snapshots-runs-unavailable"
+            message={runsResult.error ?? "The snapshot build-run history could not be loaded."}
+          />
+        ) : runsResult.data.runs.length === 0 ? (
+          <EmptyState testid="micro-snapshots-runs-empty" title="No snapshot build runs recorded yet." />
+        ) : (
+          <div className="overflow-x-auto">
+            <table
+              data-testid="micro-snapshots-runs-table"
+              className="w-full min-w-[820px] border-collapse text-xs"
+            >
+              <thead>
+                <tr className="border-b border-slate-800 text-left text-slate-500">
+                  <th className="px-1.5 py-1">Run</th>
+                  <th className="px-1.5 py-1">State</th>
+                  <th className="px-1.5 py-1">Started</th>
+                  <th className="px-1.5 py-1">Finished</th>
+                  <th className="px-1.5 py-1 text-right">Datasets</th>
+                  <th className="px-1.5 py-1 text-right">Withheld (excluded)</th>
+                  <th className="px-1.5 py-1">Error</th>
+                </tr>
+              </thead>
+              <tbody data-testid="micro-snapshots-run-rows">
+                {runsResult.data.runs.map((run) => (
+                  <tr key={run.run_id} className="border-b border-slate-900">
+                    <td className="whitespace-nowrap px-1.5 py-1 font-mono text-[10px] text-slate-500">
+                      {run.run_id}
+                    </td>
+                    <td className="px-1.5 py-1 text-slate-300">{run.state}</td>
+                    <td className="whitespace-nowrap px-1.5 py-1 font-mono text-slate-400">
+                      {formatDateTimeET(run.started_utc, { seconds: false })}
+                    </td>
+                    <td className="whitespace-nowrap px-1.5 py-1 font-mono text-slate-400">
+                      {formatDateTimeET(run.finished_utc, { seconds: false })}
+                    </td>
+                    <td className="px-1.5 py-1 text-right font-mono text-slate-300">
+                      {run.datasets_done} / {run.datasets_total}
+                    </td>
+                    <td className="px-1.5 py-1 text-right font-mono text-slate-300">
+                      {run.withheld_excluded}
+                    </td>
+                    <td className="px-1.5 py-1 text-red-300">{run.error ?? ""}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // era-desk-iter-14 (J-10): a third compute control, wired exactly like `TopupComputeControl` — the
 // operation has no per-pair counters (it is a single classify-repair-verify walk, not a walk over
 // many pairs), so the running indicator shows the compute's own `progress.phase` label instead of
@@ -10036,6 +10213,21 @@ export default function DeskPage() {
     error?: string;
   } | null>(null);
 
+  // J-12: the Feature Snapshots section's own fetch-on-expand results -- the SAME `null` (not
+  // yet fetched) / `{ok, data, error}` shape every other Rapid Microscope section already uses,
+  // TWO independent slices (the snapshot listing plus its own build-run history) mirroring the
+  // Scout Ledger / Walk-Forward sections' own `<x>Result`/`<x>RunsResult` pair.
+  const [snapshotsResult, setSnapshotsResult] = useState<{
+    ok: boolean;
+    data: DeskMicroSnapshotsResponse | null;
+    error?: string;
+  } | null>(null);
+  const [snapshotsRunsResult, setSnapshotsRunsResult] = useState<{
+    ok: boolean;
+    data: DeskMicroSnapshotRunsResponse | null;
+    error?: string;
+  } | null>(null);
+
   // iter-14 audit (finding F1): the ONE stop flag both plain-async compute polls below observe.
   // This page's own contract for a plain `for(;;)` driver that awaits `refreshChainSleep` is the
   // `refreshChainStopRef` pattern further down ("Unmounting (a nav away mid-chain) stops the driver
@@ -10125,6 +10317,13 @@ export default function DeskPage() {
       // J-11: the Graduation section's own ONE fetch -- read-only, no compute/transition control
       // (graduation transitions are not a UI act, T-8).
       fetchDeskGraduation().then(setGraduationResult);
+    } else if (section === "featureSnapshots") {
+      // J-12: the Feature Snapshots section's own two reads -- read-only, no build control
+      // (/snapshots/compute stays UI-unreachable, T-8). Mirrors the scoutLedger/walkForward
+      // precedent immediately above: the listing plus its own durable run history, both issued
+      // on first expand.
+      fetchDeskMicroSnapshots().then(setSnapshotsResult);
+      fetchDeskMicroSnapshotsRuns().then(setSnapshotsRunsResult);
     }
   }
 
@@ -12436,6 +12635,20 @@ export default function DeskPage() {
             onToggle={() => toggleSection("graduation")}
           >
             <GraduationSection graduationResult={graduationResult} />
+          </CollapsibleSection>
+        </section>
+
+        {/* goal-rapid-microscope-iter-33 (J-12): the Feature Snapshots section -- the era's own
+            sixth Rapid-Microscope section, rendered directly BELOW Graduation (T-11). READ-ONLY:
+            no build control (/snapshots/compute stays UI-unreachable, T-8). */}
+        <section aria-label="Feature Snapshots" className="mt-6">
+          <CollapsibleSection
+            id="featureSnapshots"
+            title="Feature Snapshots"
+            open={expandedSections.has("featureSnapshots")}
+            onToggle={() => toggleSection("featureSnapshots")}
+          >
+            <FeatureSnapshotsSection snapshotsResult={snapshotsResult} runsResult={snapshotsRunsResult} />
           </CollapsibleSection>
         </section>
       </main>

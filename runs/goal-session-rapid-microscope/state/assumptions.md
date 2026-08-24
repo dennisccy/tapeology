@@ -813,3 +813,83 @@ rig" means. Noted openly because the fixture root lives INSIDE `apps/backend/.da
 the operator's real store, which is the closest this condition has come to firing.
 **Reversible:** yes — deleting `apps/backend/.data/qa-fixtures/goal-rapid-microscope-iter32-*`
 removes the rows entirely; no journey status depends on them after the captures exist.
+
+## iter-33 — goal-decomposer
+
+**Ambiguity:** whether the evaluator's binding depth recommendation ("evidence") applies when,
+between the eval that produced it (iter-32, GOAL_ACHIEVED) and this dispatch, the goal-proposer
+appended a brand-new Must-have journey (J-12) inside `docs/goal.md`'s `AUTO:journeys` marker
+block — an UNCOMMITTED working-tree change (`git status --porcelain -- docs/goal.md` shows
+` M docs/goal.md`, 84 lines added) absent from `journey-history.json`'s 11-journey ledger
+(`grep -c "J-12"` = 0). Both the `evidence` recommendation and rule 7's exception presuppose "all
+Target journeys already recorded passing"; J-12 is neither recorded nor passing. This is the
+identical situation iter-31's decomposer resolved for J-11's appearance one round after an
+otherwise-identical GOAL_ACHIEVED + evidence-recommendation pairing.
+**We chose:** treat J-12 as this iteration's real Target journey and write `Depth: lean` (not the
+recommended `evidence`, and not `full`), following iter-31's own precedent for the structurally
+identical case. Grounds: (a) J-12 is genuinely new — absent from `journey-history.json`, never
+attempted, confirmed by reading the file directly rather than trusting the digest; (b) I
+independently re-verified J-12's premise against the live tree rather than trusting the goal text:
+`GET /research/desk/micro/snapshots` (`micro_routes.py:167-177`) serves only
+`{"snapshots": [...]}` with no disclosure counts today, `list_snapshot_meta` silently drops both
+withheld and stale entries with no count kept (`micro_snapshots.py:363-386`), and
+`micro_snapshots.py` has zero UI readers and no named MCP tool (`EXPECTED_TOOLS` is a 27-tuple
+without it); (c) it requires real backend (two new response fields + guard-test extensions + new
+MCP tool) and frontend (`/desk` section) work, so `evidence` depth structurally cannot build it —
+rule 7 explicitly forbids planning evidence-only when real work exists; (d) I checked all four
+full-depth escape conditions and none holds: prior verdict GOAL_ACHIEVED (not
+ESCALATE/REGRESSION), no `coherence.md` FAIL on record since iter-32, consecutive-lean count 3 of
+a cadence-6 threshold (not due), and trigger 4 ("brand-new full-stack journey ... with real
+Data-contract additions") does not fire because J-12's own Acceptance text explicitly disclaims
+one — "no second computation path, no new endpoint, no Data Contract row added, existing keys
+byte-identical with only `withheld_excluded` and `stale_excluded` added". Trigger 2
+(data-model migration) also does not fire — the trigger's own text explicitly carves out purely
+additive fields for a new journey.
+**Reversible:** yes — if the evaluator or owner reads J-12 differently (e.g. judges it
+out-of-scope or wants it deferred), no other iteration's journey status or code depends on this
+reading; J-12 simply stays unattempted in `journey-history.json` until re-planned, and nothing
+this iteration builds mutates any existing computation, endpoint, or Data Contract row.
+
+## iter-33 — goal-evaluator
+
+**Ambiguity:** whether J-12 may be scored `passing` when its Acceptance names TWO browser proofs
+— the real-store render (delivered, `J-12-result.png`) and a fixture-scoped rig showing one valid
+snapshot, one stale meta and one withheld pool member (TC-2, never produced; the browser lane
+disclosed it plainly under "Known Limitation" because its own rules forbid restarting the shared
+`:8301`/`:3301` rig). Iter-31 REFUSED the A.7 carve-out for J-11 in a structurally similar spot.
+**We chose:** `passing`, with `evidence_makeup: true` naming the fixture capture AND the
+`[NEW]`-flagged walkthrough. Grounds I measured rather than inherited: (a) iter-31's refusal
+rested on gaps that were unexecuted CODE BRANCHES (`families.length === 0`,
+`referee_handoff_ready`) run nowhere — here I read `FeatureSnapshotsSection`
+(`apps/frontend/app/desk/page.tsx`) line by line and the fixture scenario exercises NO branch the
+delivered capture did not already execute: the populated-rows path ran and is photographed, the
+withheld case is live on that same picture (`withheld_excluded: 1`, no such row, byte-matched to
+curl by the lane), and `stale_excluded` is one number in the same `<p>` that already rendered
+`0`; (b) A.7's own named example is "the screenshot shows a different-but-equally-valid data range
+than the spec's example numbers", which is literally this case (3 valid / 1 withheld / 0 stale
+instead of 1 / 1 / 1); (c) the safety-relevant half is proven by executed tests I read and re-ran
+— `snapshot_meta_report` skips withheld ids BEFORE any load, so a withheld id can never move
+`stale_excluded`, plus two counter-tests proving the withheld count is pool-derived and the TR-2
+sweep + MCP-closure test now covering `/research/desk/micro/snapshots`; (d) the agent contract
+forbids scoring an evidence-capture task as blocking or planning a round whose only content is a
+capture. Cost acknowledged: this certifies an era while one clause of a journey's Acceptance is
+owed, so the flag stays set and the recommendation names it first.
+**Reversible:** yes — one evidence-depth pass against the ready-made seed script
+(`apps/backend/scripts/seed_micro_snapshots_iter33_disclosure_fixture.py`) produces the capture
+with zero code change and no journey status to undo.
+
+## iter-33 — goal-evaluator (second)
+
+**Ambiguity:** whether J-02's `evidence_makeup` flag clears. The methodology's rule is literal —
+any fresh capture, pass or fail, clears it — and a fresh, journey-distinct `J-02-verify.png`
+landed this round (md5 `4240fd3d…`, no longer byte-identical to J-01's, and it does show the new
+Feature Snapshots section). The spec's own DoD said this round's element capture "serves as J-02's
+owed element close-up (clearing its `evidence_makeup` flag)".
+**We chose:** KEEP the flag set, J-02 stays `passing`. Grounds: I opened the image — it is a
+viewport screenshot from the replay lane that shows NEITHER string J-02's golden asserts
+("Fallback frac" is above the crop, "Withheld (excluded):" is just below it), so the named remedy
+(a T-10 element capture of the asserted text) was again not delivered. Clearing on the letter of
+the rule would tell the next round the picture is fixed when it is not — the same "certify what
+you did not check" pattern this era has logged six times. Follows iter-30's identical call.
+**Reversible:** yes — one element capture of each asserted section clears it; the flag never
+gates GOAL_ACHIEVED, so this choice does not alter the verdict either way.

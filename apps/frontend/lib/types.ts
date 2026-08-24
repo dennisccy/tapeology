@@ -2889,3 +2889,47 @@ export interface DeskGraduationResponse {
   message: string | null;
   chain_verification: MicroChainVerification;
 }
+
+// --- Feature Snapshots -- GET /research/desk/micro/snapshots (micro_snapshots.py
+// `snapshot_meta_report`), J-12: the observer's build-metadata surface -- registered since era
+// baseline (J-02), read verbatim for the first time in the browser this iteration. Every field is
+// the snapshot's own seven-component identity tuple (spec section 2.3) plus quote_size_unit/
+// row_count/bytes_on_disk/built_utc, beside two disclosure counts the SAME route now serves.
+export interface SnapshotMeta {
+  dataset_id: string;
+  dataset_checksum: string;
+  micro_algo_version: number;
+  snapshot_format_version: string;
+  feature_source_hash: string;
+  config_fingerprint: string;
+  params_hash: string;
+  quote_size_unit: string;
+  row_count: number;
+  bytes_on_disk: number;
+  built_utc: string;
+}
+
+export interface DeskMicroSnapshotsResponse {
+  snapshots: SnapshotMeta[];
+  // Pool-derived (never snapshot-file-derived, TC-7): how many unresolved-pool datasets this
+  // enumeration withheld.
+  withheld_excluded: number;
+  // A meta file present on disk whose identity re-verification failed (TR-7) -- "built, then
+  // invalidated", never "never built". Never carries the stale value itself, only its count.
+  stale_excluded: number;
+}
+
+export interface DeskMicroSnapshotRunLogEntry {
+  run_id: string;
+  state: "done" | "cancelled" | "failed";
+  started_utc: string;
+  finished_utc: string;
+  datasets_done: number;
+  datasets_total: number;
+  error: string | null;
+  withheld_excluded: number;
+}
+
+export interface DeskMicroSnapshotRunsResponse {
+  runs: DeskMicroSnapshotRunLogEntry[];
+}

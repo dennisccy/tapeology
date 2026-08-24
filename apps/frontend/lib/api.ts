@@ -22,6 +22,8 @@ import type {
   DeskForwardReadResult,
   DeskForwardRunsListResult,
   DeskGraduationResponse,
+  DeskMicroSnapshotsResponse,
+  DeskMicroSnapshotRunsResponse,
   DeskPlaybookBackscanComputeSnapshot,
   DeskPlaybookBackscanPlan,
   DeskPlaybookBackscanRunsListResult,
@@ -2722,6 +2724,61 @@ export async function fetchDeskGraduation(): Promise<{
       return { ok: true, data: (await res.json()) as DeskGraduationResponse };
     }
     let error = "The graduation ledger could not be loaded.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, data: null, error };
+  } catch {
+    return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// GET /research/desk/micro/snapshots — J-12, READ-ONLY: the observer's build-metadata surface,
+// registered since era baseline (J-02) but never read from the browser before this iteration.
+// Every CURRENTLY VALID snapshot's identity tuple plus quote_size_unit/row_count/bytes_on_disk/
+// built_utc, beside the route's own two disclosure counts (withheld_excluded, pool-derived;
+// stale_excluded, a present-but-no-longer-identity-matching meta file). Never 404/500 on zero
+// built snapshots — an honest empty list.
+export async function fetchDeskMicroSnapshots(): Promise<{
+  ok: boolean;
+  data: DeskMicroSnapshotsResponse | null;
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/micro/snapshots`);
+    if (res.ok) {
+      return { ok: true, data: (await res.json()) as DeskMicroSnapshotsResponse };
+    }
+    let error = "The feature snapshots could not be loaded.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, data: null, error };
+  } catch {
+    return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// GET /research/desk/micro/snapshots/runs — the durable build-run history, newest first. Never
+// 404 on zero runs (an honest empty list). Mirrors fetchDeskScoutRuns/fetchDeskWalkforwardRuns
+// exactly.
+export async function fetchDeskMicroSnapshotsRuns(): Promise<{
+  ok: boolean;
+  data: DeskMicroSnapshotRunsResponse | null;
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/micro/snapshots/runs`);
+    if (res.ok) {
+      return { ok: true, data: (await res.json()) as DeskMicroSnapshotRunsResponse };
+    }
+    let error = "The snapshot build-run history could not be loaded.";
     try {
       const data = await res.json();
       if (typeof data?.detail === "string") error = data.detail;

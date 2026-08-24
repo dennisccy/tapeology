@@ -742,6 +742,90 @@ operator-attended act inside the era.
     asserting a Graduation-section string unique to it, and `state/golden-gaps` no longer
     lists `J-07`.
 
+- **J-12: The observer's build truth gets a surface — and its enumerator stops excluding silently**
+  - Steps:
+    1. Render a **Feature Snapshots** section on `/desk`, directly BELOW the shipped Graduation
+       section (T-11: below the shipped ones, reusing no shipped `data-testid` or heading
+       string — a new `micro-snapshots-*` testid family), reading `GET
+       /research/desk/micro/snapshots` and `GET /research/desk/micro/snapshots/runs` — the ONE
+       canonical owner (`micro_snapshots.py`; Product Shape Data Contract row "Feature snapshot
+       metadata + build progress/runs"), which today reaches no surface at all: zero UI readers
+       and no named MCP tool (measured by grep over `apps/frontend/` and
+       `tests/test_mcp_server.py`'s `EXPECTED_TOOLS`), so the whole build truth of Vision
+       pillar 2 / capability 2 — 18 snapshot meta files on disk — is curl-only. The section
+       renders the served payload verbatim: per snapshot its `dataset_id`,
+       `snapshot_format_version`, `micro_algo_version`, `config_fingerprint`,
+       `feature_source_hash`, `params_hash`, `quote_size_unit`, `row_count`, `bytes_on_disk`
+       and `built_utc`, plus the build-run history newest-first — with no client-side
+       aggregate, derived count, re-ordering, or recomputation of any served value, and the
+       served empty-state copy rendered verbatim (never a fabricated row) when the list or the
+       run log is empty. Read-only: no build button, no POST — the `/snapshots/compute` triple
+       stays UI-unreachable (T-8; a snapshot build is a heavy operator act and stays
+       manager/CLI-driven, and page-load GETs never compute).
+    2. Close the enumerator's two SILENT exclusions at the owner — additively, existing keys
+       byte-identical, no second computation path and no new endpoint. `GET
+       /research/desk/micro/snapshots` gains, beside `snapshots`: (a) `withheld_excluded` — how
+       many unresolved-pool datasets this enumeration withheld, computed by the SAME
+       `micro_snapshots` choke point every other corpus-wide enumerator already shares
+       (`withheld_dataset_ids_for_store` / `exclude_withheld`), matching the disclosure
+       convention `GET /research/datasets` (`sealed_withheld`) and `GET
+       /research/desk/micro/snapshots/compute` (`withheld_excluded`) already keep, and NEVER a
+       number derived from which withheld shards happen to have a snapshot file (that would
+       leak sealed-pool build state); and (b) `stale_excluded` — how many stored snapshot metas
+       failed load-time identity re-verification and were therefore dropped, which today is
+       invisible: the listing can serve `[]` with 18 meta files on disk and no explanation,
+       so an operator cannot tell "never built" from "built, then invalidated by an algo /
+       format / feature-source / fingerprint move". Both counts are computed AFTER the withheld
+       filter; `stale_excluded` never carries a stale VALUE, only its count.
+    3. Add `desk_micro_snapshots` as a byte-identical GET proxy of that route, positioned
+       immediately after `desk_micro_readiness` (the dependency-order sibling rule: readiness →
+       snapshots → scout), bumping the MCP contract to **v8 (27 → 28 tools)** and growing
+       `tests/test_mcp_server.py`'s `EXPECTED_TOOLS` to the 28-tuple in the same commit (guard
+       tests are EXTENDED, never edited). Extend `tests/test_desk_ui_guards.py`'s
+       `_PRICE_ARITHMETIC_FIELDS` with every served snapshot numeric plus its seeded
+       counter-test, and run the existing TR-2 join-resistance/inference sweep over the new
+       tool, the two new counts, and the new section.
+    4. Clean rebuild (`rm -rf apps/frontend/.next`, rebuild, restart — T-9), browser pass via
+       the store-scoped rig, element-capture of the new section (T-10) against the real store
+       AND against a fixture-scoped rig carrying at least one valid snapshot, one stale meta,
+       and one withheld pool member.
+    5. Extend (never weaken) **J-02**'s stored golden replay script with an additional assertion
+       on a statically rendered Feature-Snapshots string unique to it — the era-5 lesson: assert
+       the SSR'd section shell, never async-loaded row or `<option>` text — and let that element
+       capture also serve as J-02's owed element close-up.
+  - Acceptance: `GET /research/desk/micro/snapshots` remains the single owner of every snapshot
+    value — no second computation path, no new endpoint, no Data Contract row added, existing
+    keys byte-identical with only `withheld_excluded` and `stale_excluded` added — and the
+    `/desk` Feature Snapshots section renders that payload verbatim: against the real store it
+    shows the served list (or the served empty state) beside both disclosure counts and the
+    build-run history, with an element screenshot on record (no screenshot ⇒ `unknown`, never
+    `passing`); against the fixture-scoped rig a valid snapshot renders every served identity
+    field, a stale meta appears ONLY inside `stale_excluded` (never as a row, never as a stale
+    value), and a withheld pool member appears ONLY inside `withheld_excluded` (never by id,
+    symbol, session date, checksum, row count, or bytes) — with a counter-test proving
+    `withheld_excluded` is pool-derived rather than snapshot-file-derived, so no sealed-pool
+    build state is derivable from any served number. `desk_micro_snapshots` returns a body
+    byte-identical to its GET route; the 28-tuple contract test, the extended
+    `_PRICE_ARITHMETIC_FIELDS` counter-test, the TR-2 inference sweep over the new tool, counts
+    and section, and the replay-script static sweep all pass; the MCP surface stays read-only
+    and `/snapshots/compute` stays UI-unreachable. **No PnL number moves and none is invented:**
+    this journey registers no strategy, profile, or candidate, so in place of a PnL-ledger
+    append it proves the ledger untouched — `GET /research/pnl/ledger` and
+    `reports/pnl/pnl-history.md` byte-identical before and after, the champion pointer still
+    `v1`/`default`, both founding rows keeping their `n = 1 < 5` insufficient-sample labels
+    (fabricating a row for a surface change would breach "no fabricated data" and this era's
+    `pnl_scan` freeze). The `default` profile stays byte-identical — engine equivalence and the
+    golden feature trace pass byte-unmodified, `config_fingerprint` prints `08e471b10130e1e2`,
+    zero new `Config` fields (the two disclosures are payload fields, never config), every
+    `referee_*` module still matches the iteration-0 SHA-256 listing — every shipped `/`,
+    `/structure`, and `/desk` section renders as shipped, and the full backend suite passes at
+    a count ≥ the era-open baseline with 0 regressions. A **`[NEW]`-flagged demo-narrator
+    walkthrough** navigates `/desk` to the new Feature Snapshots section and shows the served
+    inventory, both disclosure counts, and the honest empty-state copy on screen, with that
+    step's own screenshot actually containing what the narration claims. Finally J-02's stored
+    golden asserts a Feature-Snapshots string unique to it and the full stored replay set
+    re-runs green.
+
 <!-- /AUTO:journeys -->
 
 ## Anti-goals

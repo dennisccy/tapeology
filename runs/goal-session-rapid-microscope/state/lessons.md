@@ -433,3 +433,26 @@ and never call `evaluate_walkforward_survivor_transition` — hand-writing a row
 fabricated data.
 **Applies to:** any iteration capturing element screenshots on `/desk` below the fold, and any
 future fixture seeding of `micro_graduation.py` / `micro_sealed_evaluation.py` states.
+
+## iter-33 — 2026-08-25T00:35:00Z
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** A browser-QA dispatch cannot deliver a fixture-scoped capture that needs the shared
+`:8301`/`:3301` rig restarted under a different `TAPEOLOGY_DATASET_DIR` — that agent's own rules
+forbid restarting the app, so it disclosed the gap instead (as iter-31's did for J-11). If a
+journey's acceptance names a second, differently-seeded rig state, the SPEC must either sanction
+the restart explicitly (iter-32's pattern, which worked) or the round must accept the capture as
+owed. Related: the new golden assertion `"Withheld (excluded):"` is NOT static shell text — that
+`<p>` renders only after the section's fetch resolves — and J-02 and J-12 now both assert it, so
+one slow fetch fails two goldens.
+**Applies to:** any iter whose acceptance names a fixture-scoped or empty-state browser capture;
+any iter writing/extending a stored golden for a fetch-on-expand `/desk` section.
+
+## iter-33 — 2026-08-25T00:40:00Z (second)
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** `tests/test_referee_oracles.py`'s wall-clock budget assertion (120s) fails when two
+full backend suites run concurrently on this host — my first verification run tripped it at
+126.2s, my second clean run passed it and every other test both times. A stopwatch assertion is
+not evidence of a product regression; re-run it alone before treating it as one.
+**Applies to:** any agent re-running the full backend suite to verify a handoff's test claim.

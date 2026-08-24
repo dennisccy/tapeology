@@ -21,9 +21,11 @@ persistent TEST-OWNED db, never the operator's."""
 
 from __future__ import annotations
 
+import json
 import threading
 import time
 from contextlib import contextmanager
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -368,7 +370,10 @@ def test_get_snapshots_is_an_honest_empty_list_on_a_fresh_store(client):
     c, _store, _dir, _manager = client
     resp = c.get("/research/desk/micro/snapshots")
     assert resp.status_code == 200
-    assert resp.json() == {"snapshots": []}
+    # goal-rapid-microscope-iter-33 (J-12): grows to include the two disclosure counts, both `0`
+    # on a fresh store with no vault ledger and nothing on disk -- existing `snapshots` key
+    # byte-identical.
+    assert resp.json() == {"snapshots": [], "withheld_excluded": 0, "stale_excluded": 0}
 
 
 def test_snapshots_route_lists_a_built_snapshot(client):
@@ -383,6 +388,52 @@ def test_snapshots_route_lists_a_built_snapshot(client):
     assert "row_count" in body["snapshots"][0] and "bytes_on_disk" in body["snapshots"][0]
     # never raw per-event rows (the boundary note) -- only metadata keys are served
     assert "deferred" not in body["snapshots"][0] and "cumulative_delta" not in body["snapshots"][0]
+    assert body["withheld_excluded"] == 0
+    assert body["stale_excluded"] == 0
+
+
+# --- goal-rapid-microscope-iter-33 (J-12): snapshot_meta_report's own two disclosure counts -------
+
+
+def test_snapshot_meta_report_counts_a_present_but_no_longer_identity_matching_meta_as_stale(tmp_path):
+    """TC-2/TR-7: a meta file present on disk whose stored identity no longer re-verifies (here,
+    a mutated `dataset_checksum`) is excluded from `snapshots`, never served as a row and never
+    carrying its stale VALUE anywhere -- counted ONLY in `stale_excluded`."""
+    store = DatasetStore(tmp_path / "datasets")
+    meta = _plant(store)
+    snapshots_dir = str(tmp_path / "snapshots")
+    ms.run_snapshot_build_and_record(store, CONFIG, snapshots_dir, [meta["id"]])
+
+    report = ms.snapshot_meta_report(snapshots_dir, store, CONFIG)
+    assert report == {"snapshots": [ms.load_snapshot_meta(snapshots_dir, store, meta["id"], CONFIG)], "withheld_excluded": 0, "stale_excluded": 0}
+
+    # Mutate the persisted meta's own identity so it no longer re-verifies against a fresh
+    # computation -- exactly what "built, then invalidated" looks like on disk (TR-7).
+    meta_path = Path(snapshots_dir) / f"{meta['id']}.meta.json"
+    stored = json.loads(meta_path.read_text())
+    stored["dataset_checksum"] = "0" * 64
+    meta_path.write_text(json.dumps(stored, sort_keys=True))
+
+    report = ms.snapshot_meta_report(snapshots_dir, store, CONFIG)
+    assert report["snapshots"] == []
+    assert report["withheld_excluded"] == 0
+    assert report["stale_excluded"] == 1
+    assert ms.list_snapshot_meta(snapshots_dir, store, CONFIG) == []  # the list-only wrapper agrees
+
+
+def test_snapshot_meta_report_withheld_excluded_is_pool_derived_over_the_full_registered_corpus(tmp_path, monkeypatch):
+    """TC-7: `withheld_excluded` counts the store's FULL unresolved-pool membership (via
+    `_unresolved_pool_ids`, the SAME choke point `exclude_withheld` shares), never a count of
+    which withheld ids happen to have a meta file present on disk -- proven here by a withheld
+    dataset for which NO snapshot was ever built (so a file-derived count would report 0)."""
+    store = DatasetStore(tmp_path / "datasets")
+    withheld_meta = _plant(store, symbol="WITHHELDSYM")
+
+    monkeypatch.setattr(
+        ms, "_unresolved_pool_ids", lambda dataset_store, records: frozenset({withheld_meta["id"]})
+    )
+    report = ms.snapshot_meta_report(str(tmp_path / "snapshots"), store, CONFIG)
+    assert report == {"snapshots": [], "withheld_excluded": 1, "stale_excluded": 0}
 
 
 def test_compute_route_triggers_a_build_and_reports_progress_to_done(client):
@@ -539,6 +590,15 @@ def test_tc12_real_corpus_listed_via_the_route(real_snapshots):
             assert resp.status_code == 200
             body = resp.json()
             assert len(body["snapshots"]) == 18
+            # goal-rapid-microscope-iter-33 (J-12): the two disclosure counts are present and
+            # honest non-negative ints. NOT asserted at a specific value here: this real `.data`
+            # store carries whatever vault universes the operator has actually registered across
+            # later eras (a real, evolving number, not this fixture's concern) -- the dedicated
+            # pool-derived-vs-file-derived proof (TC-7) lives in `test_vault.py` and
+            # `test_snapshot_meta_report_withheld_excluded_is_pool_derived_over_the_full_
+            # registered_corpus` below, both on hermetic throwaway stores.
+            assert isinstance(body["withheld_excluded"], int) and body["withheld_excluded"] >= 0
+            assert isinstance(body["stale_excluded"], int) and body["stale_excluded"] >= 0
     finally:
         app.dependency_overrides.pop(get_dataset_store, None)
         app.dependency_overrides.pop(get_micro_snapshots_dir, None)

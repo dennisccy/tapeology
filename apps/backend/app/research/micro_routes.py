@@ -57,9 +57,9 @@ from .micro_readiness import (
 )
 from .micro_snapshots import (
     MicroSnapshotComputeManager,
-    list_snapshot_meta,
     read_run_log,
     resolve_micro_snapshots_dir,
+    snapshot_meta_report,
 )
 from .routes import get_bar_index, get_bar_store, get_dataset_store, get_registry, get_study_market_adapter
 from .scout import (
@@ -173,8 +173,15 @@ def get_micro_snapshots(
     -- for every CURRENTLY VALID (identity re-verified) snapshot; never raw per-event feature
     rows (the boundary note: an origin-fenced, event-level read is ``micro_accessor.py``'s
     exclusive door, J-05, not this route). Never 404/500 on zero built snapshots -- an honest
-    empty list, the desk router's established convention."""
-    return {"snapshots": list_snapshot_meta(snapshots_dir, dataset_store, CONFIG)}
+    empty list, the desk router's established convention.
+
+    goal-rapid-microscope-iter-33 (J-12): grows to ``{"snapshots": [...], "withheld_excluded":
+    int, "stale_excluded": int}`` -- existing ``snapshots`` key byte-identical, no second
+    computation path, no new endpoint. Both disclosure counts are ``snapshot_meta_report``'s own
+    (see that function's docstring): ``withheld_excluded`` is pool-derived, never a count of which
+    withheld ids happen to have a meta file on disk; ``stale_excluded`` counts a present-but-no-
+    longer-identity-matching meta file, never carrying the stale VALUE itself."""
+    return snapshot_meta_report(snapshots_dir, dataset_store, CONFIG)
 
 
 @router.post("/snapshots/compute")

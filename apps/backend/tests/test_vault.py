@@ -776,6 +776,10 @@ def test_tr2_no_registered_get_route_serves_or_derives_a_sealed_shards_identity(
         # goal-rapid-microscope-iter-31 (J-11): `desk_graduation`'s own REST route -- confirmed
         # covered by this SAME structural sweep (never a second, route-by-route sweep of its own).
         assert swept["/research/desk/micro/graduation"] == 200
+        # goal-rapid-microscope-iter-33 (J-12): `desk_micro_snapshots`'s own REST route (already
+        # registered since J-02, now carrying two new disclosure fields) -- confirmed covered by
+        # this SAME structural sweep too.
+        assert swept["/research/desk/micro/snapshots"] == 200
         assert swept["/research/datasets/{dataset_id}"] == 403  # the sealed id, refused
 
         # --- the join attack, EXECUTED (not merely asserted absent) -------------------------
@@ -889,6 +893,50 @@ def test_tr2_holds_after_the_operator_runs_every_micro_compute_act(tmp_path, mon
         assert swept["/research/desk/micro/scout"] == 200
 
 
+def test_tc7_micro_snapshots_withheld_excluded_is_pool_derived_not_snapshot_file_derived(tmp_path, monkeypatch):
+    """TC-7 (goal-rapid-microscope-iter-33, J-12; spec section 7.5 point 6, r4): `GET
+    /research/desk/micro/snapshots`'s `withheld_excluded` must be POOL-derived (through
+    `micro_snapshots`'s shared `_unresolved_pool_ids` choke point -- the SAME one
+    `withheld_dataset_ids_for_store`/`exclude_withheld` already share), never a count of which
+    withheld ids happen to have a `*.meta.json` file present on disk. A withheld shard's snapshot
+    build NEVER RUNS at all (`run_snapshot_build_and_record`'s own filter), so a snapshot-file-
+    derived implementation would ALWAYS report `0` for a withheld dataset that has, correctly,
+    never had a snapshot built for it -- silently under-disclosing the pool and leaking sealed-
+    pool build state by omission.
+
+    This test registers a universe whose RULE matches one real dataset's own (symbol,
+    session_date) -- never sealing it, never building any snapshot at all (the rule-membership
+    withholding case, spec section 7.5 point 7/r5, exercised without any vault shard-ledger row)
+    -- and asserts the served count is `1` while the snapshots directory stays entirely empty
+    throughout, non-vacuously proving the count comes from the POOL predicate, not from counting
+    meta files on disk."""
+    _scope_everything_to(tmp_path, monkeypatch)
+    store = _combined_fixture_store(tmp_path)
+    withheld_meta = _record_distinctive_dataset(store)
+
+    universe_ledger = vault.universe_ledger_for_dataset_dir(str(tmp_path / "datasets"))
+    vault.register_universe(
+        universe_ledger,
+        universe_id="tc7-pool-only-universe",
+        symbol_rule=[_SWEEP_SYMBOL],
+        date_rule=["2031-03-17"],  # the ET calendar date of _SWEEP_WINDOW_START (EDT, UTC-4)
+        vault_secret_commitment=vault.commit_vault_secret(_FIXTURE_SECRET),
+        registered_at="2020-01-01T00:00:00.000000Z",  # well before the dataset's real created_utc
+    )
+
+    with TestClient(app) as client:
+        body = client.get("/research/desk/micro/snapshots").json()
+        assert body["snapshots"] == [], (
+            "no snapshot was ever built for anything -- a file-derived count would report 0 here"
+        )
+        assert body["withheld_excluded"] == 1, (
+            "withheld_excluded did not count the rule-matched pool member -- it is snapshot-file-"
+            "derived, not pool-derived (TC-7)"
+        )
+        assert body["stale_excluded"] == 0
+        assert withheld_meta["id"] not in {row.get("dataset_id") for row in body["snapshots"]}
+
+
 def test_tr2_the_mcp_surface_is_closed_structurally_not_route_by_route(tmp_path, monkeypatch):
     """Spec section 7.5's "TR-2 sweeps every registered route, closing the ``get_endpoint`` path
     STRUCTURALLY". The MCP server is a byte-identical GET proxy that imports nothing from ``app``
@@ -904,6 +952,10 @@ def test_tr2_the_mcp_surface_is_closed_structurally_not_route_by_route(tmp_path,
     # a direct, non-vacuous proof the new tool is actually present in this set (not merely implied
     # by the subset assertion below, which would still pass if the entry were silently missing).
     assert "/research/desk/micro/graduation" in research_tool_paths
+    # goal-rapid-microscope-iter-33 (J-12): `desk_micro_snapshots` is now wired into
+    # `_STATIC_PATHS` too -- the SAME direct, non-vacuous proof, now that the route it proxies
+    # carries two new disclosure fields.
+    assert "/research/desk/micro/snapshots" in research_tool_paths
     assert research_tool_paths <= swept
 
     reachable = {p for p in swept if p.startswith(ALLOWED_GET_PREFIXES) and "{" not in p}

@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "journey": "J-12",
+  "name": "The observer's build truth gets a surface — and its enumerator stops excluding silently",
+  "default_timeout_ms": 10000,
+  "steps": [
+    {"n": 1, "journey": "J-12", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Playbook Signals"}},
+    {"n": 2, "journey": "J-12", "action": {"type": "click", "target": {"testid": "desk-section-expand-featureSnapshots"}}, "expect": {"text": "Withheld (excluded):"}}
+  ]
+}

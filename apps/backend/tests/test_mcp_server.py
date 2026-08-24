@@ -46,6 +46,8 @@ from app.research.desk_forward import FORWARD_REGISTER, ForwardStore, forward_pa
 from app.research.desk_playbook import PLAYBOOK_REGISTER, PlaybookStore, playbook_parameters
 from app.research.desk_screen import ScreenStore
 from app.research.desk_universe import UniverseStore
+from app.research.datasets import DatasetStore
+from app.research.micro_snapshots import resolve_micro_snapshots_dir, run_snapshot_build_and_record
 from app.research.referee_adjudicate import REFEREE_REGISTER
 from app.research.referee_null import REFEREE_NULL_TOD_SPEC_ID, REFEREE_TEST_PERM_SPEC_ID
 from app.research.referee_registry import REFEREE_MIN_OCCURRENCES, REFEREE_MIN_SESSIONS
@@ -83,10 +85,10 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 # ``desk_playbook_evidence`` (Era B2 "The Playbook" J-09, the era's own MCP contract v4 -- 18 -> 20
 # tools), ``desk_referee``/``desk_referee_registry`` (Era 6 "The Referee" J-09, MCP contract v5 --
 # 20 -> 22 tools), ``desk_micro_readiness``/``desk_scout``/``desk_walkforward``/``desk_vault``
-# (Era "The Rapid Microscope" J-08, the era's own MCP contract v6 -- 22 -> 26 tools), and
-# ``desk_graduation`` (J-11, MCP contract v7 -- 26 -> 27 tools) are the newest additions, each
-# positioned right after its dependency-order sibling (the same store/registry+route+MCP shape,
-# mirrored end to end).
+# (Era "The Rapid Microscope" J-08, the era's own MCP contract v6 -- 22 -> 26 tools),
+# ``desk_graduation`` (J-11, MCP contract v7 -- 26 -> 27 tools), and ``desk_micro_snapshots``
+# (J-12, MCP contract v8 -- 27 -> 28 tools) are the newest additions, each positioned right after
+# its dependency-order sibling (the same store/registry+route+MCP shape, mirrored end to end).
 EXPECTED_TOOLS = (
     "tape_state",
     "tape_features",
@@ -107,6 +109,7 @@ EXPECTED_TOOLS = (
     "desk_referee",
     "desk_referee_registry",
     "desk_micro_readiness",
+    "desk_micro_snapshots",
     "desk_scout",
     "desk_walkforward",
     "desk_vault",
@@ -1010,6 +1013,58 @@ async def test_desk_micro_readiness_tool_byte_identical_on_a_populated_state(mcp
 
 
 @pytest.mark.anyio
+async def test_desk_micro_snapshots_tool_byte_identical_on_the_honest_empty_state(mcp_env):
+    """J-12: before any snapshot has ever been built on this test backend, `desk_micro_snapshots`
+    proxies `GET /research/desk/micro/snapshots`'s explicit HTTP 200 honest-empty payload -- an
+    empty `snapshots` list beside both disclosure counts at zero -- never a 404."""
+    result = await call_tool("desk_micro_snapshots", {})
+    rest = httpx.get(f"{mcp_env}/research/desk/micro/snapshots", timeout=5.0)
+    assert rest.status_code == 200
+    assert rest.json() == {"snapshots": [], "withheld_excluded": 0, "stale_excluded": 0}
+    assert result.isError is False
+    assert len(result.content) == 1
+    assert result.content[0].text.encode("utf-8") == rest.content, "desk_micro_snapshots not byte-identical"
+
+
+@pytest.mark.anyio
+async def test_desk_micro_snapshots_tool_byte_identical_on_a_populated_state(mcp_env, backend_paths):
+    """J-12: seed ONE real snapshot directly through `run_snapshot_build_and_record()` -- the
+    module's own public build-and-persist path (the `test_micro_snapshots.py` precedent), NEVER a
+    live `POST /snapshots/compute` run -- after recording one real (keyless, synthetic
+    `reference`-source) dataset through the live backend's own public `POST /research/datasets`
+    route, the SAME call `test_desk_micro_readiness_tool_byte_identical_on_a_populated_state`
+    above already uses. Both write into the live backend's own env-scoped `TAPEOLOGY_DATASET_DIR`
+    and its resolved snapshots directory (a sibling of it, un-scoped by `backend_paths` --
+    `resolve_micro_snapshots_dir`'s own default), so the SEPARATE backend subprocess reads
+    exactly what this test just wrote on its next GET. Proves the tool's JSON is byte-identical
+    to its curl equivalent on a NON-EMPTY result."""
+    recorded = httpx.post(
+        f"{mcp_env}/research/datasets",
+        json={
+            "source_kind": "reference",
+            "split": "train",
+            "start": "2026-06-09T17:00:00Z",
+            "end": "2026-06-09T17:00:30Z",
+        },
+        timeout=15.0,
+    )
+    assert recorded.status_code in (200, 409)  # 409 = already recorded by an earlier run/test
+    dataset_dir = Path(backend_paths["TAPEOLOGY_DATASET_DIR"])
+    dataset_store = DatasetStore(dataset_dir)
+    snapshots_dir = resolve_micro_snapshots_dir(str(dataset_dir))
+    run_snapshot_build_and_record(dataset_store, CONFIG, snapshots_dir)
+
+    result = await call_tool("desk_micro_snapshots", {})
+    rest = httpx.get(f"{mcp_env}/research/desk/micro/snapshots", timeout=15.0)
+    assert rest.status_code == 200
+    body = rest.json()
+    assert len(body["snapshots"]) >= 1, "the live list must be non-empty for this proof"
+    assert result.isError is False
+    assert len(result.content) == 1
+    assert result.content[0].text.encode("utf-8") == rest.content, "desk_micro_snapshots not byte-identical"
+
+
+@pytest.mark.anyio
 async def test_desk_scout_tool_byte_identical_on_the_honest_empty_state(mcp_env):
     """Before any trial has ever been ledgered, `desk_scout` proxies `GET /research/desk/micro/
     scout`'s explicit HTTP 200 honest-empty payload -- an empty `families` list beside an `ok`
@@ -1317,7 +1372,7 @@ async def test_tr2_the_new_mcp_tools_leak_nothing_about_a_sealed_shard(tmp_path,
             "get_endpoint": {"path": "/research/datasets"},
         }
 
-        assert len(TOOL_NAMES) == 27, "the 27-tool contract must hold for this sweep to be complete"
+        assert len(TOOL_NAMES) == 28, "the 28-tool contract must hold for this sweep to be complete"
         leaks: list[str] = []
         for name in TOOL_NAMES:
             result = await call_tool(name, args_for.get(name, {}))
@@ -1987,10 +2042,10 @@ async def test_get_endpoint_desk_topup_runs_byte_identical_with_no_new_tool(mcp_
     assert result.content[0].text.encode("utf-8") == rest.content, "topup/runs not byte-identical"
     assert rest.json() == {"runs": [], "latest": None, "integrity_errors": []}
     # goal-rapid-microscope-iter-15: the total grew 22 -> 26 (desk_micro_readiness/desk_scout/
-    # desk_walkforward/desk_vault); iter-31 (J-11) grew it again, 26 -> 27 (desk_graduation) --
-    # this route's own no-new-tool claim is unaffected, so only the tracked total is re-derived
-    # here.
-    assert "desk_topup_runs" not in TOOL_NAMES and len(TOOL_NAMES) == 27
+    # desk_walkforward/desk_vault); iter-31 (J-11) grew it again, 26 -> 27 (desk_graduation);
+    # iter-33 (J-12) grew it again, 27 -> 28 (desk_micro_snapshots) -- this route's own
+    # no-new-tool claim is unaffected, so only the tracked total is re-derived here.
+    assert "desk_topup_runs" not in TOOL_NAMES and len(TOOL_NAMES) == 28
 
 
 @pytest.mark.anyio
@@ -2010,10 +2065,10 @@ async def test_get_endpoint_desk_screen_runs_byte_identical_with_no_new_tool(mcp
     assert result.content[0].text.encode("utf-8") == rest.content, "screen/runs not byte-identical"
     assert rest.json() == {"runs": [], "latest": None, "integrity_errors": []}
     # goal-rapid-microscope-iter-15: the total grew 22 -> 26 (desk_micro_readiness/desk_scout/
-    # desk_walkforward/desk_vault); iter-31 (J-11) grew it again, 26 -> 27 (desk_graduation) --
-    # this route's own no-new-tool claim is unaffected, so only the tracked total is re-derived
-    # here.
-    assert "desk_screen_runs" not in TOOL_NAMES and len(TOOL_NAMES) == 27
+    # desk_walkforward/desk_vault); iter-31 (J-11) grew it again, 26 -> 27 (desk_graduation);
+    # iter-33 (J-12) grew it again, 27 -> 28 (desk_micro_snapshots) -- this route's own
+    # no-new-tool claim is unaffected, so only the tracked total is re-derived here.
+    assert "desk_screen_runs" not in TOOL_NAMES and len(TOOL_NAMES) == 28
 
 
 @pytest.mark.anyio
