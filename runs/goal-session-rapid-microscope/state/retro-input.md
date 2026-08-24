@@ -8,8 +8,8 @@ scripts/automation/lib/retro_collect.sh — no model wrote this. Counters marked
 
 - **Terminal status:** STALLED
 - **Final verdict:** STALLED
-- **Iterations used:** 29
-- **Halted at (UTC):** 2026-08-23T22:24:59.175060Z
+- **Iterations used:** 30
+- **Halted at (UTC):** 2026-08-24T15:31:32.518019Z
 
 ## Verdict sequence
 
@@ -45,6 +45,7 @@ iter 25: ESCALATE
 iter 26: CONTINUE
 iter 27: ESCALATE
 iter 28: STALLED
+iter 29: STALLED
 ```
 
 ## Agent economics
@@ -595,24 +596,44 @@ Per-step wall breakdown (analyze_telemetry.py --wall):
       pump-wait                  0.6m
       OVER BUDGET at showcase-tail: 3821s > 3600s (mode=trim)
       unattributed (glue)        0.0m  (wall − agents(active) − quota)
-  session: 29 completed iteration(s), mean wall 217.8m
-      total developer                 2684.8m
-      total reviewer                   765.5m
-      total auditor                    738.7m
-      total goal-evaluator             738.1m
-      total browser-qa-agent           639.0m
+  goal-rapid-microscope-iter-29  depth=full  verdict=STALLED  wall=86.0m
+      goal-evaluator              18.3m  calls=1
+      developer                   15.7m  calls=1
+      qa                          12.3m  calls=1
+      goal-decomposer             11.9m  calls=1
+      browser-qa-agent            11.5m  calls=1
+      auditor                     10.8m  calls=1
+      iteration-summarizer         5.7m  calls=1
+      reviewer                     2.9m  calls=1
+      orchestrator                 2.5m  calls=1
+      ux-regression-reviewer       2.0m  calls=1
+      ui-impact-analyst            1.5m  calls=1
+      ui-test-designer             1.2m  calls=1
+      demo-narrator                1.0m  calls=1
+      [engine] full-pipeline      50.0m  (contains agent time above)
+      [engine] showcase-join       0.0m  (contains agent time above)
+      (resume-skipped: coherence-auditor)
+      pump-wait                 12.1m
+      overlap saved             11.2m  (parallel steps)
+  session: 30 completed iteration(s), mean wall 213.4m
+      total developer                 2700.5m
+      total reviewer                   768.4m
+      total goal-evaluator             756.4m
+      total auditor                    749.5m
+      total browser-qa-agent           650.5m
       total coherence-auditor          631.1m
-      total goal-decomposer            590.7m
-      total qa                         477.1m
-      total iteration-summarizer       342.7m
-      total ui-impact-analyst          161.5m
-      total orchestrator               151.3m
-      total demo-narrator              146.9m
+      total goal-decomposer            602.6m
+      total qa                         489.4m
+      total iteration-summarizer       348.4m
+      total ui-impact-analyst          163.0m
+      total orchestrator               153.8m
+      total demo-narrator              147.9m
       total readme-maintainer           12.1m
-      total ui-test-designer             8.9m
+      total ui-test-designer            10.1m
       total browser-qa-replay            6.5m
+      total ux-regression-reviewer       2.0m
       total AWAITING_PUMP paused gaps: 2.9m
-      halts: AWAITING_PUMP, AWAITING_PUMP, AWAITING_PUMP, STALLED, AWAITING_PUMP, STALLED
+      halts: AWAITING_PUMP, AWAITING_PUMP, AWAITING_PUMP, STALLED, AWAITING_PUMP, STALLED, STALLED
 ```
 
 ## Friction counters
@@ -626,26 +647,26 @@ Per-step wall breakdown (analyze_telemetry.py --wall):
 Last 20 lines of state/lessons.md:
 
 ```
-frontend file changed, emits a blocking CLOSURE-FAIL. Iter-28's document was correct and detailed —
-it quoted the new sentence, named its new `data-testid` and its exact DOM position — but its "Not
-Visible Yet" section described a new test as "a backend-only regression guard", and that phrase
-alone failed the round (`status.json` = blocked / closure_failed, showcase tail never finished).
-**Applies to:** any frontend-touching iteration whose `user-visible-changes.md` mentions
-"backend-only", "no user-visible" or "no visible changes" while describing something OTHER than the
-iteration itself — phrase those lines as "no UI surface" until the gate is scoped, and never read a
-CLOSURE-FAIL on this rule as a product defect without opening the document first.
+The finding was directionally right and quantitatively wrong, and had I inherited it I would have
+mis-scored the certification evidence in the pessimistic direction — the mirror image of the
+optimistic over-claiming this era has caught six times.
+**Applies to:** any iteration where the evaluator is weighing replay/golden evidence for
+certification, and generally to any auditor finding phrased as a quantified claim about artifacts
+("N of M are X") — open the artifacts and count.
 
-## iter-28 — 2026-08-23T23:12:00Z
+## iter-29 — 2026-08-24T15:35:00Z (second)
 
-**Verdict:** STALLED
-**Lesson:** A SPEED-15 rung-2 budget trim that sheds a no-golden Required-still-passing journey
-writes a `DEFERRED-BUDGET` row, and `goal_gate.py` counts that cell as blocking — so an ordinary
-wall-clock overrun can silently make GOAL_ACHIEVED mechanically impossible even when every journey
-is green. Iter-28 shed J-07 (no stored golden by an earlier binding decision, so replay structurally
-cannot cover it, and the LLM lane was not given it either); its own fixture suite runs in 1.48s.
-**Applies to:** any journey that has no stored golden and rides the Required-still-passing list —
-give it a golden, or route it to the lane that can actually run it, before a round that is likely to
-overrun; and any evaluator scoring a round that certified everything except one shed row.
+**Lesson:** Before scoring an open anti-goal item as blocking, check WHICH SECTION of `docs/goal.md`
+its cited rule actually lives in. Four of this era's eight open items cite "T-10 Evidence honesty",
+which sits in the "Build anchors & weak-model traps" section (line 433), not in "Anti-goals" (line
+689). They are real findings about build-chain reporting, but they are not product anti-goals, and
+their remedies live in `agents/**`/`scripts/automation/**` — outside a product round's authority
+per `.claude/maintenance-protocol.md` §1. Recording that classification in the ledger (without
+downgrading the finding) is what let this round separate "two owner decisions genuinely block the
+era" from "six things block the era", which is the difference between an actionable halt and an
+unanswerable one.
+**Applies to:** any evaluator inheriting a long-lived `anti_goal_violations` list; re-derive each
+entry's rule location, not just whether the code changed.
 ```
 
 ## Halt context
@@ -656,6 +677,6 @@ session.json halt-relevant fields:
 {
   "status": "STALLED",
   "last_verdict": "STALLED",
-  "parked_wip_sha": "2503d25b"
+  "parked_wip_sha": "511a6fa0"
 }
 ```

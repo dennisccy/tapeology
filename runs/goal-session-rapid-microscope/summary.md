@@ -1,11 +1,11 @@
 # Goal Session Summary — rapid-microscope
 
 **Final verdict:** STALLED
-**Total iterations:** 29
-**Wall time (seconds):** 4073
+**Total iterations:** 30
+**Wall time (seconds):** 5168
 **Quota pauses:** 0
 **Started:** 2026-08-16T22:25:35.904129Z
-**Finished:** 2026-08-23T22:24:59.175060Z
+**Finished:** 2026-08-24T15:31:32.518019Z
 
 ## Branch
 
@@ -19,16 +19,16 @@ This session pushed iteration commits to `goal/rapid-microscope`. Open a PR with
 
 | Journey | Status | Last passing iter |
 |---|---|---|
-| J-01 | passing | goal-rapid-microscope-iter-28 |
-| J-02 | passing | goal-rapid-microscope-iter-28 |
-| J-03 | passing | goal-rapid-microscope-iter-28 |
-| J-04 | passing | goal-rapid-microscope-iter-28 |
-| J-05 | passing | goal-rapid-microscope-iter-28 |
-| J-06 | passing | goal-rapid-microscope-iter-28 |
-| J-07 | passing | goal-rapid-microscope-iter-24 |
-| J-08 | passing | goal-rapid-microscope-iter-28 |
-| J-09 | passing | goal-rapid-microscope-iter-28 |
-| J-10 | passing | goal-rapid-microscope-iter-28 |
+| J-01 | passing | goal-rapid-microscope-iter-29 |
+| J-02 | passing | goal-rapid-microscope-iter-29 |
+| J-03 | passing | goal-rapid-microscope-iter-29 |
+| J-04 | passing | goal-rapid-microscope-iter-29 |
+| J-05 | passing | goal-rapid-microscope-iter-29 |
+| J-06 | passing | goal-rapid-microscope-iter-29 |
+| J-07 | passing | goal-rapid-microscope-iter-29 |
+| J-08 | passing | goal-rapid-microscope-iter-29 |
+| J-09 | passing | goal-rapid-microscope-iter-29 |
+| J-10 | passing | goal-rapid-microscope-iter-29 |
 
 ## Anti-goal violations
 
@@ -620,22 +620,42 @@ See `runs/goal-session-rapid-microscope/telemetry.jsonl` for the structured even
       pump-wait                  0.6m
       OVER BUDGET at showcase-tail: 3821s > 3600s (mode=trim)
       unattributed (glue)        0.0m  (wall − agents(active) − quota)
-  session: 29 completed iteration(s), mean wall 217.8m
-      total developer                 2684.8m
-      total reviewer                   765.5m
-      total auditor                    738.7m
-      total goal-evaluator             738.1m
-      total browser-qa-agent           639.0m
+  goal-rapid-microscope-iter-29  depth=full  verdict=STALLED  wall=86.0m
+      goal-evaluator              18.3m  calls=1
+      developer                   15.7m  calls=1
+      qa                          12.3m  calls=1
+      goal-decomposer             11.9m  calls=1
+      browser-qa-agent            11.5m  calls=1
+      auditor                     10.8m  calls=1
+      iteration-summarizer         5.7m  calls=1
+      reviewer                     2.9m  calls=1
+      orchestrator                 2.5m  calls=1
+      ux-regression-reviewer       2.0m  calls=1
+      ui-impact-analyst            1.5m  calls=1
+      ui-test-designer             1.2m  calls=1
+      demo-narrator                1.0m  calls=1
+      [engine] full-pipeline      50.0m  (contains agent time above)
+      [engine] showcase-join       0.0m  (contains agent time above)
+      (resume-skipped: coherence-auditor)
+      pump-wait                 12.1m
+      overlap saved             11.2m  (parallel steps)
+  session: 30 completed iteration(s), mean wall 213.4m
+      total developer                 2700.5m
+      total reviewer                   768.4m
+      total goal-evaluator             756.4m
+      total auditor                    749.5m
+      total browser-qa-agent           650.5m
       total coherence-auditor          631.1m
-      total goal-decomposer            590.7m
-      total qa                         477.1m
-      total iteration-summarizer       342.7m
-      total ui-impact-analyst          161.5m
-      total orchestrator               151.3m
-      total demo-narrator              146.9m
+      total goal-decomposer            602.6m
+      total qa                         489.4m
+      total iteration-summarizer       348.4m
+      total ui-impact-analyst          163.0m
+      total orchestrator               153.8m
+      total demo-narrator              147.9m
       total readme-maintainer           12.1m
-      total ui-test-designer             8.9m
+      total ui-test-designer            10.1m
       total browser-qa-replay            6.5m
+      total ux-regression-reviewer       2.0m
       total AWAITING_PUMP paused gaps: 2.9m
-      halts: AWAITING_PUMP, AWAITING_PUMP, AWAITING_PUMP, STALLED, AWAITING_PUMP, STALLED
+      halts: AWAITING_PUMP, AWAITING_PUMP, AWAITING_PUMP, STALLED, AWAITING_PUMP, STALLED, STALLED
 ```
