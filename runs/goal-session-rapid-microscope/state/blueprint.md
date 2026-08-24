@@ -455,3 +455,15 @@ from its one endpoint, read verbatim by UI/MCP/reports.
      attach to) is unchanged by this note: J-11 gives J-07 a stored golden replay script that can
      now navigate to the new Graduation section, but J-07's own `docs/goal.md` acceptance text
      stays a pure fixture walk with no browser requirement of its own. -->
+
+<!-- iter-32 note: no Data Contract or Information Architecture change. This iteration closes
+     J-11's two remaining acceptance renders (the empty-ledger "No candidates ledgered." capture
+     and a four-stage-plus-permanent-failed-verdict capture) purely with NEW, additionally-scoped
+     `TAPEOLOGY_MICRO_GRADUATION_DIR` fixture roots and a companion QA-only seed script -- it adds
+     no module, no route, no MCP tool, and touches no line of `micro_graduation.py`,
+     `micro_sealed_evaluation.py`, `micro_routes.py`, or the `/desk` Graduation section component
+     (all already registered/shipped per the iter-31 note above). The persistent :8301 rig's
+     DEFAULT (unscoped) graduation directory -- the one J-07's stored golden replay script reads --
+     is left untouched; both new captures point the backend at separate, throwaway scoped roots for
+     their own dispatch only. No new page, route, MCP tool, or nav-skeleton change; no reapproval
+     file written. -->

@@ -748,3 +748,27 @@ green. Recorded openly in J-08's journey note rather than left silent.
 **Reversible:** yes — if the owner reads J-08's "26-tool" wording as a hard invariant, the fix is a
 goal-text edit, not a code change, and J-08's status would then need re-derivation against the new
 text like any drifted journey.
+
+## iter-32 — goal-decomposer
+
+**Ambiguity:** J-11's acceptance text says the Graduation section "against the real store...
+shows the served `message` 'No candidates ledgered.'", but the era's ONE persistent :8301
+store-scoped QA rig has carried the iter-18 single-family graduation fixture since it was
+seeded (iter-31's own lesson: "the empty-state render is structurally unreachable on it"), and
+the frontend's `NEXT_PUBLIC_API_URL` is baked in at process start so no second frontend/backend
+pair can be stood up mid-round. A literal reading ("the exact directory the rig currently
+serves from") is technically unsatisfiable without either wiping the persistent rig's default
+graduation directory (which would break J-07's existing stored golden replay script, itself
+built against that same directory) or standing up infrastructure the browser lane has no
+mandate to build.
+**We chose:** read "the real store" as "an actual, non-fabricated, production-shaped store with
+zero recorded graduation activity" rather than "today's specific default directory" — i.e., a
+FRESH, additionally-scoped `TAPEOLOGY_MICRO_GRADUATION_DIR` root that is never seeded, used only
+for this one capture, restarted away from afterward. This is the literal reading iter-31's own
+evaluator/lesson recommended for this exact round ("seed a scoped
+`TAPEOLOGY_MICRO_GRADUATION_DIR` and name which rig serves which scenario ... or the round will
+build correct code and still fail its own acceptance for lack of a place to photograph it"), and
+it leaves the persistent rig's default directory — and therefore J-07's stored golden — untouched.
+**Reversible:** yes — if a future round is told to use the literal current default directory
+instead, no code from this iteration depends on the reading; only the throwaway scoped root used
+for the empty capture would be discarded and a different one substituted.
