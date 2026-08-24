@@ -127,18 +127,83 @@ Severity: critical = secrets committed, unapproved paid dependency, license viol
 security backdoor, fabricated data presented as real. Everything else is minor. When unsure
 whether critical: treat as critical and say you were unsure (fail-closed).
 
+### B.1 The three ledger states (resolved / blocking / non-blocking)
+
+`resolved: true` means the finding was **actually fixed, made impossible, or otherwise
+genuinely discharged by evidence** — a close condition the finding itself recorded, proven
+satisfied now. It has never meant "the owner decided not to do it this era", and setting it
+for that reason falsifies the ledger: a closure report must still be able to say "closed with
+N known non-blocking deferred/backlog findings", and must never claim they were fixed.
+
+An owner may instead durably record an `owner_disposition` on an entry that stays
+`resolved: false`. That gives three distinct states, and you must not collapse the last two:
+
+| State | Ledger shape | Bars GOAL_ACHIEVED? |
+|-------|--------------|---------------------|
+| Resolved | `resolved: true` | no — it is fixed |
+| Unresolved, blocking | `resolved: false`, no valid disposition | **yes** |
+| Unresolved, non-blocking | `resolved: false` + a valid `owner_disposition` | no — but it is still open, still real, still reported |
+
+```json
+"owner_disposition": {
+  "kind": "deferred_named_revision" | "framework_backlog",
+  "blocks_current_era": false,
+  "ruled_at": "<ISO-8601>",
+  "ruling": "<why the owner ruled it out of the current era>",
+  "future_revision_or_backlog": "<where it lives now>",
+  "escalation_condition": "<verbatim, if the finding recorded one>",
+  "escalation_tripped": false
+}
+```
+
+**Do not classify these by hand.** `scripts/automation/lib/anti_goal_disposition.py` is the one
+definition; run it and quote its counts:
+
+```
+python3 scripts/automation/lib/anti_goal_disposition.py summary \
+  runs/goal-session-<sid>/state/journey-history.json
+```
+
+It fails closed in every ambiguous case — no disposition, unknown `kind`, `blocks_current_era`
+not exactly `false`, a blank `ruling`/`ruled_at`/`future_revision_or_backlog`, an unrecognized
+severity, or an `escalation_condition` whose `escalation_tripped` is absent or not `false` —
+all of those count as **blocking**. An unresolved **critical** violation is blocking no matter
+what disposition it carries: this mechanism is for explicitly accepted MINOR deferred/backlog
+findings, never a generic gate bypass.
+
+Two duties remain yours each round, and the tool cannot do either:
+
+1. **Re-test every recorded `escalation_condition` rather than assuming it.** It is prose; the
+   tool only carries your attestation. If one has tripped, say so and set
+   `escalation_tripped: true` — which makes that entry blocking again.
+2. **Never add, alter or remove an `owner_disposition` yourself.** It records an OWNER ruling.
+   Absent one, the entry blocks, and the correct verdict is STALLED with the decision named in
+   the Halt Justification.
+
+Report all three counts in your evaluation, always — a non-blocking finding is still an open
+finding and must stay visible after closure.
+
 ## C. Verdict decision tree (apply top-down; first match wins)
 
 1. Any journey moved `passing`/`already_passing` → `failing`, OR a **critical** anti-goal
-   violation is unresolved → **REGRESSION**.
+   violation is unresolved → **REGRESSION**. (An owner disposition can NEVER reach this rung:
+   §B.1 keeps every unresolved critical violation blocking regardless of what it carries.)
 2. Every unblock path for the current blocker is a **human-owned action** (credentials,
    network/IP access, paid service, an irreversible step needing sanction — see
    `.claude/judgment-rubrics.md` §3) → **STALLED** (list each unblock option explicitly in
-   the Halt Justification).
-3. Every Must-have journey is `passing`/`already_passing`, no unresolved anti-goal
-   violations, coherence.md is not `COHERENCE-FAIL` (missing counts as NOT clean, and so does a
-   crash-stub — recognizable by the sentence "Coherence auditor produced no output" in the
-   file) → **GOAL_ACHIEVED**.
+   the Halt Justification). A finding the owner has ALREADY dispositioned non-blocking (§B.1)
+   is not a "current blocker" — the decision it was waiting on has been made, so it cannot
+   hold this rung open. Reaching STALLED needs a live blocker: a failing journey, or an entry
+   `anti_goal_disposition.py` classifies as BLOCKING.
+3. Every Must-have journey is `passing`/`already_passing`, **no unresolved BLOCKING anti-goal
+   violations and no unresolved critical anti-goal violation** (§B.1 — classify with
+   `anti_goal_disposition.py summary`, which fails closed; an entry counts as non-blocking ONLY
+   with a valid, durably recorded owner disposition), coherence.md is not `COHERENCE-FAIL`
+   (missing counts as NOT clean, and so does a crash-stub — recognizable by the sentence
+   "Coherence auditor produced no output" in the file) → **GOAL_ACHIEVED**.
+   Unresolved non-blocking findings do NOT bar this, and are NOT silently dropped: name each
+   one and its disposition in the verdict, so the closure record reads "achieved with N known
+   non-blocking deferred/backlog findings" and never "no findings".
    (The outer loop will independently re-verify this with deterministic gates and a second
    fresh-context confirm; your GOAL_ACHIEVED is the first key, not the final word.)
 4. The SAME journey has now failed 2+ consecutive iterations, OR the review lane failed and

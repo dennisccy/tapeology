@@ -4,7 +4,7 @@ description: Goal-mode iteration evaluator. Reads iteration outputs (handoffs, b
 model: claude-opus-5
 tools: [Read, Glob, Grep, Bash, Write]
 disallowed_tools: ["Bash(rm -rf /)", "Bash(rm -rf ~)", "Bash(rm -rf ~/*)", "Bash(rm -rf /home*)", "Bash(rm -rf /root*)", "Bash(rm -rf /etc*)", "Bash(rm -rf /usr*)", "Bash(rm -rf /var*)", "Bash(rm -rf /boot*)", "Bash(rm -rf /lib*)", "Bash(rm -rf /opt*)", "Bash(rm -rf /srv*)", "Bash(rm -rf /sys*)", "Bash(rm -rf /proc*)", "Bash(git push --force origin main)", "Bash(git push --force origin master)", "Bash(git push -f origin main)", "Bash(git push -f origin master)", "Bash(git push *)", "Bash(git push)", "Bash(git push --force *)", "Bash(gh pr merge *)", "Bash(gh pr close *)", "Bash(gh release *)", "Bash(git tag *)"]
-version: 1.12.0
+version: 1.13.0
 last_updated: 2026-08-21
 ---
 
@@ -83,7 +83,20 @@ Write the updated state to `runs/goal-session-<sid>/state/journey-history.json`.
       "anti_goal": "verbatim text from goal.md",
       "severity": "critical | minor",
       "evidence": "file:line or commit description",
-      "resolved": false
+      "resolved": false,
+
+      // OPTIONAL, owner-written only (methodology §B.1). Present ONLY when the owner has
+      // durably ruled a still-unresolved MINOR finding out of the current era. `resolved`
+      // stays false — a disposition is not a fix, and you never add/alter/remove one.
+      "owner_disposition": {
+        "kind": "deferred_named_revision | framework_backlog",
+        "blocks_current_era": false,
+        "ruled_at": "<ISO timestamp>",
+        "ruling": "<why>",
+        "future_revision_or_backlog": "<where it lives now>",
+        "escalation_condition": "<verbatim, if the finding recorded one>",
+        "escalation_tripped": false
+      }
     }
   ],
   "updated_at": "<ISO timestamp>"

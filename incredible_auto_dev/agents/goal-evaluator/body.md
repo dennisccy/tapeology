@@ -74,7 +74,20 @@ Write the updated state to `runs/goal-session-<sid>/state/journey-history.json`.
       "anti_goal": "verbatim text from goal.md",
       "severity": "critical | minor",
       "evidence": "file:line or commit description",
-      "resolved": false
+      "resolved": false,
+
+      // OPTIONAL, owner-written only (methodology §B.1). Present ONLY when the owner has
+      // durably ruled a still-unresolved MINOR finding out of the current era. `resolved`
+      // stays false — a disposition is not a fix, and you never add/alter/remove one.
+      "owner_disposition": {
+        "kind": "deferred_named_revision | framework_backlog",
+        "blocks_current_era": false,
+        "ruled_at": "<ISO timestamp>",
+        "ruling": "<why>",
+        "future_revision_or_backlog": "<where it lives now>",
+        "escalation_condition": "<verbatim, if the finding recorded one>",
+        "escalation_tripped": false
+      }
     }
   ],
   "updated_at": "<ISO timestamp>"
