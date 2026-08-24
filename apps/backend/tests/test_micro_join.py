@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import hashlib
 import inspect
-import os
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -40,6 +39,7 @@ from app.research.desk_playbook import PlaybookStore, playbook_parameters
 from app.research.desk_playbook_context import BandMapResolver
 from app.research.micro_snapshots import read_snapshot_rows, resolve_micro_snapshots_dir, run_snapshot_build_and_record
 from app.research.tradability_cache import TradabilityCache
+from tests.real_corpus_cache import real_corpus_dataset_store
 
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures" / "datasets_j03"
 PG_DATASET_ID = "5232fa672b7b4077a5117d34b14c807d"
@@ -52,17 +52,16 @@ def _iso(epoch: float) -> str:
 
 
 def _real_corpus_dataset_store() -> DatasetStore:
-    """iter-28: a ``DatasetStore`` over the real ``.data/datasets`` corpus wired with the SAME
-    durable ``index_db_path=`` primitive the live backend's own ``get_dataset_store()``
-    (``routes.py``) already uses -- ``TAPEOLOGY_DATASET_INDEX_DB`` env-or-sibling
-    ``dataset_index.db``. Without this, the two real-corpus tests below re-parsed and
-    re-checksummed the whole real corpus from scratch on every single test run; the index is a
-    content-checksum-keyed, "owns nothing" derived cache, so sharing it with the running backend
-    is the intended reuse, never a new mechanism."""
-    dataset_dir = CONFIG.dataset_dir_resolved()
-    override = os.environ.get("TAPEOLOGY_DATASET_INDEX_DB")
-    index_db_path = override or os.path.join(os.path.dirname(dataset_dir), "dataset_index.db")
-    return DatasetStore(dataset_dir, index_db_path=index_db_path)
+    """A ``DatasetStore`` over the real ``.data/datasets`` corpus wired with the production
+    durable ``index_db_path=`` primitive. Without it, the two real-corpus tests below re-parsed
+    and re-checksummed the whole corpus from scratch on every single run.
+
+    iter-28 introduced the index here but resolved it the way the LIVE backend does
+    (``TAPEOLOGY_DATASET_INDEX_DB`` env-or-sibling), which pointed the suite at the operator's own
+    ``.data/dataset_index.db`` -- a second writer of one SQLite file, for no benefit (iter-28
+    audit; owner ruling 2026-08-24, task A2). Same class, same stat key, same persistence, now in
+    the suite's own ``.data/test-cache/`` namespace: ``tests/real_corpus_cache.py``."""
+    return real_corpus_dataset_store(CONFIG.dataset_dir_resolved())
 
 
 # --- shared fixture: the real PG snapshot, built once per module (577 trades -- cheap) -------------

@@ -46,6 +46,7 @@ from app.research.desk_routes import get_playbook_store
 from app.research.micro_join import BAND_TOUCH_STATUS_ENUMERATED, joinable_corpus_counts
 from app.research.micro_routes import get_micro_band_touch_cache, get_micro_readiness_cache
 from app.research.referee_evidence import REFEREE_TICK_GATE_SYMBOL_DAYS
+from tests.real_corpus_cache import real_corpus_dataset_store, real_corpus_readiness_cache
 from app.research.routes import get_bar_store, get_dataset_store
 from app.research.tradability_cache import TradabilityCache, resolve_tradability_cache_db_path
 from app.research import vault
@@ -568,31 +569,23 @@ def real_readiness():
     #
     # iter-28: a fresh `tmp_path_factory` dir every pytest invocation forced a full re-parse +
     # re-checksum of the whole real store (26 GB / 98 files at this era's corpus size) on every
-    # single run. Point BOTH the `MicroReadinessCache` DB and the `DatasetStore`'s own metadata
-    # index at their PRODUCTION durable-cache paths instead of a throwaway dir -- the exact same
-    # `resolve_micro_readiness_cache_db_path` / `TAPEOLOGY_DATASET_INDEX_DB`-env-or-sibling
-    # primitives `get_dataset_store()` already wires in `routes.py` for the live backend. Both
-    # caches are content-checksum-keyed (`Store discipline`: "no second mutable input to go
-    # stale") -- sharing them with the running backend is exactly the intended reuse, not a new
-    # cache mechanism, and both files already live under the gitignored `.data/` tree.
+    # single run, so BOTH the `MicroReadinessCache` DB and the `DatasetStore`'s own metadata
+    # index were given durable paths instead of a throwaway dir. Right primitives, wrong FILES:
+    # they resolved to the OPERATOR backend's own `.data/dataset_index.db` and
+    # `.data/micro_readiness_cache.db`, so a test run and a running backend became two writers of
+    # one SQLite file for no benefit (iter-28 audit; owner ruling 2026-08-24, task A2). Same
+    # production classes, same key semantics, same persistence -- now in the suite's OWN
+    # `.data/test-cache/` namespace. See `tests/real_corpus_cache.py`.
     dataset_dir = CONFIG.dataset_dir
-    index_db_override = os.environ.get("TAPEOLOGY_DATASET_INDEX_DB")
-    index_db_path = index_db_override or os.path.join(
-        os.path.dirname(dataset_dir), "dataset_index.db"
-    )
-    store = DatasetStore(dataset_dir, index_db_path=index_db_path)
-    cache = MicroReadinessCache(resolve_micro_readiness_cache_db_path(dataset_dir))
+    store = real_corpus_dataset_store(dataset_dir)
+    cache = real_corpus_readiness_cache(dataset_dir)
     return build_readiness(store, cache, dataset_dir=dataset_dir)
 
 
 @pytest.fixture(scope="module")
 def real_dataset_records():
     dataset_dir = CONFIG.dataset_dir
-    index_db_override = os.environ.get("TAPEOLOGY_DATASET_INDEX_DB")
-    index_db_path = index_db_override or os.path.join(
-        os.path.dirname(dataset_dir), "dataset_index.db"
-    )
-    store = DatasetStore(dataset_dir, index_db_path=index_db_path)
+    store = real_corpus_dataset_store(dataset_dir)
     records, errors = store.list()
     assert errors == []  # the committed corpus is healthy -- a real integrity error here would
     # be a repo-hygiene regression, not something this iteration's tests should silently paper

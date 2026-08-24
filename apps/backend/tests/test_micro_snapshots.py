@@ -8,8 +8,16 @@ The real-corpus tests (TC-12) run against the ACTUAL committed 18-dataset legacy
 substitute for the real-corpus build acceptance. A snapshot is DERIVED and REUSABLE (module
 docstring), so this module-scoped fixture pays the real build cost only the FIRST time it ever
 runs against a given machine's ``.data`` tree; every subsequent run (including a re-run of just
-this file) reuses the already-valid snapshots near-instantly (``load_snapshot_meta``'s own
-identity re-verification)."""
+this file) reuses the already-valid snapshots (``load_snapshot_meta``'s own identity
+re-verification).
+
+That reuse claim was true of the SNAPSHOTS and false of the STORE until 2026-08-24: deciding to
+reuse still costs one ``DatasetStore.list()`` plus one ``get()`` per dataset, and an index-less
+store re-verified the entire real corpus for each of those -- once per test, since conftest
+resets the in-process stat cache between tests. This file was ~80% of the whole suite's wall
+clock as a result. The ``real_snapshots`` fixture now takes its store from
+``tests/real_corpus_cache.py``: the same production durable index the live backend uses, on a
+persistent TEST-OWNED db, never the operator's."""
 
 from __future__ import annotations
 
@@ -29,6 +37,7 @@ from app.research.micro_routes import (
     get_micro_snapshots_dir,
 )
 from app.research.routes import get_dataset_store
+from tests.real_corpus_cache import real_corpus_dataset_store
 from tests.test_micro_observer import _events_for_store
 
 TICKER = "TEST"
@@ -482,7 +491,22 @@ def test_runs_route_lists_a_completed_job(client):
 @pytest.fixture(scope="module")
 def real_snapshots():
     dataset_dir = CONFIG.dataset_dir  # the un-overridden package default -- the committed real corpus
-    store = DatasetStore(dataset_dir)
+    # Owner ruling 2026-08-24, task A1. The reuse this file's docstring promises was real for the
+    # SNAPSHOTS and false for the STORE: `run_snapshot_build_and_record` reuses a valid snapshot,
+    # but reaching that decision calls `DatasetStore.list()` once and `load_snapshot_meta` ->
+    # `DatasetStore.get()` per dataset, and an index-less store re-parses and re-checksums the
+    # whole real corpus for every one of those calls -- once per test, because conftest's
+    # `_reset_store_verified_caches` (correctly) clears the in-process stat cache between tests.
+    # That is what made this file ~80% of the whole suite's wall clock (iter-28 audit, B2).
+    #
+    # The fix is the production durable index, on a PERSISTENT TEST-OWNED db under
+    # `.data/test-cache/` -- never the live backend's `.data/dataset_index.db`
+    # (`tests/real_corpus_cache.py`). A hit is metadata `DatasetStore._load` already
+    # checksum-verified, any stat difference is a miss that re-verifies in full, and
+    # `load_events`/`replay` -- the calls a snapshot BUILD actually makes -- bypass the cache
+    # entirely on every call. So a cold build is unchanged and only the re-verification of
+    # already-verified metadata is paid once instead of once per call.
+    store = real_corpus_dataset_store(dataset_dir)
     snapshots_dir = ms.resolve_micro_snapshots_dir(dataset_dir)
     results = ms.run_snapshot_build_and_record(store, CONFIG, snapshots_dir, None)
     return store, snapshots_dir, results
