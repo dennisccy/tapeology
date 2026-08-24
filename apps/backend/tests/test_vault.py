@@ -773,6 +773,9 @@ def test_tr2_no_registered_get_route_serves_or_derives_a_sealed_shards_identity(
         assert swept["/research/datasets"] == 200
         assert swept["/research/desk/micro/vault"] == 200
         assert swept["/research/desk/micro/readiness"] == 200
+        # goal-rapid-microscope-iter-31 (J-11): `desk_graduation`'s own REST route -- confirmed
+        # covered by this SAME structural sweep (never a second, route-by-route sweep of its own).
+        assert swept["/research/desk/micro/graduation"] == 200
         assert swept["/research/datasets/{dataset_id}"] == 403  # the sealed id, refused
 
         # --- the join attack, EXECUTED (not merely asserted absent) -------------------------
@@ -897,6 +900,10 @@ def test_tr2_the_mcp_surface_is_closed_structurally_not_route_by_route(tmp_path,
     swept = set(_sweepable_get_paths())
     research_tool_paths = {p for p in _STATIC_PATHS.values() if p.startswith("/research/")}
     assert "/research/datasets" in research_tool_paths  # the `datasets` tool r3 names explicitly
+    # goal-rapid-microscope-iter-31 (J-11): `desk_graduation` is now wired into `_STATIC_PATHS` --
+    # a direct, non-vacuous proof the new tool is actually present in this set (not merely implied
+    # by the subset assertion below, which would still pass if the entry were silently missing).
+    assert "/research/desk/micro/graduation" in research_tool_paths
     assert research_tool_paths <= swept
 
     reachable = {p for p in swept if p.startswith(ALLOWED_GET_PREFIXES) and "{" not in p}

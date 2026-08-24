@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "journey": "J-07",
+  "name": "Graduation — provenance in, nothing laundered out",
+  "default_timeout_ms": 10000,
+  "steps": [
+    {"n": 1, "journey": "J-07", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Playbook Signals"}},
+    {"n": 2, "journey": "J-07", "action": {"type": "click", "target": {"testid": "desk-section-expand-graduation"}}, "expect": {"text": "graduation transitions are not a UI act"}}
+  ]
+}

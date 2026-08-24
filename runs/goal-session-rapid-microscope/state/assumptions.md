@@ -675,3 +675,76 @@ pictures are fixed — the same "certify what you did not check" pattern this er
 times.
 **Reversible:** yes — one element capture of each section clears the flag with no other change;
 and the flag never gates GOAL_ACHIEVED, so this choice does not alter the verdict either way.
+
+## iter-31 — goal-decomposer
+
+**Ambiguity:** whether the evaluator's binding depth recommendation ("evidence") applies when,
+between the eval that produced it (iter-30, GOAL_ACHIEVED) and this dispatch, the goal-proposer
+appended a brand-new Must-have journey (J-11) inside `docs/goal.md`'s `AUTO:journeys` marker
+block — an UNCOMMITTED working-tree change (`git status --porcelain -- docs/goal.md` shows
+` M docs/goal.md`) absent from `journey-history.json`'s 10-journey ledger. Both the `evidence`
+recommendation and rule 7's exception presuppose "all Target journeys already recorded passing";
+J-11 is neither recorded nor passing.
+**We chose:** treat J-11 as this iteration's real Target journey and write `Depth: lean` (not the
+recommended `evidence`, and not `full`). Grounds: (a) J-11 is genuinely new — absent from
+`journey-history.json`, never attempted, confirmed by reading the file directly rather than
+trusting the digest; (b) it requires real backend (new MCP tool + guard-test extensions) and
+frontend (`/desk` section) work, so `evidence` depth (developer/reviewer skipped) structurally
+cannot build it — rule 7 explicitly forbids planning evidence-only when real work exists; (c) I
+checked all four full-depth escape conditions and none holds: prior verdict GOAL_ACHIEVED (not
+ESCALATE/REGRESSION), iter-30's `coherence.md` COHERENCE-PASS, consecutive-lean count 1 of a
+cadence-6 threshold (not due), and trigger 4 ("brand-new full-stack journey ... with real
+Data-contract additions") does not fire because J-11's own Acceptance text explicitly disclaims
+one — "no second computation path, no new endpoint, no Data Contract row added" — even though the
+journey touches both backend and frontend. This is the depth rubric's own named lean example, "a
+new endpoint plus its UI use" (here: new UI/MCP readers of an already-registered, unchanged
+endpoint), not a structural/cross-cutting or data-model-migration trigger.
+**Reversible:** yes — if the evaluator or owner reads J-11 differently (e.g. judges it
+out-of-scope or wants it deferred), no other iteration's journey status or code depends on this
+reading; J-11 simply stays unattempted in `journey-history.json` until re-planned, and nothing
+this iteration builds mutates any existing computation, endpoint, or Data Contract row.
+
+## iter-31 — goal-evaluator
+
+**Ambiguity:** whether J-11 should be scored `partial` or `passing`. The browser lane returned PASS
+with a genuine element capture, the reviewer passed, coherence passed, and the section's core
+contract (verbatim render, correct position, read-only, byte-identical MCP proxy) is fully
+evidenced — but J-11's own Acceptance text names two further on-screen proofs (the real store's
+empty `"No candidates ledgered."` render, and a fixture rig with one family per stage showing all
+four stage tokens, a permanent FAILED sealed verdict and the referee-spec-revision sentence), and
+the lane disclosed under "Known Limitation" that it produced neither. Methodology A.7 offers a
+competing reading: score from the code/replay evidence and file the shortfall as
+`evidence_makeup` (a capture defect), which would leave J-11 `passing` and the era finishable now.
+**We chose:** `partial`, with no `evidence_makeup` flag. Grounds I measured rather than inherited:
+(a) A.7's own rail restricts the carve-out to defective PRESENTATION of confirmed behaviour, and
+two of the three gaps are unexecuted CODE BRANCHES — `families.length === 0` and
+`family.state === "referee_handoff_ready"` (`apps/frontend/app/desk/page.tsx:7013,7027-7031`) —
+which have run nowhere: no browser pass, and the repo has no frontend rendering tests (the dev pass
+ran pytest, `tsc --noEmit` and `next build` only); (b) J-11's Acceptance carries the no-screenshot
+rail verbatim in its own words ("with an element screenshot on record (no screenshot ⇒ `unknown`,
+never `passing`)") for the empty-state render specifically, so calling it green overrides the
+journey's own text; (c) I confirmed the served empty payload IS proven at the API layer
+(`test_mcp_server.py:1190-1194` asserts the exact body `{"families": [], "message": "No candidates
+ledgered.", ...}`), which is why I scored `partial` rather than `unknown` — real evidence exists,
+it simply does not cover the whole acceptance. Cost acknowledged: this defers a GOAL_ACHIEVED that
+would otherwise be available this round.
+**Reversible:** yes — one browser pass against a four-stage fixture rig plus one empty-store pass
+promotes J-11 to `passing` with no other change; nothing else in this evaluation depends on it.
+
+## iter-31 — goal-evaluator (second)
+
+**Ambiguity:** whether J-08 "The surface and MCP v6 — the funnel is visible" stays `passing` when
+its Acceptance says "the 26-tool contract test ... pass" and this iteration grew `EXPECTED_TOOLS`
+to a 27-tuple. No `journeys-changed.md` was produced (J-08's goal text did not change), so the
+drift is in the product under a fixed acceptance sentence, not in the text.
+**We chose:** J-08 stays `passing`. Grounds: the same `docs/goal.md` file now instructs the bump in
+J-11 step 2 ("bumping the MCP contract to **v7 (26 → 27 tools)** and growing ... `EXPECTED_TOOLS`
+to the 27-tuple ... guard tests are EXTENDED, never edited"), so the later journey supersedes the
+earlier count; I verified the guard was extended and not weakened (all four tools J-08 itself added
+— `desk_micro_readiness`, `desk_scout`, `desk_walkforward`, `desk_vault` — are still in the tuple
+with their byte-identity tests, and the write-verb/arg-shape guards still pass in the suite I ran
+myself); and J-08's user-visible capability (its four `/desk` sections rendering verbatim) replayed
+green. Recorded openly in J-08's journey note rather than left silent.
+**Reversible:** yes — if the owner reads J-08's "26-tool" wording as a hard invariant, the fix is a
+goal-text edit, not a code change, and J-08's status would then need re-derivation against the new
+text like any drifted journey.

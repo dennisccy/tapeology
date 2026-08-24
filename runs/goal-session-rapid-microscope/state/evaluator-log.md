@@ -2179,3 +2179,60 @@ evidence-only round does all three with no developer and no code change. One thi
 the closing report must say "finished with six known open items that you ruled do not count
 against this era" and list them — two real product items you deferred, four about this build
 system's own reporting honesty. It must never say there were no findings.
+
+## Iteration 31 — goal-rapid-microscope-iter-31
+
+**Date:** 2026-08-24T21:10:00Z
+**Verdict:** CONTINUE
+**Depth dispatched:** lean
+**Journey deltas:**
+- Newly passing: none.
+- Newly failing: none. Regressed: none. Deferred for budget: none. Skipped: none.
+- NEW journey scored for the first time: **J-11 "Graduation gets a surface" — partial**, not green.
+- Re-checked by their own stored scripts, machine-driven, all green: J-01, J-04, J-05, J-06, J-08,
+  J-09, J-10 (seven of seven). I opened two of the seven pictures myself (J-08, J-10).
+- Re-checked through the live browser lane, green: J-07 "Graduation". It now has its FIRST stored
+  replay script, and the era's list of missing scripts is gone (the file itself was deleted).
+- Not re-checked at all, by the round's own design: J-02 "The micro observer" and J-03 "Structure x
+  flow" — kept off this round's must-still-pass list because nothing they depend on was touched.
+  They keep their green status and their round-30 stamp, and both still carry the "owed a better
+  picture" flag, because the close-up asked for at rounds 29 and 30 was again not made.
+- Anti-goal violations: none introduced. Six stay open, all minor, all carrying your written ruling
+  that they do not count against this era; zero blocking, zero serious.
+
+**Reasoning:** The build itself is real and I checked it by hand rather than reading about it. The
+new Graduation panel sits at the bottom of the Desk page, under Validation Vault; I opened its
+picture and then opened the data file the test backend actually reads, and every value on screen
+matches that file — the family name, the empty transition list, and the one sealed row with its
+"pass" verdict, 30 samples, and a time stamp that converts correctly to New York time. I ran the
+whole backend test suite myself, twice: 3,495 passed, 8 skipped, nothing failing, above the 3,491
+the last round set. I re-derived the frozen things instead of inheriting them: the settings
+fingerprint still prints 08e471b10130e1e2, all six judge files still hash exactly as they did when
+the era opened, your money ledger file is untouched, and the guard report shows all 11,395 files of
+your real store unchanged. I also re-tested the three conditions attached to your ruling on the six
+open items: the recording vault is still yours alone and its tapes still readable straight off
+disk; the sealed judge still has no caller in the running product and no sealed row exists outside
+a throwaway test rig; and no showcase document was published at all this round. None has come true.
+
+The reason this round does not finish the era is J-11's own written acceptance. It asks for two
+screens that nobody has seen: the panel with an empty ledger, showing the words "No candidates
+ledgered.", and a test set-up carrying one family in each of the four stages, a permanently failed
+verdict, and the sentence about the referee revision. The test lane did not produce either, and
+said so plainly in its own report rather than ticking them off — which is the honest behaviour this
+era has been asking for. Since the journey's own text says a missing picture means "not passing", I
+scored it partial. Two smaller things also went unmade: the walkthrough step for the new panel, and
+the close-up pictures for J-02 and J-03. One finding is mine: the new panel prints the line "Ledger
+chain verification:", which is the only text J-04's and J-05's stored scripts look for. It cannot
+mislead them today, because a closed panel shows none of its contents and their scripts open only
+their own panels — I read that component myself to be sure — but it makes an already-weak check
+weaker.
+
+**Next-step recommendation:** One more short round at normal depth, doing three things for J-11:
+(1) set up a test store holding one family in each of the four stages plus one permanently failed
+verdict, open the Desk page against it, and photograph the panel showing all four stage words, the
+failed verdict, and the referee sentence; (2) photograph the same panel against a store with no
+records, so the "No candidates ledgered." line is on screen; (3) add the walkthrough step that
+opens the Desk page and shows the new panel. If they are convenient, the close-up pictures for J-02
+and J-03 and a private wording for J-05's check may ride along, but they must not delay the round.
+Nothing else: no new real tape, no revealing or assigning of any sealed recording, and no running
+of the three studies against your real recorded corpus. After that round the era is finished.

@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "journey": "J-11",
+  "name": "Graduation gets a surface — the funnel's last state stops being invisible",
+  "default_timeout_ms": 10000,
+  "steps": [
+    {"n": 1, "journey": "J-11", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Playbook Signals"}},
+    {"n": 2, "journey": "J-11", "action": {"type": "click", "target": {"testid": "desk-section-expand-graduation"}}, "expect": {"text": "240dd966c1aceca2 — exploratory"}}
+  ]
+}

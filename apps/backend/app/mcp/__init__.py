@@ -21,9 +21,9 @@ Result contract (locked by ``tests/test_mcp_server.py``):
     era-5B J-04; ``desk_universe``/``desk_screen`` at era-desk J-06; ``desk_playbook``/
     ``desk_playbook_evidence`` at Era B2 J-09; ``desk_referee``/``desk_referee_registry`` at Era 6
     "The Referee" J-09; ``desk_micro_readiness``/``desk_scout``/``desk_walkforward``/``desk_vault``
-    at Era "The Rapid Microscope" J-08, MCP contract v6 — 22 -> 26 tools); an
-    allowlisted-but-UNKNOWN path (any unshipped ``/research/*``) still surfaces the backend's
-    honest 404 this way — never placeholder data.
+    at Era "The Rapid Microscope" J-08, MCP contract v6 — 22 -> 26 tools; ``desk_graduation`` at
+    J-11, MCP contract v7 — 26 -> 27 tools); an allowlisted-but-UNKNOWN path (any unshipped
+    ``/research/*``) still surfaces the backend's honest 404 this way — never placeholder data.
   * backend unreachable — an explicit tool error naming the base URL and the failure
     (``BackendUnreachableError``); NEVER cached or fabricated data (no cache, no retry loop,
     no offline snapshot exists anywhere in this module).
@@ -150,6 +150,12 @@ _STATIC_PATHS: dict[str, str] = {
     "desk_scout": "/research/desk/micro/scout",
     "desk_walkforward": "/research/desk/micro/walkforward",
     "desk_vault": "/research/desk/micro/vault",
+    # `desk_graduation` (J-11, MCP contract v7 -- 26 -> 27 tools) is the IDENTICAL no-required-
+    # param shape as its four dependency-order siblings directly above: it proxies the funnel's
+    # terminal-state endpoint, which already serves an explicit HTTP 200 honest-empty payload
+    # (an empty `families` list plus the ledger's own `message`) before any candidate has ever
+    # graduated (never a 404). No query-param variant exists.
+    "desk_graduation": "/research/desk/micro/graduation",
 }
 
 _TAPE_PATHS: dict[str, str] = {
@@ -466,6 +472,18 @@ TOOLS: tuple[types.Tool, ...] = (
             "-- JSON verbatim. A sealed or not-yet-fully-released shard carries only the opaque "
             "pre-exposure fields (shard_id, universe_id, size_bucket, checksum_commitment, "
             "sealed_at, exposure_state) -- never a symbol, date, dataset id, or raw checksum."
+        ),
+        inputSchema=_object_schema({}),
+    ),
+    types.Tool(
+        name="desk_graduation",
+        description=(
+            "Read-only proxy of GET /research/desk/micro/graduation -- the Rapid Microscope "
+            "funnel's terminal state: every candidate family's current graduation stage "
+            "(exploratory / walkforward_survivor / sealed_survivor / referee_handoff_ready), its "
+            "complete transition history, and its complete sealed-shard-evaluation history "
+            "(including permanent failed verdicts), beside the ledger's own chain-verification "
+            "verdict -- JSON verbatim. Never 404/500 on an empty ledger."
         ),
         inputSchema=_object_schema({}),
     ),

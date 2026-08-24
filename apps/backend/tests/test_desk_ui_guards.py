@@ -333,6 +333,15 @@ _PRICE_ARITHMETIC_FIELDS = (
     r"|readiness\.sealed_tranche\.(?:shard_count|symbol_days)"
     r"|universeCounts\.(?:shard_count|symbol_days)"
     r"|readiness\.joinable_corpus\.(?:withheld_excluded)"
+    # goal-rapid-microscope-iter-31 (J-11): the new Graduation section's own served numeric --
+    # GET /research/desk/micro/graduation read verbatim for the first time in the browser. Each
+    # sealed-evaluation row's own observation count (`evaluation.n`, `GraduationSealedEvaluation
+    # Row`'s destructured field) is the only graduation numeric the section binds to a local name
+    # directly -- every OTHER field of a transition/sealed-evaluation row (heterogeneous by
+    # transition target state / evaluation artifact shape) is rendered via `JSON.stringify(...)`
+    # (a serialization call, never arithmetic, the `screen_result`/raw `fold_results` precedent),
+    # so no per-field entry is needed for those.
+    r"|evaluation\.(?:n)"
 )
 _PRICE_ARITHMETIC_PATTERN = re.compile(
     rf"({_PRICE_ARITHMETIC_FIELDS})\s*[-+*/]|[-+*/]\s*({_PRICE_ARITHMETIC_FIELDS})"
@@ -1970,3 +1979,30 @@ def test_the_cohort_filter_copy_is_clean():
     for phrase in phrases:
         assert phrase in source, f"expected cohort copy missing: {phrase!r}"
         assert find_violations(phrase) == [], phrase
+
+
+# goal-rapid-microscope-iter-31 (J-11): the new Graduation section's price-arithmetic guard --
+# TC-5's own seeded counter-test proving the extended `_PRICE_ARITHMETIC_FIELDS` pattern is live,
+# not vacuous.
+
+
+def test_desk_page_price_arithmetic_guard_catches_graduation_evaluation_n_arithmetic():
+    """TC-5 counter-test: a client-side sum/rate over the new `evaluation.n` binding (the Graduation
+    section's own sealed-evaluation observation count) is caught, exactly like every other served
+    numeric this guard already covers."""
+    seeded_sum = "const total = evaluation.n + evaluation.n;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_sum) is not None
+
+
+def test_desk_page_graduation_section_never_derives_a_second_computation_of_the_referee_note():
+    """J-11's own Acceptance text ("no second computation path"): the Graduation section's static
+    `referee_handoff_ready` copy is transcribed BYTE-FOR-BYTE from `micro_graduation.py`'s own
+    `REFEREE_FUTURE_REVISION_SENTENCE` -- proven here by importing the backend constant directly and
+    asserting it appears verbatim in the frontend source, so the two can never silently drift."""
+    from app.research.micro_graduation import REFEREE_FUTURE_REVISION_SENTENCE
+
+    source = _DESK_PAGE.read_text()
+    assert REFEREE_FUTURE_REVISION_SENTENCE in source, (
+        "the Graduation section's referee_handoff_ready copy does not match "
+        "micro_graduation.REFEREE_FUTURE_REVISION_SENTENCE byte-for-byte"
+    )

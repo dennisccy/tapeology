@@ -392,3 +392,28 @@ clears it" must not be applied mechanically, because a fresh capture can reprodu
 defect the flag was raised for.
 **Applies to:** any iteration scoring journeys verified by `demo_runner.py --mode verify` against
 accordion/below-the-fold sections, and any evaluator deciding whether to clear `evidence_makeup`.
+
+## iter-31 — 2026-08-24T21:10:00Z
+
+**Verdict:** CONTINUE
+**Lesson:** An acceptance criterion that names TWO mutually exclusive store states ("the empty real
+ledger shows 'No candidates ledgered.'" AND "a fixture rig with one family per stage") cannot be
+met on one long-lived QA rig: this era's `:8301` store-scoped rig has carried the iteration-18
+graduation fixture since it was seeded, so the empty-state render is structurally unreachable on
+it, and the browser lane has no mandate to stand up a second backend/frontend pair (the frontend's
+`NEXT_PUBLIC_API_URL` is baked in at process start). Plan the fixture rig in the SPEC — seed a
+scoped `TAPEOLOGY_MICRO_GRADUATION_DIR` and name which rig serves which scenario — or the round
+will build correct code and still fail its own acceptance for lack of a place to photograph it.
+**Applies to:** any iteration whose acceptance names an empty-state render plus a populated render,
+or otherwise requires two different store contents in one browser pass.
+
+## iter-31 — 2026-08-24T21:10:00Z (second)
+
+**Verdict:** CONTINUE
+**Lesson:** A new `/desk` section can satisfy T-11 literally (own heading, own `data-testid`,
+rendered below the shipped ones) and still erode existing goldens: the Graduation section prints
+"Ledger chain verification:", the single string J-04's and J-05's stored scripts assert. It is
+harmless only because `CollapsibleSection` renders `{open && children}`, so a collapsed section
+contributes no text. Run the T-11 static sweep against the stored scripts' EXPECT TEXTS, not just
+against testids and headings, and prefer a journey-unique string for every golden.
+**Applies to:** any iteration adding a section to `/desk` (or any page with stored replay scripts).

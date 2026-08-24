@@ -21,6 +21,7 @@ import type {
   DeskForwardPinsResult,
   DeskForwardReadResult,
   DeskForwardRunsListResult,
+  DeskGraduationResponse,
   DeskPlaybookBackscanComputeSnapshot,
   DeskPlaybookBackscanPlan,
   DeskPlaybookBackscanRunsListResult,
@@ -2693,6 +2694,34 @@ export async function fetchDeskVault(): Promise<{
       return { ok: true, data: (await res.json()) as DeskVaultResponse };
     }
     let error = "The validation vault could not be loaded.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, data: null, error };
+  } catch {
+    return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// GET /research/desk/micro/graduation — J-11, READ-ONLY: graduation transitions are not a UI
+// act (T-8), so this is the section's ONLY fetch. Every family's current stage token, complete
+// transition history, and complete sealed-evaluation history (including permanent failed
+// verdicts), beside the ledger's own chain-verification verdict. Never 404/500 on an empty
+// ledger — the honest `message` field covers that case.
+export async function fetchDeskGraduation(): Promise<{
+  ok: boolean;
+  data: DeskGraduationResponse | null;
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/micro/graduation`);
+    if (res.ok) {
+      return { ok: true, data: (await res.json()) as DeskGraduationResponse };
+    }
+    let error = "The graduation ledger could not be loaded.";
     try {
       const data = await res.json();
       if (typeof data?.detail === "string") error = data.detail;

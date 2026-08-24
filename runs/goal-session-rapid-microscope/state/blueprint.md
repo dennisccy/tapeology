@@ -25,7 +25,9 @@ Tapeology
         ├── Microscope Readiness   (J-01)
         ├── Scout Ledger           (J-04; J-09 pilot-study results render here too)
         ├── Walk-Forward           (J-05; J-09 pilot-study results render here too)
-        └── Validation Vault       (J-06)
+        ├── Validation Vault       (J-06)
+        └── Graduation             (J-11, iter-31 — read-only, renders GET .../micro/graduation
+                                     verbatim; no new Data Contract row, see note below)
 ```
 
 **Feature / journey homes** (each reachable in ≤2 clicks from the persistent nav):
@@ -42,6 +44,7 @@ Tapeology
 | Rapid-Microscope surface + MCP v6 (J-08) | `/desk` → all four new sections above | Desk |
 | Pilot studies (J-09) | `/desk` → Scout Ledger / Walk-Forward (results render through J-08's sections, no new page) | Desk |
 | Kept-product sentinel (J-10) | `/`, `/structure`, `/desk` (every existing section, unchanged) | Cockpit / Structure / Desk |
+| Graduation surface + MCP v7 (J-11) | `/desk` → Graduation (below Validation Vault) | Desk |
 
 ## Data Contract
 
@@ -437,3 +440,18 @@ from its one endpoint, read verbatim by UI/MCP/reports.
      independently re-derived this iteration (see iter-30 spec TC-3..TC-5), not merely inherited
      from the commit message. No served value, computing module, or endpoint changed; no new page,
      route, MCP tool, or nav-skeleton change; no reapproval file written. -->
+
+<!-- iter-31 note: no Data Contract change. J-11 wires the ALREADY-registered "Graduation states +
+     export bundles" row (owner `micro_graduation.py`/`micro_sealed_evaluation.py`, endpoint
+     `GET /research/desk/micro/graduation`, registered since era baseline) to its first UI reader
+     (a new `/desk` Graduation section, rendered below Validation Vault) and its first MCP reader
+     (`desk_graduation`, a byte-identical GET proxy, MCP contract v6->v7, 26->27 tools). Matching
+     this file's own iter-15 precedent ("an MCP tool is a transport-layer proxy of an
+     already-registered endpoint, not a second computing module or a second serving path"), the
+     new MCP tool gets no row of its own. The Information Architecture gains one new leaf
+     (Graduation) under the ALREADY-registered "Desk -> Rapid Microscope" nav section -- additive
+     only, not a top-level nav-skeleton change, so no reapproval file is written. J-07's own IA
+     row (keyless/automated; states surface via the Scout Ledger / Walk-Forward / Vault rows they
+     attach to) is unchanged by this note: J-11 gives J-07 a stored golden replay script that can
+     now navigate to the new Graduation section, but J-07's own `docs/goal.md` acceptance text
+     stays a pure fixture walk with no browser requirement of its own. -->

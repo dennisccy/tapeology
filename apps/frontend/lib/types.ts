@@ -2852,3 +2852,40 @@ export interface DeskVaultResponse {
   shard_ledger_chain_verification: MicroChainVerification;
   universe_ledger_chain_verification: MicroChainVerification;
 }
+
+// --- Graduation -- GET /research/desk/micro/graduation (micro_graduation.py
+// `list_graduation_families`), J-11: the funnel's terminal state, read verbatim for the first
+// time -- zero UI readers before this iteration. A family's own `transitions`/`sealed_evaluations`
+// rows vary in shape by transition target state / evaluation artifact (the `WalkForwardFoldSpec`
+// precedent above): each carries the few fields this page destructures directly, plus an index
+// signature for everything else, rendered as an opaque, verbatim JSON detail (never enumerated
+// field-by-field -- the `screen_result`/raw `fold_results` precedent).
+export interface GraduationTransitionRow {
+  from_state: string;
+  to_state: string;
+  evaluated_at: string;
+  [key: string]: unknown;
+}
+
+export interface GraduationSealedEvaluationRow {
+  dataset_id: string;
+  verdict: string;
+  n: number;
+  evaluated_at: string;
+  [key: string]: unknown;
+}
+
+export interface GraduationFamily {
+  family_root_id: string;
+  state: string;
+  transitions: GraduationTransitionRow[];
+  sealed_evaluations: GraduationSealedEvaluationRow[];
+}
+
+export interface DeskGraduationResponse {
+  families: GraduationFamily[];
+  // Set to the ledger's own `EMPTY_LEDGER_MESSAGE` ("No candidates ledgered.") when `families` is
+  // empty, `null` otherwise -- rendered verbatim, never a hardcoded fallback string.
+  message: string | null;
+  chain_verification: MicroChainVerification;
+}

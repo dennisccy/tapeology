@@ -62,6 +62,7 @@ import {
   fetchDeskScout,
   fetchDeskScoutCompute,
   fetchDeskScoutRuns,
+  fetchDeskGraduation,
   fetchDeskVault,
   fetchDeskWalkforward,
   fetchDeskWalkforwardCompute,
@@ -82,6 +83,7 @@ import type {
   DeskForwardRun,
   DeskForwardRunsListResult,
   DeskForwardTouch,
+  DeskGraduationResponse,
   DeskPlaybookAbsence,
   DeskPlaybookBackscanComputeSnapshot,
   DeskPlaybookBackscanOutcomeCounts,
@@ -389,7 +391,8 @@ type DeskCollapsibleSection =
   | "microReadiness"
   | "scoutLedger"
   | "walkForward"
-  | "validationVault";
+  | "validationVault"
+  | "graduation";
 // DESK-COLLAPSED-END
 
 const PRIMARY_BUTTON_CLASS =
@@ -6939,6 +6942,199 @@ function ValidationVaultSection({
   );
 }
 
+// goal-rapid-microscope-iter-31 (J-11): the era's own module-level copy of `micro_graduation.py`'s
+// `REFEREE_FUTURE_REVISION_SENTENCE` -- transcribed byte-for-byte (guarded below by
+// `test_desk_ui_guards.py`'s own copy-drift test). This is static UI copy tied to the SERVED
+// `referee_handoff_ready` stage token, never a second computation of a value the backend already
+// owns -- the same class as the Design Direction's own "Sealed — metadata only until exposure."
+// example: a fixed sentence keyed off a state string, not a value read off the response body,
+// because `GET /research/desk/micro/graduation` does not itself serve this sentence (it is only
+// ever composed inside a Referee-handoff bundle, a research artifact this iteration's Acceptance
+// text explicitly keeps off the surface -- "no second computation path, no new endpoint").
+// One unbroken literal (never `+`-concatenated across lines) so it is byte-identical, as a raw
+// SOURCE substring, to the backend's own joined `REFEREE_FUTURE_REVISION_SENTENCE` value -- what
+// the copy-drift guard test actually scans for.
+const GRADUATION_REFEREE_HANDOFF_NOTE =
+  "This referee_handoff_ready state does not imply the current Referee can register or adjudicate this candidate: a flow-context predicate requires a future named revision of docs/referee-statistical-spec.md. Where a candidate maps onto the existing referee vocabulary (setup, side, existing context predicates, existing measures), the bundle is registrable through the existing operator act unchanged.";
+
+// J-11: the Graduation section -- the funnel's terminal state, rendered directly BELOW Validation
+// Vault (T-11). Read-only: no compute/transition control, graduation transitions are not a UI act
+// (T-8). Renders `GET /research/desk/micro/graduation` verbatim: per family its `family_root_id`,
+// current stage token, complete `transitions` history, and complete `sealed_evaluations` history
+// (including permanent failed verdicts) -- no client-side aggregate, derived count, re-ordering, or
+// recomputation. Each row's full payload (heterogeneous by transition target state / evaluation
+// artifact shape) is ALSO disclosed via an opaque, verbatim JSON detail -- the `screen_result`/raw
+// `fold_results` precedent -- so nothing served is ever dropped, while the columns a reader needs
+// at a glance (state, verdict, n) render directly, guarded by `_PRICE_ARITHMETIC_FIELDS` below.
+function GraduationSection({
+  graduationResult,
+}: {
+  graduationResult: { ok: boolean; data: DeskGraduationResponse | null; error?: string } | null;
+}) {
+  if (graduationResult === null) {
+    return (
+      <div data-testid="graduation-section">
+        <LoadingPanel testid="graduation-loading" />
+      </div>
+    );
+  }
+  if (!graduationResult.ok || graduationResult.data === null) {
+    return (
+      <div data-testid="graduation-section">
+        <UnavailablePanel
+          testid="graduation-unavailable"
+          message={graduationResult.error ?? "The graduation ledger could not be loaded."}
+        />
+      </div>
+    );
+  }
+  const graduation = graduationResult.data;
+  return (
+    <div data-testid="graduation-section">
+      <p className="mb-3 text-xs text-slate-500">
+        Graduation (GET /research/desk/micro/graduation, read verbatim; read-only -- graduation
+        transitions are not a UI act): every candidate family&apos;s current stage
+        (exploratory / walkforward_survivor / sealed_survivor / referee_handoff_ready), its
+        complete transition history, and its complete sealed-evaluation history including any
+        permanent failed verdicts.
+      </p>
+
+      <p data-testid="graduation-chain-verification" className="mb-4 text-[11px] text-slate-500">
+        Ledger chain verification:{" "}
+        <span className="font-mono text-slate-300">
+          {graduation.chain_verification.ok
+            ? "ok"
+            : `failed at row ${graduation.chain_verification.failed_at_row} (${graduation.chain_verification.reason})`}
+        </span>
+      </p>
+
+      <div data-testid="graduation-families-block">
+        {graduation.families.length === 0 ? (
+          <EmptyState testid="graduation-families-empty" title={graduation.message ?? "No candidates ledgered."} />
+        ) : (
+          graduation.families.map((family) => (
+            <div
+              key={family.family_root_id}
+              data-testid={`graduation-family-${family.family_root_id}`}
+              className="mb-4"
+            >
+              <h4 className="mb-1 text-xs font-semibold text-slate-400">
+                {family.family_root_id}{" "}
+                <span className="font-normal text-slate-500">— {family.state}</span>
+              </h4>
+              {family.state === "referee_handoff_ready" && (
+                <p
+                  data-testid={`graduation-family-${family.family_root_id}-referee-note`}
+                  className="mb-2 text-[11px] text-slate-500"
+                >
+                  {GRADUATION_REFEREE_HANDOFF_NOTE}
+                </p>
+              )}
+
+              <div
+                data-testid={`graduation-family-${family.family_root_id}-transitions-block`}
+                className="mb-2"
+              >
+                <h5 className="mb-1 text-[11px] font-semibold text-slate-500">Transitions</h5>
+                {family.transitions.length === 0 ? (
+                  <EmptyState
+                    testid={`graduation-family-${family.family_root_id}-transitions-empty`}
+                    title="No transitions recorded."
+                  />
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[640px] border-collapse text-xs">
+                      <thead>
+                        <tr className="border-b border-slate-800 text-left text-slate-500">
+                          <th className="px-1.5 py-1">From</th>
+                          <th className="px-1.5 py-1">To</th>
+                          <th className="px-1.5 py-1">Evaluated at</th>
+                          <th className="px-1.5 py-1">Detail</th>
+                        </tr>
+                      </thead>
+                      <tbody data-testid={`graduation-family-${family.family_root_id}-transition-rows`}>
+                        {family.transitions.map((transition, transitionIndex) => (
+                          <tr key={transitionIndex} className="border-b border-slate-900">
+                            <td className="px-1.5 py-1 text-slate-300">{transition.from_state}</td>
+                            <td className="px-1.5 py-1 text-slate-300">{transition.to_state}</td>
+                            <td className="whitespace-nowrap px-1.5 py-1 font-mono text-slate-400">
+                              {formatDateTimeET(transition.evaluated_at, { seconds: false })}
+                            </td>
+                            <td className="px-1.5 py-1">
+                              <details>
+                                <summary className="cursor-pointer text-slate-500">transition</summary>
+                                <pre className="mt-1 max-w-[420px] overflow-x-auto whitespace-pre-wrap break-all text-[10px] text-slate-500">
+                                  {JSON.stringify(transition, null, 2)}
+                                </pre>
+                              </details>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              <div
+                data-testid={`graduation-family-${family.family_root_id}-sealed-evaluations-block`}
+              >
+                <h5 className="mb-1 text-[11px] font-semibold text-slate-500">Sealed evaluations</h5>
+                {family.sealed_evaluations.length === 0 ? (
+                  <EmptyState
+                    testid={`graduation-family-${family.family_root_id}-sealed-evaluations-empty`}
+                    title="No sealed evaluations recorded."
+                  />
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[640px] border-collapse text-xs">
+                      <thead>
+                        <tr className="border-b border-slate-800 text-left text-slate-500">
+                          <th className="px-1.5 py-1">Dataset</th>
+                          <th className="px-1.5 py-1">Verdict</th>
+                          <th className="px-1.5 py-1 text-right">n</th>
+                          <th className="px-1.5 py-1">Evaluated at</th>
+                          <th className="px-1.5 py-1">Detail</th>
+                        </tr>
+                      </thead>
+                      <tbody
+                        data-testid={`graduation-family-${family.family_root_id}-sealed-evaluation-rows`}
+                      >
+                        {family.sealed_evaluations.map((evaluation, evaluationIndex) => (
+                          <tr key={evaluationIndex} className="border-b border-slate-900">
+                            <td className="whitespace-nowrap px-1.5 py-1 font-mono text-[10px] text-slate-500">
+                              {evaluation.dataset_id}
+                            </td>
+                            <td className="px-1.5 py-1 text-slate-300">{evaluation.verdict}</td>
+                            <td className="px-1.5 py-1 text-right font-mono text-slate-300">
+                              {evaluation.n}
+                            </td>
+                            <td className="whitespace-nowrap px-1.5 py-1 font-mono text-slate-400">
+                              {formatDateTimeET(evaluation.evaluated_at, { seconds: false })}
+                            </td>
+                            <td className="px-1.5 py-1">
+                              <details>
+                                <summary className="cursor-pointer text-slate-500">sealed_evaluation</summary>
+                                <pre className="mt-1 max-w-[420px] overflow-x-auto whitespace-pre-wrap break-all text-[10px] text-slate-500">
+                                  {JSON.stringify(evaluation, null, 2)}
+                                </pre>
+                              </details>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
 // era-desk-iter-14 (J-10): a third compute control, wired exactly like `TopupComputeControl` — the
 // operation has no per-pair counters (it is a single classify-repair-verify walk, not a walk over
 // many pairs), so the running indicator shows the compute's own `progress.phase` label instead of
@@ -9832,6 +10028,14 @@ export default function DeskPage() {
     error?: string;
   } | null>(null);
 
+  // J-11: the Graduation section's own fetch-on-expand result -- the SAME `null` (not yet
+  // fetched) / `{ok, data, error}` shape every other Rapid Microscope section already uses.
+  const [graduationResult, setGraduationResult] = useState<{
+    ok: boolean;
+    data: DeskGraduationResponse | null;
+    error?: string;
+  } | null>(null);
+
   // iter-14 audit (finding F1): the ONE stop flag both plain-async compute polls below observe.
   // This page's own contract for a plain `for(;;)` driver that awaits `refreshChainSleep` is the
   // `refreshChainStopRef` pattern further down ("Unmounting (a nav away mid-chain) stops the driver
@@ -9917,6 +10121,10 @@ export default function DeskPage() {
       // /research/datasets, never a re-read of microReadinessResult to enrich or cross-reference a
       // shard/universe row. This is that one fetch.
       fetchDeskVault().then(setVaultResult);
+    } else if (section === "graduation") {
+      // J-11: the Graduation section's own ONE fetch -- read-only, no compute/transition control
+      // (graduation transitions are not a UI act, T-8).
+      fetchDeskGraduation().then(setGraduationResult);
     }
   }
 
@@ -12214,6 +12422,20 @@ export default function DeskPage() {
             onToggle={() => toggleSection("validationVault")}
           >
             <ValidationVaultSection vaultResult={vaultResult} />
+          </CollapsibleSection>
+        </section>
+
+        {/* goal-rapid-microscope-iter-31 (J-11): the Graduation section -- the funnel's terminal
+            state, rendered directly BELOW Validation Vault (T-11). READ-ONLY: no compute/
+            transition control (transitions are not a UI act, T-8). */}
+        <section aria-label="Graduation" className="mt-6">
+          <CollapsibleSection
+            id="graduation"
+            title="Graduation"
+            open={expandedSections.has("graduation")}
+            onToggle={() => toggleSection("graduation")}
+          >
+            <GraduationSection graduationResult={graduationResult} />
           </CollapsibleSection>
         </section>
       </main>

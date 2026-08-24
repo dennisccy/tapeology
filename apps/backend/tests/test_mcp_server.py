@@ -49,6 +49,11 @@ from app.research.desk_universe import UniverseStore
 from app.research.referee_adjudicate import REFEREE_REGISTER
 from app.research.referee_null import REFEREE_NULL_TOD_SPEC_ID, REFEREE_TEST_PERM_SPEC_ID
 from app.research.referee_registry import REFEREE_MIN_OCCURRENCES, REFEREE_MIN_SESSIONS
+from app.research.micro_graduation import (
+    GRADUATION_STATE_WALKFORWARD_SURVIVOR,
+    GraduationLedger,
+    ROW_KIND_STATE_TRANSITION,
+)
 from app.research.scout_ledger import ScoutLedger
 
 # Era "The Rapid Microscope" J-08's own opaque-pool-critical proof reuses, rather than
@@ -77,10 +82,11 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 # tools), ``desk_forward`` (forward-test era, 17 -> 18 tools), ``desk_playbook``/
 # ``desk_playbook_evidence`` (Era B2 "The Playbook" J-09, the era's own MCP contract v4 -- 18 -> 20
 # tools), ``desk_referee``/``desk_referee_registry`` (Era 6 "The Referee" J-09, MCP contract v5 --
-# 20 -> 22 tools), and ``desk_micro_readiness``/``desk_scout``/``desk_walkforward``/``desk_vault``
-# (Era "The Rapid Microscope" J-08, the era's own MCP contract v6 -- 22 -> 26 tools) are the newest
-# additions, each positioned right after its dependency-order sibling (the same store/registry+
-# route+MCP shape, mirrored end to end).
+# 20 -> 22 tools), ``desk_micro_readiness``/``desk_scout``/``desk_walkforward``/``desk_vault``
+# (Era "The Rapid Microscope" J-08, the era's own MCP contract v6 -- 22 -> 26 tools), and
+# ``desk_graduation`` (J-11, MCP contract v7 -- 26 -> 27 tools) are the newest additions, each
+# positioned right after its dependency-order sibling (the same store/registry+route+MCP shape,
+# mirrored end to end).
 EXPECTED_TOOLS = (
     "tape_state",
     "tape_features",
@@ -104,6 +110,7 @@ EXPECTED_TOOLS = (
     "desk_scout",
     "desk_walkforward",
     "desk_vault",
+    "desk_graduation",
     "pnl_ledger",
     "taxonomy",
     "ui_route_map",
@@ -160,6 +167,7 @@ def backend_paths(tmp_path_factory):
         "TAPEOLOGY_MICRO_SCOUT_DIR": str(tmp_path_factory.mktemp("mcp-micro-scout")),
         "TAPEOLOGY_MICRO_WALKFORWARD_DIR": str(tmp_path_factory.mktemp("mcp-micro-walkforward")),
         "TAPEOLOGY_MICRO_VAULT_DIR": str(tmp_path_factory.mktemp("mcp-micro-vault")),
+        "TAPEOLOGY_MICRO_GRADUATION_DIR": str(tmp_path_factory.mktemp("mcp-micro-graduation")),
     }
 
 
@@ -1163,6 +1171,58 @@ async def test_desk_vault_tool_byte_identical_on_a_populated_state(mcp_env, back
     assert result.content[0].text.encode("utf-8") == rest.content, "desk_vault not byte-identical"
 
 
+# desk_graduation (J-11, MCP contract v7, 26 -> 27 tools; empty + populated) -------------------------
+#
+# The IDENTICAL desk_vault precedent directly above: seeded through `GraduationLedger.append_row()`
+# -- the ledger's own public write path -- into the live backend's env-scoped
+# `TAPEOLOGY_MICRO_GRADUATION_DIR`, never through a live graduation-evaluation compute (J-11 is
+# keyless/automated; no operator compute act triggers a graduation transition this era).
+
+
+@pytest.mark.anyio
+async def test_desk_graduation_tool_byte_identical_on_the_honest_empty_state(mcp_env):
+    """Before any candidate has ever graduated, `desk_graduation` proxies `GET /research/desk/
+    micro/graduation`'s explicit HTTP 200 honest-empty payload -- an empty `families` list, the
+    ledger's own `EMPTY_LEDGER_MESSAGE`, and an `ok` chain verification -- never a 404."""
+    result = await call_tool("desk_graduation", {})
+    rest = httpx.get(f"{mcp_env}/research/desk/micro/graduation", timeout=5.0)
+    assert rest.status_code == 200
+    assert rest.json() == {
+        "families": [],
+        "message": "No candidates ledgered.",
+        "chain_verification": {"ok": True, "failed_at_row": None, "reason": None},
+    }
+    assert result.isError is False
+    assert len(result.content) == 1
+    assert result.content[0].text.encode("utf-8") == rest.content, "desk_graduation not byte-identical"
+
+
+@pytest.mark.anyio
+async def test_desk_graduation_tool_byte_identical_on_a_populated_state(mcp_env, backend_paths):
+    """Seed ONE real state-transition row directly through `GraduationLedger.append_row()` into the
+    live backend's env-scoped `TAPEOLOGY_MICRO_GRADUATION_DIR`, then prove the tool's JSON is
+    byte-identical to its curl equivalent on a NON-EMPTY result."""
+    graduation_dir = Path(backend_paths["TAPEOLOGY_MICRO_GRADUATION_DIR"])
+    GraduationLedger(graduation_dir).append_row(
+        {
+            "row_kind": ROW_KIND_STATE_TRANSITION,
+            "family_root_id": "mcp-test-graduation-root",
+            "sequence_id": "mcp-test-sequence",
+            "from_state": "exploratory",
+            "to_state": GRADUATION_STATE_WALKFORWARD_SURVIVOR,
+            "evaluated_at": "2026-08-24T00:00:00Z",
+        }
+    )
+    result = await call_tool("desk_graduation", {})
+    rest = httpx.get(f"{mcp_env}/research/desk/micro/graduation", timeout=5.0)
+    assert rest.status_code == 200
+    body = rest.json()
+    assert len(body["families"]) >= 1, "the live list must be non-empty for this proof"
+    assert result.isError is False
+    assert len(result.content) == 1
+    assert result.content[0].text.encode("utf-8") == rest.content, "desk_graduation not byte-identical"
+
+
 @pytest.mark.anyio
 async def test_tr2_the_new_mcp_tools_leak_nothing_about_a_sealed_shard(tmp_path, monkeypatch):
     """The round's opaque-pool-critical proof (goal.md's own carried-forward reminder): closes the
@@ -1174,7 +1234,7 @@ async def test_tr2_the_new_mcp_tools_leak_nothing_about_a_sealed_shard(tmp_path,
     `_record_distinctive_dataset`/`_scope_everything_to`/`_scalars`) -- then spawns a DEDICATED,
     freshly hermetic backend subprocess over that exact store (never the shared module-scoped
     `backend` fixture, whose dataset dir has already accumulated many other tests' recordings by
-    the time this test runs) and calls every one of the 26 registered MCP tools against it,
+    the time this test runs) and calls every one of the 27 registered MCP tools against it,
     asserting the sealed shard's raw dataset id, raw content checksum, symbol, session date,
     window bounds, and exact trade/quote counts appear in ZERO tool response bodies.
 
@@ -1257,7 +1317,7 @@ async def test_tr2_the_new_mcp_tools_leak_nothing_about_a_sealed_shard(tmp_path,
             "get_endpoint": {"path": "/research/datasets"},
         }
 
-        assert len(TOOL_NAMES) == 26, "the 26-tool contract must hold for this sweep to be complete"
+        assert len(TOOL_NAMES) == 27, "the 27-tool contract must hold for this sweep to be complete"
         leaks: list[str] = []
         for name in TOOL_NAMES:
             result = await call_tool(name, args_for.get(name, {}))
@@ -1927,9 +1987,10 @@ async def test_get_endpoint_desk_topup_runs_byte_identical_with_no_new_tool(mcp_
     assert result.content[0].text.encode("utf-8") == rest.content, "topup/runs not byte-identical"
     assert rest.json() == {"runs": [], "latest": None, "integrity_errors": []}
     # goal-rapid-microscope-iter-15: the total grew 22 -> 26 (desk_micro_readiness/desk_scout/
-    # desk_walkforward/desk_vault) -- this route's own no-new-tool claim is unaffected, so only
-    # the tracked total is re-derived here.
-    assert "desk_topup_runs" not in TOOL_NAMES and len(TOOL_NAMES) == 26
+    # desk_walkforward/desk_vault); iter-31 (J-11) grew it again, 26 -> 27 (desk_graduation) --
+    # this route's own no-new-tool claim is unaffected, so only the tracked total is re-derived
+    # here.
+    assert "desk_topup_runs" not in TOOL_NAMES and len(TOOL_NAMES) == 27
 
 
 @pytest.mark.anyio
@@ -1949,9 +2010,10 @@ async def test_get_endpoint_desk_screen_runs_byte_identical_with_no_new_tool(mcp
     assert result.content[0].text.encode("utf-8") == rest.content, "screen/runs not byte-identical"
     assert rest.json() == {"runs": [], "latest": None, "integrity_errors": []}
     # goal-rapid-microscope-iter-15: the total grew 22 -> 26 (desk_micro_readiness/desk_scout/
-    # desk_walkforward/desk_vault) -- this route's own no-new-tool claim is unaffected, so only
-    # the tracked total is re-derived here.
-    assert "desk_screen_runs" not in TOOL_NAMES and len(TOOL_NAMES) == 26
+    # desk_walkforward/desk_vault); iter-31 (J-11) grew it again, 26 -> 27 (desk_graduation) --
+    # this route's own no-new-tool claim is unaffected, so only the tracked total is re-derived
+    # here.
+    assert "desk_screen_runs" not in TOOL_NAMES and len(TOOL_NAMES) == 27
 
 
 @pytest.mark.anyio

@@ -1,0 +1,28 @@
+{
+  "phase": "goal-rapid-microscope-iter-31",
+  "status": "in_progress",
+  "current_step": "dev_complete",
+  "updated_at": "2026-08-24T19:22:00.000000Z",
+  "started_at": "2026-08-24T19:00:00.000000Z",
+  "cli": "claude",
+  "blockers": [],
+  "changed_files": [
+    "apps/backend/app/mcp/__init__.py",
+    "apps/backend/tests/test_mcp_server.py",
+    "apps/backend/tests/test_desk_ui_guards.py",
+    "apps/backend/tests/test_vault.py",
+    "apps/frontend/lib/types.ts",
+    "apps/frontend/lib/api.ts",
+    "apps/frontend/app/desk/page.tsx",
+    "docs/handoffs/goal-rapid-microscope-iter-31-dev.md"
+  ],
+  "tests_run": true,
+  "test_summary": "3495 passed, 8 skipped, 0 failed (iter-30 baseline: 3491 passed / 8 skipped)",
+  "browser_checks_run": false,
+  "next_action": "reviewer",
+  "notes": [
+    "J-11: desk_graduation MCP tool (contract v6 -> v7, 26 -> 27 tools) + read-only Graduation section on /desk, directly below Validation Vault.",
+    "Backend-only verification this pass: full suite green, npm run build clean, live service-startup curl check of GET /research/desk/micro/graduation and GET /desk (both 200), config_fingerprint unchanged (08e471b10130e1e2), referee_*.py and reports/pnl/pnl-history.md show zero diff.",
+    "Browser-qa-agent verification (TC-1/TC-2/TC-12 fixture-scoped 4-stage render + screenshots), J-07's golden replay script (TC-7), and the demo-narrator [NEW] walkthrough step remain for later pipeline stages -- out of this dev pass's IN SCOPE file list. See dev handoff Known Issues."
+  ]
+}
