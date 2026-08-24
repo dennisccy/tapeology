@@ -1798,8 +1798,35 @@ check_backend_only_claim() {
   local uvc_file="$REPO_ROOT/reports/phase-${phase}-user-visible-changes.md"
   [[ -f "$uvc_file" ]] || return 0  # File missing — handled elsewhere
 
-  # If the user-visible-changes file says N/A or no visible changes
-  if grep -qi "backend-only\|no user-visible\|no visible changes\|Frontend Present: no" "$uvc_file" 2>/dev/null; then
+  # Does the document CLAIM no visible surface? Delegated to closure_gate.py's
+  # `claims-no-visible-surface` so this layer and the deterministic gate share
+  # ONE definition of the claim (a claim-shaped assertion that nothing in the
+  # document rebuts). The old rule here was a bare substring grep, and the bare
+  # substring `backend-only` is ordinary prose in a frontend phase: it made both
+  # layers report a contradiction against a document that described its visible
+  # change at length (goal-rapid-microscope-iter-28).
+  local _cbo_gate="${BASH_SOURCE[0]%/*}/closure_gate.py"
+  local _cbo_claimed=1
+  if command -v python3 >/dev/null 2>&1 && [[ -f "$_cbo_gate" ]]; then
+    python3 "$_cbo_gate" claims-no-visible-surface "$uvc_file" >/dev/null 2>&1
+    _cbo_claimed=$?
+    # Exit 2 is a usage/read error, not a verdict — fall back rather than guess.
+    [[ "$_cbo_claimed" -le 1 ]] || _cbo_claimed=""
+  else
+    _cbo_claimed=""
+  fi
+  if [[ -z "$_cbo_claimed" ]]; then
+    # Fallback for an environment with no python3: the ORIGINAL grep, minus the
+    # bare `backend-only` alternative that caused the false positive. Keeps this
+    # check useful without re-introducing the defect.
+    if grep -qi "no user-visible\|no visible changes\|Frontend Present: no" "$uvc_file" 2>/dev/null; then
+      _cbo_claimed=0
+    else
+      _cbo_claimed=1
+    fi
+  fi
+
+  if [[ "$_cbo_claimed" -eq 0 ]]; then
     # Check if frontend files actually changed
     if detect_frontend_changes "$phase"; then
       echo "[check_backend_only_claim] WARNING: user-visible-changes claims no UI changes but frontend files were modified." >&2

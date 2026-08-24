@@ -17,9 +17,13 @@ Checks (mirroring agents/phase-closure-auditor/body.md Steps 1-4 and
      `Frontend Present: yes`, content checks: >5 content lines, no N/A stubs,
      no placeholder markers, what-to-click has >=3 numbered non-vague steps,
      ui-test-results not all-SKIPPED-without-a-documented-reason.
-  3. Backend-only claim guard — port of common.sh check_backend_only_claim
-     (user-visible-changes claims "no visible changes" while frontend files
-     changed): blocking on a frontend phase, WARN on a backend-only one.
+  3. No-visible-surface claim guard — port of common.sh
+     check_backend_only_claim (user-visible-changes claims "no visible changes"
+     while frontend files changed): blocking on a frontend phase, WARN on a
+     backend-only one. Two signals must agree: a claim-SHAPED assertion
+     (_NO_VISIBLE_CLAIM_RE — NOT the bare substring `backend-only`, which is
+     ordinary prose) and no affirmative description of a visible change
+     (documents_a_visible_change).
   4. Vagueness — only OBJECTIVE vagueness blocks (placeholder markers and the
      bare "Test the form"-class what-to-click steps). Anything subtler is a
      WARN line: upstream QA live-audits and the downstream evaluator
@@ -35,6 +39,10 @@ cases), 2 = usage/environment error (no verdict written).
 Usage:
   closure_gate.py <phase-name> --repo-root <path>
   closure_gate.py self-test
+  closure_gate.py claims-no-visible-surface <user-visible-changes.md>
+      exit 0 = the document claims no visible surface and nothing in it rebuts
+      that; exit 1 = no such claim. Used by check_backend_only_claim
+      (lib/common.sh) so both layers share ONE definition of the claim.
 """
 from __future__ import annotations
 
@@ -82,12 +90,75 @@ _ISOLATION_MARKER_RE = re.compile(
 # must not make this gate the more lenient of the two.
 _ISOLATION_ENV_TRUTHY = frozenset({"true", "TRUE", "1", "yes", "on", "required"})
 
-# N/A-stub / backend-only claim markers — the same set check_backend_only_claim
-# greps (lib/common.sh) so both layers agree on what a backend-only claim is.
-_BACKEND_CLAIM_RE = re.compile(
+# N/A-stub markers — the same set check_backend_only_claim greps (lib/common.sh).
+# Used ONLY for stub detection (Step 2), where the accompanying `lines <= 5`
+# condition is what makes a bare `backend-only` hit meaningful: a five-line file
+# saying "backend-only" IS the stub. Never used for the claim guard below.
+_NA_STUB_MARKER_RE = re.compile(
     r"backend-only|no user-visible|no visible changes|frontend present:\s*no",
     re.IGNORECASE,
 )
+
+# ── document-level "this phase has no visible surface" claim ─────────────────
+# The claim guard (Step 4) used to reuse _NA_STUB_MARKER_RE, i.e. it treated the
+# BARE substring `backend-only` anywhere in a full-length user-visible-changes
+# document as a claim that the phase changed nothing visible. That is false:
+# `backend-only` is ordinary prose in a frontend phase, describing a COMPONENT
+# rather than the phase. goal-rapid-microscope-iter-28 proved it — the document
+# describes a new visible /desk caveat at length under "What Changed in the
+# Visible UI", then later calls a new test "a backend-only regression guard",
+# and the gate emitted CLOSURE-FAIL for a contradiction that did not exist.
+#
+# So the claim must be claim-SHAPED, and it is now detected in two independent
+# halves, both of which must agree before the gate blocks:
+#   (a) _NO_VISIBLE_CLAIM_RE  — the document asserts no visible surface, either
+#       as a no-visible-changes statement, an explicit Frontend-Present: no /
+#       backend-only: yes declaration, or `backend-only` bound to the PHASE
+#       itself ("backend-only phase", "this iteration is backend-only") rather
+#       than to some noun inside it ("backend-only regression guard");
+#   (b) documents_a_visible_change() — the rebuttal: the document AFFIRMATIVELY
+#       describes a visible change under its own visible-changes heading.
+# A claim with no rebuttal blocks (the N/A-stub-on-a-frontend-phase defect this
+# gate exists for). A claim WITH a rebuttal is a wording inconsistency, not a
+# missing description, so it is a named WARN. Deliberately NOT in (a):
+# "user-facing" — iter-28 uses "zero user-facing surface" about the test
+# infrastructure, which is exactly the incidental-prose shape this guards.
+_NO_VISIBLE_CLAIM_RE = re.compile(
+    r"no\s+(?:new\s+)?(?:user[- ])?visible\s+(?:changes?|surface|impact|ui)"
+    r"|no\s+user[- ]visible\b"
+    r"|no\s+ui\s+changes?\b"
+    r"|zero\s+(?:new\s+)?user[- ]visible\s+changes?"
+    r"|frontend\s+present:\s*no\b"
+    r"|backend[- ]only:\s*(?:yes|true)\b"
+    r"|backend[- ]only\s+(?:phase|iteration|round|sprint|milestone|release|effort|delivery)\b"
+    # The copular form must END the clause. Without that, "the new guard test
+    # added this iteration is a backend-only regression guard" reads as a claim
+    # — the exact false positive this rewrite exists to kill, one clause later.
+    r"|(?:this\s+|the\s+)?(?:phase|iteration|round|milestone|release|change\s?set)\s+is\s+"
+    r"backend[- ]only(?=\s*(?:[.,;:!)\]]|$|\band\b|\bwith\b|—|--))"
+    r"|this\s+is\s+a\s+backend[- ]only\s+(?:phase|iteration|round|milestone|release)\b",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+# A `##`-level section heading that introduces a description of what changed
+# visibly. Narrow on purpose: "What Users Can Now Do" is NOT consulted, because
+# a phase can legitimately add no new user action while still changing the UI.
+_VISIBLE_SECTION_RE = re.compile(
+    r"visible\s+ui|visible\s+changes?|changed\s+in\s+the\s+visible"
+    r"|ui\s+changes?|visible\s+surface",
+    re.IGNORECASE,
+)
+
+# A body line that only says "there is nothing here".
+_PURE_NEGATION_RE = re.compile(
+    r"^(?:none|n/?a|nothing(?:\s+new)?|not\s+applicable|no\s+changes?"
+    r"|no\s+(?:user[- ])?visible\s+changes?|no\s+ui\s+changes?)[.!]?$",
+    re.IGNORECASE,
+)
+
+# A visible-change description has to have some substance; a bare "- Updated."
+# under the right heading is not a description.
+_VISIBLE_EVIDENCE_MIN_CHARS = 40
 
 # Frontend file patterns — mirror of detect_frontend_changes (lib/common.sh).
 _FRONTEND_FILE_RE = re.compile(
@@ -139,6 +210,47 @@ def content_lines(text: str) -> int:
             continue
         n += 1
     return n
+
+
+def _strip_markup(line: str) -> str:
+    """A body line reduced to its prose: list marker, blockquote marker and
+    bold/italic emphasis removed. Used only for the negation test."""
+    t = line.strip()
+    t = re.sub(r"^[>\s]*", "", t)
+    t = re.sub(r"^(?:[-*+]|\d+[.)])\s+", "", t)
+    t = t.replace("**", "").replace("__", "").strip()
+    return t
+
+
+def documents_a_visible_change(text: str) -> bool:
+    """True when the document AFFIRMATIVELY describes a user-visible change.
+
+    The rebuttal half of the claim guard (see _NO_VISIBLE_CLAIM_RE). Looks only
+    under a `##` heading that introduces visible changes, and requires at least
+    one substantive, non-negating body line there. A document with no such
+    section — an N/A stub, or one whose visible-changes section says "None." —
+    rebuts nothing, so a claim in it still blocks.
+    """
+    if not text:
+        return False
+    # (heading, body) pairs for every `##`+ section.
+    parts = re.split(r"^(##+\s+.*?)\s*$", text, flags=re.MULTILINE)
+    # parts[0] is the pre-first-heading preamble; then heading, body, heading, ...
+    for i in range(1, len(parts) - 1, 2):
+        heading = parts[i].lstrip("#").strip()
+        if not _VISIBLE_SECTION_RE.search(heading):
+            continue
+        for raw in parts[i + 1].splitlines():
+            if raw.strip().startswith("#"):
+                continue
+            prose = _strip_markup(raw)
+            if not prose or set(prose) <= {"-", "|", ":", " "}:
+                continue
+            if _PURE_NEGATION_RE.match(prose):
+                continue
+            if len(prose) >= _VISIBLE_EVIDENCE_MIN_CHARS:
+                return True
+    return False
 
 
 def maintenance_isolation_active(plan_text: str = "") -> bool:
@@ -344,7 +456,7 @@ def run_gate(phase: str, repo_root: Path) -> GateResult:
 
         lines = content_lines(text)
         nonempty = lines > 5
-        stub = bool(_BACKEND_CLAIM_RE.search(text)) and lines <= 5
+        stub = bool(_NA_STUB_MARKER_RE.search(text)) and lines <= 5
         holders = placeholder_hits(text)
         status = "OK"
         if stub:
@@ -482,25 +594,44 @@ def _crossref_frontend(
                 "(WARN only — format may legitimately vary)."
             )
 
-    # Backend-only claim guard (port of check_backend_only_claim, blocking here
-    # because Frontend Present: yes — body.md Step 4).
+    # No-visible-surface claim guard (port of check_backend_only_claim, blocking
+    # here because Frontend Present: yes — body.md Step 4).
+    #
+    # Two signals must agree before this blocks: a claim-SHAPED assertion that
+    # the phase has no visible surface, AND the absence of any affirmative
+    # description of a visible change. A bare `backend-only` in prose is not the
+    # first, and a document that describes its visible change under the right
+    # heading supplies the second — see _NO_VISIBLE_CLAIM_RE for the iteration
+    # that proved the single-substring rule wrong.
     uvc = texts.get("user-visible-changes")
-    if uvc is not None and _BACKEND_CLAIM_RE.search(uvc):
-        if frontend_files_changed(repo_root, phase):
+    if uvc is not None and _NO_VISIBLE_CLAIM_RE.search(uvc):
+        described = documents_a_visible_change(uvc)
+        if described:
+            r.warns.append(
+                "user-visible-changes states no visible surface somewhere in the "
+                "document, but also describes a visible change under its "
+                "visible-changes heading — wording inconsistency, not a missing "
+                "description (WARN)."
+            )
+            r.crossref.append(
+                "no-visible-surface claim guard: claim present but rebutted by a "
+                "described visible change (WARN)."
+            )
+        elif frontend_files_changed(repo_root, phase):
             r.blocking.append((
                 "user-visible-changes claims no visible changes but frontend "
                 "files were modified",
                 "Reconcile: either document the user-visible changes "
                 "(re-run ui-impact-phase.sh) or correct the change set.",
             ))
-            r.crossref.append("backend-only claim guard: INCONSISTENT (blocking).")
+            r.crossref.append("no-visible-surface claim guard: INCONSISTENT (blocking).")
         else:
             r.warns.append(
-                "user-visible-changes uses backend-only language on a frontend "
+                "user-visible-changes claims no visible surface on a frontend "
                 "phase, but no frontend file changes were detected (WARN)."
             )
     else:
-        r.crossref.append("backend-only claim guard: consistent.")
+        r.crossref.append("no-visible-surface claim guard: consistent.")
 
 
 # ── report rendering (frozen format — closure_verdict_passes greps line 1) ───
@@ -568,9 +699,25 @@ def render_report(phase: str, r: GateResult) -> str:
 def main(argv: list[str]) -> int:
     if argv and argv[0] in ("self-test", "--self-test"):
         return _self_test()
+    # Single source of truth for "does this document CLAIM no visible surface?",
+    # so the bash twin (check_backend_only_claim, lib/common.sh) and this gate
+    # can never drift apart on the question — the drift is what let a bare
+    # `backend-only` substring stand in for a claim in the first place.
+    # Exit 0 = an unrebutted claim; 1 = no claim (or a rebutted one); 2 = usage.
+    if argv and argv[0] == "claims-no-visible-surface":
+        if len(argv) != 2:
+            sys.stderr.write(
+                "usage: closure_gate.py claims-no-visible-surface <file>\n")
+            return 2
+        text = _read(Path(argv[1]))
+        if text is None:
+            return 2
+        claimed = bool(_NO_VISIBLE_CLAIM_RE.search(text))
+        return 0 if (claimed and not documents_a_visible_change(text)) else 1
     if not argv:
         sys.stderr.write(
             "usage: closure_gate.py <phase-name> --repo-root <path> | self-test\n"
+            "       closure_gate.py claims-no-visible-surface <file>\n"
         )
         return 2
     phase = argv[0]
@@ -808,8 +955,142 @@ def _self_test() -> int:
             assert r.verdict == "CLOSURE-FAIL"
             assert any("stub" in b[0] for b in r.blocking), r.blocking
 
+    # ── no-visible-surface claim guard: BOTH directions ──────────────────────
+    # Direction 1 — a real declaration + modified frontend files still blocks.
+    # Direction 2 — iter-28's exact semantic shape passes: the visible change is
+    # described, and `backend-only` appears later only as ordinary prose.
+
+    _ITER28_UVC = (
+        "# Phase p1 — User-Visible Changes\n\n"
+        "## What Users Can Now Do\n\n"
+        "- Nothing new. This iteration adds zero new actions, zero new pages, and zero new\n"
+        "  navigation. It is a disclosure-only change to already-shipped copy.\n\n"
+        "## What Changed in the Visible UI\n\n"
+        "- On the `/desk` page, inside the already-shipped **Referee Registry** collapsible\n"
+        "  section, a new one-line disclosure sentence now appears directly below the existing\n"
+        "  tick-gate statement and directly above the existing basis-caveats list.\n"
+        "- No other element on `/desk`, on the cockpit (`/`), or on `/structure` changed.\n\n"
+        "## Not Visible Yet\n\n"
+        "- The new guard test added this iteration is a backend-only regression guard proving\n"
+        "  the durable cache never masks a checksum failure; there is no UI surface for it.\n"
+        "- The test-infrastructure fix has zero user-facing surface — it is purely a\n"
+        "  developer/CI-facing speed improvement to `pytest` runs.\n"
+    )
+
+    def _with_frontend_change(root: Path, phase: str) -> None:
+        (root / "runs" / phase / "status.json").write_text(
+            json.dumps({"changed_files": ["apps/frontend/app/desk/page.tsx"]}),
+            encoding="utf-8")
+
+    def t_claim_regex_shape():
+        # Claim-shaped assertions ARE claims.
+        for claim in (
+            "No user-visible changes. All changes are internal backend implementation.",
+            "**Status:** N/A — Backend-only phase (Frontend Present: no)",
+            "There are no visible changes in this phase.",
+            "This is a backend-only iteration.",
+            "The phase is backend-only.",
+            "backend-only: yes",
+            "No UI changes were made.",
+        ):
+            assert _NO_VISIBLE_CLAIM_RE.search(claim), claim
+        # Incidental prose is NOT a claim.
+        for prose in (
+            "a backend-only regression guard proving the cache never masks a failure",
+            "the new backend-only test covers the durable index",
+            "this touches a backend-only component of the readiness pipeline",
+            "The fix has zero user-facing surface — it is a developer/CI improvement.",
+            "No other element on `/desk` changed in any way.",
+        ):
+            assert not _NO_VISIBLE_CLAIM_RE.search(prose), prose
+
+    def t_rebuttal_detection():
+        assert documents_a_visible_change(_ITER28_UVC)
+        # An N/A stub rebuts nothing.
+        assert not documents_a_visible_change(
+            "# Phase p1 — User-Visible Changes\n\n"
+            "**Status:** N/A — Backend-only phase (Frontend Present: no)\n\n"
+            "No user-visible changes. All changes are internal backend implementation.\n")
+        # A visible-changes section that says "None." rebuts nothing.
+        assert not documents_a_visible_change(
+            "# Phase p1 — User-Visible Changes\n\n"
+            "## What Changed in the Visible UI\n\n- None.\n\n"
+            "## Notes\n\nThis paragraph is long enough to be substantive prose, but it is not\n"
+            "under a visible-changes heading, so it must not count as a rebuttal.\n")
+
+    def t_no_visible_claim_still_blocks():
+        """Direction 1: a genuine declaration + changed frontend files blocks."""
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            _write_fixture(root, "p1")
+            _with_frontend_change(root, "p1")
+            (root / "reports" / "phase-p1-user-visible-changes.md").write_text(
+                "# Phase p1 — User-Visible Changes\n\n" + _RICH + "\n\n"
+                "## Summary\n\nNo user-visible changes. All changes are internal backend\n"
+                "implementation with no rendered surface of any kind.\n",
+                encoding="utf-8")
+            r = run_gate("p1", root)
+            assert r.verdict == "CLOSURE-FAIL", (r.verdict, r.warns)
+            assert any("claims no visible changes" in b[0] for b in r.blocking), r.blocking
+
+    def t_backend_only_phase_declaration_still_blocks():
+        """Direction 1, the `backend-only <phase>` wording rather than the
+        no-visible-changes wording."""
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            _write_fixture(root, "p1")
+            _with_frontend_change(root, "p1")
+            (root / "reports" / "phase-p1-user-visible-changes.md").write_text(
+                "# Phase p1 — User-Visible Changes\n\n" + _RICH + "\n\n"
+                "## Summary\n\nThis is a backend-only phase; nothing was rendered and no\n"
+                "template, route or component was touched at any point.\n",
+                encoding="utf-8")
+            r = run_gate("p1", root)
+            assert r.verdict == "CLOSURE-FAIL", (r.verdict, r.warns)
+            assert any("claims no visible changes" in b[0] for b in r.blocking), r.blocking
+
+    def t_iter28_incidental_backend_only_passes():
+        """Direction 2: goal-rapid-microscope-iter-28's exact semantic shape —
+        the visible change described, `backend-only` later as prose about a
+        TEST, frontend files genuinely modified — must NOT block."""
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            _write_fixture(root, "p1")
+            _with_frontend_change(root, "p1")
+            (root / "reports" / "phase-p1-user-visible-changes.md").write_text(
+                _ITER28_UVC, encoding="utf-8")
+            r = run_gate("p1", root)
+            assert r.verdict == "CLOSURE-PASS", (r.verdict, r.blocking)
+            assert any("claim guard: consistent" in c for c in r.crossref), r.crossref
+
+    def t_claim_with_described_change_is_a_named_warn():
+        """A document that BOTH declares no visible surface AND describes one is
+        a wording inconsistency: named, not silent, and not blocking."""
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            _write_fixture(root, "p1")
+            _with_frontend_change(root, "p1")
+            (root / "reports" / "phase-p1-user-visible-changes.md").write_text(
+                "# Phase p1 — User-Visible Changes\n\n"
+                "**Status:** No user-visible changes.\n\n" + _RICH + "\n\n"
+                "## What Changed in the Visible UI\n\n"
+                "- The `/desk` page now renders a new one-line disclosure sentence beneath the\n"
+                "  existing tick-gate statement, under a new data-testid.\n",
+                encoding="utf-8")
+            r = run_gate("p1", root)
+            assert r.verdict == "CLOSURE-PASS", (r.verdict, r.blocking)
+            assert any("wording inconsistency" in w for w in r.warns), r.warns
+
     tests = [
         ("helpers", t_helpers),
+        ("claim_regex_shape", t_claim_regex_shape),
+        ("rebuttal_detection", t_rebuttal_detection),
+        ("no_visible_claim_still_blocks", t_no_visible_claim_still_blocks),
+        ("backend_only_phase_declaration_still_blocks",
+         t_backend_only_phase_declaration_still_blocks),
+        ("iter28_incidental_backend_only_passes", t_iter28_incidental_backend_only_passes),
+        ("claim_with_described_change_is_a_named_warn",
+         t_claim_with_described_change_is_a_named_warn),
         ("skip_detection", t_skip_detection),
         ("happy_tree", t_happy),
         ("missing_artifact", t_missing_artifact),
