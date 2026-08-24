@@ -1,34 +1,34 @@
 # Goal Session Summary — rapid-microscope
 
-**Final verdict:** AWAITING_PUMP
-**Total iterations:** 28
-**Wall time (seconds):** 20
+**Final verdict:** STALLED
+**Total iterations:** 29
+**Wall time (seconds):** 4073
 **Quota pauses:** 0
 **Started:** 2026-08-16T22:25:35.904129Z
-**Finished:** 2026-08-23T21:16:32.345944Z
+**Finished:** 2026-08-23T22:24:59.175060Z
 
 ## Branch
 
 This session pushed iteration commits to `goal/rapid-microscope`. Open a PR with:
 
     gh pr create --base main --head goal/rapid-microscope \
-      --title "feat: rapid-microscope — AWAITING_PUMP" \
+      --title "feat: rapid-microscope — STALLED" \
       --body-file runs/goal-session-rapid-microscope/summary.md
 
 ## Final journey state
 
 | Journey | Status | Last passing iter |
 |---|---|---|
-| J-01 | passing | goal-rapid-microscope-iter-27 |
-| J-02 | passing | goal-rapid-microscope-iter-27 |
-| J-03 | passing | goal-rapid-microscope-iter-27 |
-| J-04 | passing | goal-rapid-microscope-iter-27 |
-| J-05 | passing | goal-rapid-microscope-iter-27 |
-| J-06 | passing | goal-rapid-microscope-iter-27 |
+| J-01 | passing | goal-rapid-microscope-iter-28 |
+| J-02 | passing | goal-rapid-microscope-iter-28 |
+| J-03 | passing | goal-rapid-microscope-iter-28 |
+| J-04 | passing | goal-rapid-microscope-iter-28 |
+| J-05 | passing | goal-rapid-microscope-iter-28 |
+| J-06 | passing | goal-rapid-microscope-iter-28 |
 | J-07 | passing | goal-rapid-microscope-iter-24 |
-| J-08 | passing | goal-rapid-microscope-iter-27 |
-| J-09 | passing | goal-rapid-microscope-iter-27 |
-| J-10 | passing | goal-rapid-microscope-iter-27 |
+| J-08 | passing | goal-rapid-microscope-iter-28 |
+| J-09 | passing | goal-rapid-microscope-iter-28 |
+| J-10 | passing | goal-rapid-microscope-iter-28 |
 
 ## Anti-goal violations
 
@@ -81,6 +81,9 @@ This session pushed iteration commits to `goal/rapid-microscope`. Open a PR with
 - [critical] Foundation invariants -- 'no fabricated data' / Single source of truth: each shared value is computed once and read verbatim, so a cached copy may never disagree with the canonical computation. *(critical)* (iter goal-rapid-microscope-iter-26)
 - [minor] Constraints -- 'the suite stays keyless and hermetic' (Era-B/B2 rail, binding) and Success Criteria #1 'Nothing kept regresses -- full backend suite green ... every iteration'. A suite that reads the operator's own mutable multi-gigabyte store is neither hermetic nor runnable, so no lane can honestly evidence criterion #1. (iter goal-rapid-microscope-iter-26)
 - [minor] Constraints -- 'T-10 Evidence honesty. No screenshot => unknown, never passing; operator acts are reported run-or-not-run' -- a lane may not certify, NARRATE, or claim as captured what it did not check. (iter goal-rapid-microscope-iter-27)
+- [minor] Constraints -- 'T-10 Evidence honesty. No screenshot => unknown, never passing' -- a lane may not certify or narrate what it did not open. (iter goal-rapid-microscope-iter-28)
+- [minor] Constraints -- Test quality / evidence honesty: a spec'd test contract must actually be exercised; a guard that cannot fail certifies nothing. (iter goal-rapid-microscope-iter-28)
+- [minor] Dev-chain integrity (framework, not product): a deterministic closing gate's verdict must follow from its own inputs - it may not fail correct work on a substring match. (iter goal-rapid-microscope-iter-28)
 
 ## Telemetry
 
@@ -606,22 +609,33 @@ See `runs/goal-session-rapid-microscope/telemetry.jsonl` for the structured even
       [engine] showcase-join       0.0m  (contains agent time above)
       (resume-skipped: goal-decomposer)
       pump-wait                  0.2m
-  session: 28 completed iteration(s), mean wall 223.1m
+  goal-rapid-microscope-iter-28  depth=full  verdict=STALLED  wall=67.8m
+      auditor                     39.3m  calls=1
+      goal-evaluator              21.2m  calls=1
+      iteration-summarizer         4.1m  calls=1
+      coherence-auditor            3.2m  calls=1
+      [engine] full-pipeline      39.3m  (contains agent time above)
+      [engine] showcase-join       0.0m  (contains agent time above)
+      (resume-skipped: goal-decomposer)
+      pump-wait                  0.6m
+      OVER BUDGET at showcase-tail: 3821s > 3600s (mode=trim)
+      unattributed (glue)        0.0m  (wall − agents(active) − quota)
+  session: 29 completed iteration(s), mean wall 217.8m
       total developer                 2684.8m
       total reviewer                   765.5m
-      total goal-evaluator             716.9m
-      total auditor                    699.5m
+      total auditor                    738.7m
+      total goal-evaluator             738.1m
       total browser-qa-agent           639.0m
-      total coherence-auditor          627.9m
+      total coherence-auditor          631.1m
       total goal-decomposer            590.7m
       total qa                         477.1m
-      total iteration-summarizer       338.6m
+      total iteration-summarizer       342.7m
       total ui-impact-analyst          161.5m
       total orchestrator               151.3m
       total demo-narrator              146.9m
       total readme-maintainer           12.1m
       total ui-test-designer             8.9m
       total browser-qa-replay            6.5m
-      total AWAITING_PUMP paused gaps: 2.3m
-      halts: AWAITING_PUMP, AWAITING_PUMP, AWAITING_PUMP, STALLED, AWAITING_PUMP
+      total AWAITING_PUMP paused gaps: 2.9m
+      halts: AWAITING_PUMP, AWAITING_PUMP, AWAITING_PUMP, STALLED, AWAITING_PUMP, STALLED
 ```

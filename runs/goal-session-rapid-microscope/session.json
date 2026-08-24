@@ -9,17 +9,17 @@
     "stall_window": 3,
     "regression_halt": true
   },
-  "status": "in_progress",
+  "status": "STALLED",
   "last_verdict": "STALLED",
   "next_depth": "full",
   "auto_release": false,
   "push_per_iter": true,
   "push_branch": "goal/rapid-microscope",
   "updated_at": "2026-08-23T22:24:58.790589Z",
-  "finished_at": "2026-08-23T21:16:32.345944Z",
-  "total_iterations": 28,
-  "wall_time_seconds": 20,
+  "finished_at": "2026-08-23T22:24:59.175060Z",
+  "total_iterations": 29,
+  "wall_time_seconds": 4073,
   "quota_pause_count": 0,
-  "parked_wip_sha": "9b85ba9",
+  "parked_wip_sha": "2503d25b",
   "output_styles": "off"
 }
