@@ -1765,3 +1765,64 @@ rather than silently converting them into a round of their own.
 choices continues from exactly this state, and the three polish jobs are carried in
 `iteration-state.md` so a resume is productive immediately.
 
+
+<!-- condense.sh 2026-08-24T14:05:23Z: moved 3 entries (keep-iters=5) -->
+
+## iter-23 — goal-decomposer
+
+**Ambiguity:** J-06's browser acceptance evidence (the Microscope Readiness / Validation Vault
+sections on `/desk` showing the real registered tranche) cannot be produced by the standard
+`start_scoped_qa_backend.sh` / `qa_playbook_iter7_fixture_scoped_backend.sh` rig — that rig points
+`TAPEOLOGY_DATASET_DIR` at a FIXTURE dataset directory, separate from the real `apps/backend/.data/datasets`
+store the owner's operator act (commits `08534e8`, `76e7a70`, run 2026-08-21/22, outside goal-mode)
+actually recorded 80 genuine J-06 shards into. `docs/goal.md` names no backend instance for
+operator-act journey evidence.
+**We chose:** direct this iteration's J-06 browser pass at a SEPARATE backend instance pointed at
+the real `.data/datasets` store — the same `TAPEOLOGY_DATASET_DIR="$ROOT/.data/datasets"` pattern
+`goal-desk-iter9-scoped-backend.sh` already established for a prior era's real-corpus evidence —
+read-only GETs only, kept entirely apart from the QA fixture rig's own lifecycle so the fixture
+rig's "No candidates ledgered." golden assertions (`J-08.json` step 3 / `J-10.json` step 12) are
+never touched by this iteration's evidence gathering. Regression journeys (J-01, J-08, J-09, J-10
+smoke) still run against the standard fixture-scoped rig as usual.
+**Reversible:** yes — a later iteration may choose a different evidence-capture path for
+operator-act journeys; nothing about this iteration's scoring depends on the script name used,
+only that the real store (not the empty fixture store) is what gets rendered and screenshotted.
+
+## iter-23 — goal-evaluator
+
+**Ambiguity:** J-06's acceptance says "the tranche exists on disk meeting every §7.6 minimum
+(readiness serves the arithmetic)" and "at least the HMAC-assigned subset of tranche shards is
+`sealed`", but never says WHICH number the readiness surface must show. This iteration's own spec
+(TC-1/TC-3) asserted `sealed_tranche.by_universe[...].shard_count == 21` on the readiness endpoint;
+the endpoint actually serves `80`, and the `21` figure lands on the vault endpoint instead.
+**We chose:** `80` on readiness is CORRECT and TC-1/TC-3's literal `21` is an imprecision in the
+decomposer's phrasing, not a product defect — so J-06 passes on a readiness section showing 80.
+Grounds I checked rather than inherited: serving `21` on readiness while the registered universe is
+80 pairs would let a reader subtract and name the sealed complement exactly, which is the attack the
+*(critical)* r5 anti-goal exists to stop; the coherence auditor reached the same reading independently
+against `blueprint.md`'s Data Contract; and the same iteration spec's IN SCOPE bullet 4 already framed
+it as "21 sealed, 80 shard pool". I did NOT extend this to accepting the readiness variable's name
+(`sealed_shard_count`) as accurate — it counts the whole withheld pool, and I logged that as an
+advisory.
+**Reversible:** yes — if the owner rules that readiness should distinguish "sealed" from "pooled",
+that ruling changes a served number, not this scoring, and J-06's acceptance text is silent either way.
+
+## iter-23 — goal-evaluator (second)
+
+**Ambiguity:** whether a PARTIAL de-anonymisation of the sealed pool violates the *(critical)* r5
+anti-goal. Its prose says "unexposed pool members stay mutually indistinguishable", but the very next
+sentence names its own governing test: "no still-unexposed vault-eligible shard is identifiable with
+certainty." I found a real channel (served per-shard `sealed_at` joined against the committed
+per-run `sealed_this_run` counts) that proves 3 pool members unsealed and reduces one shard's
+candidate set from 79 to 4 — indistinguishability is weakened, certainty is not reached.
+**We chose:** MINOR, not critical, and therefore J-06 passes and the verdict is not REGRESSION.
+Grounds: the rail designates the certainty test as governing, and I verified the smallest candidate
+set I could construct is 4, never 1; nothing is fabricated, no secret leaks, and no gate, promotion
+or certificate consumes the affected value. I record that this was a close call and that I resolved
+it by the rail's own named test rather than by its looser prose sentence. I opened it as an OPEN
+minor item, which under the evaluator's own rule ("do not mark GOAL_ACHIEVED while any anti-goal
+violation is unresolved") means it must be closed before the era can be certified.
+**Reversible:** yes — if the owner or a later auditor reads the "mutually indistinguishable" sentence
+as independently binding, the same finding is re-scored critical and the fix is unchanged; nothing
+about this round's evidence depends on the severity label.
+

@@ -243,64 +243,6 @@ observations ⇒ `insufficient` · 30 otherwise-valid ⇒ sufficiency can clear 
 `rule_hash`, applied floors and runtime behaviour agree byte-for-byte · `insufficient` consumes the
 single shot.
 
-## iter-23 — goal-decomposer
-
-**Ambiguity:** J-06's browser acceptance evidence (the Microscope Readiness / Validation Vault
-sections on `/desk` showing the real registered tranche) cannot be produced by the standard
-`start_scoped_qa_backend.sh` / `qa_playbook_iter7_fixture_scoped_backend.sh` rig — that rig points
-`TAPEOLOGY_DATASET_DIR` at a FIXTURE dataset directory, separate from the real `apps/backend/.data/datasets`
-store the owner's operator act (commits `08534e8`, `76e7a70`, run 2026-08-21/22, outside goal-mode)
-actually recorded 80 genuine J-06 shards into. `docs/goal.md` names no backend instance for
-operator-act journey evidence.
-**We chose:** direct this iteration's J-06 browser pass at a SEPARATE backend instance pointed at
-the real `.data/datasets` store — the same `TAPEOLOGY_DATASET_DIR="$ROOT/.data/datasets"` pattern
-`goal-desk-iter9-scoped-backend.sh` already established for a prior era's real-corpus evidence —
-read-only GETs only, kept entirely apart from the QA fixture rig's own lifecycle so the fixture
-rig's "No candidates ledgered." golden assertions (`J-08.json` step 3 / `J-10.json` step 12) are
-never touched by this iteration's evidence gathering. Regression journeys (J-01, J-08, J-09, J-10
-smoke) still run against the standard fixture-scoped rig as usual.
-**Reversible:** yes — a later iteration may choose a different evidence-capture path for
-operator-act journeys; nothing about this iteration's scoring depends on the script name used,
-only that the real store (not the empty fixture store) is what gets rendered and screenshotted.
-
-## iter-23 — goal-evaluator
-
-**Ambiguity:** J-06's acceptance says "the tranche exists on disk meeting every §7.6 minimum
-(readiness serves the arithmetic)" and "at least the HMAC-assigned subset of tranche shards is
-`sealed`", but never says WHICH number the readiness surface must show. This iteration's own spec
-(TC-1/TC-3) asserted `sealed_tranche.by_universe[...].shard_count == 21` on the readiness endpoint;
-the endpoint actually serves `80`, and the `21` figure lands on the vault endpoint instead.
-**We chose:** `80` on readiness is CORRECT and TC-1/TC-3's literal `21` is an imprecision in the
-decomposer's phrasing, not a product defect — so J-06 passes on a readiness section showing 80.
-Grounds I checked rather than inherited: serving `21` on readiness while the registered universe is
-80 pairs would let a reader subtract and name the sealed complement exactly, which is the attack the
-*(critical)* r5 anti-goal exists to stop; the coherence auditor reached the same reading independently
-against `blueprint.md`'s Data Contract; and the same iteration spec's IN SCOPE bullet 4 already framed
-it as "21 sealed, 80 shard pool". I did NOT extend this to accepting the readiness variable's name
-(`sealed_shard_count`) as accurate — it counts the whole withheld pool, and I logged that as an
-advisory.
-**Reversible:** yes — if the owner rules that readiness should distinguish "sealed" from "pooled",
-that ruling changes a served number, not this scoring, and J-06's acceptance text is silent either way.
-
-## iter-23 — goal-evaluator (second)
-
-**Ambiguity:** whether a PARTIAL de-anonymisation of the sealed pool violates the *(critical)* r5
-anti-goal. Its prose says "unexposed pool members stay mutually indistinguishable", but the very next
-sentence names its own governing test: "no still-unexposed vault-eligible shard is identifiable with
-certainty." I found a real channel (served per-shard `sealed_at` joined against the committed
-per-run `sealed_this_run` counts) that proves 3 pool members unsealed and reduces one shard's
-candidate set from 79 to 4 — indistinguishability is weakened, certainty is not reached.
-**We chose:** MINOR, not critical, and therefore J-06 passes and the verdict is not REGRESSION.
-Grounds: the rail designates the certainty test as governing, and I verified the smallest candidate
-set I could construct is 4, never 1; nothing is fabricated, no secret leaks, and no gate, promotion
-or certificate consumes the affected value. I record that this was a close call and that I resolved
-it by the rail's own named test rather than by its looser prose sentence. I opened it as an OPEN
-minor item, which under the evaluator's own rule ("do not mark GOAL_ACHIEVED while any anti-goal
-violation is unresolved") means it must be closed before the era can be certified.
-**Reversible:** yes — if the owner or a later auditor reads the "mutually indistinguishable" sentence
-as independently binding, the same finding is re-scored critical and the fix is unchanged; nothing
-about this round's evidence depends on the severity label.
-
 ## iter-24 — goal-decomposer
 
 **Ambiguity:** iter-23's evaluator recommended closing the sealing-time leak with an explicit "or":
@@ -716,3 +658,91 @@ remain valid — no re-photograph is owed for unchanged code. I record in the jo
 fresh cockpit or `/structure` photograph exists for this round, rather than hiding it.
 **Reversible:** yes — a later round photographing those two surfaces would confirm, not overturn,
 this scoring.
+
+## iter-29 — goal-decomposer
+
+**Ambiguity:** whether the "zero remaining FAILING journeys" shortcut applies here — the inline
+journey digest shows all 10 journeys `passing`, including J-07 (`last_passing=iter-24`) — even
+though `iteration-state.md`'s Active blockers explicitly name J-07 as needing re-verification this
+round ("DEFERRED-BUDGET row; keeps its iter-24 stamp; that one cell mechanically bars
+GOAL_ACHIEVED until re-verified") and the last evaluator's STALLED verdict named it as one of two
+concrete developer jobs. This is the same shape of ambiguity iter-27's decomposer entry logged for
+an ESCALATE verdict; here the verdict is STALLED and, since that entry was written, the owner has
+directly landed both of the STALLED next-step's developer jobs (test-cache fix, closure-gate fix)
+via out-of-band commits `f08f46ee`/`f2b292f4`, leaving only the re-verification half open.
+**We chose:** treat J-07 as this iteration's Target journey (not the one-line "all passing" stub),
+per the same reading iter-27 established: a live evaluator verdict naming concrete, non-owner-owned
+work is binding scope, and "all passing" is not license to override it. I re-derived the "not
+owner-owned" premise myself rather than inheriting it — `iteration-state.md` puts J-07's
+re-verification under "dev, blocked on dispatch", a distinct category from the "human (owner
+ruling)" and "human (already deferred)" items in the same list — and confirmed via `git log` that
+the owner's two commits already closed the OTHER dev-track item (the test-cache fix), so
+re-checking J-07 is the one piece of that list still open. Everything else on the Active-blockers
+list (3 remaining dev-chain framework findings, 2 owner-deferred items) is excluded, matching the
+evaluator's own categorization of those as human-owned.
+**Reversible:** yes — if this reading is wrong, a later round can revert to the one-line stub; no
+code this iteration's plan commits to depends on it, since the plan itself makes no production code
+change (pure re-verification).
+
+## iter-29 — goal-evaluator
+
+**Ambiguity:** whether the iteration-26 anti-goal item may be CLOSED. It cites the Era-B/B2 rail
+"the suite stays keyless and hermetic" together with Success Criteria #1 ("full backend suite green
+... every iteration"), on the grounds that "a suite that reads the operator's own mutable
+multi-gigabyte store is neither hermetic nor runnable". The owner's commit `f08f46ee` fixed the
+runnability half decisively, but the three test files STILL read the operator's real ~26 GB corpus
+— deliberately, per `tests/real_corpus_cache.py`'s own docstring ("the acceptance they carry is
+'the real corpus still produces this answer' and a fixture cannot stand in for that"). So on a
+literal reading of the word "hermetic" the item is not closed.
+**We chose:** CLOSE it, on the reading that "keyless and hermetic" in the Era-B/B2 rail targets
+credentials and network reachability — both always satisfied by this suite — and that the half of
+the item which was a genuine violation was Success Criteria #1, which is now met. Grounds I
+measured rather than inherited: I ran the three files and timed them (3.21s / 7.11s / 2.30s wall,
+against 14m38s / 27m57s / 27m31s recorded before, and against this same evaluator killing ONE of
+them unfinished at 8m40s at iteration 26); the full suite completed 3,491 passed / 8 skipped / 0
+failed twice this round; both live operator cache DBs are byte-identical (mtime + sha256) across
+both runs; and I read the mechanism itself — `real_corpus_cache.py` routes to a dedicated
+`.data/test-cache/` namespace and deliberately refuses `TAPEOLOGY_DATASET_INDEX_DB` /
+`TAPEOLOGY_MICRO_READINESS_CACHE_DB`, while `conftest.py`'s session-scoped
+`_forbid_live_cache_db_construction` refuses any test construction against a live path. The
+residual real-corpus READ is written verbatim into the ledger's resolution text rather than
+dropped, so a later round can reopen it without archaeology.
+**Reversible:** yes — reopening the entry costs one edit and disturbs no journey status.
+
+## iter-29 — goal-evaluator (second)
+
+**Ambiguity:** whether STALLED's first branch — "every unblock path for the current blocker is a
+human-owned action" — may be claimed when the blocker is two MINOR, pre-existing, owner-deferred
+anti-goal items whose escalation conditions are both untripped, while an unrelated, genuinely
+machine-buildable job exists (strengthening J-05's golden assertion and taking element captures for
+J-02/J-03). Branch two ("no actionable next step is identifiable") plainly does not fire.
+**We chose:** STALLED under branch one. Grounds re-derived rather than inherited: (a) I re-tested
+BOTH escalation conditions myself this round — `grep -rn evaluate_sealed_verdict apps/backend/app/`
+returns zero production callers and `.data` has no `micro_graduation` directory; the vault directory
+is operator-owned (`drwxrwxr-x dennis-chan`) with the raw datasets still readable outside the
+product — so neither item re-scores critical; (b) both are barred from a build round by the owner's
+OWN earlier rulings (r8 forbids designing the ledger identity commitment ad hoc; r9 put `econ_floor`
+out of scope and the iter-18 auditor refused to invent a resolution under T-1), so a dispatched
+developer could not close either one even at full depth; (c) the machine-buildable golden job is NOT
+an unblock path for that blocker, so it does not defeat branch one — it is recorded as optional in
+the recommendation instead. I deliberately did NOT reuse iterations 27/28's supporting argument
+about the depth ladder: with `CHAIN_REQUIRE_FULL_DEPTH` currently set (telemetry
+`depth_cost_overridden: hard-full-required`), a CONTINUE would in fact still get a developer, so
+that argument is unavailable this round and the verdict must stand on branch one alone. It does.
+**Reversible:** yes — a `--resume` restores the loop with every recorded status untouched.
+
+## iter-29 — goal-evaluator (third)
+
+**Ambiguity:** whether J-07 "Graduation" may have its stamp moved to iteration 29 with NO
+screenshot, when methodology A.3's no-screenshot rail is absolute ("no citation → `unknown`").
+**We chose:** `passing` at iter-29, cited to the pytest run rather than an image. Grounds: J-07's
+acceptance text in `docs/goal.md` is entirely a fixture walk ("the fixture walk produces a
+validating `referee_handoff_ready` bundle ... every `referee_*` module remains byte-identical") and
+names no screen at all; `docs/goal.md:315` scopes the screenshot rail to "every BROWSER acceptance",
+which J-07 has none of; and the era carries an earlier binding ruling that J-07 has no screen and no
+stored golden. The suite ran three times independently this round (dev 23/1.53s, auditor 23/1.56s,
+my own 23/1.49s) and I re-derived the byte-identity half by hand (six `referee_*.py` sha256 all
+matching the iteration-0 listing). `last_evidence_path` therefore points at the dev handoff's TC-1
+section, which is unusual and is flagged here rather than hidden.
+**Reversible:** yes — if a later ruling gives J-07 a browser surface, it would need a capture like
+any other journey; nothing else in this scoring depends on the choice.

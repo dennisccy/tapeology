@@ -210,29 +210,12 @@ includes `insufficient_n` / `no survivor` / a floor refusal — i.e. anything un
 **Applies to:** any iteration whose demo script includes a step on a `GET /research/...` address
 rather than a `/cockpit`, `/structure` or `/desk` page.
 
-## iter-23 — 2026-08-23T03:05:00Z
-
-**Verdict:** ESCALATE
-**Lesson:** An "opaque pool" leaks through its own bookkeeping, not through its serving layer. The
-vault's serving code is a correct positive allow-list and TR-2 passes, yet joining the per-shard
-`sealed_at` the vault route serves (`vault.py:380` `_OPAQUE_SHARD_KEYS`) against the per-run
-`sealed_this_run` counts published in the committed `reports/j06-tranche/recording-runs.json`
-partitions the 21 seals 7/13/1/0/0 across the five recorder runs — proving 3 pool members unsealed
-and cutting one shard's candidate set from 79 to 4. An inference trap that models only the SERVED
-surfaces will keep passing while the operator's own committed run reports do the leaking.
+## iter-23 — 2026-08-23T03:05:00Z  [condensed: body → lessons.md.archive.md]
 **Applies to:** any iteration that adds a served per-item timestamp/ordinal to a withheld set, or
 that commits a per-run progress artifact beside one — check the JOIN, and make the trap's
 combinatorial model consume every artifact its own attacker-knowledge list claims.
 
-## iter-23 — 2026-08-23T03:05:00Z (second)
-
-**Verdict:** ESCALATE
-**Lesson:** The depth arbiter's `full-cap` rung (one full per cadence window) silently cut the
-audit lane out of the ONE iteration whose entire declared purpose was independently verifying
-4,191 lines of never-reviewed operator code — the spec said so in writing, with a qualifying
-`Full trigger:` line, and the cost ladder overrode it anyway (telemetry `depth_demoted`, reason
-`full-cap`). Only a hard `Depth enforcement: required` line outranks a cost rung; a mere
-`Full trigger:` does not.
+## iter-23 — 2026-08-23T03:05:00Z (second)  [condensed: body → lessons.md.archive.md]
 **Applies to:** any iteration whose purpose is independent verification of code that entered the
 repo outside goal-mode — the decomposer must write `Depth enforcement: required`, not just
 `Full trigger:`, or plan for the checker to be cut.
@@ -389,3 +372,34 @@ cannot cover it, and the LLM lane was not given it either); its own fixture suit
 **Applies to:** any journey that has no stored golden and rides the Required-still-passing list —
 give it a golden, or route it to the lane that can actually run it, before a round that is likely to
 overrun; and any evaluator scoring a round that certified everything except one shed row.
+
+## iter-29 — 2026-08-24T15:35:00Z
+
+**Verdict:** STALLED
+**Lesson:** A hard-audit finding is an input to be re-derived, not a fact to inherit — even when
+it comes from the lane with the best catch record in the era. The iter-29 audit's T1 told the
+evaluator to read "9/9 replay PASS" as near-worthless ("six 2-step single-substring goldens", "the
+evidence PNGs are non-discriminating", "J-04 and J-05 cannot distinguish their own surface"). I
+opened four PNGs and read all nine golden scripts: J-01/J-04/J-05/J-09 each depict their own
+acceptance state, the J-04/J-09 byte-identical frame contains BOTH journeys' asserted strings, and
+J-01/J-02/J-03/J-09 assert journey-specific text. Only J-05 genuinely borrows J-04's assertion.
+The finding was directionally right and quantitatively wrong, and had I inherited it I would have
+mis-scored the certification evidence in the pessimistic direction — the mirror image of the
+optimistic over-claiming this era has caught six times.
+**Applies to:** any iteration where the evaluator is weighing replay/golden evidence for
+certification, and generally to any auditor finding phrased as a quantified claim about artifacts
+("N of M are X") — open the artifacts and count.
+
+## iter-29 — 2026-08-24T15:35:00Z (second)
+
+**Lesson:** Before scoring an open anti-goal item as blocking, check WHICH SECTION of `docs/goal.md`
+its cited rule actually lives in. Four of this era's eight open items cite "T-10 Evidence honesty",
+which sits in the "Build anchors & weak-model traps" section (line 433), not in "Anti-goals" (line
+689). They are real findings about build-chain reporting, but they are not product anti-goals, and
+their remedies live in `agents/**`/`scripts/automation/**` — outside a product round's authority
+per `.claude/maintenance-protocol.md` §1. Recording that classification in the ledger (without
+downgrading the finding) is what let this round separate "two owner decisions genuinely block the
+era" from "six things block the era", which is the difference between an actionable halt and an
+unanswerable one.
+**Applies to:** any evaluator inheriting a long-lived `anti_goal_violations` list; re-derive each
+entry's rule location, not just whether the code changed.

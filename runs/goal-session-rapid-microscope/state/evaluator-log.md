@@ -2052,3 +2052,78 @@ rounds 24 and 26 both refused for good reason. "Stalled" buys me nothing — it 
 the point. Rounds 26 and 27 both wrote that this question was yours and then kept going so you never
 had to answer it. This one stops so you can. Your work this round is parked as a local commit and not
 pushed, which is what the engine does on a halt.
+
+## Iteration 29 — goal-rapid-microscope-iter-29
+
+**Date:** 2026-08-24T15:35:00Z
+**Verdict:** STALLED
+**Depth dispatched:** full (hard-required — you set CHAIN_REQUIRE_FULL_DEPTH, and the engine's own
+telemetry records `hard-full-required` overriding the `full-cap` cost rung)
+**Journey deltas:**
+- Newly passing: none — all ten were green when the round began and all ten are green now.
+- Newly failing: none. Regressed: none.
+- **J-07 "Graduation" re-verified and its stamp moved from round 24 to round 29.** This clears the
+  one `DEFERRED-BUDGET` cell that was mechanically barring a "finished" result. Its own test suite
+  ran three times independently — developer 23 passed / 1.53s, independent checker 23 passed /
+  1.56s, and my own run 23 passed / 1.49s.
+- Re-checked by their own stored checks, machine-driven, all green: J-01, J-02, J-03, J-04, J-05,
+  J-06, J-08, J-09, J-10 (nine of nine). I opened five of the nine pictures myself.
+- Nothing was skipped this round. The results table has no deferred row.
+- Anti-goal violations: **two CLOSED, both proved closed by my own hands**; six stay open, none
+  critical, none introduced. Only two of the six are about your product.
+
+**Reasoning:** I checked this round's three headline claims by doing them again rather than
+reading about them. First, J-07: I ran its suite myself and got 23 passed in 1.49 seconds, and I
+re-derived the other half of its acceptance by hand — all six referee files hash byte-identical to
+the era's opening record. Second, the test suite really is fixed: I timed the three files that
+used to make it unfinishable and they now take 3.2, 7.1 and 2.3 seconds against the 14 minutes 38,
+27 minutes 57 and 27 minutes 31 the earlier rounds recorded. Third, the closing check that failed
+correct work last round on a word match really is fixed: I ran its own tests (15 of 15, then 29 of
+29) and pointed it at last round's document, which now correctly answers "this does not claim a
+no-visible surface" — the exact answer whose absence caused the false failure. Zero product code
+changed; your real store is untouched (11,395 files identical, vault still 21 recordings, all
+sealed, last written 21 August), and both live cache files are byte-identical after two full suite
+runs.
+
+Two findings are mine. First, and this one runs in your favour: the independent checker warned me
+that the nine stored checks are shallow and that their pictures "do not depict the expanded state
+each journey asserts", and told me to weigh that before certifying. I opened four of the pictures
+and read all nine stored checks, and the warning is overstated. J-01, J-04, J-05 and J-09 each
+show their own acceptance state; the two pictures that are byte-identical for J-04 and J-09
+genuinely contain both journeys' evidence; and four of the checks look for journey-specific text,
+not a shared string. The one real weak spot is J-05, which borrows J-04's text to look for, plus a
+narrower point the checker did not make: J-02's and J-03's text sits below the visible part of the
+page, and this project's own rule T-10 says such sections need close-up captures. Second, I looked
+up where the rule behind four of the six open complaints actually lives. It is "T-10 Evidence
+honesty", in this goal file's "Build anchors & weak-model traps" section — not in its Anti-goals
+section. Those four are complaints about how this build system reports evidence, and their fixes
+live in files a product round may not edit. I wrote that classification into the ledger openly and
+downgraded nothing.
+
+**Next-step recommendation:** Nothing further can move without two decisions from you, and each
+is a one-line answer. (1) The chain-ledger question, open since round 13 and deferred by you at
+r8: deleting the vault's ledger together with its anchor makes the product say "chain ok" and
+forget that 21 recordings are sealed. Your own r8 ruling forbids a build round from designing that
+fix on the spot. (2) The sealed judge's money floor, open since round 18 and also deferred by you:
+the judge takes its "big enough to matter" threshold from whoever calls it. Nothing in the running
+product calls it — I re-checked that myself today, along with the other safety condition, and
+neither has tripped. For each, you can rule that it does not block this era (the era then finishes
+next round with no code change at all), schedule the real fix, or take the item out of scope in
+the goal file. One small optional job exists for a machine if you want it: give J-05's stored
+check its own text to look for, and take close-up pictures for J-02 and J-03. It blocks nothing.
+Still do not record more real tape, do not reveal or assign any sealed recording, and do not run
+the three studies against your real recorded corpus.
+
+I am writing "stalled" rather than "continue", and I want the reason on the record. My rule book
+forbids me from calling the goal finished while any anti-goal item is unresolved. Six are open.
+Four are build-system honesty items whose fixes live in files a product round may not touch, and
+you already ruled on that class on 24 August in the message of commit f2b292f4 — "This ONE bug
+only; the other three framework findings are untouched and stay as backlog." The remaining two are
+real entries in the Anti-goals list, and both are barred from being fixed by a build round by your
+own earlier rulings. So every way to unblock this is yours. That is the first branch of my decision
+tree, and it fires on its own merits — I deliberately did not lean on any argument about how the
+engine schedules the next round, because that was a supporting point in earlier rounds and it is
+not needed here. I did not write "escalate": my rule for it needs a LIGHT round to have surfaced
+something, and this was a heavy one. "Stalled" buys me nothing — it stops the run, which is the
+point. Last round's halt worked: you fixed two things, ran this round at full depth, and five of
+the six items round 28 asked for are now done.

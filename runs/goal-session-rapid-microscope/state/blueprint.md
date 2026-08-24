@@ -403,3 +403,25 @@ from its one endpoint, read verbatim by UI/MCP/reports.
      the plan, the iter-27 note above becomes retroactively accurate and needs no further edit; if
      iter-28 is demoted or interrupted again, a further correction will be appended here rather than
      silently trusting the iter-27 note a second time. -->
+
+<!-- iter-29 note: no Data Contract or Information Architecture change. Between iter-28 and this
+     iteration, an OWNER-APPROVED maintenance task (outside goal-mode; commits `f08f46ee` "tasks
+     A1 + A2" and `f2b292f4` "task B", both 2026-08-24) superseded the iter-27/28 notes above's
+     description of the two real-corpus test fixtures: they no longer point the production
+     `DatasetStore(index_db_path=...)`/`MicroReadinessCache` primitives at the operator's LIVE
+     `.data/dataset_index.db`/`.data/micro_readiness_cache.db` (iter-28 audit finding B1) -- a new
+     test-only module, `tests/real_corpus_cache.py`, now owns that decision under a dedicated
+     `.data/test-cache/` namespace, same production classes, same key semantics, guarded against
+     ever colliding with the live path (`test_real_corpus_cache_scope.py`). `test_micro_snapshots.py`
+     also gained the same durable-index fix (was ~80% of suite wall clock: 27:31.86 -> 2.55s warm).
+     Both commits are test/framework files only -- zero diff under `apps/backend/app/` or
+     `apps/frontend/` (owner-verified in `reports/qa/goal-rapid-microscope-maint-2026-08-24-
+     verification.md`; this iteration's own pipeline independently re-derives that claim rather than
+     inheriting it, per this era's iter-25 lesson). No served value, computing module, or endpoint
+     changed -- these are harness-only files, matching this table's own iter-19/24/25/27-note
+     precedent. This iteration's own scope (re-verifying J-07 "Graduation" through its existing
+     `test_micro_graduation.py` suite, now finishable well inside budget) introduces no Data
+     Contract row of its own either: J-07's canonical home stays exactly the "keyless/automated;
+     states surface via the Scout Ledger / Walk-Forward / Vault rows they attach to" row already in
+     the Information Architecture table above. No new page, route, MCP tool, or nav-skeleton change;
+     no reapproval file written. -->
