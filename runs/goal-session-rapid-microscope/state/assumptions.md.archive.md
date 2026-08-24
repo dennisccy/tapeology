@@ -1826,3 +1826,129 @@ violation is unresolved") means it must be closed before the era can be certifie
 as independently binding, the same finding is re-scored critical and the fix is unchanged; nothing
 about this round's evidence depends on the severity label.
 
+
+<!-- condense.sh 2026-08-24T17:26:22Z: moved 4 entries (keep-iters=5) -->
+
+## iter-24 — goal-decomposer
+
+**Ambiguity:** iter-23's evaluator recommended closing the sealing-time leak with an explicit "or":
+"stop publishing the per-run seal count, OR serve the sealing time only coarsely" -- both offered,
+neither chosen, and each has a different blast radius. The first would mean editing the already-
+committed `reports/j06-tranche/recording-runs.json`'s five historical `sealed_this_run` entries
+(0/0/1/13/7, real, on disk); the second means narrowing the served `sealed_at` precision on
+`GET /research/desk/micro/vault` going forward, touching a still-live serving path instead.
+**We chose:** coarsen the served `sealed_at` field (option two), and explicitly leave
+`recording-runs.json`'s historical entries untouched. Grounds: this project's foundation invariant
+is "record integrity" -- no legacy file is ever rewritten or reserialized -- and while
+`recording-runs.json` is an operator report rather than a store record, rewriting its already-
+committed historical numbers in place sits closer to that discipline's spirit than narrowing a
+still-live SERVED field's precision does; the served field is the ongoing, currently-open channel
+(every future GET keeps disclosing full precision until fixed), while the historical report is a
+closed, dated snapshot of five specific runs that already happened. I also verified the r5 anti-
+goal's actual governing test ("no still-unexposed vault-eligible shard is identifiable with
+certainty," i.e. never fewer than 2 candidates) is not currently violated -- the iter-23 evaluator's
+own worst case was 4, and the codebase's existing `stage_tr2()` combinatorial half already enforces
+exactly a `>= 2` floor (`j06_operator.py:803`) -- so the widened check reuses that SAME floor rather
+than inventing a new number, consistent with the project's own "no magic numbers" invariant.
+**Reversible:** yes -- if a later round or the owner decides the committed report's historical
+per-run counts should also be redacted/bucketed, that is a separate, additive edit to
+`recording-runs.json` (or a documented policy note beside it); nothing about this round's vault.py
+change or the widened `stage_tr2()` check depends on that choice being made this way.
+
+## iter-24 — developer (J-09 golden trigger mechanism)
+
+**Ambiguity:** the phase spec's own step 7 acceptance text asks J-09.json to trigger a pilot-study
+Scout compute "via the POST ... grid-selector path" -- but the deterministic replay harness
+(`demo_runner.py`) has no raw-HTTP action type (`_VALID_ACTIONS = {"goto", "click", "fill",
+"expect", "wait_for"}` only), and the `/desk` frontend's own Scout compute button sends a bare
+`POST` with no body (no UI control selects a pilot grid), so a pure browser-action script cannot
+literally issue that POST -- and this iteration's own Frontend IN SCOPE explicitly expects no code
+change that would add one.
+**We chose:** realize the "trigger" as a one-time fixture-seeding act (a new script,
+`scripts/seed_micro_scout_iter24_j09_fixture.py`) that calls the REAL production entry point
+(`scout.register_screen_and_walkforward_check`, the same function the POST route and the CLI's
+`--grid capitulation_exhaustion_pilot` path both call) directly, wired into
+`qa_playbook_iter7_fixture_scoped_backend.sh`'s rig setup -- exactly the established
+`seed_micro_graduation_iter18_fixture.py` precedent for J-07. `journey-scripts/J-09.json` itself
+then stays pure `goto`/`click`/`expect`, asserting against the row the seeder already planted.
+Grounds: the design-constraint note the decomposer's own plan left for this exact gap already
+named this as the intended resolution ("realized as a one-time fixture seeding act ... exactly
+the established pattern `seed_micro_graduation_iter18_fixture.py` already uses"); I verified it
+end-to-end (fresh rig launch, `demo_runner.py --mode verify`, break-then-restore proof) rather
+than assuming it would work.
+
+**Two things I found and fixed while building this, worth recording plainly:**
+
+1. **Assertion target: `family_id`, not `candidate_id`.** `candidate_id` is `cand-{spec_hash[:16]}`,
+   and `spec_hash` folds in the candidate's own `corpus_manifest` -- every dataset currently in the
+   store, including the iter-18 seeder's own `PGQA` dataset, which `DatasetStore.record` mints a
+   fresh `uuid.uuid4().hex` id for on EVERY rig launch (verified: two fresh launches produced two
+   different `candidate_id`s for the identical Study-3 request, `cand-1e3b854f...` vs
+   `cand-ccf4244a...`). A golden hardcoding `candidate_id` would therefore fail non-deterministically
+   on the very next fresh rig launch. `family_id` (`derive_family_id(feature_name,
+   structure_context_kind, horizon_key)`) depends on none of that -- confirmed byte-identical
+   (`failed_aggression_score__playbook_signal__trades_20`) across both launches -- and is unique to
+   Study 3 among everything else this rig ever registers (the default grid only ever uses
+   `structure_context_kind="none"`). J-09.json asserts on `family_id`.
+2. **A real, pre-existing latent bug, fixed inside my own new seeder only.** Planting a
+   `setup_id="capitulation"` signal via the `tests/test_scout.py` `_plant_capitulation_signal`
+   shape (which omits `"side"`) 500s `GET /research/desk/referee/registry/shortlist`
+   (`referee_evidence.playbook_occurrence_readiness` does `signal["side"]` unconditionally on every
+   signal at the live detector basis) -- discovered live because every OTHER seed script in this
+   rig plants signals through the REAL `compute_playbook` pipeline, which always stamps `side`, so
+   nothing had ever exercised this path with a hand-built signal missing it before. Fixed by adding
+   `"side": "long"` to my own planted signal (the value a genuine `detect_capitulation` signal
+   always carries per `desk_playbook_detect.py`'s own "capitulation entry, long only") -- zero diff
+   to `referee_evidence.py` or any other `referee_*` module (SHA-256 listing re-verified
+   byte-identical to the iteration-0 baseline). Not a fix to the pre-existing
+   `_plant_capitulation_signal` test helper in `tests/test_scout.py` (out of this iteration's scope
+   -- it works fine for what it is used for there, Scout's own join, which never reads `side`).
+
+**Reversible:** yes -- the seeder script and the golden's assertion string can both change
+independently of the vault.py/j06_operator.py work above; nothing about the TR-2 widening or the
+`sealed_at` coarsening depends on this choice.
+
+## iter-24 — goal-evaluator
+
+**Ambiguity:** how to score a journey whose fresh browser evidence shows a real FAIL that was then
+REPAIRED later in the same iteration, with no post-repair capture. The methodology names two
+carve-outs and neither fits: `pending_infra` is for browser infrastructure that FAILED and owes
+evidence (the rig worked fine here), and `evidence_makeup`/`capture-defect` (A.7) explicitly "never
+applies when the asserted BEHAVIOR is unmet — a screenshot showing wrong behavior is a failure, not
+a capture defect". At capture time the behaviour genuinely WAS unmet; by end of iteration it was
+not. There is no named case for "the screenshot predates the fix".
+**We chose:** `partial` for J-06, with `evidence_makeup: true` set alongside it. Grounds, each
+checked this round rather than inherited: (a) NOT `passing` — the no-screenshot rail (A.3) is
+absolute, evidence durability (A.6) does not apply because the product code DID change
+(`vault.py` + `page.tsx` are both in this iteration's 8-file diff), and the only fresh picture of
+the changed cell shows it wrong; (b) NOT `regressed`/`failing` — that would force a REGRESSION halt
+for human review, and nothing here needs a human: I read the fixed call site at `page.tsx:6807`
+myself, ran the new guard `tests/test_desk_vault_sealed_at_day_marker_guard.py` (3 passed), and the
+auditor's break-then-restore proof shows the guard bites; (c) `partial` is literally defined as
+"only some assertion steps passed", which is exactly the shape of J-06's results this round (UT-02
+PASS, UT-03 FAIL, UT-05 SKIP); (d) `evidence_makeup: true` is set for its OPERATIONAL meaning —
+schedule the re-capture as a passenger task, never as an iteration goal — and the downgrade is
+caused by the FAIL row, not by the flag. I record that the flag's "never downgrades" clause and my
+`partial` score sit in tension, and that I resolved it in the fail-closed direction.
+**Reversible:** yes — one fresh photograph of the fixed "Sealed at" cell restores `passing` with no
+other change; nothing else about this iteration's scoring depends on the label.
+
+## iter-24 — goal-evaluator (second)
+
+**Ambiguity:** whether this iteration's J-07 "Graduation" capture counts as the FRESH evidence the
+spec's TC-8 demanded. Iter-22 verified J-07 through the graduation surface's own JSON body
+(family_root_id, `sealed_evaluations[0].verdict: pass`, rule id/hash, floors, chain verification).
+This iteration's UT-08 is a different artefact SHAPE: a crop of the Validation Vault table row.
+J-07's acceptance text is about the graduation bundle, not the vault table, and `docs/goal.md`
+itself calls J-07 "keyless/automated with browser reveals landing in J-08".
+**We chose:** accept it as fresh re-verification and stamp J-07 `passing` at iter-24. Grounds:
+(a) the row carries family root `240dd966c1aceca2` — the SAME family iter-22 verified through the
+bundle — now in `exposed` state with Dataset, Symbol `PGQA` and Session date `2026-06-09` all
+disclosed, i.e. an on-point look at the graduation end state, not a bystander page; (b) the capture
+is genuinely new, md5 `98eb6825...` vs iter-22's `5cc50f17...`; (c) the iter-22 bundle capture stays
+DURABLE under A.6 because `micro_graduation.py` and `micro_sealed_evaluation.py` are byte-unchanged
+— I ran `git status` on both myself and got empty, and every `referee_*.py` likewise. So J-07 rests
+on durable bundle evidence PLUS a fresh on-point look, not on the table row alone.
+**Reversible:** yes — if a later round wants the bundle body re-captured directly, that is an
+additive capture; it would confirm, not overturn, this scoring.
+

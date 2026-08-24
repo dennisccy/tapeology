@@ -1,40 +1,40 @@
 # Iteration State — rapid-microscope
 
-**After iteration:** 29 · **Date:** 2026-08-24 · **Verdict:** STALLED
+**After iteration:** 30 · **Date:** 2026-08-24 · **Verdict:** GOAL_ACHIEVED
 
 ## Journeys
 
-10 passing (J-01..J-10) · 0 failing · 0 unknown — 10 total. All re-verified at iter-29; no deferred row.
+10 passing (J-01..J-10) · 0 failing · 0 unknown — 10 total. All re-verified at iter-30 (9 by
+golden replay, J-07 by its own suite + first browser capture); no deferred row, no skip.
 
 ## Active blockers
 
-- **Chain-ledger identity** (iter-13, minor, OPEN) — `micro_chain_ledger.py:184-190` `_verify_tail`:
-  anchor None + no rows ⇒ `{'ok': True}`, so deleting ledger+anchor empties the sealed set for 21 real
-  sealed shards. Owner **human** (r8 defers the fix, forbids ad-hoc design). Re-tested iter-29: NOT tripped.
-- **Sealed judge's econ floor** (iter-18, minor, OPEN) — `micro_sealed_evaluation.py:316` reads a
-  caller-supplied `econ_floor`. Owner **human** (r9 out-of-scope; needs the iter-12-deferred
-  candidate-registration ledger). Re-tested iter-29: zero production callers, no `micro_graduation` dir.
-- **4 build-chain evidence-honesty findings** (iters 21, 24×2, 27, minor, OPEN) — cite T-10, which sits in
-  goal.md's "Build anchors & weak-model traps" (line 433), NOT its Anti-goals. Fixes live in
-  `agents/**`/`scripts/automation/**`. Owner **human**; ruled "stay as backlog" in commit `f2b292f4`.
-- Optional, NOT blocking (dev): J-05's golden borrows J-04's assertion string; J-02/J-03 assert
-  below-the-fold text needing T-10 element captures — `runs/goal-session-rapid-microscope/journey-scripts/`.
+- **none.** The owner's 2026-08-24 ruling (commit `2551a139`, owner-authored, state JSON only)
+  dispositioned all six open findings `blocks_current_era: false`.
+  `anti_goal_disposition.py summary` re-run at iter-30: `total=52 resolved=46
+  unresolved_blocking=0 unresolved_non_blocking=6 unresolved_critical=0`.
+- Six findings stay OPEN and non-blocking — they must appear in any closure report, never as "no
+  findings": iter-13 chain-ledger identity (r8) · iter-18 sealed-judge econ floor (r9) · iter-21,
+  iter-24 x2, iter-27 build-chain evidence honesty (`framework_backlog`). All three recorded
+  escalation conditions re-tested by hand at iter-30: **untripped**.
+- Optional, NOT blocking (evidence lane only): J-02/J-03 captures are byte-identical to J-01's and
+  stop above their asserted rows (`evidence_makeup: true` deliberately kept SET) · J-05's golden
+  borrows J-04's assertion string · iter-29 walkthrough recording is NOT_YET / 0 steps.
 
 ## Last 2 verdicts
 
-- iter 29: STALLED — 10/10 green and every deterministic gate passes; the only blockers left are two
-  owner-deferred anti-goal items no build round is permitted to fix.
-- iter 28: STALLED — J-07 shed for budget plus six open items; the owner answered with two out-of-band
-  commits and a full-depth resume.
+- iter 30: GOAL_ACHIEVED — 10/10 green, zero blocking/critical findings, COHERENCE-PASS, no goal
+  text drift; the one blocker (an owner decision) was made out of band and re-derived, not trusted.
+- iter 29: STALLED — 10/10 green but six findings open with only an owner ruling able to clear them.
 
 ## Do not redo
 
-- **J-07 re-verification DONE** (iter-29): `test_micro_graduation.py` 23/23, run three times (dev, auditor,
-  evaluator). Stamp on iter-29; DEFERRED-BUDGET cleared.
-- **Test-suite runnability FIXED** (owner `f08f46ee`): real-corpus files 3.2s/7.1s/2.3s; full suite 3,491
-  pass / 8 skip / 0 fail in ~6m34s. Anti-goal item CLOSED.
-- **Closure-gate `backend-only` false positive FIXED** (owner `f2b292f4`): self-test 15/15, units 29/29.
-  Anti-goal item CLOSED.
-- **Referee family + fingerprint frozen, re-derived iter-29**: six `referee_*.py` sha256 match iter-0;
-  fingerprint `08e471b10130e1e2`. Re-hash, never re-implement.
-- **The 4 build-chain findings are NOT product scope** (maintenance-protocol §1). **Standing out-of-scope**: no new real tape, no revealing/assigning a sealed shard, no pilot studies against the real corpus.
+- **All ten journeys verified at iter-30** — `reports/qa/goal-rapid-microscope-iter-30-evidence/`;
+  replay 9/9 in `reports/phase-goal-rapid-microscope-iter-30-regression-replay-results.md`.
+- **The owner's disposition ruling is settled** — never re-litigate the six findings, never edit an
+  `owner_disposition`, never mark one `resolved: true` (none was fixed).
+- **Frozen rails re-derived at iter-30**: fingerprint `08e471b10130e1e2`; six `referee_*.py` sha256
+  match iter-0; vault 21 shards, last written 2026-08-21, unchanged. Re-hash, never re-implement.
+- **Full backend suite green at iter-30** (evaluator's own run): 3,491 passed / 8 skipped / 0 failed, exit 0; `git status --porcelain apps/` empty.
+- **Standing out-of-scope**: no new real tape, no revealing/assigning a sealed shard, no pilot
+  studies against the real corpus, no new Config field.

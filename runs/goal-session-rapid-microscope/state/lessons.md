@@ -220,43 +220,17 @@ combinatorial model consume every artifact its own attacker-knowledge list claim
 repo outside goal-mode — the decomposer must write `Depth enforcement: required`, not just
 `Full trigger:`, or plan for the checker to be cut.
 
-## iter-24 — 2026-08-23T05:55:00Z
-
-**Verdict:** CONTINUE
-**Lesson:** Narrowing a served timestamp's PRECISION is never a backend-only change: the moment
-`vault.py` started serving `sealed_at` as a bare `yyyy-MM-dd`, the Vault cell's existing
-`formatDateTimeET` parsed it as UTC midnight and rendered the PREVIOUS calendar day plus an
-invented `20:00 ET` — the exact trap `apps/frontend/lib/datetime.ts:132-148` already documents,
-with `formatDayMarker` already shipped as its answer. The spec's "Frontend: no code changes
-expected" line made three lanes stop looking, even though the ui-impact-analyst wrote the defect up
-in advance.
+## iter-24 — 2026-08-23T05:55:00Z  [condensed: body → lessons.md.archive.md]
 **Applies to:** any iteration that changes the SHAPE or precision of an already-served date/time
 field — grep every frontend call site reading that field and check day-marker vs instant before
 declaring the frontend untouched.
 
-## iter-24 (second) — 2026-08-23T05:55:00Z
-
-**Verdict:** CONTINUE
-**Lesson:** An inference/anonymity check must be keyed on the ATTACKER's starting point, not on the
-reference side of the join. The new `stage_tr2()` run-aware half walked the RUN buckets and skipped
-any bucket no run claimed — but a run's `at` is stamped by `_utc()` at second precision while each
-shard's `sealed_at` is stamped by `vault._iso_utc_now()` at microsecond precision, so under the
-REAL old data shape no served value ever prefix-matched a run key, zero buckets existed, and the
-check reported "safe" against precisely the leak it was built for. Re-keying on the served buckets
-(skipping none) makes it bite; the counter-test that "proved" non-vacuity only proved it on an
-alignment production can never produce.
+## iter-24 (second) — 2026-08-23T05:55:00Z  [condensed: body → lessons.md.archive.md]
 **Applies to:** any TR-2 / join-resistance / k-anonymity check, and any "non-vacuity counter-test"
 — build the counter-fixture from what the WRITER actually wrote (read the stamping function), never
 from the reference side's own values.
 
-## iter-24 (third) — 2026-08-23T05:55:00Z
-
-**Verdict:** CONTINUE
-**Lesson:** `closure_gate.py` clears an iteration on "ui-test-results: execution evidence present
-(PASS/FAIL rows)" — it never reads the merged **Browser QA Verdict** line. This round that line
-read FAIL and the round still closed CLOSURE-PASS; iter-21 flagged the identical hole and it is
-still open. Only the audit lane stood between a photographed, predicted rendering defect and a
-shipped iteration.
+## iter-24 (third) — 2026-08-23T05:55:00Z  [condensed: body → lessons.md.archive.md]
 **Applies to:** any evaluator reading a CLOSURE-PASS — treat it as "artifacts exist", not "the
 browser agreed"; always open `reports/phase-<iter>-ui-test-results.md`'s own verdict line yourself.
 
@@ -403,3 +377,18 @@ era" from "six things block the era", which is the difference between an actiona
 unanswerable one.
 **Applies to:** any evaluator inheriting a long-lived `anti_goal_violations` list; re-derive each
 entry's rule location, not just whether the code changed.
+
+## iter-30 — 2026-08-24T18:15:00Z
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** The deterministic replay lane writes ONE viewport screenshot per journey but takes it
+at whatever scroll position the last step left, so journeys whose assertion text lives at
+different depths of the same `/desk` accordion end up sharing a byte-identical file — this round
+J-01/J-02/J-03 all shared md5 `b805ad04cf96ddb7663299b78d257beb` and J-04/J-09 shared
+`18e0584813bfca5430a499c0181f37f2`. A PASS row plus a screenshot is therefore NOT proof the
+picture frames what the journey asserts; the only way to tell is to open the image and compare it
+to the golden's `expect.text`. Consequence for the `evidence_makeup` flag: "any fresh capture
+clears it" must not be applied mechanically, because a fresh capture can reproduce the exact
+defect the flag was raised for.
+**Applies to:** any iteration scoring journeys verified by `demo_runner.py --mode verify` against
+accordion/below-the-fold sections, and any evaluator deciding whether to clear `evidence_makeup`.

@@ -1,18 +1,18 @@
 # Goal Session Summary — rapid-microscope
 
-**Final verdict:** STALLED
+**Final verdict:** AWAITING_PUMP
 **Total iterations:** 30
-**Wall time (seconds):** 5168
+**Wall time (seconds):** 7
 **Quota pauses:** 0
 **Started:** 2026-08-16T22:25:35.904129Z
-**Finished:** 2026-08-24T15:31:32.518019Z
+**Finished:** 2026-08-24T17:26:30.200911Z
 
 ## Branch
 
 This session pushed iteration commits to `goal/rapid-microscope`. Open a PR with:
 
     gh pr create --base main --head goal/rapid-microscope \
-      --title "feat: rapid-microscope — STALLED" \
+      --title "feat: rapid-microscope — AWAITING_PUMP" \
       --body-file runs/goal-session-rapid-microscope/summary.md
 
 ## Final journey state
@@ -639,6 +639,8 @@ See `runs/goal-session-rapid-microscope/telemetry.jsonl` for the structured even
       (resume-skipped: coherence-auditor)
       pump-wait                 12.1m
       overlap saved             11.2m  (parallel steps)
+  goal-rapid-microscope-iter-30  depth=?  verdict=?  wall=?  (incomplete/interrupted attempt)
+      goal-decomposer              0.0m  calls=1  failures=1
   session: 30 completed iteration(s), mean wall 213.4m
       total developer                 2700.5m
       total reviewer                   768.4m
@@ -657,5 +659,5 @@ See `runs/goal-session-rapid-microscope/telemetry.jsonl` for the structured even
       total browser-qa-replay            6.5m
       total ux-regression-reviewer       2.0m
       total AWAITING_PUMP paused gaps: 2.9m
-      halts: AWAITING_PUMP, AWAITING_PUMP, AWAITING_PUMP, STALLED, AWAITING_PUMP, STALLED, STALLED
+      halts: AWAITING_PUMP, AWAITING_PUMP, AWAITING_PUMP, STALLED, AWAITING_PUMP, STALLED, STALLED, AWAITING_PUMP
 ```

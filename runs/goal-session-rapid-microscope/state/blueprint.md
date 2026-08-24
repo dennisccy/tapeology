@@ -425,3 +425,15 @@ from its one endpoint, read verbatim by UI/MCP/reports.
      states surface via the Scout Ledger / Walk-Forward / Vault rows they attach to" row already in
      the Information Architecture table above. No new page, route, MCP tool, or nav-skeleton change;
      no reapproval file written. -->
+
+<!-- iter-30 note: no Data Contract or Information Architecture change. This iteration is a
+     zero-code verification round: between iter-29 and this iteration, an OWNER-APPROVED
+     out-of-band ruling (commits `efb26351` "three-state anti-goal ledger" and `2551a139` "owner
+     dispositions for rapid-microscope's six open findings", both 2026-08-24) added an additive
+     `owner_disposition` field to journey-history.json's anti_goal_violations ledger and used it
+     to disposition all six previously-open findings as non-blocking (two `deferred_named_revision`
+     product items under standing owner rulings r8/r9, four `framework_backlog` build-chain items
+     outside a product round's authority) -- unresolved_blocking=0, unresolved_critical=0,
+     independently re-derived this iteration (see iter-30 spec TC-3..TC-5), not merely inherited
+     from the commit message. No served value, computing module, or endpoint changed; no new page,
+     route, MCP tool, or nav-skeleton change; no reapproval file written. -->
