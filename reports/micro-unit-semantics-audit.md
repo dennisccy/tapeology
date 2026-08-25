@@ -1,0 +1,359 @@
+# Rapid Microscope — measurement-semantics audit (unit + side)
+
+**Date:** 2026-08-25 · **Branch:** `goal/rapid-microscope` · **Status:** audit complete, pre-fix
+
+This audit was produced BEFORE any code change, per the operator's instruction. Every claim
+below cites the line that establishes it.
+
+---
+
+## 1. What physical/unit meaning does `mid_outcome()["value"]` have today?
+
+A **raw price difference in dollars** (quote currency), direction-signed:
+
+```python
+# micro_features.py:372
+value = _signed(mid_at_horizon - mid_at_start, side)
+```
+
+`last_trade_outcome` (`micro_features.py:399`) is identical in kind. By contrast
+`spread_bps()` (`micro_features.py:410-417`) is a genuine ratio:
+`spread / mid * 10_000.0`.
+
+So the module already contains **both** unit systems, one line apart, with no naming that
+distinguishes them.
+
+## 2. Where does it first become labelled as bps?
+
+`scout.py:1045`:
+
+```python
+effect_bps, _per_session = _observed_effect(session_groups)
+```
+
+The rename happens **with no accompanying arithmetic**. It is then persisted under that name at
+`scout.py:1253` (`screen_result["effect_bps"]`) and `scout.py:1109`
+(`_bucket_effect`'s per-bucket `"effect_bps"`), and served verbatim by
+`GET /research/desk/micro/scout`.
+
+## 3. Is there any hidden normalization between the feature layer and Scout?
+
+**No.** The full chain, verified line by line:
+
+| Step | Site | Unit |
+|---|---|---|
+| outcome computed | `micro_features.py:372` | dollars |
+| wrapped | `micro_join.py:299` `_build_outcome()["mid"]` | dollars |
+| anchor built | `scout.py:443, 495, 611, 684` `outcome_value` | dollars |
+| per-session delta | `scout.py:831` `cand.mean() - comp.mean()` | dollars |
+| pooled effect | `scout.py:840-850` `_observed_effect` | dollars |
+| **named** | `scout.py:1045` `effect_bps` | **still dollars** |
+| **gated** | `scout.py:1249` `abs(effect_bps) >= econ_floor["floor_bps"]` | **dollars vs bps** |
+
+Every intermediate step is a mean or a difference of dollar values. There is no division by
+price anywhere in the path.
+
+`floor_bps` on the right-hand side is genuine bps: `scout.py:1353`
+`floor_bps = ECON_FLOOR_SPREAD_MULTIPLE * family_median_spread_bps`, where the median is taken
+over `mf.spread_bps(...)` values (`scout.py:786`).
+
+**The economic gate is dimensionally invalid.**
+
+### 3b. Second, independent defect at the same site (not in the original brief)
+
+`_observed_effect` averages session-cluster mean deltas **across symbols** — the live corpus
+spans PG, AAPL, AMD, AMZN, GOOGL, META, MSFT, NFLX, NVDA, SPY, TSLA. A dollar move is not
+comparable across price levels, so pooling dollar deltas across an ~$160–$600 price range is not
+a meaningful estimator *regardless of what it is later compared against*. Converting the
+outcome to a return fixes the estimator and the gate together.
+
+## 4. Which Scout decisions depend on the magnitude?
+
+| Decision | Site | Magnitude-dependent? |
+|---|---|---|
+| `killed_economic` | `scout.py:1296-1298` | **Yes — dimensionally invalid** |
+| `killed_null` | `scout.py:1277` | Scale-free per se (block permutation), but contaminated by the cross-symbol dollar heterogeneity in §3b |
+| `killed_direction` | `scout.py:1279` | Sign only |
+| `killed_fragile` | `scout.py:1299` | Sign stability only |
+| `killed_concentration` | `scout.py:1284` | Counts only |
+| `killed_insufficient_n` | `scout.py:1270` | Counts only |
+
+## 5. Which walk-forward rules depend on the magnitude?
+
+`evaluate_survivor_rule` (`walkforward.py:661-705`):
+
+- **condition 3** (`:676-682`) — `abs(pooled_effect) >= econ_floor["floor_bps"]`
+- **condition 4** (`:647-658`) — `abs(f["effect"]) >= floor_bps`
+
+Conditions 1, 2 and 5 are counts/signs and are unit-independent.
+
+**The walk-forward effect is in a THIRD unit.** Its observation feed is
+`walkforward.py:1236` `"value": horizon["return_pct"]`, and `desk_forward.py:40` states
+plainly: *"`return_pct` values are PERCENT (x100)"* (computed at `desk_forward.py:539`).
+
+So conditions 3 and 4 compare **percent against basis points** — a 100× error. It is currently
+**dormant**, not benign: the only registered sequence carries `econ_floor: null`
+(`walkforward.py:1292` registers `econ_floor=None`), so the comparison has never executed. Any
+J-09 study that supplies Scout's floor to a fold sequence fires it.
+
+## 6. Which sealed-evaluation rules depend on the magnitude?
+
+`micro_sealed_evaluation.py:252-273` — `clears_economic_floor` =
+`abs(summary["effect"]) >= econ_floor["floor_bps"]`, producing failure reason
+`below_economic_floor` (`:154, :273`). `summary` comes from the same
+`walkforward.summarize_fold_observations`, so it inherits the percent-vs-bps defect exactly.
+
+## 7. Which persisted artifacts contain old-semantics values?
+
+| Store | Contents | Classification |
+|---|---|---|
+| `.data/micro_scout/ledger.jsonl` | **6 real rows**, run `c7817e82`, 2026-08-25T14:07–14:16Z. `screen_result.effect_bps`, `.per_session_deltas_bps`, `.fallback_tercile[*].effect_bps`, `.best_of_n_disclosure.corrected_threshold_bps` — **all dollars**. `econ_floor.floor_bps` / `family_median_spread_bps` — genuine bps. | **Requires recomputation** |
+| `.data/micro_walkforward/walkforward_ledger.jsonl` | 1 `fold_spec` + fold results for `seq-d39d20e47af24671`; effects in **percent**; `econ_floor: null` | **Retain, but version + label** — no economic comparison ever executed |
+| `.data/micro_graduation/` | **Does not exist.** `GET .../graduation` → `{"families": [], "message": "No candidates ledgered."}` | Nothing to invalidate |
+| sealed evaluations | **None on disk anywhere** | Nothing to invalidate |
+| `.data/micro_vault/`, `.data/micro_exposure_registry/` | Shard/universe/exposure ledgers — carry no outcome magnitudes | Unaffected |
+
+`.data/` is gitignored (`.gitignore:72`), so none of this is committed evidence.
+
+## 8. Are real scientific results already persisted under the wrong semantics?
+
+**Yes, but narrowly, and nothing laundered downstream.**
+
+The 6 real Scout rows are genuine exploratory results. Two of them
+(`quote_imbalance ≥0` / `≤0`) carry `decision = killed_economic` — decisions produced by the
+dimensionally invalid comparison, and therefore **not scientifically valid as recorded**. The
+other four died on `killed_null` (×3) or `killed_insufficient_n` (×1), neither of which touches
+the floor; those verdicts are unaffected in kind, though their recorded effect magnitudes are
+still mislabeled.
+
+Nothing consumed them: graduation is empty, no sealed evaluation exists, no candidate ever
+reached `walkforward_survivor`. **No claim escaped the funnel under the bad unit.**
+
+---
+
+## 9. Side / direction vocabulary
+
+Two distinct vocabularies exist and they collide at exactly one site.
+
+- **Aggressor side** `buy | sell` — `micro_observer.py:276, 291, 423, 425, 589, 593`
+- **Candidate direction** `long | short` — `walkforward.py:642, 654`,
+  `micro_sealed_evaluation.py:218`, and the frozen `desk_playbook_detect.py` /
+  `backtests.py:1110`
+
+The collision:
+
+```python
+# micro_features.py:348-351
+def _signed(value, side):
+    return -value if side == "sell" else value
+```
+
+```python
+# scout.py:431 (and :599)
+mj.outcome_row_at_single_horizon(..., side=sidedness)   # sidedness ∈ {long, short, None}
+```
+
+A candidate registered `sidedness="short"` reaches `_signed` as `"short"`, does **not** match
+`"sell"`, and is silently returned unflipped. It would then meet `killed_direction`
+(`scout.py:1279`, which requires `effect_bps > 0`) and a genuine short edge would be recorded as
+a wrong-direction kill.
+
+**This bug has never fired.** Every registered candidate carries `sidedness: None` —
+`default_fixture_grid` (`scout.py:1580`) and all three pilot studies
+(`scout.py:1652, 1665, 1677`). It is **latent, not corrupting**. `_signed` has exactly two
+callers, both in `micro_features.py`; aggressor-signing of *features* is done separately and
+correctly inside `micro_observer.py`.
+
+---
+
+## 10. The specification itself is contradictory
+
+This is a spec defect propagated faithfully into code, not only an implementation slip.
+
+- **§0 Units** (`docs/rapid-validation-spec.md:215`) — *"Returns/moves in percent or bps as named
+  per field"*
+- **§4 Outcomes** (`:423-424`) — *"forward **mid-price** move (quote mid at the horizon boundary
+  minus mid at the outcome start)"* → **a dollar subtraction**
+- **§5.5** (`:480`) — `econ_interesting = |effect_bps| ≥ ECON_FLOOR_SPREAD_MULTIPLE ×
+  family_median_spread_bps` → **bps vs bps**
+
+§4 and §5.5 are mutually inconsistent, and §4 violates §0. The implementation obeyed both
+literally, which is how dollars came to be compared against basis points.
+
+Because the defect originates in the canonical spec, the correction must be recorded as a
+**named methodology revision**, not a silent rewrite.
+
+---
+
+## 11. Root cause (one sentence)
+
+`docs/rapid-validation-spec.md` §4 defines the primary outcome as an absolute mid-price
+*difference* while §5.5 gates it against a *ratio* floor expressed in basis points;
+`micro_features.mid_outcome()` implements §4 literally, `scout.py` renames the result
+`effect_bps` at `:1045` without converting it, and `scout.py:1249` compares the two — so the
+economic-relevance gate has been evaluating **dollars ≥ basis points** since the module was
+written, with a parallel **percent ≥ basis points** defect dormant in `walkforward.py:682` and
+`micro_sealed_evaluation.py:257`.
+
+---
+---
+
+# Part 2 — the correction (spec revision r13, 2026-08-25)
+
+## 12. What changed
+
+| File | Change | Why |
+|---|---|---|
+| `app/research/micro_features.py` | `mid_outcome`/`last_trade_outcome` now return `return_bps` (primary) + `delta_price` (diagnostic) + `unit`; the ambiguous `value` key is **removed**; `_signed` replaced by eager direction validation; added `BPS_UNIT`, `OUTCOME_UNIT`, `AGGRESSOR_SIDES`, `CANDIDATE_DIRECTIONS`, `UnknownSideVocabularyError`, `UnitMismatchError`, `aggressor_sign`, `direction_sign`, `direction_for_aggressor`, `require_bps_floor`, `clears_economic_floor` | The root cause. The outcome is now computed by `bps_move` — the correct primitive **this module already owned** and the outcome path simply never called |
+| `app/research/micro_join.py` | `side=` → `direction=` through the outcome-row helpers | The parameter carries a candidate direction, never an aggressor side |
+| `app/research/scout.py` | Reads `return_bps`; anchor key `outcome_value` → `outcome_bps`; `econ_interesting` via `clears_economic_floor`; `econ_floor` stamps `unit`; frozen `outcome` spec gains `unit`; `screen_result` gains `outcome_unit` | The gate now compares bps to bps, and the unit is frozen into the candidate identity |
+| `app/research/walkforward.py` | `PCT_TO_BPS`/`observation_value_bps` convert the `return_pct` feed at its one boundary; fold summaries carry `unit`; survivor conditions 3 and 4 route through the unit-checked door | Closes the dormant percent-vs-bps 100× error |
+| `app/research/micro_sealed_evaluation.py` | `clears_economic_floor` at the sealed gate | Same door, same semantics |
+| `app/research/micro_readiness.py` | `totals` gains `distinct_symbols`, `distinct_sessions`, `label_quality` | Corpus growth must be judgeable by evidence QUALITY, not only count |
+| `docs/rapid-validation-spec.md` | Revision **r13**; §0 Units and Side vocabularies; §4 outcome formula; §5.5 floor unit + the three-concept table; trap **TR-33** | The defect originated in the spec — the correction is recorded as a named revision, not a silent rewrite |
+| `docs/goal.md` | r13 note in the era header | The journeys are the record of what was built and are not rewritten |
+| `tests/test_micro_unit_semantics.py` | **New** — 31 guards | The tests that would have caught this immediately |
+
+## 13. Methodology change
+
+| | Before | After (r13) |
+|---|---|---|
+| Primary outcome | `mid_h − mid_s` — **dollars**, key `value` | `(mid_h − mid_s) / mid_s × 10_000` — **basis points**, key `return_bps` |
+| Raw dollar move | *was* the scientific quantity | `delta_price` — diagnostic only, never pooled or gated |
+| Scout effect | dollars, named `effect_bps` | genuine bps |
+| Walk-forward / sealed effect | percent (`return_pct`) | genuine bps |
+| Economic gate | `dollars ≥ bps` | `bps ≥ bps`, both sides unit-proved |
+| Unit declaration | none | on every outcome row, fold summary, floor, and screen result |
+
+**No gate was weakened.** `ECON_FLOOR_SPREAD_MULTIPLE` stays `1.0`; `SCOUT_SCREEN_ALPHA` `0.05`;
+`SCOUT_MIN_SESSION_CLUSTERS` `2`; `SCOUT_MIN_OBSERVATIONS_PER_CELL` `5`;
+`SCOUT_MAX_TOP1_CONCENTRATION` `0.8`; `WF_MIN_SUFFICIENT_FOLDS` `3`; fold geometry 40/5/20/20;
+`SEALED_MIN_OBSERVATIONS` `30`. Only the unit moved.
+
+## 14. Side semantics
+
+| | Before | After (r13) |
+|---|---|---|
+| Vocabulary | implicit, interchangeable | two closed, disjoint sets |
+| Aggressor side | `buy`/`sell` (observer) | `AGGRESSOR_SIDES` — validated by `aggressor_sign` |
+| Candidate direction | `long`/`short` (`sidedness`) — reached a helper that only knew `sell` | `CANDIDATE_DIRECTIONS` — validated by `direction_sign` |
+| Unknown value | silently returned **+value** | raises `UnknownSideVocabularyError`, **before** any unmeasured/truncated short-circuit |
+| Conversion | implicit and accidental | one named adapter, `direction_for_aggressor` |
+
+## 15. Persisted-data impact
+
+- **`.data/micro_scout/ledger.jsonl` — 12 rows, 6 distinct pre-r13 variants, 2 runs
+  (`c7817e82` 14:07–14:16Z, `02720c6c` 15:01–15:12Z).** Every magnitude is dollars. The two
+  `killed_economic` decisions are **void as economic judgements**. Rows are **retained** (the
+  append-only rail) and **re-keyed**: the outcome unit joins the frozen spec, so r13 candidates
+  compute different `candidate_id`s and can never be confused with their pre-r13 namesakes.
+- **`.data/micro_walkforward/` — retained.** Effects are percent, `econ_floor: null`, so no
+  economic comparison ever ran; the verdicts (`insufficient`, and the TR-15 floor refusals) are
+  unaffected in kind. New rows carry `unit`.
+- **`.data/micro_graduation/` — absent. No sealed evaluations exist.** Nothing to invalidate;
+  nothing ever advanced on a bad magnitude.
+- **`.data/micro_snapshots/` — rebuilt.** Editing `micro_features.py` moves
+  `feature_source_hash` (it hashes module source bytes), so all 18 snapshots became an honest
+  cache MISS. **Verified: rebuilt feature rows are byte-identical to the pre-r13 rows**
+  (`309845c6…`, sha `f2078b71…`), `params_hash` unchanged (`5d3f3094…`), `config_fingerprint`
+  still `08e471b10130e1e2`. r13 changed no feature value — only the outcome layer.
+- **`.data/micro_vault/`, `.data/micro_exposure_registry/` — untouched.** No outcome magnitudes.
+  **No sealed vault data was consumed at any point.**
+
+---
+
+# Part 3 — the real-corpus re-run under r13
+
+Run: `python -m app.research.scout --grid default`, same 18-shard exploratory corpus, 11
+sessions, all 18 snapshots rebuilt first. Ledger `.data/micro_scout/ledger.jsonl`: 12 pre-r13
+rows retained + 6 new r13 rows appended (nothing deleted, nothing rewritten).
+
+| candidate | pre-r13 effect (dollars, mislabelled `effect_bps`) | r13 `effect_bps` | `floor_bps` | r13 `p_screen` | pre-r13 decision | r13 decision | changed |
+|---|---|---|---|---|---|---|---|
+| `cumulative_delta ≥ 0` | +0.0000268 | **−0.0191** | 1.5262 | 0.8136 | `killed_null` | `killed_null` | no |
+| `cumulative_delta ≤ 0` | +0.0000236 | **+0.0203** | 1.5262 | 0.8021 | `killed_null` | `killed_null` | no |
+| `failed_aggression_score ≥ 0` | — | — | 1.5262 | — | `killed_insufficient_n` | `killed_insufficient_n` | no |
+| `failed_aggression_score ≤ 0` | +0.001568 | **+0.0340** | 1.5262 | 0.7141 | `killed_null` | `killed_null` | no |
+| `quote_imbalance ≥ 0` | +0.004236 | **+0.1462** | 1.5262 | 0.00050 | `killed_economic` | `killed_economic` | no |
+| `quote_imbalance ≤ 0` | −0.004716 | **−0.1499** | 1.5262 | 0.00050 | `killed_economic` | `killed_economic` | no |
+
+**Zero survivors, as before. No decision changed. No survivor was manufactured.** Every r13 row
+is re-keyed (`cand-e5dcfa15…` → `cand-48bc98d6…`, etc.) — no collision with any pre-r13 row.
+
+## 16. What the re-run actually proves
+
+**(a) The old numbers were not recoverable by rescaling.** The old/new ratio is *not* constant:
+0.0014, 0.0012, 0.046, 0.029, 0.031. Dividing by each anchor's own price is not a global rescale,
+so no correction factor could have rehabilitated the persisted rows. **Recomputation was
+mandatory; reinterpretation was impossible.** This is the strongest justification for re-keying
+rather than relabelling.
+
+**(b) The pre-r13 estimator was incoherent, not merely mis-scaled.** `cumulative_delta ≥ 0` and
+`cumulative_delta ≤ 0` split the same anchors into complementary candidate/comparator cells, so a
+valid contrast MUST return near-mirror effects. Pre-r13 both read **positive**
+(+0.0000268 and +0.0000236) — structurally impossible for a genuine contrast. Under r13 they read
+**−0.0191 and +0.0203**, proper mirror images. The dollar pooling had destroyed the sign, not just
+the scale. Nothing in the old ledger's magnitudes should be read as evidence of anything.
+
+**(c) `p_screen` moved materially** (0.9925 → 0.8136; 0.9955 → 0.8021; 0.4563 → 0.7141) because
+the statistic itself changed. `quote_imbalance` stayed at 0.00050 — the permutation floor
+(1/2001), i.e. the effect is beyond every one of 2,000 block permutations either way.
+
+**(d) The `quote_imbalance` conclusion survives, now honestly.** The corrected effect is ~34×
+larger than the mislabelled figure — and still **10.4× below** the spread floor (0.146 vs 1.526
+bps). The kill stands, but it now rests on a comparison that means something: a statistically
+unambiguous effect (p at the permutation floor, ~2.3M vs ~1.5M observations, 11/11 sessions) whose
+magnitude is an order of magnitude too small to clear the quoted-spread cost proxy.
+
+## 17. Scientific interpretation — what may now safely be concluded
+
+1. **The measurement layer is now trustworthy, and it was not before.** Every `*_bps` magnitude
+   reaching a gate is proved to be basis points at the Scout, walk-forward and sealed stages.
+2. **No conclusion of this era ever depended on the defect.** Graduation is empty, no sealed
+   evaluation exists, no candidate ever advanced. The two void `killed_economic` decisions have
+   been superseded by valid ones that reach the same verdict.
+3. **On the exploratory corpus, none of the six reference candidates is economically
+   interesting.** That is a statement about a 12-symbol-day, 11-session, 3.0-session-equivalent
+   corpus whose aggressor labels are 29–83% tick-test inferences — it is a screening result, not
+   a finding about markets.
+4. **Nothing here is a profitability claim, and `econ_interesting` is not one either.** Clearing
+   the spread proxy is necessary and very far from sufficient; profitability needs an execution
+   model this era does not build (§5.5's three-concept table).
+
+## 18. Remaining blocker (unchanged by r13 — and deliberately so)
+
+`GET /research/desk/micro/walkforward` still refuses with **`0 < 105`**: the geometry needs
+40 train + 5 embargo + 20 test + 2×20 step = 105 sessions for `WF_MIN_SUFFICIENT_FOLDS`, and the
+exploratory corpus has **11**. All three pilot studies read `floor_unmet` (60 required, 11
+available). 80 sealed vault symbol-days exist and were **not touched** — they are OOS reserve, not
+discovery data. No geometry, floor, or threshold was relaxed to make anything run.
+
+The bottleneck is exposed sessions: **11 of 105**. That is the next problem, and it is now safe
+to attack, because growth will be measured in a unit that means something.
+
+---
+
+## 19. Acceptance criteria — verified
+
+| Criterion | Evidence |
+|---|---|
+| Every value called bps is demonstrably basis points | `test_micro_unit_semantics.py` (31 guards), propagation tests at all three stages |
+| Scout economic floor compares bps vs bps | `scout.py` → `mf.clears_economic_floor` → `require_bps_floor` |
+| Walk-forward fold + pooled effects use the canonical unit | `PCT_TO_BPS` at the feed; `unit` on every fold summary |
+| Sealed evaluation uses the same unit | `micro_sealed_evaluation.py:257` through the same door |
+| long/short cannot silently conflict with buy/sell | disjoint vocabularies, separate validators, one adapter |
+| Unknown side values fail loudly | `UnknownSideVocabularyError`, raised **before** unmeasured/truncated short-circuits |
+| Price-scale invariance tests pass | 3 tests incl. 4 parametrised rescale factors |
+| Economic-floor regression tests pass | 5 bps vs 2 bps → interesting; 1 bps vs 2 bps → `killed_economic` |
+| Spec documents the corrected convention | r13 + §0 + §4 + §5.5 + TR-33 |
+| Old evidence cannot be mistaken for new | outcome `unit` is a frozen spec field → all 6 candidates **re-keyed**; unitless floors refused |
+| Real corpus recomputed | run over 18 rebuilt snapshots, 6 r13 rows appended |
+| Before/after table for all six | §Part 3 |
+| No sealed vault data consumed | `withheld_excluded: 80` on every grid; vault ledgers untouched |
+| No statistical or sample gate weakened | §13 — every constant unchanged |
+| All relevant existing tests pass | **3543 passed, 8 skipped, 0 failed** (`PYTEST_EXIT=0`); frontend `tsc --noEmit` exit 0 |
+| Era invariants intact | 0 `referee_*` modules changed · 0 `Config` fields · fingerprint `08e471b10130e1e2` · `params_hash` `5d3f3094…` unchanged · rebuilt feature rows byte-identical |
+
+**Not verified in a browser:** the one-word `/desk` header change (`Effect` → `Effect (bps)`).
+It is a static label with no golden-replay or guard-test dependency, and `tsc --noEmit` passes,
+but no screenshot was taken — so by the era's own T-10 rule it is `unknown`, not `passing`.

@@ -70,6 +70,17 @@ __all__ = [
     "OutcomeRefused",
     "resolve_outcome_start",
     "require_outcome_start_not_before_conditioning",
+    "BPS_UNIT",
+    "OUTCOME_UNIT",
+    "AGGRESSOR_SIDES",
+    "CANDIDATE_DIRECTIONS",
+    "UnknownSideVocabularyError",
+    "UnitMismatchError",
+    "aggressor_sign",
+    "direction_sign",
+    "direction_for_aggressor",
+    "require_bps_floor",
+    "clears_economic_floor",
     "mid_outcome",
     "last_trade_outcome",
     "spread_bps",
@@ -345,10 +356,111 @@ def require_outcome_start_not_before_conditioning(
     return requested_start
 
 
-def _signed(value: float | None, side: str | None) -> float | None:
-    if value is None:
+# --- Units and the two side vocabularies (spec section 0 "Units", section 4, revision r13) -------
+#
+# **Revision r13 (2026-08-25).** Before r13 the primary outcome was an absolute mid-price
+# DIFFERENCE -- dollars -- which ``scout.py`` then renamed ``effect_bps`` without converting and
+# compared against a floor genuinely expressed in basis points (spec section 5.5). The gate was
+# therefore dimensionally invalid, and the pooled estimator was itself meaningless across a corpus
+# spanning ~$160 (PG) to ~$600 (SPY): a dollar is not comparable between price levels. r13 makes
+# the canonical primary outcome a PRICE-SCALE-INVARIANT RETURN in basis points, computed by the
+# ``bps_move`` primitive this module already owned and the outcome path simply never called.
+#
+# The ambiguous ``value`` key is deliberately GONE rather than redefined: an unlabelled number is
+# exactly what let dollars masquerade as basis points for a whole era. Callers read ``return_bps``
+# (the scientific primary) or ``delta_price`` (a diagnostic only -- never gated, never pooled).
+
+BPS_UNIT = "bps"
+OUTCOME_UNIT = "return_bps"
+
+# The two vocabularies, previously implicit and silently interchangeable. **Aggressor side** names
+# who crossed the spread on a TRADE (``micro_observer.py``'s own domain). **Candidate direction**
+# names the hypothesis a registered candidate takes (``walkforward.py``/``micro_sealed_evaluation.
+# py``'s ``sidedness``, and the frozen ``desk_playbook_detect.py``/``backtests.py`` vocabulary).
+# They are disjoint by construction so a value from one can never satisfy a test written for the
+# other -- the pre-r13 defect, where ``_signed`` flipped only on ``"sell"`` and a ``"short"``
+# candidate was therefore silently NOT flipped and then killed as wrong-direction.
+AGGRESSOR_SIDES: tuple[str, ...] = ("buy", "sell")
+CANDIDATE_DIRECTIONS: tuple[str, ...] = ("long", "short")
+
+
+class UnknownSideVocabularyError(ValueError):
+    """A side/direction string outside its declared closed vocabulary reached a signing helper.
+    Raised, never silently treated as positive (which is what the pre-r13 ``_signed`` did to every
+    value that was not exactly ``"sell"``)."""
+
+
+class UnitMismatchError(ValueError):
+    """A magnitude was about to be compared against a floor that does not declare basis points --
+    including a pre-r13 persisted floor, which carries no ``unit`` at all. Refused, because
+    silently reinterpreting old-semantics evidence under the new convention is precisely the
+    laundering r13 exists to prevent."""
+
+
+def aggressor_sign(side: str) -> int:
+    """``+1`` for a buy-side aggressor, ``-1`` for a sell-side one. A candidate DIRECTION
+    (``long``/``short``) is not an aggressor side and is refused here."""
+    if side not in AGGRESSOR_SIDES:
+        raise UnknownSideVocabularyError(
+            f"unknown aggressor side {side!r} -- expected one of {AGGRESSOR_SIDES}"
+        )
+    return 1 if side == "buy" else -1
+
+
+def direction_sign(direction: str) -> int:
+    """``+1`` for a long candidate, ``-1`` for a short one. An aggressor SIDE (``buy``/``sell``) is
+    not a candidate direction and is refused here."""
+    if direction not in CANDIDATE_DIRECTIONS:
+        raise UnknownSideVocabularyError(
+            f"unknown candidate direction {direction!r} -- expected one of {CANDIDATE_DIRECTIONS}"
+        )
+    return 1 if direction == "long" else -1
+
+
+def direction_for_aggressor(side: str) -> str:
+    """The ONE explicit adapter between the two vocabularies, for a caller that genuinely wants to
+    read a trade's aggressor side as a hypothesis direction. Never implicit."""
+    return "long" if aggressor_sign(side) == 1 else "short"
+
+
+def _require_direction(direction: str | None) -> int:
+    """Validates a candidate direction EAGERLY -- before any ``unmeasured``/``truncated``
+    short-circuit -- and returns its sign. ``direction=None`` is an UNSIDED candidate (the honest
+    default; every candidate registered to date carries it) and signs ``+1``. Anything outside
+    ``CANDIDATE_DIRECTIONS`` raises, so an unmeasured or truncated row can never launder a bad
+    vocabulary past the gate that would have caught it."""
+    return 1 if direction is None else direction_sign(direction)
+
+
+def require_bps_floor(econ_floor: dict) -> float:
+    """The floor's magnitude, having proved it is expressed in basis points. The ONE door every
+    economic-relevance comparison goes through (``scout.py``, ``walkforward.py``,
+    ``micro_sealed_evaluation.py``), so no gate can compare against an undeclared unit."""
+    unit = econ_floor.get("unit")
+    if unit != BPS_UNIT:
+        raise UnitMismatchError(
+            f"economic floor declares unit {unit!r}, not {BPS_UNIT!r} -- refused. A floor with no "
+            "unit is a pre-r13 record; its magnitude was never comparable to an r13 return_bps "
+            "effect and is never reinterpreted as though it were."
+        )
+    floor_bps = econ_floor.get("floor_bps")
+    if floor_bps is None:
+        raise UnitMismatchError("economic floor carries no floor_bps magnitude -- refused")
+    return float(floor_bps)
+
+
+def clears_economic_floor(effect_bps: float | None, econ_floor: dict | None) -> bool | None:
+    """Spec section 5.5's economic-relevance column: ``|effect_bps| >= floor_bps``, **bps against
+    bps**, both sides unit-checked. ``None`` when either input is genuinely absent -- never a
+    fabricated ``False``.
+
+    This answers "is the measured effect larger than the quoted-spread cost proxy", i.e. whether
+    the effect is **economically interesting**. It is NOT a profitability finding: profitability
+    requires an execution model (entry/exit rules, fill basis, slippage, fees, latency, capacity,
+    borrow) that this era does not build. The proxy sentence travels with every served floor."""
+    if effect_bps is None or econ_floor is None:
         return None
-    return -value if side == "sell" else value
+    return abs(effect_bps) >= require_bps_floor(econ_floor)
 
 
 def mid_outcome(
@@ -358,23 +470,31 @@ def mid_outcome(
     outcome_start: float,
     horizon_ts: float,
     session_end_ts: float,
-    side: str | None,
+    direction: str | None,
 ) -> dict:
-    """The mid-basis PRIMARY outcome (spec section 4): forward mid-price move from ``outcome_
-    start`` to ``horizon_ts``, side-signed when ``side`` names a hypothesis direction ("buy"/
-    "sell"), session-truncated with the truncation flagged (and the row excluded from any later
-    average, never silently measured past the session). A row lacking a quote mid at either end is
-    ``unmeasured`` -- excluded and counted, never silently measured off the last trade."""
+    """The mid-basis PRIMARY outcome (spec section 4, revision r13): the forward mid **return in
+    basis points** from ``outcome_start`` to ``horizon_ts``, direction-signed when ``direction``
+    names a hypothesis direction (``"long"``/``"short"``), session-truncated with the truncation
+    flagged (and the row excluded from any later average, never silently measured past the
+    session). A row lacking a quote mid at either end -- or carrying a non-positive starting mid,
+    which has no basis to express a return against -- is ``unmeasured``: excluded and counted,
+    never silently measured off the last trade and never a fabricated 0.0.
+
+    ``return_bps`` is the scientific primary. ``delta_price`` is retained beside it as a raw
+    DIAGNOSTIC (the dollar move an operator can eyeball against a chart); it is never gated,
+    never pooled, and never compared to a bps floor."""
+    sign = _require_direction(direction)
     truncated = horizon_ts > session_end_ts
-    unmeasured = mid_at_start is None or mid_at_horizon is None
-    value = None
-    if not unmeasured and not truncated:
-        value = _signed(mid_at_horizon - mid_at_start, side)
+    return_bps = bps_move(mid_at_start, mid_at_horizon)
+    unmeasured = return_bps is None
+    measured = not (unmeasured or truncated)
     return {
         "basis": "mid",
+        "unit": OUTCOME_UNIT,
         "outcome_start": outcome_start,
         "horizon_ts": horizon_ts,
-        "value": value,
+        "return_bps": sign * return_bps if measured else None,
+        "delta_price": sign * (mid_at_horizon - mid_at_start) if measured else None,
         "unmeasured": unmeasured,
         "truncated": truncated,
     }
@@ -387,21 +507,24 @@ def last_trade_outcome(
     outcome_start: float,
     horizon_ts: float,
     session_end_ts: float,
-    side: str | None,
+    direction: str | None,
 ) -> dict:
     """The SEPARATELY NAMED last-trade-basis sensitivity column (spec section 4) -- identical
-    shape to ``mid_outcome``, never pooled with, substituted for, or averaged into the mid-basis
-    primary. Callers must keep the two bases apart at every serving surface."""
+    shape and identical r13 unit to ``mid_outcome``, never pooled with, substituted for, or
+    averaged into the mid-basis primary. Callers must keep the two bases apart at every serving
+    surface."""
+    sign = _require_direction(direction)
     truncated = horizon_ts > session_end_ts
-    unmeasured = price_at_start is None or price_at_horizon is None
-    value = None
-    if not unmeasured and not truncated:
-        value = _signed(price_at_horizon - price_at_start, side)
+    return_bps = bps_move(price_at_start, price_at_horizon)
+    unmeasured = return_bps is None
+    measured = not (unmeasured or truncated)
     return {
         "basis": "last_trade",
+        "unit": OUTCOME_UNIT,
         "outcome_start": outcome_start,
         "horizon_ts": horizon_ts,
-        "value": value,
+        "return_bps": sign * return_bps if measured else None,
+        "delta_price": sign * (price_at_horizon - price_at_start) if measured else None,
         "unmeasured": unmeasured,
         "truncated": truncated,
     }

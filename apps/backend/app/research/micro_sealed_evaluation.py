@@ -254,7 +254,9 @@ def _derive_verdict(
     condition_3_magnitude = (
         econ_floor is not None
         and econ_floor.get("floor_bps") is not None
-        and abs(summary["effect"]) >= econ_floor["floor_bps"]
+        # r13: the SAME unit-checked door Scout and walk-forward use -- bps against bps, with a
+        # pre-r13 unitless floor refused rather than silently reinterpreted.
+        and bool(wf.mf.clears_economic_floor(summary["effect"], econ_floor))
     )
     condition_5_class_process = (
         evidence_class == REQUIRED_EVIDENCE_CLASS and process_label == REQUIRED_PROCESS_LABEL

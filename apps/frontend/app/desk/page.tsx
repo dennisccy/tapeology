@@ -6606,7 +6606,12 @@ function WalkForwardSection({
                         <tr className="border-b border-slate-800 text-left text-slate-500">
                           <th className="px-1.5 py-1 text-right">Fold</th>
                           <th className="px-1.5 py-1">Status</th>
-                          <th className="px-1.5 py-1 text-right">Effect</th>
+                          {/* r13: a magnitude column with no unit is the ambiguity that let
+                              dollars masquerade as basis points for a whole era. Every fold
+                              effect is `return_bps` by spec invariant (rapid-validation-spec
+                              section 4), so the header names it. Label only -- the served value
+                              is still rendered verbatim, with no client-side arithmetic. */}
+                          <th className="px-1.5 py-1 text-right">Effect (bps)</th>
                           <th className="px-1.5 py-1 text-right">N</th>
                           <th className="px-1.5 py-1 text-right">Sessions</th>
                           <th className="px-1.5 py-1">Sign</th>

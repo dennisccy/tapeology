@@ -38,7 +38,7 @@ from test_copy_discipline import find_violations
 
 # === helpers ==========================================================================================
 
-_ECON_FLOOR = {"floor_bps": 5.0}
+_ECON_FLOOR = {"floor_bps": 5.0, "unit": "bps"}  # r13: an economic floor must declare its unit
 _FIXTURE_VAULT_SECRET = b"a-graduation-fixture-vault-secret"
 
 

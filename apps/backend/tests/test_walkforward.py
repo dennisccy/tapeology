@@ -45,7 +45,7 @@ from tests.test_micro_accessor import _plant_dataset_and_snapshot
 
 # === helpers ==========================================================================================
 
-_ECON_FLOOR = {"floor_bps": 5.0}
+_ECON_FLOOR = {"floor_bps": 5.0, "unit": "bps"}  # r13: an economic floor must declare its unit
 
 
 def _observation(session_date: str, symbol: str, value: float) -> dict:

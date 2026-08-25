@@ -428,7 +428,7 @@ def _extract_none_anchors(
             # waste -- measured on the real corpus to turn a should-be-fast extraction into a
             # multi-minute stall (see micro_join.outcome_row_at_single_horizon's own docstring).
             outcome = mj.outcome_row_at_single_horizon(
-                trade_rows, anchor_pos, horizon_kind, horizon_value, session_end_ts, side=sidedness
+                trade_rows, anchor_pos, horizon_kind, horizon_value, session_end_ts, direction=sidedness
             )
             if outcome is None or outcome["mid"]["unmeasured"] or outcome["mid"]["truncated"]:
                 continue
@@ -440,7 +440,7 @@ def _extract_none_anchors(
                     "anchor_at": anchor_row["anchor_at"],
                     "trade_index": anchor_row["trade_index"],
                     "feature_value": feature_value,
-                    "outcome_value": outcome["mid"]["value"],
+                    "outcome_bps": outcome["mid"]["return_bps"],
                     "tod_bucket": tod_bucket_for_epoch(epoch_anchor + anchor_row["anchor_at"]),
                     "fallback_frac": anchor_row.get("fallback_frac_20t"),
                 }
@@ -492,7 +492,7 @@ def _extract_band_touch_anchors(
                     "anchor_at": feature_at_trigger["anchor_at"],
                     "trade_index": feature_at_trigger["trade_index"],
                     "feature_value": feature_value,
-                    "outcome_value": outcome["mid"]["value"],
+                    "outcome_bps": outcome["mid"]["return_bps"],
                     "tod_bucket": tod_bucket_for_epoch(touch["as_of_epoch"]),
                     "fallback_frac": feature_at_trigger.get("fallback_frac_20t"),
                 }
@@ -596,7 +596,7 @@ def _extract_divergence_anchors(
                 tau2_pos = trade_rows.index(tau2_row)
                 outcome = mj.outcome_row_at_single_horizon(
                     trade_rows, tau2_pos, horizon_kind, horizon_value, session_end_ts,
-                    side=sidedness,
+                    direction=sidedness,
                 )
                 if outcome is None or outcome["mid"]["unmeasured"] or outcome["mid"]["truncated"]:
                     continue
@@ -608,7 +608,7 @@ def _extract_divergence_anchors(
                         "anchor_at": tau2_row["anchor_at"],
                         "trade_index": tau2_row["trade_index"],
                         "feature_value": feature_value,
-                        "outcome_value": outcome["mid"]["value"],
+                        "outcome_bps": outcome["mid"]["return_bps"],
                         "tod_bucket": tod_bucket_for_epoch(epoch_anchor + tau2_row["anchor_at"]),
                         "fallback_frac": tau2_row.get("fallback_frac_20t"),
                     }
@@ -681,7 +681,7 @@ def _extract_playbook_signal_anchors(
                     "anchor_at": feature_at_trigger["anchor_at"],
                     "trade_index": feature_at_trigger["trade_index"],
                     "feature_value": feature_value,
-                    "outcome_value": outcome["mid"]["value"],
+                    "outcome_bps": outcome["mid"]["return_bps"],
                     "tod_bucket": tod_bucket_for_epoch(trigger_epoch),
                     "fallback_frac": feature_at_trigger.get("fallback_frac_20t"),
                 }
@@ -709,7 +709,7 @@ def extract_anchors(
 ) -> list[dict]:
     """One row per eligible anchor across ``corpus_manifest`` (spec section 5.1's own field -- a
     list of ``{"dataset_id": ...}`` entries): ``{dataset_id, symbol, session_date, anchor_at,
-    trade_index, feature_value, outcome_value, tod_bucket, fallback_frac}``. Dispatches on
+    trade_index, feature_value, outcome_bps, tod_bucket, fallback_frac}``. Dispatches on
     ``structure_context_kind`` -- ``"none"`` (every trade-anchored snapshot row), ``"band_touch"``
     (every enumerated wall touch, or a paired-touch divergence row -- see
     ``_extract_band_touch_anchors``), ``"playbook_signal"`` (every recorded signal, optionally
@@ -818,7 +818,7 @@ def _session_groups(anchors: list[dict], cell_of: list[str], usable_sessions: li
         bucket = groups.get(anchor["session_date"])
         if bucket is None:
             continue
-        bucket["outcomes"].append(anchor["outcome_value"])
+        bucket["outcomes"].append(anchor["outcome_bps"])
         bucket["labels"].append(cell == "candidate")
     return {
         s: {
@@ -1026,7 +1026,7 @@ def compute_p_screen(
     block_length: int,
     shuffle: str = "block",
 ) -> tuple[float | None, float | None]:
-    """PURE: given a pre-built anchor list (``feature_value``/``outcome_value``/``session_date``
+    """PURE: given a pre-built anchor list (``feature_value``/``outcome_bps``/``session_date``
     per anchor -- no dataset/snapshot I/O), returns ``(observed_effect_bps, p_screen)``. The ONE
     function ``screen_candidate`` calls for its statistical core, and the function TR-8's
     calibration test (and its banned-shuffle counter-test) calls directly against a hand-built
@@ -1097,10 +1097,10 @@ def _bucket_effect(anchors: list[dict], cell_of: list[str], key_fn) -> dict:
         )
         if cell == "candidate":
             bucket["n_candidate"] += 1
-            bucket["cand_sum"] += anchor["outcome_value"]
+            bucket["cand_sum"] += anchor["outcome_bps"]
         else:
             bucket["n_comparator"] += 1
-            bucket["comp_sum"] += anchor["outcome_value"]
+            bucket["comp_sum"] += anchor["outcome_bps"]
     out = {}
     for key, b in buckets.items():
         cand_mean = b["cand_sum"] / b["n_candidate"] if b["n_candidate"] else None
@@ -1246,10 +1246,16 @@ def screen_candidate(
         p_screen = _two_sided_p(effect_bps, null_effects)
         valid_null = null_effects[~np.isnan(null_effects)]
         best_of_n = _best_of_n_disclosure(list(np.abs(valid_null)), n_variants_tried)
-        econ_interesting = abs(effect_bps) >= econ_floor["floor_bps"] if effect_bps is not None else None
+        # r13: bps against bps, through the ONE unit-checked door (`mf.require_bps_floor`).
+        # Pre-r13 this read `abs(effect_bps) >= econ_floor["floor_bps"]` where the left side was a
+        # raw DOLLAR mid-price difference and the right side genuine basis points.
+        econ_interesting = mf.clears_economic_floor(effect_bps, econ_floor)
 
     screen_result = {
         "evidence_class": EVIDENCE_CLASS_HISTORICAL_EXPOSED_DIAGNOSTIC,
+        # r13: `outcome_unit` names what every magnitude on this row is measured in, so a served
+        # screen never depends on a reader inferring the unit from a variable name.
+        "outcome_unit": mf.OUTCOME_UNIT,
         "effect_bps": effect_bps,
         "p_screen": p_screen,
         "p_screen_label": "descriptive screen -- not a confirmatory p-value",
@@ -1355,6 +1361,10 @@ def build_candidate_spec_fields(
         "multiple": ECON_FLOOR_SPREAD_MULTIPLE,
         "family_median_spread_bps": family_median_spread_bps,
         "floor_bps": floor_bps,
+        # r13: the floor states its own unit so no comparison can be made against an undeclared
+        # one. A pre-r13 persisted floor carries no `unit` key at all and is refused by
+        # `mf.require_bps_floor` rather than silently reinterpreted.
+        "unit": mf.BPS_UNIT,
         "proxy_sentence": ECON_PROXY_SENTENCE,
     }
     structure_context: dict = {"kind": structure_context_kind}
@@ -1365,7 +1375,14 @@ def build_candidate_spec_fields(
         "family_root_id": family_root_id,
         "feature": {"name": feature_name, "transform": transform, "params": params},
         "structure_context": structure_context,
-        "outcome": {"horizon_key": horizon_key, "sidedness": sidedness},
+        # r13: the outcome UNIT is part of the frozen outcome definition, so an r13 candidate and
+        # its pre-r13 namesake compute DIFFERENT `spec_hash`/`candidate_id` values. That is the
+        # point: the six pre-r13 rows on the real ledger stay permanently on record and
+        # permanently distinguishable, and no reader can mistake a dollar-semantics effect for a
+        # return_bps one. `distinct_variant_count` therefore counts them as separate variants,
+        # which grows the best-of-N denominator -- the conservative direction, and a disclosure
+        # rather than a decision rule.
+        "outcome": {"horizon_key": horizon_key, "sidedness": sidedness, "unit": mf.OUTCOME_UNIT},
         "fitting_rule": fitting_rule,
         "econ_floor": econ_floor,
         "corpus_manifest": corpus_manifest,
@@ -1807,7 +1824,7 @@ def register_screen_and_walkforward_check(
         rows_cache=rows_cache, resolver=resolver, playbook_store=playbook_store, setup_id=setup_id,
     )
     observations = [
-        {"session_date": a["session_date"], "symbol": a["symbol"], "value": a["outcome_value"]}
+        {"session_date": a["session_date"], "symbol": a["symbol"], "value": a["outcome_bps"]}
         for a in anchors
     ]
     floor_result = wf.scout_candidate_walkforward_floor_check(

@@ -68,6 +68,7 @@ from .micro_accessor import (
     initialize_r2_exposure_registry,
     resolve_micro_exposure_registry_dir,
 )
+from . import micro_features as mf
 from .micro_readiness import WF_TEST_MIN_SESSIONS, WF_TRAIN_MIN_SESSIONS
 from .micro_snapshots import append_run_log, exclude_withheld
 from . import vault
@@ -165,6 +166,22 @@ __all__ = [
 # transcribed them FIRST (that module's own docstring: "a future J-05 dev should import these two
 # names from here ... never mint a second, independently-valued copy").
 WF_MIN_SUFFICIENT_FOLDS = 3
+
+# --- r13 unit discipline -------------------------------------------------------------------------
+# Fold observations arrive from `desk_forward`'s playbook horizons, whose `return_pct` is PERCENT
+# (`desk_forward.py:40`: "``return_pct`` values are PERCENT (x100)"). The survivor rule's
+# conditions 3 and 4 compare a fold effect against `econ_floor["floor_bps"]` -- basis points -- so
+# feeding percent straight through was a dormant 100x error, latent only because the sole
+# registered sequence carries `econ_floor: None` and the comparison never executed. Every
+# observation is now converted at the ONE feed boundary, and the fold summary states its unit.
+PCT_TO_BPS = 100.0
+WF_OBSERVATION_UNIT = mf.OUTCOME_UNIT
+
+
+def observation_value_bps(return_pct: float) -> float:
+    """The ONE percent-to-basis-points conversion for the walk-forward observation feed. 0.25% is
+    25 bps."""
+    return return_pct * PCT_TO_BPS
 WF_FOLD_MIN_SIGNAL_SESSIONS = 8
 WF_FOLD_MIN_OBSERVATIONS = 30
 WF_FOLD_MIN_SYMBOLS = 2
@@ -416,6 +433,7 @@ def summarize_fold_observations(observations: list[dict], floors: dict) -> dict:
             "n_sessions": n_sessions,
             "n_symbols": n_symbols,
             "effect": None,
+            "unit": WF_OBSERVATION_UNIT,
             "sign": None,
             "missing": missing,
         }
@@ -429,6 +447,9 @@ def summarize_fold_observations(observations: list[dict], floors: dict) -> dict:
         "n_sessions": n_sessions,
         "n_symbols": n_symbols,
         "effect": effect,
+        # r13: the fold states the unit of its own effect, so the survivor rule's economic
+        # condition can never be a percent-against-basis-points comparison again.
+        "unit": WF_OBSERVATION_UNIT,
         "sign": sign,
         "missing": {},
     }
@@ -652,9 +673,9 @@ def _opposite_direction_eligible_fold_exists(eligible_folds: list[dict], sidedne
     if econ_floor is None:
         return False
     opposite = "negative" if sidedness == "long" else "positive"
-    floor_bps = econ_floor.get("floor_bps")
-    if floor_bps is None:
+    if econ_floor.get("floor_bps") is None:
         return False
+    floor_bps = mf.require_bps_floor(econ_floor)  # r13: bps against bps, unit proved
     return any(f["sign"] == opposite and abs(f["effect"]) >= floor_bps for f in eligible_folds)
 
 
@@ -679,7 +700,8 @@ def evaluate_survivor_rule(fold_results: list[dict], *, sidedness: str, econ_flo
         and econ_floor is not None
         and econ_floor.get("floor_bps") is not None
         and ((pooled_effect > 0) == (expected_sign == "positive"))
-        and abs(pooled_effect) >= econ_floor["floor_bps"]
+        # r13: `mf.clears_economic_floor` proves BOTH sides are basis points before comparing.
+        and bool(mf.clears_economic_floor(pooled_effect, econ_floor))
     )
 
     condition_4 = not _opposite_direction_eligible_fold_exists(eligible, sidedness, econ_floor)
@@ -1233,7 +1255,10 @@ def playbook_observations(
                 {
                     "session_date": session_date,
                     "symbol": signal["symbol"],
-                    "value": horizon["return_pct"],
+                    # r13: converted at the feed boundary so every downstream fold effect,
+                    # pooled effect and sealed verdict is in the ONE canonical unit.
+                    "value": observation_value_bps(horizon["return_pct"]),
+                    "value_unit": WF_OBSERVATION_UNIT,
                     "setup_id": signal["setup_id"],
                 }
             )

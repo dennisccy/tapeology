@@ -125,6 +125,53 @@ _RTH_OPEN = time(9, 30)
 _RTH_CLOSE = time(16, 0)
 _RTH_MINUTES_PER_SESSION = 390.0  # 16:00 - 09:30, the standard-session-equivalents denominator
 
+# r13: the corpus must be judgeable by QUALITY, not only by count. `fallback_frac` is already
+# served per shard; this is the aggregate an operator needs before reading any flow result -- an
+# aggressor label produced by the tick test is an INFERENCE, not ground truth, and a flow effect
+# measured mostly on inferences is weak evidence however large its sample.
+#
+# The threshold is a plain MAJORITY -- not a tuned number, and it GATES NOTHING. It answers one
+# question: "on this shard, are most of the buy/sell labels determined by the quote rule, or
+# guessed?" Nothing in the pipeline reads it; it is a disclosure only (the spec section 5.4
+# fallback-tercile stratification remains the mechanism that actually stratifies a result).
+_FALLBACK_FRAC_DISCLOSURE_THRESHOLD = 0.5
+
+
+def _label_quality(shards: list[dict]) -> dict:
+    """r13: the aggregate aggressor-label trustworthiness of the exploratory corpus, derived
+    ENTIRELY from the per-shard ``fallback_frac``/``trade_count`` values already served above --
+    no second source, no recomputation, no new I/O.
+
+    ``trade_weighted_fallback_frac`` is the honest corpus-level figure: a 100-trade shard and a
+    500,000-trade shard must not weigh the same. ``shards_majority_inferred`` counts shards whose
+    labels are more guessed than determined. All of it is a DISCLOSURE -- nothing gates on it.
+    Empty corpus answers ``None`` magnitudes, never a fabricated 0.0 that would read as perfect
+    label quality."""
+    measured = [s for s in shards if s.get("fallback_frac") is not None]
+    total_trades = sum(s.get("trade_count") or 0 for s in measured)
+    weighted = (
+        sum((s["fallback_frac"] * (s.get("trade_count") or 0)) for s in measured) / total_trades
+        if total_trades
+        else None
+    )
+    fracs = [s["fallback_frac"] for s in measured]
+    return {
+        "shards_measured": len(measured),
+        "trade_weighted_fallback_frac": round(weighted, 4) if weighted is not None else None,
+        "min_fallback_frac": round(min(fracs), 4) if fracs else None,
+        "max_fallback_frac": round(max(fracs), 4) if fracs else None,
+        "majority_inferred_threshold": _FALLBACK_FRAC_DISCLOSURE_THRESHOLD,
+        "shards_majority_inferred": sum(
+            1 for f in fracs if f > _FALLBACK_FRAC_DISCLOSURE_THRESHOLD
+        ),
+        "note": (
+            "fallback_frac is the share of this corpus's aggressor (buy/sell) labels produced by "
+            "the tick test rather than the quote rule -- an INFERENCE, never ground truth. A flow "
+            "result measured largely on inferred labels is weak evidence however large its "
+            "sample. A disclosure only: nothing gates on these numbers."
+        ),
+    }
+
 
 # --- session-date / RTH-coverage arithmetic (cheap; no event replay) --------------------------------
 
@@ -580,6 +627,12 @@ def build_readiness(
         "rth_minutes_covered": round(rth_minutes_total, 2),
         "session_equivalents": round(rth_minutes_total / _RTH_MINUTES_PER_SESSION, 4),
         "referee_tick_gate_symbol_days": REFEREE_TICK_GATE_SYMBOL_DAYS,
+        # r13: breadth and label quality, so corpus GROWTH can be judged by what the evidence is
+        # worth and not only by how much of it there is. Every input is already served per shard
+        # above -- this aggregates, it never introduces a second computation of anything.
+        "distinct_symbols": len({s["symbol"] for s in shards}),
+        "distinct_sessions": len(session_dates),
+        "label_quality": _label_quality(shards),
     }
 
     # J-03: honestly zero (never computed) when no playbook_store is given at all -- a true

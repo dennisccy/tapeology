@@ -208,12 +208,64 @@
 > disclosed position can never take sealed / blind / historical-OOS credit again. Nothing is
 > disclosed to "balance" it. Detail → §7.2.2. Traps → TR-4, TR-2.
 
+> **Revision r13 (2026-08-25, owner ruling — the canonical outcome unit is a price-scale-invariant
+> return, and the two side vocabularies are separated).** A measurement audit
+> ([`reports/micro-unit-semantics-audit.md`](../reports/micro-unit-semantics-audit.md)) found this
+> spec internally contradictory, and the contradiction faithfully implemented. **§4 defined the
+> primary outcome as a mid-price DIFFERENCE — dollars — while §5.5 gated it against
+> `family_median_spread_bps`, genuine basis points.** `micro_features.mid_outcome()` implemented §4
+> literally, `scout.py` renamed the result `effect_bps` without converting it, and the
+> economic-relevance gate has therefore been evaluating **dollars ≥ basis points** for the whole
+> era. Two consequences, both structural. **(1) The gate was dimensionally invalid**, so every
+> `killed_economic` decision recorded before r13 is void as an economic judgement. **(2) The
+> estimator was itself meaningless across the corpus**: pooling dollar deltas over symbols spanning
+> ~$160 (PG) to ~$600 (SPY) compares quantities that are not commensurable, whatever they are later
+> tested against. A parallel defect sat dormant one layer down — walk-forward and sealed-evaluation
+> effects are fed from `desk_forward`'s `return_pct`, which is PERCENT, and conditions 3 and 4 of
+> `WF_SURVIVOR_RULE_V1` compare them against the same bps floor: a 100× error that never fired only
+> because the sole registered sequence carries `econ_floor: null`.
+>
+> r13 fixes the measurement layer and nothing else. **The canonical primary outcome is
+> `return_bps = (mid_horizon − mid_start) / mid_start × 10_000`**, direction-signed, computed by
+> the `bps_move` primitive `micro_features.py` already owned and the outcome path simply never
+> called. The ambiguous `value` key is REMOVED rather than redefined — an unlabelled number is what
+> let dollars masquerade as basis points — and every outcome row, fold summary and economic floor
+> now states its own unit, with a single unit-checked door (`require_bps_floor`) that every
+> magnitude comparison passes through. The walk-forward feed converts percent to bps at its one
+> boundary. r13 also separates the two side vocabularies that previously collided: **aggressor side
+> is `buy | sell`, candidate direction is `long | short`**, disjoint, individually validated, with
+> one explicit adapter — before r13 the outcome signer flipped only on `"sell"`, so a `"short"`
+> candidate was silently NOT flipped and would then have been killed as wrong-direction. That
+> defect never fired: every candidate registered to date carries `sidedness: null`.
+>
+> **Nothing else moves.** No threshold, grid, formula, embargo, fold parameter, floor multiple,
+> p-value rule, sample floor or concentration ceiling is touched — r13 changes only the UNIT a
+> magnitude is expressed in and the vocabulary a direction is named in. `ECON_FLOOR_SPREAD_MULTIPLE`
+> stays `1.0`. **Re-keying:** the outcome unit joins the frozen `outcome` spec fields, so every r13
+> candidate computes a different `spec_hash`/`candidate_id` from its pre-r13 namesake — old rows
+> stay permanently on record, permanently distinguishable, and are never reinterpreted under the new
+> convention. A pre-r13 economic floor carries no `unit` key and is REFUSED by the gate rather than
+> silently read as bps. Detail → §0 Units, §4, §5.5. Traps → TR-33.
+
 ---
 
 ## 0. Shared conventions
 
-- **Units.** Returns/moves in percent or bps as named per field; side-signed where a hypothesis
-  side exists (positive = the thesis direction), stated per field. Shares are integer counts.
+- **Units (r13).** Returns/moves in percent or bps **as named per field, and every field states
+  its own unit** — a magnitude whose unit must be inferred from a variable name is a defect, not a
+  convention. **The canonical scientific outcome unit of this era is `return_bps`**, a
+  price-scale-invariant return in basis points (§4); it is the unit of every Scout effect, every
+  walk-forward fold and pooled effect, every sealed-evaluation effect, and every economic floor.
+  **An absolute price difference is never a scientific magnitude** — it is not comparable between
+  price levels, so it never enters an estimator, a pooled average, or a gate; it may be served
+  only as an explicitly named diagnostic (`delta_price`). Shares are integer counts.
+- **Side vocabularies (r13).** Two closed, disjoint vocabularies, never interchangeable.
+  **Aggressor side** — `buy | sell` — names who crossed the spread on a trade; it is the
+  observer's domain. **Candidate direction** — `long | short` — names the hypothesis a registered
+  candidate takes; it is `sidedness` in the ledger, the walk-forward and the sealed evaluator.
+  Direction-signing uses `positive = the thesis direction`. An unsided candidate is `null` and is
+  not flipped. **A value outside its vocabulary raises; it is never silently treated as
+  positive.** Conversion between the two happens only through the one named adapter.
 - **Sessions.** A session is an ET RTH trading date (`session_date`); the desk's session-honesty
   module (`desk_sessions.py`) is the arbiter of what counts as a session.
 - **Determinism.** Every random draw uses `random.Random` streams under the recipe
@@ -420,10 +472,22 @@ Quote sizes reach the observer on `QuoteEvent` rows — they are dropped only in
 
 ## 4. Outcomes (the closed set)
 
-For an anchor event: forward **mid-price** move (quote mid at the horizon boundary minus mid at
-the outcome start) at every horizon in §1's three horizon families; session-truncated with
+For an anchor event: the forward **mid RETURN in basis points (r13)**
+
+```
+return_bps = (mid_at_horizon − mid_at_outcome_start) / mid_at_outcome_start × 10_000
+```
+
+at every horizon in §1's three horizon families; session-truncated with
 truncation flagged and truncated rows excluded from averages (the playbook rail's honesty rule);
-side-signed when a hypothesis side exists. **Mid is the ONLY primary basis (r2)**: a row lacking
+**direction-signed** (`long | short`, §0) when a hypothesis direction exists, unflipped when the
+candidate is unsided. **The outcome is a RETURN, never an absolute price difference (r13)** — a
+dollar move is not comparable between a $160 and a $600 symbol, so pooling one across a corpus
+estimates nothing and comparing one to a basis-point floor is dimensionally invalid. A
+non-positive starting mid has no basis to express a return against and is `unmeasured`, exactly
+as a missing one is. The raw signed dollar move MAY be served beside the primary as an explicitly
+named `delta_price` diagnostic; it is never pooled, never averaged, never gated, and never
+compared against a spread floor. **Mid is the ONLY primary basis (r2)**: a row lacking
 a quote mid at either end is `unmeasured` — excluded and counted, never silently measured off
 the last trade. A separately named `last_trade_basis` outcome column MAY be served beside the
 primary as a sensitivity reading; it is never pooled with, substituted for, or averaged into
@@ -482,6 +546,26 @@ computed from the discovery anchors' quoted spreads, with the formula and inputs
 candidate spec BEFORE any outcome is read (registration-ordering enforced, TR-9). Served beside —
 never multiplied into — the statistical screen, always with the proxy sentence: *quoted spread is
 a research cost proxy, not a full execution or tradability model*.
+
+**Both sides of that comparison are `return_bps` (r13), and the floor states its unit.** The
+effect is the §4 canonical outcome; the floor is a median of `spread_bps` over the candidate's own
+discovery anchors. Every comparison passes through one unit-checked door, and a floor that does
+not declare basis points — including any floor persisted before r13, which carries no unit at all
+— is REFUSED rather than silently compared against.
+
+**What clearing this floor does and does not establish (r13).** Three concepts, never conflated:
+
+| Concept | What it means | What establishes it |
+|---|---|---|
+| **Statistical effect** | The relationship differs from the dependence-honest null | `p_screen` under §5.3's block permutation — a descriptive screen, not a confirmatory p-value |
+| **Economically interesting** | The measured effect magnitude exceeds the registered quoted-spread cost proxy | `econ_interesting` — this column, and nothing more |
+| **Profitable / executable** | A strategy makes money after real execution | An explicit execution model this era does NOT build: entry and exit rules, bid/ask fill basis, spread paid, slippage, fees, latency, liquidity and capacity, partial fills, and short borrow/locate where applicable — followed by live confirmation under the Referee's own spec |
+
+The Rapid Microscope establishes at most the **second** category before live confirmation.
+`econ_interesting` is therefore never described as "profitable", "tradable", or "an edge" on any
+surface, in any report, or in any code comment — it clears a cost PROXY, which is a necessary and
+very far from sufficient condition. A Scout survivor is a candidate that has not yet been killed,
+never a finding.
 
 ---
 
@@ -1191,6 +1275,7 @@ boundary by its `observed_through`.
 | TR-27 nonced rule commitment (r7 §7.2) | One ledger-tracked shard exposed while untracked pool members remain withheld ⇒ rule contents hidden · ALL tracked shards exposed but one untracked ORIGINAL-pool member still withheld ⇒ still hidden · after the final pool member is released ⇒ `symbol_rule` + `date_rule` + nonce reveal and recompute EXACTLY to the registered `rule_commitment` · a plausible-rule dictionary attack against the served commitment cannot verify guesses without the nonce · no other API/UI/MCP surface serves the symbol or date axes pre-release |
 | TR-28 coarse pre-release volumes (r7 §7.1, NON-LIVE surfaces) | A one-symbol-day run while withheld ⇒ no exact trade/quote/byte count appears on ANY surface · a multi-shard pool ⇒ coarse bucket labels only, never rounded numbers · expose one shard and re-query ⇒ the remaining withheld counts cannot be solved exactly from the before/after response pair (differencing resistance) · buckets never narrow as the pool shrinks · the final ORIGINAL-pool member released ⇒ exact totals may be served. **LIVE recorder progress is governed by TR-32 instead, which serves no volume field at all.** |
 | TR-32 live-progress composition (r11 §7.1) | Poll/observe any live progress transport (REST, CLI, UI, MCP) frequently enough that `chunks_done` advances by exactly one, and difference every served field against the deterministic operator-known plan ⇒ NO specific chunk's realized success/failure is recoverable with certainty · a coarse volume bucket TRANSITION across a single-chunk advance must not prove that chunk was `fetched` (running totals advance only on fetch) · bucketing the outcome counters is NOT sufficient (an exact 0→1 boundary still pins the first failure) · internal exact state and the TERMINAL TR-4 disclosed-failure list remain lawful |
+| TR-33 measurement semantics (r13 §0/§4/§5.5) | Price-scale invariance: $10.00→$10.05 and $100.00→$100.50 produce the IDENTICAL outcome (+50 bps), and $10.00→$10.05 vs $100.00→$100.05 produce DIFFERENT ones (+50 vs +5 bps) despite an identical dollar delta · rescaling both prices by any positive factor leaves the outcome unchanged · every `*_bps` magnitude reaching a gate is proved to be basis points at the Scout, walk-forward and sealed-evaluation stages · a floor that does not declare `bps` (including every pre-r13 floor) is refused, never silently compared · a direction outside `long|short` and an aggressor side outside `buy|sell` each RAISE, including on an unmeasured or truncated row, and a `short` candidate's outcome is the exact negation of the `long` one |
 | TR-26 depletion revealing quote (r6 §3) | Price-change termination: `available_at` equals the first CHANGED-price quote, not the last same-price one · bound termination: `available_at` equals the bound-hitting quote · truncating immediately BEFORE the revealing quote makes the depletion value non-existent/unavailable, and including it makes the value appear deterministically |
 
 Plus the standing suite: engine golden trace + observer equivalence + frozen-default profile,

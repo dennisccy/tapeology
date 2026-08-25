@@ -38,6 +38,22 @@
 > every `referee_*` module are FROZEN research vocabulary for this whole era (genuine bug fixes
 > excepted, each its own named revision). **The era succeeds if it kills bad ideas honestly; it
 > does NOT need to discover an edge.**
+>
+> **Measurement correction — spec revision r13 (2026-08-25).** A post-GOAL_ACHIEVED audit
+> ([`reports/micro-unit-semantics-audit.md`](../reports/micro-unit-semantics-audit.md)) found the
+> spec internally contradictory and the contradiction faithfully implemented: §4 defined the
+> primary outcome as a mid-price DIFFERENCE (dollars) while §5.5 gated it against a floor in basis
+> points, so the economic-relevance gate compared **dollars against basis points** for the whole
+> era, and the pooled estimator was incommensurable across a corpus spanning ~$160 to ~$600.
+> [Spec r13](rapid-validation-spec.md) makes the canonical outcome
+> `return_bps = (mid_horizon − mid_start) / mid_start × 10_000`, separates the aggressor
+> (`buy|sell`) and candidate-direction (`long|short`) vocabularies, and routes every magnitude
+> comparison through one unit-checked door. **No gate was weakened**: no threshold, grid, embargo,
+> fold parameter, floor multiple, p-value rule, sample floor or concentration ceiling moved. The
+> era's journeys below are the record of what was BUILT and are not rewritten; what r13 changes is
+> the unit those journeys' numbers were always meant to be in. Every pre-r13 `killed_economic`
+> decision is void as an economic judgement and is superseded by a re-keyed r13 row beside it —
+> old rows are never deleted and never reinterpreted.
 
 ## Vision
 

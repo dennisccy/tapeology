@@ -319,8 +319,13 @@ def test_the_trades_20_horizon_matches_an_independently_computed_reference(pg_sn
     outcomes = micro_join.outcome_rows_after_trigger(rows, anchor_row, session_end_ts)
     trades_20 = next(o for o in outcomes if o["horizon_kind"] == "trades" and o["horizon_value"] == 20)
 
+    # r13: the independently-computed reference is a RETURN in basis points, not the raw dollar
+    # difference this line used to assert -- the primary outcome's canonical unit.
     expected_mid_move = expected_horizon_row["mid"] - anchor_row["mid"]
-    assert trades_20["mid"]["value"] == pytest.approx(expected_mid_move)
+    expected_return_bps = expected_mid_move / anchor_row["mid"] * 10_000.0
+    assert trades_20["mid"]["return_bps"] == pytest.approx(expected_return_bps)
+    assert trades_20["mid"]["delta_price"] == pytest.approx(expected_mid_move)
+    assert trades_20["mid"]["unit"] == "return_bps"
     assert trades_20["mid"]["truncated"] is False
     assert trades_20["mid"]["unmeasured"] is False
     expected_spread_bps = anchor_row["spread"] / anchor_row["mid"] * 10_000.0
@@ -338,11 +343,11 @@ def test_a_horizon_beyond_the_recorded_stream_is_truncated_never_measured_off_th
 
     trades_100 = next(o for o in outcomes if o["horizon_kind"] == "trades" and o["horizon_value"] == 100)
     assert trades_100["mid"]["truncated"] is True
-    assert trades_100["mid"]["value"] is None
+    assert trades_100["mid"]["return_bps"] is None
     assert trades_100["last_trade"]["truncated"] is True
     clock_300 = next(o for o in outcomes if o["horizon_kind"] == "clock_seconds" and o["horizon_value"] == 300)
     assert clock_300["mid"]["truncated"] is True
-    assert clock_300["mid"]["value"] is None
+    assert clock_300["mid"]["return_bps"] is None
 
 
 # --- TC-2: the band-map wall touch join -------------------------------------------------------------
@@ -1023,8 +1028,8 @@ def test_outcome_rows_at_position_matches_outcome_rows_after_trigger_exactly(pg_
 
     for anchor_pos in (0, 9, 49, 50, len(trade_rows) - 3, len(trade_rows) - 1):
         anchor_row = trade_rows[anchor_pos]
-        via_trigger = micro_join.outcome_rows_after_trigger(rows, anchor_row, session_end_ts, side=None)
-        via_position = micro_join.outcome_rows_at_position(trade_rows, anchor_pos, session_end_ts, side=None)
+        via_trigger = micro_join.outcome_rows_after_trigger(rows, anchor_row, session_end_ts, direction=None)
+        via_position = micro_join.outcome_rows_at_position(trade_rows, anchor_pos, session_end_ts, direction=None)
         assert via_position == via_trigger
 
 
@@ -1036,8 +1041,8 @@ def test_outcome_rows_at_position_matches_with_a_hypothesis_side(pg_snapshot):
     anchor_pos = 9
     anchor_row = trade_rows[anchor_pos]
 
-    via_trigger = micro_join.outcome_rows_after_trigger(rows, anchor_row, session_end_ts, side="buy")
-    via_position = micro_join.outcome_rows_at_position(trade_rows, anchor_pos, session_end_ts, side="buy")
+    via_trigger = micro_join.outcome_rows_after_trigger(rows, anchor_row, session_end_ts, direction="long")
+    via_position = micro_join.outcome_rows_at_position(trade_rows, anchor_pos, session_end_ts, direction="long")
     assert via_position == via_trigger
 
 
@@ -1052,10 +1057,10 @@ def test_outcome_row_at_single_horizon_matches_the_corresponding_entry_of_the_fu
         ("clock_seconds", 30), ("clock_seconds", 60), ("clock_seconds", 300),
     ]
     for anchor_pos in (9, 49, len(trade_rows) - 3):
-        full_set = micro_join.outcome_rows_at_position(trade_rows, anchor_pos, session_end_ts, side=None)
+        full_set = micro_join.outcome_rows_at_position(trade_rows, anchor_pos, session_end_ts, direction=None)
         for kind, value in horizon_pairs:
             single = micro_join.outcome_row_at_single_horizon(
-                trade_rows, anchor_pos, kind, value, session_end_ts, side=None
+                trade_rows, anchor_pos, kind, value, session_end_ts, direction=None
             )
             expected = next(o for o in full_set if o["horizon_kind"] == kind and o["horizon_value"] == value)
             assert single == expected

@@ -289,7 +289,7 @@ def _clock_horizon_row(trade_rows: list[dict], anchor_pos: int, horizon_ts: floa
 
 def _build_outcome(
     *, kind: str, value: int, anchor_row: dict, horizon_row: dict | None, horizon_ts: float,
-    session_end_ts: float, side: str | None,
+    session_end_ts: float, direction: str | None,
 ) -> dict:
     mid_at_horizon = horizon_row.get("mid") if horizon_row is not None else None
     price_at_horizon = horizon_row.get("price") if horizon_row is not None else None
@@ -299,19 +299,19 @@ def _build_outcome(
         "mid": mf.mid_outcome(
             mid_at_start=anchor_row.get("mid"), mid_at_horizon=mid_at_horizon,
             outcome_start=anchor_row["anchor_at"], horizon_ts=horizon_ts,
-            session_end_ts=session_end_ts, side=side,
+            session_end_ts=session_end_ts, direction=direction,
         ),
         "last_trade": mf.last_trade_outcome(
             price_at_start=anchor_row.get("price"), price_at_horizon=price_at_horizon,
             outcome_start=anchor_row["anchor_at"], horizon_ts=horizon_ts,
-            session_end_ts=session_end_ts, side=side,
+            session_end_ts=session_end_ts, direction=direction,
         ),
         "spread_at_outcome_start_bps": mf.spread_bps(anchor_row.get("spread"), anchor_row.get("mid")),
     }
 
 
 def _outcome_rows_after(
-    trade_rows: list[dict], anchor_pos: int, session_end_ts: float, *, side: str | None
+    trade_rows: list[dict], anchor_pos: int, session_end_ts: float, *, direction: str | None
 ) -> list[dict]:
     anchor_row = trade_rows[anchor_pos]
     outcomes: list[dict] = []
@@ -320,27 +320,27 @@ def _outcome_rows_after(
         horizon_ts = horizon_row["anchor_at"] if horizon_row is not None else session_end_ts + _BEYOND_SESSION_EPS
         outcomes.append(_build_outcome(
             kind="trades", value=n, anchor_row=anchor_row, horizon_row=horizon_row,
-            horizon_ts=horizon_ts, session_end_ts=session_end_ts, side=side,
+            horizon_ts=horizon_ts, session_end_ts=session_end_ts, direction=direction,
         ))
     for shares in MICRO_HORIZON_SHARES:
         horizon_row = _shares_horizon_row(trade_rows, anchor_pos, shares)
         horizon_ts = horizon_row["anchor_at"] if horizon_row is not None else session_end_ts + _BEYOND_SESSION_EPS
         outcomes.append(_build_outcome(
             kind="shares", value=shares, anchor_row=anchor_row, horizon_row=horizon_row,
-            horizon_ts=horizon_ts, session_end_ts=session_end_ts, side=side,
+            horizon_ts=horizon_ts, session_end_ts=session_end_ts, direction=direction,
         ))
     for seconds in MICRO_HORIZON_CLOCK_SECONDS:
         horizon_ts = anchor_row["anchor_at"] + seconds
         horizon_row = None if horizon_ts > session_end_ts else _clock_horizon_row(trade_rows, anchor_pos, horizon_ts)
         outcomes.append(_build_outcome(
             kind="clock_seconds", value=seconds, anchor_row=anchor_row, horizon_row=horizon_row,
-            horizon_ts=horizon_ts, session_end_ts=session_end_ts, side=side,
+            horizon_ts=horizon_ts, session_end_ts=session_end_ts, direction=direction,
         ))
     return outcomes
 
 
 def outcome_rows_after_trigger(
-    rows: Sequence[dict], anchor_row: dict, session_end_ts: float, *, side: str | None = None
+    rows: Sequence[dict], anchor_row: dict, session_end_ts: float, *, direction: str | None = None
 ) -> list[dict]:
     """The closed set of outcome rows (spec section 4) at every horizon of section 1, anchored at
     ``anchor_row`` (a row returned by ``feature_row_at_trigger`` over the SAME ``rows``). Outcome
@@ -356,18 +356,18 @@ def outcome_rows_after_trigger(
     this scan -- see that function's own docstring)."""
     trade_rows = _trade_rows(rows)
     anchor_pos = trade_rows.index(anchor_row)
-    return _outcome_rows_after(trade_rows, anchor_pos, session_end_ts, side=side)
+    return _outcome_rows_after(trade_rows, anchor_pos, session_end_ts, direction=direction)
 
 
 def outcome_rows_at_position(
-    trade_rows: list[dict], anchor_pos: int, session_end_ts: float, *, side: str | None = None
+    trade_rows: list[dict], anchor_pos: int, session_end_ts: float, *, direction: str | None = None
 ) -> list[dict]:
     """The O(1)-position counterpart to ``outcome_rows_after_trigger`` (module docstring, iter-4):
     for a caller that ALREADY knows an anchor's own position in its trade-only row list (e.g. one
     iterating via ``enumerate(trade_rows)``), this skips the O(n) ``.index()`` lookup that function
     performs internally -- byte-identical output to
-    ``outcome_rows_after_trigger(rows, trade_rows[anchor_pos], session_end_ts, side=side)`` for the
-    SAME ``trade_rows``/``anchor_pos``/``session_end_ts``/``side`` (both call the SAME
+    ``outcome_rows_after_trigger(rows, trade_rows[anchor_pos], session_end_ts, direction=direction)`` for the
+    SAME ``trade_rows``/``anchor_pos``/``session_end_ts``/``direction`` (both call the SAME
     ``_outcome_rows_after`` core -- no second outcome implementation, the read-side law honored).
 
     Takes ``trade_rows`` (a plain ``list``, not ``Sequence``) and passes it through UNCOPIED:
@@ -375,7 +375,7 @@ def outcome_rows_at_position(
     here would itself be an O(n) cost paid on EVERY call -- exactly the anti-pattern this function
     exists to eliminate, and the reason a caller iterating every anchor of a large dataset must
     pass the SAME list object through every call, never a fresh copy per anchor."""
-    return _outcome_rows_after(trade_rows, anchor_pos, session_end_ts, side=side)
+    return _outcome_rows_after(trade_rows, anchor_pos, session_end_ts, direction=direction)
 
 
 def outcome_row_at_single_horizon(
@@ -385,7 +385,7 @@ def outcome_row_at_single_horizon(
     horizon_value: int,
     session_end_ts: float,
     *,
-    side: str | None = None,
+    direction: str | None = None,
 ) -> dict:
     """ONE entry of the closed outcome set (spec section 4) -- computes only the requested
     ``(horizon_kind, horizon_value)`` pair, byte-identical to the matching entry of
@@ -423,7 +423,7 @@ def outcome_row_at_single_horizon(
         raise ValueError(f"unknown horizon_kind {horizon_kind!r}")
     return _build_outcome(
         kind=horizon_kind, value=horizon_value, anchor_row=anchor_row, horizon_row=horizon_row,
-        horizon_ts=horizon_ts, session_end_ts=session_end_ts, side=side,
+        horizon_ts=horizon_ts, session_end_ts=session_end_ts, direction=direction,
     )
 
 
@@ -453,7 +453,7 @@ def _join_core(
             "dataset_id": dataset_meta["id"], "feature_at_trigger": None, "outcomes": [],
         }
     session_end_ts = _session_end_logical_ts(dataset_meta)
-    outcomes = _outcome_rows_after(trade_rows, i, session_end_ts, side=None)
+    outcomes = _outcome_rows_after(trade_rows, i, session_end_ts, direction=None)
     return {
         "status": JOIN_STATUS_JOINED,
         "dataset_id": dataset_meta["id"],

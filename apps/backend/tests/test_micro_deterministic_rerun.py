@@ -74,7 +74,7 @@ _FIXTURE_DIRS = [
 ]
 
 _ECON_FLOOR_TINY = {
-    "multiple": 1.0, "family_median_spread_bps": 0.001, "floor_bps": 0.001,
+    "multiple": 1.0, "family_median_spread_bps": 0.001, "floor_bps": 0.001, "unit": "bps",
     "proxy_sentence": scout.ECON_PROXY_SENTENCE,
 }
 
@@ -128,7 +128,7 @@ def _planted_effect_anchors(n_sessions=6, n_per_session=20, effect=3.0, seed=1):
             anchors.append(
                 {
                     "session_date": session_date, "symbol": "PG", "feature_value": feature_value,
-                    "outcome_value": outcome, "tod_bucket": "mid", "fallback_frac": rng.random(),
+                    "outcome_bps": outcome, "tod_bucket": "mid", "fallback_frac": rng.random(),
                 }
             )
     return anchors

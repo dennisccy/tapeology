@@ -228,47 +228,58 @@ def test_tc6_planted_outcome_before_conditioning_max_is_refused():
         mf.require_outcome_start_not_before_conditioning(20.0, [10.0, 25.0])  # 20 < 25 -- illegal
 
 
-def test_mid_outcome_hand_computed_side_signed():
-    buy = mf.mid_outcome(
+def test_mid_outcome_hand_computed_direction_signed():
+    """**Updated at spec revision r13.** This test previously asserted ``value == 0.5`` for
+    100.00 -> 100.50 -- the raw DOLLAR difference -- and named its directions ``"buy"``/``"sell"``.
+    Both were wrong, and asserting them is what kept the defect alive: the pipeline compared that
+    dollar figure against a basis-point floor, and ``"short"`` never reached the aggressor-only
+    sign-flip at all. The same move is +50 bps; the dollar delta survives as a diagnostic."""
+    long_side = mf.mid_outcome(
         mid_at_start=100.0, mid_at_horizon=100.5, outcome_start=0.0, horizon_ts=30.0,
-        session_end_ts=100.0, side="buy",
+        session_end_ts=100.0, direction="long",
     )
-    assert buy == {
-        "basis": "mid", "outcome_start": 0.0, "horizon_ts": 30.0,
-        "value": pytest.approx(0.5), "unmeasured": False, "truncated": False,
+    assert long_side == {
+        "basis": "mid", "unit": mf.OUTCOME_UNIT, "outcome_start": 0.0, "horizon_ts": 30.0,
+        "return_bps": pytest.approx(50.0), "delta_price": pytest.approx(0.5),
+        "unmeasured": False, "truncated": False,
     }
-    sell = mf.mid_outcome(
+    short_side = mf.mid_outcome(
         mid_at_start=100.0, mid_at_horizon=100.5, outcome_start=0.0, horizon_ts=30.0,
-        session_end_ts=100.0, side="sell",
+        session_end_ts=100.0, direction="short",
     )
-    assert sell["value"] == pytest.approx(-0.5)  # sell-signed: the same raw move flips sign
+    assert short_side["return_bps"] == pytest.approx(-50.0)  # the same move, direction-flipped
+    assert short_side["delta_price"] == pytest.approx(-0.5)
 
 
 def test_mid_outcome_unmeasured_when_a_mid_is_missing():
     result = mf.mid_outcome(
         mid_at_start=None, mid_at_horizon=100.5, outcome_start=0.0, horizon_ts=30.0,
-        session_end_ts=100.0, side=None,
+        session_end_ts=100.0, direction=None,
     )
     assert result["unmeasured"] is True
-    assert result["value"] is None
+    assert result["return_bps"] is None
+    assert result["delta_price"] is None
 
 
 def test_mid_outcome_truncated_when_horizon_exceeds_session_end():
     result = mf.mid_outcome(
         mid_at_start=100.0, mid_at_horizon=100.5, outcome_start=0.0, horizon_ts=150.0,
-        session_end_ts=100.0, side="buy",
+        session_end_ts=100.0, direction="long",
     )
     assert result["truncated"] is True
-    assert result["value"] is None  # excluded, never measured past the session
+    assert result["return_bps"] is None  # excluded, never measured past the session
+    assert result["delta_price"] is None
 
 
 def test_last_trade_outcome_is_a_separately_named_basis_never_the_primary():
     result = mf.last_trade_outcome(
         price_at_start=50.0, price_at_horizon=50.25, outcome_start=0.0, horizon_ts=30.0,
-        session_end_ts=100.0, side="buy",
+        session_end_ts=100.0, direction="long",
     )
     assert result["basis"] == "last_trade"
-    assert result["value"] == pytest.approx(0.25)
+    assert result["unit"] == mf.OUTCOME_UNIT
+    assert result["return_bps"] == pytest.approx(50.0)  # 0.25 on 50.00 == 50 bps
+    assert result["delta_price"] == pytest.approx(0.25)
 
 
 # --- J-03: the section 4 cost-proxy column, served BESIDE every outcome, never netted in -----------

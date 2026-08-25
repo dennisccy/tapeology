@@ -54,7 +54,7 @@ _ASSIGNED_AT = "2026-01-05T00:00:00.000000Z"
 _EXPOSED_AT = "2026-01-06T00:00:00.000000Z"
 _EVALUATED_AT = "2026-06-10T00:00:00.000000Z"
 
-_ECON_FLOOR = {"floor_bps": 5.0}
+_ECON_FLOOR = {"floor_bps": 5.0, "unit": "bps"}  # r13: an economic floor must declare its unit
 
 
 def _observation(session_date: str, symbol: str, value: float) -> dict:

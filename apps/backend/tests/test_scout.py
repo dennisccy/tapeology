@@ -48,7 +48,7 @@ _FIXTURE_DIRS = [
 ]
 
 _ECON_FLOOR_TINY = {
-    "multiple": 1.0, "family_median_spread_bps": 0.001, "floor_bps": 0.001,
+    "multiple": 1.0, "family_median_spread_bps": 0.001, "floor_bps": 0.001, "unit": "bps",
     "proxy_sentence": scout.ECON_PROXY_SENTENCE,
 }
 
@@ -84,7 +84,7 @@ def _autocorrelated_null_anchors(meta_seed: int, n_sessions: int = 15, n_per_ses
             anchors.append(
                 {
                     "session_date": session_date, "symbol": "PG", "feature_value": feature,
-                    "outcome_value": outcome, "tod_bucket": "mid", "fallback_frac": rng.random(),
+                    "outcome_bps": outcome, "tod_bucket": "mid", "fallback_frac": rng.random(),
                 }
             )
     return anchors
@@ -287,7 +287,7 @@ def _planted_effect_anchors(n_sessions=6, n_per_session=20, effect=3.0, seed=1):
             anchors.append(
                 {
                     "session_date": session_date, "symbol": "PG", "feature_value": feature_value,
-                    "outcome_value": outcome, "tod_bucket": "mid", "fallback_frac": rng.random(),
+                    "outcome_bps": outcome, "tod_bucket": "mid", "fallback_frac": rng.random(),
                 }
             )
     return anchors
@@ -318,7 +318,7 @@ def test_screen_candidate_kills_null_on_an_unrelated_feature():
             anchors.append(
                 {
                     "session_date": session_date, "symbol": "PG", "feature_value": rng.gauss(0, 1),
-                    "outcome_value": rng.gauss(0, 1), "tod_bucket": "mid", "fallback_frac": rng.random(),
+                    "outcome_bps": rng.gauss(0, 1), "tod_bucket": "mid", "fallback_frac": rng.random(),
                 }
             )
     result = scout.screen_candidate(
@@ -332,7 +332,7 @@ def test_screen_candidate_kills_null_on_an_unrelated_feature():
 
 def test_screen_candidate_kills_direction_on_a_wrong_signed_effect():
     anchors = _planted_effect_anchors()
-    flipped = [{**a, "outcome_value": -a["outcome_value"]} for a in anchors]
+    flipped = [{**a, "outcome_bps": -a["outcome_bps"]} for a in anchors]
     result = scout.screen_candidate(
         feature_name="cumulative_delta", transform="threshold", params={"op": "ge", "value": 0.0},
         sidedness="buy", horizon_key="trades_20", econ_floor=_ECON_FLOOR_TINY, anchors=flipped,
@@ -345,7 +345,7 @@ def test_screen_candidate_kills_direction_on_a_wrong_signed_effect():
 def test_screen_candidate_kills_economic_below_the_floor():
     anchors = _planted_effect_anchors()
     huge_floor = {
-        "multiple": 1.0, "family_median_spread_bps": 1000.0, "floor_bps": 1000.0,
+        "multiple": 1.0, "family_median_spread_bps": 1000.0, "floor_bps": 1000.0, "unit": "bps",
         "proxy_sentence": scout.ECON_PROXY_SENTENCE,
     }
     result = scout.screen_candidate(
@@ -372,7 +372,7 @@ def test_screen_candidate_kills_concentration_when_the_effect_is_symbol_skewed()
             anchors.append(
                 {
                     "session_date": session_date, "symbol": symbol, "feature_value": feature_value,
-                    "outcome_value": outcome, "tod_bucket": "mid", "fallback_frac": rng.random(),
+                    "outcome_bps": outcome, "tod_bucket": "mid", "fallback_frac": rng.random(),
                 }
             )
     result = scout.screen_candidate(
@@ -406,16 +406,16 @@ def test_screen_candidate_kills_fragile_when_the_sign_depends_on_one_dominant_se
     anchors = []
     # session A (few candidate anchors): consistently mildly negative
     for i in range(8):
-        anchors.append({"session_date": "A", "symbol": "PG", "feature_value": 1.0, "outcome_value": -0.2})
-        anchors.append({"session_date": "A", "symbol": "PG", "feature_value": -1.0, "outcome_value": 0.0})
+        anchors.append({"session_date": "A", "symbol": "PG", "feature_value": 1.0, "outcome_bps": -0.2})
+        anchors.append({"session_date": "A", "symbol": "PG", "feature_value": -1.0, "outcome_bps": 0.0})
     # session B (the MOST candidate anchors -- "biggest"): strongly positive
     for i in range(12):
-        anchors.append({"session_date": "B", "symbol": "PG", "feature_value": 1.0, "outcome_value": 2.0})
-        anchors.append({"session_date": "B", "symbol": "PG", "feature_value": -1.0, "outcome_value": 0.0})
+        anchors.append({"session_date": "B", "symbol": "PG", "feature_value": 1.0, "outcome_bps": 2.0})
+        anchors.append({"session_date": "B", "symbol": "PG", "feature_value": -1.0, "outcome_bps": 0.0})
     # session C (few candidate anchors): consistently mildly negative, like A
     for i in range(8):
-        anchors.append({"session_date": "C", "symbol": "PG", "feature_value": 1.0, "outcome_value": -0.2})
-        anchors.append({"session_date": "C", "symbol": "PG", "feature_value": -1.0, "outcome_value": 0.0})
+        anchors.append({"session_date": "C", "symbol": "PG", "feature_value": 1.0, "outcome_bps": -0.2})
+        anchors.append({"session_date": "C", "symbol": "PG", "feature_value": -1.0, "outcome_bps": 0.0})
     for a in anchors:
         a["tod_bucket"] = "mid"
         a["fallback_frac"] = 0.4
@@ -543,7 +543,7 @@ def test_extract_anchors_returns_one_row_per_measured_trade_anchor(pg_snapshot_s
         assert a["session_date"] == "2026-06-09"
         assert a["symbol"] == "PG"
         assert isinstance(a["feature_value"], float)
-        assert isinstance(a["outcome_value"], float)
+        assert isinstance(a["outcome_bps"], float)
         assert a["tod_bucket"] in ("open", "mid", "close", None)
 
 
@@ -618,7 +618,7 @@ def test_tc1_extract_anchors_band_touch_returns_rows_joined_via_join_band_touch(
     for a in anchors:
         assert a["symbol"] == "PG"
         assert isinstance(a["feature_value"], float)
-        assert isinstance(a["outcome_value"], float)
+        assert isinstance(a["outcome_bps"], float)
 
 
 def test_tc1_extract_anchors_band_touch_still_raises_for_a_kind_outside_the_closed_set():
@@ -674,7 +674,7 @@ def test_tc2_extract_anchors_playbook_signal_carries_setup_id_verbatim(pg_snapsh
     assert len(anchors) == 1
     assert anchors[0]["symbol"] == "PG"
     assert isinstance(anchors[0]["feature_value"], float)
-    assert isinstance(anchors[0]["outcome_value"], float)
+    assert isinstance(anchors[0]["outcome_bps"], float)
 
     # The underlying join primitive DOES carry setup_id verbatim (micro_join.py's own contract,
     # J-03) -- proves the ROUTE this anchor traveled, not merely that a row exists.
@@ -747,7 +747,7 @@ def test_extract_anchors_count_matches_measured_outcome_rows_at_that_horizon(pg_
     for anchor_row in trade_rows:
         if anchor_row.get("cumulative_delta") is None:
             continue
-        outcomes = mj.outcome_rows_after_trigger(rows, anchor_row, session_end_ts, side=None)
+        outcomes = mj.outcome_rows_after_trigger(rows, anchor_row, session_end_ts, direction=None)
         o = next(o for o in outcomes if o["horizon_kind"] == "trades" and o["horizon_value"] == 20)
         if not o["mid"]["unmeasured"] and not o["mid"]["truncated"]:
             expected += 1

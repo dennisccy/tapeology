@@ -124,7 +124,10 @@ from app.research.micro_snapshots import (  # noqa: E402
 )
 from app.research.scout_ledger import ScoutLedger  # noqa: E402
 
-_ECON_FLOOR = {"floor_bps": 5.0}
+# r13: an economic floor must declare its unit -- `micro_features.require_bps_floor` refuses an
+# undeclared one rather than silently comparing against it. This is QA-fixture data, so the
+# magnitude is unchanged; only the unit it was always implicitly in is now stated.
+_ECON_FLOOR = {"floor_bps": 5.0, "unit": "bps"}
 _FIXTURE_VAULT_SECRET = b"goal-rapid-microscope-iter32-qa-only-fourstage-fixture-vault-secret"
 
 _SEALED_AT = "2026-05-01T00:00:00.000000Z"

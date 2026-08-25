@@ -85,7 +85,8 @@ _ASSIGNED_AT = "2026-06-05T00:00:00.000000Z"
 _EXPOSED_AT = "2026-06-06T00:00:00.000000Z"
 _EVALUATED_AT = "2026-06-10T00:00:00.000000Z"
 
-_ECON_FLOOR = {"floor_bps": 5.0}
+# r13: an economic floor must declare its unit (see `micro_features.require_bps_floor`).
+_ECON_FLOOR = {"floor_bps": 5.0, "unit": "bps"}
 _FIXTURE_VAULT_SECRET = b"goal-rapid-microscope-iter18-qa-only-fixture-vault-secret"
 
 

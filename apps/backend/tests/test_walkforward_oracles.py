@@ -7,7 +7,7 @@ tolerance (mid-basis primary); byte-identical rerun"). Test-first contract: TC-2
 
 **Synthetic, keyless, hand-built -- no real tick dataset or engine replay (a disclosed design
 choice, ``walkforward.py``'s own module docstring).** Both fixtures are flat, session-clustered
-``{session_date, symbol, feature_value, outcome_value}`` corpora built directly in Python (the
+``{session_date, symbol, feature_value, outcome_bps}`` corpora built directly in Python (the
 ``test_scout.py`` TR-8 calibration-fixture style), run through the SAME two production entry
 points this era ships: ``scout.compute_p_screen`` (Scout's own descriptive screen -- proving the
 corpus's OWN ground truth is honestly detectable/undetectable at that stage) and
@@ -18,13 +18,13 @@ core a second way.
 
 **Corpus shape (both fixtures, identical structure, different outcome-generating rule).** 70
 sessions x 2 symbols x 4 anchors/symbol/session = 560 anchors; ``feature_value`` is a seeded
-standard-normal draw deciding Scout's candidate/comparator split (``>= 0.0``); ``outcome_value``
+standard-normal draw deciding Scout's candidate/comparator split (``>= 0.0``); ``outcome_bps``
 (bps) is ``planted_effect_bps + Uniform(-2, 2)`` for a candidate-cell anchor, ``Uniform(-2, 2)``
 alone (mean 0) for a comparator-cell one -- ``planted_effect_bps = 0.0`` for the known-null corpus
 (candidate and comparator are drawn from the IDENTICAL distribution: no true relationship exists
-between ``feature_value`` and ``outcome_value`` at all) and ``20.0`` for the planted-effect corpus
+between ``feature_value`` and ``outcome_bps`` at all) and ``20.0`` for the planted-effect corpus
 (a clearly recoverable, deterministic-by-construction mean shift). Walk-forward's own
-``observations`` are the candidate cell's ``outcome_value``s alone (``feature_value >= 0.0``) --
+``observations`` are the candidate cell's ``outcome_bps``s alone (``feature_value >= 0.0``) --
 the "already selected rule, does it hold out of sample" question Mode B asks, mirrored from the
 diagnostic run's own ``playbook_observations`` design.
 
@@ -48,7 +48,7 @@ N_SESSIONS = 70
 SYMBOLS = ("AAA", "BBB")
 ANCHORS_PER_SYMBOL_PER_SESSION = 4
 GEOMETRY = {"train_sessions": 20, "test_sessions": 10, "step_sessions": 10, "embargo_sessions": 0, "embargo_derivation": "each anchor is an independent per-print draw with no cross-session memory -- no cross-boundary dependency identified"}
-ECON_FLOOR = {"floor_bps": 5.0}
+ECON_FLOOR = {"floor_bps": 5.0, "unit": "bps"}  # r13: an economic floor must declare its unit
 
 PLANTED_EFFECT_BPS = 20.0
 PLANTED_TOLERANCE_BPS = 2.0
@@ -63,13 +63,13 @@ def _build_synthetic_corpus(*, planted_effect_bps: float, seed_key: str) -> list
             for _ in range(ANCHORS_PER_SYMBOL_PER_SESSION):
                 feature_value = rng.gauss(0.0, 1.0)
                 if feature_value >= 0.0:
-                    outcome_value = planted_effect_bps + rng.uniform(-2.0, 2.0)
+                    outcome_bps = planted_effect_bps + rng.uniform(-2.0, 2.0)
                 else:
-                    outcome_value = rng.uniform(-2.0, 2.0)
+                    outcome_bps = rng.uniform(-2.0, 2.0)
                 anchors.append(
                     {
                         "session_date": session_date, "symbol": symbol,
-                        "feature_value": feature_value, "outcome_value": outcome_value,
+                        "feature_value": feature_value, "outcome_bps": outcome_bps,
                         "tod_bucket": "mid", "fallback_frac": 0.3,
                     }
                 )
@@ -93,7 +93,7 @@ def _run_walkforward(anchors: list[dict], *, corpus_id: str, tmp_path) -> tuple[
     sessions = sorted({a["session_date"] for a in anchors})
     folds = wf.build_folds(sessions, GEOMETRY)
     observations = [
-        {"session_date": a["session_date"], "symbol": a["symbol"], "value": a["outcome_value"]}
+        {"session_date": a["session_date"], "symbol": a["symbol"], "value": a["outcome_bps"]}
         for a in anchors if a["feature_value"] >= 0.0
     ]
     ledger = WalkForwardLedger(str(tmp_path / f"{corpus_id}_ledger"))
