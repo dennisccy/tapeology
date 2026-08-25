@@ -1,34 +1,36 @@
 # Goal Session Summary — rapid-microscope
 
-**Final verdict:** AWAITING_PUMP
-**Total iterations:** 30
-**Wall time (seconds):** 7
+**Final verdict:** GOAL_ACHIEVED
+**Total iterations:** 34
+**Wall time (seconds):** 22357
 **Quota pauses:** 0
 **Started:** 2026-08-16T22:25:35.904129Z
-**Finished:** 2026-08-24T17:26:30.200911Z
+**Finished:** 2026-08-24T23:39:33.492206Z
 
 ## Branch
 
 This session pushed iteration commits to `goal/rapid-microscope`. Open a PR with:
 
     gh pr create --base main --head goal/rapid-microscope \
-      --title "feat: rapid-microscope — AWAITING_PUMP" \
+      --title "feat: rapid-microscope — GOAL_ACHIEVED" \
       --body-file runs/goal-session-rapid-microscope/summary.md
 
 ## Final journey state
 
 | Journey | Status | Last passing iter |
 |---|---|---|
-| J-01 | passing | goal-rapid-microscope-iter-29 |
-| J-02 | passing | goal-rapid-microscope-iter-29 |
-| J-03 | passing | goal-rapid-microscope-iter-29 |
-| J-04 | passing | goal-rapid-microscope-iter-29 |
-| J-05 | passing | goal-rapid-microscope-iter-29 |
-| J-06 | passing | goal-rapid-microscope-iter-29 |
-| J-07 | passing | goal-rapid-microscope-iter-29 |
-| J-08 | passing | goal-rapid-microscope-iter-29 |
-| J-09 | passing | goal-rapid-microscope-iter-29 |
-| J-10 | passing | goal-rapid-microscope-iter-29 |
+| J-01 | passing | goal-rapid-microscope-iter-33 |
+| J-02 | passing | goal-rapid-microscope-iter-33 |
+| J-03 | passing | goal-rapid-microscope-iter-30 |
+| J-04 | passing | goal-rapid-microscope-iter-33 |
+| J-05 | passing | goal-rapid-microscope-iter-32 |
+| J-06 | passing | goal-rapid-microscope-iter-32 |
+| J-07 | passing | goal-rapid-microscope-iter-32 |
+| J-08 | passing | goal-rapid-microscope-iter-33 |
+| J-09 | passing | goal-rapid-microscope-iter-31 |
+| J-10 | passing | goal-rapid-microscope-iter-33 |
+| J-11 | passing | goal-rapid-microscope-iter-33 |
+| J-12 | passing | goal-rapid-microscope-iter-33 |
 
 ## Anti-goal violations
 
@@ -641,23 +643,84 @@ See `runs/goal-session-rapid-microscope/telemetry.jsonl` for the structured even
       overlap saved             11.2m  (parallel steps)
   goal-rapid-microscope-iter-30  depth=?  verdict=?  wall=?  (incomplete/interrupted attempt)
       goal-decomposer              0.0m  calls=1  failures=1
-  session: 30 completed iteration(s), mean wall 213.4m
-      total developer                 2700.5m
-      total reviewer                   768.4m
-      total goal-evaluator             756.4m
+  goal-rapid-microscope-iter-30  depth=lean  verdict=GOAL_ACHIEVED  wall=66.3m
+      goal-evaluator              37.0m  calls=1
+      goal-decomposer              7.7m  calls=1
+      goal-evaluator-confirm       6.2m  calls=1
+      developer                    5.3m  calls=1
+      iteration-summarizer         4.8m  calls=1
+      browser-qa-agent             3.7m  calls=1
+      reviewer                     1.5m  calls=1
+      browser-qa-replay            1.2m  calls=1
+      [engine] lean-pipeline      10.6m  (contains agent time above)
+      [engine] showcase-join       0.0m  (contains agent time above)
+      (resume-skipped: coherence-auditor)
+      pump-wait                  0.4m
+      OVER BUDGET at showcase-tail: 3692s > 3600s (mode=trim)
+      overlap saved              1.1m  (parallel steps)
+  goal-rapid-microscope-iter-31  depth=lean  verdict=CONTINUE  wall=80.1m
+      developer                   24.6m  calls=1
+      goal-evaluator              20.7m  calls=1
+      browser-qa-agent            14.2m  calls=1
+      reviewer                    12.3m  calls=1
+      goal-decomposer              8.1m  calls=1
+      coherence-auditor            2.9m  calls=1
+      browser-qa-replay            1.2m  calls=1
+      [engine] lean-pipeline      51.2m  (contains agent time above)
+      [engine] showcase-join       0.0m  (contains agent time above)
+      (resume-skipped: coherence-auditor)
+      pump-wait                  3.2m
+      overlap saved              4.0m  (parallel steps)
+  goal-rapid-microscope-iter-32  depth=lean  verdict=GOAL_ACHIEVED  wall=86.3m
+      developer                   34.8m  calls=1
+      goal-evaluator              16.8m  calls=1
+      browser-qa-agent            11.8m  calls=1
+      goal-decomposer             11.0m  calls=1
+      iteration-summarizer         9.4m  calls=2
+      goal-evaluator-confirm       4.2m  calls=1
+      reviewer                     2.8m  calls=1
+      coherence-auditor            2.0m  calls=1
+      browser-qa-replay            1.1m  calls=1
+      [engine] lean-pipeline      49.5m  (contains agent time above)
+      [engine] showcase-join       0.1m  (contains agent time above)
+      (resume-skipped: coherence-auditor)
+      pump-wait                  7.0m
+      OVER BUDGET at coherence-auditor: 3632s > 3600s (mode=trim)
+      overlap saved              7.6m  (parallel steps)
+  goal-rapid-microscope-iter-33  depth=lean  verdict=GOAL_ACHIEVED  wall=101.8m
+      developer                   37.2m  calls=1
+      goal-evaluator              23.9m  calls=1
+      reviewer                    17.7m  calls=1
+      browser-qa-agent             8.8m  calls=1
+      goal-decomposer              7.0m  calls=1
+      goal-evaluator-confirm       3.6m  calls=1
+      iteration-summarizer         3.5m  calls=1
+      coherence-auditor            2.5m  calls=1
+      browser-qa-replay            1.1m  calls=1
+      [engine] lean-pipeline      63.8m  (contains agent time above)
+      [engine] showcase-join       0.0m  (contains agent time above)
+      (resume-skipped: coherence-auditor)
+      pump-wait                  2.9m
+      OVER BUDGET at browser-qa: 3719s > 3600s (mode=trim)
+      overlap saved              3.5m  (parallel steps)
+  session: 34 completed iteration(s), mean wall 198.1m
+      total developer                 2802.4m
+      total goal-evaluator             854.9m
+      total reviewer                   802.6m
       total auditor                    749.5m
-      total browser-qa-agent           650.5m
-      total coherence-auditor          631.1m
-      total goal-decomposer            602.6m
+      total browser-qa-agent           689.0m
+      total coherence-auditor          638.5m
+      total goal-decomposer            636.4m
       total qa                         489.4m
-      total iteration-summarizer       348.4m
+      total iteration-summarizer       366.1m
       total ui-impact-analyst          163.0m
       total orchestrator               153.8m
       total demo-narrator              147.9m
+      total goal-evaluator-confirm      14.0m
       total readme-maintainer           12.1m
+      total browser-qa-replay           11.2m
       total ui-test-designer            10.1m
-      total browser-qa-replay            6.5m
       total ux-regression-reviewer       2.0m
-      total AWAITING_PUMP paused gaps: 2.9m
+      total AWAITING_PUMP paused gaps: 3.3m
       halts: AWAITING_PUMP, AWAITING_PUMP, AWAITING_PUMP, STALLED, AWAITING_PUMP, STALLED, STALLED, AWAITING_PUMP
 ```

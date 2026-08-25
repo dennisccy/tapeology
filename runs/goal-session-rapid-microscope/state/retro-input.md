@@ -6,10 +6,10 @@ scripts/automation/lib/retro_collect.sh — no model wrote this. Counters marked
 
 ## Outcome
 
-- **Terminal status:** STALLED
-- **Final verdict:** STALLED
-- **Iterations used:** 30
-- **Halted at (UTC):** 2026-08-24T15:31:32.518019Z
+- **Terminal status:** GOAL_ACHIEVED
+- **Final verdict:** GOAL_ACHIEVED
+- **Iterations used:** 34
+- **Halted at (UTC):** 2026-08-24T23:39:33.492206Z
 
 ## Verdict sequence
 
@@ -46,6 +46,10 @@ iter 26: CONTINUE
 iter 27: ESCALATE
 iter 28: STALLED
 iter 29: STALLED
+iter 30: GOAL_ACHIEVED
+iter 31: CONTINUE
+iter 32: GOAL_ACHIEVED
+iter 33: GOAL_ACHIEVED
 ```
 
 ## Agent economics
@@ -615,25 +619,88 @@ Per-step wall breakdown (analyze_telemetry.py --wall):
       (resume-skipped: coherence-auditor)
       pump-wait                 12.1m
       overlap saved             11.2m  (parallel steps)
-  session: 30 completed iteration(s), mean wall 213.4m
-      total developer                 2700.5m
-      total reviewer                   768.4m
-      total goal-evaluator             756.4m
+  goal-rapid-microscope-iter-30  depth=?  verdict=?  wall=?  (incomplete/interrupted attempt)
+      goal-decomposer              0.0m  calls=1  failures=1
+  goal-rapid-microscope-iter-30  depth=lean  verdict=GOAL_ACHIEVED  wall=66.3m
+      goal-evaluator              37.0m  calls=1
+      goal-decomposer              7.7m  calls=1
+      goal-evaluator-confirm       6.2m  calls=1
+      developer                    5.3m  calls=1
+      iteration-summarizer         4.8m  calls=1
+      browser-qa-agent             3.7m  calls=1
+      reviewer                     1.5m  calls=1
+      browser-qa-replay            1.2m  calls=1
+      [engine] lean-pipeline      10.6m  (contains agent time above)
+      [engine] showcase-join       0.0m  (contains agent time above)
+      (resume-skipped: coherence-auditor)
+      pump-wait                  0.4m
+      OVER BUDGET at showcase-tail: 3692s > 3600s (mode=trim)
+      overlap saved              1.1m  (parallel steps)
+  goal-rapid-microscope-iter-31  depth=lean  verdict=CONTINUE  wall=80.1m
+      developer                   24.6m  calls=1
+      goal-evaluator              20.7m  calls=1
+      browser-qa-agent            14.2m  calls=1
+      reviewer                    12.3m  calls=1
+      goal-decomposer              8.1m  calls=1
+      coherence-auditor            2.9m  calls=1
+      browser-qa-replay            1.2m  calls=1
+      [engine] lean-pipeline      51.2m  (contains agent time above)
+      [engine] showcase-join       0.0m  (contains agent time above)
+      (resume-skipped: coherence-auditor)
+      pump-wait                  3.2m
+      overlap saved              4.0m  (parallel steps)
+  goal-rapid-microscope-iter-32  depth=lean  verdict=GOAL_ACHIEVED  wall=86.3m
+      developer                   34.8m  calls=1
+      goal-evaluator              16.8m  calls=1
+      browser-qa-agent            11.8m  calls=1
+      goal-decomposer             11.0m  calls=1
+      iteration-summarizer         9.4m  calls=2
+      goal-evaluator-confirm       4.2m  calls=1
+      reviewer                     2.8m  calls=1
+      coherence-auditor            2.0m  calls=1
+      browser-qa-replay            1.1m  calls=1
+      [engine] lean-pipeline      49.5m  (contains agent time above)
+      [engine] showcase-join       0.1m  (contains agent time above)
+      (resume-skipped: coherence-auditor)
+      pump-wait                  7.0m
+      OVER BUDGET at coherence-auditor: 3632s > 3600s (mode=trim)
+      overlap saved              7.6m  (parallel steps)
+  goal-rapid-microscope-iter-33  depth=lean  verdict=GOAL_ACHIEVED  wall=101.8m
+      developer                   37.2m  calls=1
+      goal-evaluator              23.9m  calls=1
+      reviewer                    17.7m  calls=1
+      browser-qa-agent             8.8m  calls=1
+      goal-decomposer              7.0m  calls=1
+      goal-evaluator-confirm       3.6m  calls=1
+      iteration-summarizer         3.5m  calls=1
+      coherence-auditor            2.5m  calls=1
+      browser-qa-replay            1.1m  calls=1
+      [engine] lean-pipeline      63.8m  (contains agent time above)
+      [engine] showcase-join       0.0m  (contains agent time above)
+      (resume-skipped: coherence-auditor)
+      pump-wait                  2.9m
+      OVER BUDGET at browser-qa: 3719s > 3600s (mode=trim)
+      overlap saved              3.5m  (parallel steps)
+  session: 34 completed iteration(s), mean wall 198.1m
+      total developer                 2802.4m
+      total goal-evaluator             854.9m
+      total reviewer                   802.6m
       total auditor                    749.5m
-      total browser-qa-agent           650.5m
-      total coherence-auditor          631.1m
-      total goal-decomposer            602.6m
+      total browser-qa-agent           689.0m
+      total coherence-auditor          638.5m
+      total goal-decomposer            636.4m
       total qa                         489.4m
-      total iteration-summarizer       348.4m
+      total iteration-summarizer       366.1m
       total ui-impact-analyst          163.0m
       total orchestrator               153.8m
       total demo-narrator              147.9m
+      total goal-evaluator-confirm      14.0m
       total readme-maintainer           12.1m
+      total browser-qa-replay           11.2m
       total ui-test-designer            10.1m
-      total browser-qa-replay            6.5m
       total ux-regression-reviewer       2.0m
-      total AWAITING_PUMP paused gaps: 2.9m
-      halts: AWAITING_PUMP, AWAITING_PUMP, AWAITING_PUMP, STALLED, AWAITING_PUMP, STALLED, STALLED
+      total AWAITING_PUMP paused gaps: 3.3m
+      halts: AWAITING_PUMP, AWAITING_PUMP, AWAITING_PUMP, STALLED, AWAITING_PUMP, STALLED, STALLED, AWAITING_PUMP
 ```
 
 ## Friction counters
@@ -647,26 +714,26 @@ Per-step wall breakdown (analyze_telemetry.py --wall):
 Last 20 lines of state/lessons.md:
 
 ```
-The finding was directionally right and quantitatively wrong, and had I inherited it I would have
-mis-scored the certification evidence in the pessimistic direction — the mirror image of the
-optimistic over-claiming this era has caught six times.
-**Applies to:** any iteration where the evaluator is weighing replay/golden evidence for
-certification, and generally to any auditor finding phrased as a quantified claim about artifacts
-("N of M are X") — open the artifacts and count.
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** A browser-QA dispatch cannot deliver a fixture-scoped capture that needs the shared
+`:8301`/`:3301` rig restarted under a different `TAPEOLOGY_DATASET_DIR` — that agent's own rules
+forbid restarting the app, so it disclosed the gap instead (as iter-31's did for J-11). If a
+journey's acceptance names a second, differently-seeded rig state, the SPEC must either sanction
+the restart explicitly (iter-32's pattern, which worked) or the round must accept the capture as
+owed. Related: the new golden assertion `"Withheld (excluded):"` is NOT static shell text — that
+`<p>` renders only after the section's fetch resolves — and J-02 and J-12 now both assert it, so
+one slow fetch fails two goldens.
+**Applies to:** any iter whose acceptance names a fixture-scoped or empty-state browser capture;
+any iter writing/extending a stored golden for a fetch-on-expand `/desk` section.
 
-## iter-29 — 2026-08-24T15:35:00Z (second)
+## iter-33 — 2026-08-25T00:40:00Z (second)
 
-**Lesson:** Before scoring an open anti-goal item as blocking, check WHICH SECTION of `docs/goal.md`
-its cited rule actually lives in. Four of this era's eight open items cite "T-10 Evidence honesty",
-which sits in the "Build anchors & weak-model traps" section (line 433), not in "Anti-goals" (line
-689). They are real findings about build-chain reporting, but they are not product anti-goals, and
-their remedies live in `agents/**`/`scripts/automation/**` — outside a product round's authority
-per `.claude/maintenance-protocol.md` §1. Recording that classification in the ledger (without
-downgrading the finding) is what let this round separate "two owner decisions genuinely block the
-era" from "six things block the era", which is the difference between an actionable halt and an
-unanswerable one.
-**Applies to:** any evaluator inheriting a long-lived `anti_goal_violations` list; re-derive each
-entry's rule location, not just whether the code changed.
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** `tests/test_referee_oracles.py`'s wall-clock budget assertion (120s) fails when two
+full backend suites run concurrently on this host — my first verification run tripped it at
+126.2s, my second clean run passed it and every other test both times. A stopwatch assertion is
+not evidence of a product regression; re-run it alone before treating it as one.
+**Applies to:** any agent re-running the full backend suite to verify a handoff's test claim.
 ```
 
 ## Halt context
@@ -675,8 +742,8 @@ session.json halt-relevant fields:
 
 ```json
 {
-  "status": "STALLED",
-  "last_verdict": "STALLED",
+  "status": "GOAL_ACHIEVED",
+  "last_verdict": "GOAL_ACHIEVED",
   "parked_wip_sha": "511a6fa0"
 }
 ```

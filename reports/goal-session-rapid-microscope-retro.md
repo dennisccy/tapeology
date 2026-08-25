@@ -6,41 +6,42 @@
 > Codes: P0/P1/P2 = how urgent · Effort S/M/L = how much work · Risk LOW/MED/HIGH
 > = chance a change breaks something else.
 
-**Session:** rapid-microscope · **Terminal status:** STALLED · **Iterations:** 30
+**Session:** rapid-microscope · **Terminal status:** GOAL_ACHIEVED · **Iterations:** 34
 
 ## Candidate items
 
-### RETRO-1 · ESCALATE churn dominates verdict sequence, ending in STALLED
+### RETRO-1 · ESCALATE verdict pattern dominates 34-iter session
 - **Proposed:** P1 · Effort M · Risk MED
-- **Problem:** The session produced 22 ESCALATE verdicts out of 30 iterations and never converged, ending STALLED. This heavy recycle pattern suggests either the evaluator's gates are too strict, escalation resolution is broken, or the goals are unachievable with this toolchain. Developers see repeated work rejection with no clear path to success.
-- **Evidence:** Verdict sequence — "iter 0: CONTINUE, iter 1: ESCALATE, iter 2: CONTINUE, iter 3: ESCALATE, iter 4: ESCALATE, iter 5: ESCALATE, iter 6: ESCALATE, iter 7: CONTINUE, iter 8: ESCALATE, iter 9: CONTINUE, iter 10: ESCALATE, iter 11: CONTINUE, iter 12: ESCALATE, iter 13: ESCALATE, iter 14: ESCALATE, iter 15: ESCALATE, iter 16: ESCALATE, iter 17: ESCALATE, iter 18: ESCALATE, iter 19: CONTINUE, iter 20: ESCALATE, iter 21: ESCALATE, iter 22: STALLED, iter 23: ESCALATE, iter 24: CONTINUE, iter 25: ESCALATE, iter 26: CONTINUE, iter 27: ESCALATE, iter 28: STALLED, iter 29: STALLED"
-- **Sketch:** Instrument the evaluator to categorize why ESCALATEs occur (e.g., test failure, regression, anti-goal violation, evidence gap). Add a max-escalate-per-journey counter; if a single journey escalates >4 times, escalate to human review rather than retry. Alternatively, add a convergence detector that flags when ESCALATE/CONTINUE cycles are not making progress over 5+ iterations.
-- **Verify idea:** Run a follow-up session on the same goal; if ESCALATE count drops to <30% of iterations or to <15 total, the fix is working.
+- **Problem:** Over half of the iterations ended ESCALATE rather than CONTINUE; many runs resolved CONTINUE only to be followed by ESCALATE, forcing re-evaluation and re-work. This prolongs sessions and delays goal convergence.
+- **Evidence:** Verdict sequence — "iter 0: CONTINUE / iter 1: ESCALATE / iter 2: CONTINUE / iter 3: ESCALATE / iter 4: ESCALATE / iter 5: ESCALATE / iter 6: ESCALATE / iter 7: CONTINUE / iter 8: ESCALATE / iter 9: CONTINUE / iter 10: ESCALATE ... iter 20: ESCALATE / iter 21: ESCALATE / iter 22: STALLED / iter 23: ESCALATE / iter 24: CONTINUE / iter 25: ESCALATE / iter 26: CONTINUE / iter 27: ESCALATE / iter 28: STALLED / iter 29: STALLED / iter 30: GOAL_ACHIEVED"
+- **Sketch:** Audit the ESCALATE gate logic in `.claude/workflow.md` verdict-dispatch rules. Check if the threshold for escalating vs. continuing is too tight, or if certain agent verdicts (reviewer, coherence-auditor, auditor) are weighted too heavily. Consider a "soft continue" mode for minor issues that don't warrant full re-evaluation.
+- **Verify idea:** Next session should show ESCALATE/CONTINUE ratio trending away from 1:1, with fewer total iterations to GOAL_ACHIEVED (target <25 iters for similar scope).
 
-### RETRO-2 · Developer agent dominates wall time; 42% of session spent in one agent
+### RETRO-2 · Per-pipeline-stage quotas exceeded in ≥15 iterations; budget misalignment
 - **Proposed:** P1 · Effort M · Risk MED
-- **Problem:** Developer consumed 2700.5m out of 6404.3m total wall time—nearly 3.5x more than any other agent (reviewer 768.4m, auditor 749.5m). This serialization bottleneck suggests developer tasks are over-scoped, work is not parallelized, or the pipeline queues dispatches inefficiently.
-- **Evidence:** Agent economics — "developer | 13 | 43259 | ...", and session wall-time summary "total developer 2700.5m" vs "total reviewer 768.4m" and "total auditor 749.5m" and "total goal-evaluator 756.4m"
-- **Sketch:** Profile developer's task scope in high-wall iterations (e.g., iter-9 and iter-13, where developer made multiple calls). Identify whether developer is calling itself recursively, blocking on external resources, or doing work that could be delegated to specialized agents. Implement per-iteration developer time cap (e.g., 1 call maximum, or <60m per iteration).
-- **Verify idea:** In next session, measure developer call count and wall time per iteration; target ratio to other agents <2x instead of 3.5x.
+- **Problem:** The post-dev-fanout and browser-qa pipeline stages repeatedly exceeded their 3600s quota across 15+ iterations, forcing mode=trim or causing incomplete/interrupted attempts that lost work and required restart. The inconsistency suggests the budgets are misaligned with real workload.
+- **Evidence:** Agent economics — wall-time report shows "OVER BUDGET at post-dev-fanout: 10921s > 3600s (mode=trim)" (iter 2), "14000s > 3600s (mode=trim)" (iter 13), "12315s > 3600s (mode=trim)" (iter 26); and "OVER BUDGET at browser-qa: 4747s > 3600s (mode=trim)" (iter 3), "17465s > 3600s (mode=trim)" (iter 10), recurring in iters 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 21, 22, 24, 26, 28, 30, 32, 33.
+- **Sketch:** Instrument post-dev-fanout and browser-qa stages to categorize work (review rounds, capture, replay) and measure each separately. Rebase quotas on collected median + P95 latencies. Alternatively, allow adaptive quotas that scale with prior rounds (e.g., if iter-N hit 6000s, iter-N+1 gets 7200s).
+- **Verify idea:** Next session shows no over-budget trims in browser-qa or post-dev-fanout stages, or trims occur <2 times per session.
 
-### RETRO-3 · Iteration budget overruns; 15+ iterations exceed post-dev-fanout cap
+### RETRO-3 · Browser-QA cannot coordinate rig restarts for fixture-scoped captures
+- **Proposed:** P1 · Effort M · Risk MED
+- **Problem:** Journeys that require the shared `:8301`/`:3301` app to restart under a different `TAPEOLOGY_DATASET_DIR` cannot be satisfied by browser-QA (its rules forbid restarts). The gap is disclosed late (iter-31, iter-32), wasting iterations before falling back to manual restart approval.
+- **Evidence:** Lessons tail — "A browser-QA dispatch cannot deliver a fixture-scoped capture that needs the shared `:8301`/`:3301` rig restarted under a different `TAPEOLOGY_DATASET_DIR` — that agent's own rules forbid restarting the app, so it disclosed the gap instead (as iter-31's did for J-11)."
+- **Sketch:** Add a `requires_rig_restart: true` field to journey acceptance specs. In goal-decomposer, detect this flag and either reject the journey early, or issue an `AskUserQuestion` asking whether to restart the rig before the journey runs. Alternatively, extend browser-QA's permissions to explicitly allow rig restart for fixture-scoped captures if the spec declares it.
+- **Verify idea:** Next journey requiring a rig restart either declares it in the spec (rig restarted proactively) or is rejected at decomposition time — no iteration wasted on discovery.
+
+### RETRO-4 · Developer agent consumes 41% of wall-time; imbalance suggests missed instrumentation
+- **Proposed:** P2 · Effort M · Risk LOW
+- **Problem:** Developer consumed 2802.4m of 6772m total agent wall-time (41%), 3.3× the auditor and 1.6× goal-evaluator. No telemetry breaks down developer work by task type (search, implement, test, fix-loop round), so we cannot identify which tasks drive the imbalance or whether multiple fix-loop rounds compound the problem.
+- **Evidence:** Agent economics — "total developer 2802.4m" vs "total auditor 749.5m" vs "total goal-evaluator 854.9m"; developer made 13 total invocations, averaging 215m per call.
+- **Sketch:** Instrument each developer dispatch to tag the task type (search, implement, test-implement, fix-loop-round-N, retry-from-checkpoint). Log wall-time and token cost per tag. Analyze if fix-loops with N>3 dominate the cost, or if search/implement tasks are undersized and triggering many restarts.
+- **Verify idea:** Next session's developer invocations are tagged in telemetry; wall-time distribution by task type is queryable; if fix-loops are the culprit, they average <4 rounds per invocation.
+
+### RETRO-5 · STALLED verdicts led to recovery, not halt — gate enforcement unclear
 - **Proposed:** P2 · Effort S · Risk LOW
-- **Problem:** Sixteen iterations reported "OVER BUDGET" with some wildly exceeding the 3600s post-dev-fanout cap (iter-2: 10921s, iter-13: 14000s, iter-26: 12315s, iter-28: 11738s). Trim mode silently skips downstream agents, degrading observability and potentially masking regressions.
-- **Evidence:** Wall-time breakdown — "goal-rapid-microscope-iter-2 [...] OVER BUDGET at post-dev-fanout: 10921s > 3600s (mode=trim)", "goal-rapid-microscope-iter-13 [...] OVER BUDGET at post-dev-fanout: 14000s > 3600s (mode=trim)", "goal-rapid-microscope-iter-26 [...] OVER BUDGET at post-dev-fanout: 12315s > 3600s (mode=trim)"
-- **Sketch:** Increase post-dev-fanout budget to 7200s–10800s for full-pipeline iterations, or add a pre-flight budget estimate that warns developers upfront of their time window. Alternatively, reduce developer scope (RETRO-2) to keep within tighter caps.
-- **Verify idea:** Rerun this session; if OVER BUDGET warnings appear in <10% of iterations, the fix is working.
+- **Problem:** Three iterations declared STALLED (iters 22, 28, 29), which should be a hard halt per `.claude/workflow.md`, but the session recovered and reached GOAL_ACHIEVED (iters 30–33). The framework's STALLED gate is either unenforced or has undocumented recovery logic, making future STALLED→recovery cases hard to debug and reason about.
+- **Evidence:** Verdict sequence — "iter 22: STALLED / iter 23: ESCALATE [session continues] ... iter 28: STALLED / iter 29: STALLED / iter 30: GOAL_ACHIEVED"; session.json shows "status: GOAL_ACHIEVED", not halted.
+- **Sketch:** Audit goal-evaluator's STALLED gate (`.claude/workflow.md` verdict dispatch). Document the exact conditions that allow recovery (e.g., new evidence from auditor, user confirmation, or a time/round limit). If recovery is legitimate, rename STALLED to CHECKPOINT or add an explicit recovery substate; if STALLED should be final, fix the gate to enforce halt.
+- **Verify idea:** Next session: if it emits STALLED, it halts immediately (no iter after STALLED); if it recovers from STALLED, the lessons log explicitly documents why (e.g., "auditor found new fixture; retrying").
 
-### RETRO-4 · Multiple incomplete/resume attempts within single iteration; pump instability
-- **Proposed:** P1 · Effort M · Risk MED
-- **Problem:** Iter-1, iter-4, iter-17, iter-28 each show multiple incomplete attempts within one iteration, including failed agent calls (iter-17 ui-impact-analyst failure, iter-28 auditor failure). This suggests pump inflight timeouts are too short or the pump is crashing mid-dispatch, forcing expensive restarts.
-- **Evidence:** Wall-time breakdown — "goal-rapid-microscope-iter-1  depth=lean  verdict=?  wall=?  (incomplete/interrupted attempt)" followed by "goal-rapid-microscope-iter-1  depth=lean  verdict=?  wall=?  (incomplete/interrupted attempt)" then final attempt; similar pattern for iter-4, iter-17 (with "failures=1"), and iter-28 (with "auditor [...] failures=1")
-- **Sketch:** Audit CHAIN_DISPATCH_INFLIGHT_TIMEOUT (current likely 3600s) and per-agent inflight caps. Raise them to 14400s or 21600s for lengthy iterations. Add early-warning telemetry 10% before timeout. Implement a pump-crash recovery log to detect if the pump is restarting mid-dispatch.
-- **Verify idea:** In next session, measure count of incomplete-attempt repeats; should be zero or <3% of iterations (i.e., <1 per session).
-
-### RETRO-5 · Single-agent wall-time outliers obscure queue vs. compute bottleneck
-- **Proposed:** P2 · Effort M · Risk MED
-- **Problem:** Individual agent calls show extreme wall times (coherence-auditor 349.1m in iter-11, developer 498.6m with 3 calls in iter-9, goal-evaluator 51.4m in iter-19) that dwarf others' effort. Without instrumentation separating true agent-execution time from pump-queue delay, the pipeline cannot distinguish genuine algorithmic bottlenecks from queue stalls.
-- **Evidence:** Wall-time breakdown — "goal-rapid-microscope-iter-11 [...] coherence-auditor 349.1m calls=1", "goal-rapid-microscope-iter-9 [...] developer 498.6m calls=3 [...] pump-wait 493.6m", "goal-rapid-microscope-iter-19 [...] goal-evaluator 51.4m calls=1"
-- **Sketch:** Add telemetry breakdown in the analyzer: emit (agent-name, wall-time, queue-time-estimated, active-agent-time). Use this to separate pump overhead from true work. Flag outliers where queue-time > 50% of wall-time as pump-tuning candidates, and outliers where active-time is extreme as agent-logic candidates.
-- **Verify idea:** Rerun one high-outlier iteration (e.g., a developer-heavy iter); if queue-time is >50% of wall-time, pump tuning (RETRO-4) is the fix. If <30%, agent logic needs profiling.

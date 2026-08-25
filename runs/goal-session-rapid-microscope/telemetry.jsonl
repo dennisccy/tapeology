@@ -1762,3 +1762,14 @@
 {"agent":"iteration-summarizer","status":"ok","wait_seconds":4,"run_seconds":204,"rc":"0","ts":"2026-08-24T23:27:17Z","session_id":"rapid-microscope","iter":33,"event":"dispatch_wait","cli":"claude"}
 {"agent":"iteration-summarizer","exit_status":0,"duration_seconds":208,"quota_sleep_seconds":0,"active_seconds":208,"retries":0,"ts":"2026-08-24T23:27:17Z","session_id":"rapid-microscope","iter":33,"event":"agent_invocation_end","cli":"claude"}
 {"iter_name":"goal-rapid-microscope-iter-33","verdict":"GOAL_ACHIEVED","next_depth":"evidence","journey_deltas":{"newly_passing":7,"newly_failing":0,"regressed":0,"anti_goal_violations":52},"ts":"2026-08-24T23:27:17Z","session_id":"rapid-microscope","iter":33,"event":"iter_end","cli":"claude"}
+{"branch":"goal/rapid-microscope","commit_sha":"e790d99aa98be2e8a06fe608cbdc30c4ba0b646a","success":true,"error":"","verdict":"GOAL_ACHIEVED","ts":"2026-08-24T23:27:21Z","session_id":"rapid-microscope","iter":33,"event":"iter_push","cli":"claude"}
+{"agent":"goal-proposer","ts":"2026-08-24T23:27:21Z","session_id":"rapid-microscope","iter":33,"event":"agent_invocation_start","cli":"claude"}
+{"agent":"goal-proposer","status":"ok","wait_seconds":0,"run_seconds":650,"rc":"0","ts":"2026-08-24T23:38:12Z","session_id":"rapid-microscope","iter":33,"event":"dispatch_wait","cli":"claude"}
+{"agent":"goal-proposer","exit_status":0,"duration_seconds":651,"quota_sleep_seconds":0,"active_seconds":651,"retries":0,"ts":"2026-08-24T23:38:12Z","session_id":"rapid-microscope","iter":33,"event":"agent_invocation_end","cli":"claude"}
+{"agent":"iteration-summarizer","ts":"2026-08-24T23:38:12Z","session_id":"rapid-microscope","iter":33,"event":"agent_invocation_start","cli":"claude"}
+{"agent":"iteration-summarizer","status":"ok","wait_seconds":5,"run_seconds":76,"rc":"0","ts":"2026-08-24T23:39:33Z","session_id":"rapid-microscope","iter":33,"event":"dispatch_wait","cli":"claude"}
+{"agent":"iteration-summarizer","exit_status":0,"duration_seconds":81,"quota_sleep_seconds":0,"active_seconds":81,"retries":0,"ts":"2026-08-24T23:39:33Z","session_id":"rapid-microscope","iter":33,"event":"agent_invocation_end","cli":"claude"}
+{"final_verdict":"GOAL_ACHIEVED","total_iterations":34,"wall_time_seconds":22357,"quota_pause_count":0,"ts":"2026-08-24T23:39:33Z","session_id":"rapid-microscope","iter":33,"event":"session_end","cli":"claude"}
+{"agent":"retro-analyst","ts":"2026-08-24T23:39:33Z","session_id":"rapid-microscope","iter":33,"event":"agent_invocation_start","cli":"claude"}
+{"agent":"retro-analyst","status":"ok","wait_seconds":4,"run_seconds":132,"rc":"0","ts":"2026-08-24T23:41:49Z","session_id":"rapid-microscope","iter":33,"event":"dispatch_wait","cli":"claude"}
+{"agent":"retro-analyst","exit_status":0,"duration_seconds":136,"quota_sleep_seconds":0,"active_seconds":136,"retries":0,"ts":"2026-08-24T23:41:49Z","session_id":"rapid-microscope","iter":33,"event":"agent_invocation_end","cli":"claude"}
