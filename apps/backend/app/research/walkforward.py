@@ -131,6 +131,12 @@ __all__ = [
     "assert_purge_exact",
     "observations_in_sessions",
     "summarize_fold_observations",
+    "require_canonical_observation_units",
+    "unit_of_fold_row",
+    "LEGACY_WF_EFFECT_UNIT",
+    "WF_OBSERVATION_UNIT",
+    "PCT_TO_BPS",
+    "observation_value_bps",
     "classify_evidence_class",
     "sequence_id_for",
     "compute_spec_hash",
@@ -182,6 +188,36 @@ def observation_value_bps(return_pct: float) -> float:
     """The ONE percent-to-basis-points conversion for the walk-forward observation feed. 0.25% is
     25 bps."""
     return return_pct * PCT_TO_BPS
+
+
+# The explicit historical-convention token for a fold_result row written BEFORE the r13 unit
+# contract existed. Such a row carries no `unit` key at all; its magnitude is `desk_forward`'s
+# `return_pct`, i.e. PERCENT (`desk_forward.py`: "``return_pct`` values are PERCENT (x100)").
+#
+# It is a DISTINCT token from both `"percent"` and the canonical `"return_bps"` on purpose: it
+# states the unit AND that the unit was established from the pre-r13 convention rather than
+# declared by the writer. The persisted magnitude is never converted, never rewritten, and never
+# pooled into a new r13 computation -- it is only ever SERVED beside this token so no reader can
+# mistake 0.019 percent for 0.019 bps.
+LEGACY_WF_EFFECT_UNIT = "legacy_percent"
+
+
+def require_canonical_observation_units(observations: list[dict]) -> None:
+    """Every observation entering an r13 fold computation must PROVE it is in the canonical
+    ``return_bps`` unit. Missing, unknown, legacy or MIXED units refuse before a single value is
+    averaged -- pooling one percent observation with one bps observation silently produces a number
+    that is in neither unit, which is exactly the class of defect r13 exists to end.
+
+    An empty list has nothing to prove and passes (its caller reports ``insufficient`` on count)."""
+    for observation in observations:
+        mf.require_return_bps_effect(observation.get("value"), observation.get("value_unit"))
+
+
+def unit_of_fold_row(fold_row: dict) -> str:
+    """The unit a persisted fold_result row's ``effect`` is actually in -- READ-TIME only, never
+    written back. An r13 row declares its own; a row with no ``unit`` key predates the contract and
+    is ``LEGACY_WF_EFFECT_UNIT``. This is the single discriminator every serving path shares."""
+    return fold_row.get("unit") or LEGACY_WF_EFFECT_UNIT
 WF_FOLD_MIN_SIGNAL_SESSIONS = 8
 WF_FOLD_MIN_OBSERVATIONS = 30
 WF_FOLD_MIN_SYMBOLS = 2
@@ -405,6 +441,7 @@ def summarize_fold_observations(observations: list[dict], floors: dict) -> dict:
     two-cell candidate-vs-comparator screen). Below ANY of the three per-fold floors
     (``WF_FOLD_MIN_OBSERVATIONS``/``WF_FOLD_MIN_SIGNAL_SESSIONS``/``WF_FOLD_MIN_SYMBOLS``) reads
     ``insufficient`` with the failed arithmetic attached (TC-16), never a fabricated verdict."""
+    require_canonical_observation_units(observations)
     n = len(observations)
     sessions: dict[str, list[float]] = {}
     symbols: set[str] = set()
@@ -586,6 +623,7 @@ def register_mode_b_spec(*, corpus_id: str, rule_id: str, sidedness: str, econ_f
     fold`` appends, exactly as Mode A's spec is never separately ledgered either -- module
     docstring's "one abstract input" design keeps the spec itself a plain dict a caller threads
     through, not a second store). ``sequence_id`` is a pure function of ``(corpus_id, rule_id)``."""
+    mf.validate_candidate_direction(sidedness)  # r13: closed vocabulary at registration
     sequence_id = sequence_id_for(corpus_id, rule_id)
     spec_fields = {"mode": "B", "corpus_id": corpus_id, "rule_id": rule_id, "sidedness": sidedness, "econ_floor": econ_floor}
     spec_hash = compute_spec_hash(spec_fields)
@@ -657,26 +695,52 @@ def _eligible_folds(fold_results: list[dict]) -> tuple[list[dict], list[dict]]:
     return sufficient, eligible
 
 
-def _pooled_sign_agreement(eligible_folds: list[dict], sidedness: str) -> float:
+# --- r13 canonical sign space (see the module docstring's own contract) ---------------------------
+#
+# A fold effect reaching this predicate is ALREADY direction-signed. `playbook_observations`'s own
+# docstring states it verbatim -- "already side-relative signed ... a positive value already means
+# 'worked in the setup's own registered direction' ... never a second, independent sign
+# derivation" -- and `desk_forward`'s DESK_FORWARD_RETURN_SIGN_CONVENTION says the same at source:
+# "a POSITIVE number means price went the way the wall implied". A short candidate's successful
+# (downward) move arrives as a POSITIVE number.
+#
+# Before this correction these helpers re-derived an expected sign from `sidedness`
+# ("positive" if long else "negative"), applying a SECOND direction interpretation to an
+# already-signed value. A genuinely successful SHORT sequence would have been scored as
+# wrong-direction and refused survival. The defect was latent: the only registered sequence
+# carries sidedness="long", where the two conventions coincide.
+#
+# Spec section 6.6 says the pooled effect must lie "in the registered direction" -- it never says
+# "negative if short". In canonical signed space, "in the registered direction" IS positive, for
+# both directions. `sidedness` remains recorded and served as the candidate's registered
+# direction; it simply no longer re-derives a sign that was already applied.
+_SIGN_THESIS_WORKED = "positive"
+_SIGN_THESIS_FAILED = "negative"
+
+
+def _pooled_sign_agreement(eligible_folds: list[dict]) -> float:
+    """Share of eligible folds whose effect is positive, i.e. whose own fold agreed that the
+    registered thesis worked. Identical for a long and a short candidate (canonical sign space)."""
     if not eligible_folds:
         return 0.0
-    expected = "positive" if sidedness == "long" else "negative"
-    agreeing = sum(1 for f in eligible_folds if f["sign"] == expected)
+    agreeing = sum(1 for f in eligible_folds if f["sign"] == _SIGN_THESIS_WORKED)
     return agreeing / len(eligible_folds)
 
 
-def _opposite_direction_eligible_fold_exists(eligible_folds: list[dict], sidedness: str, econ_floor: dict | None) -> bool:
+def _opposite_direction_eligible_fold_exists(eligible_folds: list[dict], econ_floor: dict | None) -> bool:
     """This module's own condition-4 reading (module docstring's disclosed interpretation call):
-    an eligible fold is treated as "passing the screen in the opposite direction" when its own
-    sign opposes the registered direction AND its magnitude clears the SAME economic-relevance
-    floor condition 3 uses -- never satisfied (fail-closed) when no econ_floor applies."""
-    if econ_floor is None:
-        return False
-    opposite = "negative" if sidedness == "long" else "positive"
-    if econ_floor.get("floor_bps") is None:
+    an eligible fold is treated as "passing the screen in the opposite direction" when its effect
+    is NEGATIVE in canonical signed space -- the registered thesis measurably failed on that fold
+    -- AND its magnitude clears the SAME economic-relevance floor condition 3 uses. Never satisfied
+    (fail-closed) when no econ_floor applies."""
+    if econ_floor is None or econ_floor.get("floor_bps") is None:
         return False
     floor_bps = mf.require_bps_floor(econ_floor)  # r13: bps against bps, unit proved
-    return any(f["sign"] == opposite and abs(f["effect"]) >= floor_bps for f in eligible_folds)
+    return any(
+        f["sign"] == _SIGN_THESIS_FAILED
+        and abs(mf.require_return_bps_effect(f["effect"], f.get("unit"))) >= floor_bps
+        for f in eligible_folds
+    )
 
 
 def evaluate_survivor_rule(fold_results: list[dict], *, sidedness: str, econ_floor: dict | None, voided: bool) -> dict:
@@ -689,22 +753,33 @@ def evaluate_survivor_rule(fold_results: list[dict], *, sidedness: str, econ_flo
     needs to observe."""
     sufficient, eligible = _eligible_folds(fold_results)
 
+    mf.validate_candidate_direction(sidedness)  # the registered direction is still a closed vocabulary
+
     condition_1 = len(sufficient) >= WF_MIN_SUFFICIENT_FOLDS and len(eligible) == len(sufficient)
-    sign_agreement = _pooled_sign_agreement(eligible, sidedness)
+    sign_agreement = _pooled_sign_agreement(eligible)
     condition_2 = sign_agreement >= WF_SURVIVOR_SIGN_CONSISTENCY
 
-    pooled_effect = statistics.mean([f["effect"] for f in eligible]) if eligible else None
-    expected_sign = "positive" if sidedness == "long" else "negative"
+    # Every eligible fold must PROVE its effect is canonical `return_bps` before it is pooled --
+    # a legacy percent row can never be averaged into a new r13 scientific number.
+    pooled_effect = (
+        statistics.mean([mf.require_return_bps_effect(f["effect"], f.get("unit")) for f in eligible])
+        if eligible
+        else None
+    )
+    # Spec section 6.6 condition 3: "the pooled effect lies in the registered direction with
+    # magnitude >= the economic floor". In canonical signed space (see `_SIGN_THESIS_WORKED`),
+    # "in the registered direction" is POSITIVE for a long and a short candidate alike -- the
+    # value was direction-signed once, at the outcome, and is never re-signed here.
     condition_3 = (
         pooled_effect is not None
         and econ_floor is not None
         and econ_floor.get("floor_bps") is not None
-        and ((pooled_effect > 0) == (expected_sign == "positive"))
-        # r13: `mf.clears_economic_floor` proves BOTH sides are basis points before comparing.
-        and bool(mf.clears_economic_floor(pooled_effect, econ_floor))
+        and pooled_effect > 0
+        # r13: proves BOTH the effect unit and the floor unit before comparing magnitudes.
+        and bool(mf.clears_economic_floor(pooled_effect, WF_OBSERVATION_UNIT, econ_floor))
     )
 
-    condition_4 = not _opposite_direction_eligible_fold_exists(eligible, sidedness, econ_floor)
+    condition_4 = not _opposite_direction_eligible_fold_exists(eligible, econ_floor)
     condition_5 = not voided
 
     conditions = {
@@ -741,6 +816,21 @@ def sequence_verdict(fold_results: list[dict], *, sidedness: str, econ_floor: di
             "sequence-level verdict is refused (spec section 6.6), never a fabricated result",
             "n_sufficient_folds": len(sufficient),
         }
+    # r13: a persisted PRE-r13 fold carries a percent magnitude and no unit. Serving it is a
+    # disclosure problem (`unit_of_fold_row`); feeding it into a NEW scientific verdict is not
+    # allowed at all. Refuse rather than pool a magnitude whose unit cannot be proved.
+    legacy = [f for f in sufficient if unit_of_fold_row(f) != WF_OBSERVATION_UNIT]
+    if legacy:
+        return {
+            "refused": True,
+            "reason": f"{len(legacy)} of {len(sufficient)} sufficient folds carry a non-canonical "
+            f"effect unit (pre-r13 rows are {LEGACY_WF_EFFECT_UNIT}) -- a sequence-level verdict "
+            "is refused rather than pooling magnitudes whose unit cannot be proved. The rows stay "
+            "on record and are served with their own historical unit; they are never converted, "
+            "relabelled, or fed into a new r13 computation.",
+            "n_sufficient_folds": len(sufficient),
+            "n_non_canonical_unit_folds": len(legacy),
+        }
     return {"refused": False, **evaluate_survivor_rule(fold_results, sidedness=sidedness, econ_floor=econ_floor, voided=voided)}
 
 
@@ -759,6 +849,10 @@ def decay_view(fold_results: list[dict]) -> dict:
             "fold_index": f["fold_index"],
             "status": f["status"],
             "effect": f["effect"],
+            # r13: the decay view copied the magnitude and dropped its unit, so a legacy percent
+            # fold reached the UI naked and was labelled bps by the column header. The row now
+            # carries the unit its own effect is actually in.
+            "unit": unit_of_fold_row(f),
             "n": f["n"],
             "n_sessions": f["n_sessions"],
             "sign": f["sign"],
@@ -832,7 +926,11 @@ def list_walkforward_sequences(ledger: WalkForwardLedger) -> list[dict]:
                 "sidedness": last["sidedness"],
                 "econ_floor": last["econ_floor"],
                 "voided": voided,
-                "fold_results": sequence_rows,
+                # r13: each served fold row carries the unit its OWN effect is in -- the persisted
+                # magnitude verbatim, never converted, plus `LEGACY_WF_EFFECT_UNIT` for a pre-r13
+                # row that declared none. The ledger on disk is untouched; this is read-time
+                # disclosure so no consumer can read a percent magnitude as basis points.
+                "fold_results": [{**row, "unit": unit_of_fold_row(row)} for row in sequence_rows],
                 "decay_view": decay_view(sequence_rows),
                 "sequence_verdict": verdict,
             }

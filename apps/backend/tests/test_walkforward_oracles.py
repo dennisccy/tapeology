@@ -93,7 +93,8 @@ def _run_walkforward(anchors: list[dict], *, corpus_id: str, tmp_path) -> tuple[
     sessions = sorted({a["session_date"] for a in anchors})
     folds = wf.build_folds(sessions, GEOMETRY)
     observations = [
-        {"session_date": a["session_date"], "symbol": a["symbol"], "value": a["outcome_bps"]}
+        {"session_date": a["session_date"], "symbol": a["symbol"], "value": a["outcome_bps"],
+         "value_unit": wf.WF_OBSERVATION_UNIT}
         for a in anchors if a["feature_value"] >= 0.0
     ]
     ledger = WalkForwardLedger(str(tmp_path / f"{corpus_id}_ledger"))

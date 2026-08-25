@@ -245,7 +245,45 @@
 > candidate computes a different `spec_hash`/`candidate_id` from its pre-r13 namesake — old rows
 > stay permanently on record, permanently distinguishable, and are never reinterpreted under the new
 > convention. A pre-r13 economic floor carries no `unit` key and is REFUSED by the gate rather than
-> silently read as bps. Detail → §0 Units, §4, §5.5. Traps → TR-33.
+> silently read as bps. Detail → §0 Units, §4, §5.5. Traps → TR-34.
+>
+> **r13 (completion, 2026-08-25) — the sign convention is applied ONCE, and units are proved, not
+> assumed.** Implementing r13 exposed three places where its own semantics were not carried
+> through. All are corrected under the SAME revision: no methodology changes here — the outcome
+> definition, the floor formula, every constant, every threshold and every gate stay exactly as
+> r13 already fixed them — so a new revision number would misrepresent a completion as a change.
+>
+> **(1) Direction was applied twice.** A value reaching walk-forward or the sealed evaluator has
+> ALREADY been direction-signed — at the outcome by `mid_outcome`, or at source for the playbook
+> feed (`desk_forward`: *"a POSITIVE number means price went the way the wall implied"*, restated
+> by `walkforward.playbook_observations`: *"never a second, independent sign derivation"*). Both
+> stages nevertheless re-derived an expected sign from `sidedness` (`"positive" if long else
+> "negative"`), so a genuinely successful SHORT candidate — which arrives POSITIVE — would have
+> been scored wrong-direction and refused survival. §6.6 condition 3 and §8.1 condition 2 require
+> the effect to lie *"in the registered direction"*; **in canonical signed space that IS positive,
+> for long and short alike.** `sidedness` stays recorded, served and vocabulary-checked; it no
+> longer re-derives a sign the outcome layer already applied. Latent: every registered candidate
+> and sequence to date is `long` or unsided, where the two readings coincide.
+>
+> **(2) Units are proved on BOTH sides of every comparison.** r13's first pass proved the floor's
+> unit but trusted the effect because a variable was named `effect_bps`. A name is not a proof:
+> `require_return_bps_effect` now gates every effect magnitude, every fold observation (missing,
+> unknown, legacy or MIXED units refuse before a single value is averaged), and every sealed
+> observation at its own boundary.
+>
+> **(3) Candidate direction is validated at every public scientific boundary** — candidate
+> registration, spec freeze, anchor extraction, screening, fold-spec registration and survivor
+> evaluation — so an invalid vocabulary can never enter a frozen spec merely because the candidate
+> later dies as `insufficient` and never reaches the outcome signer.
+>
+> **Legacy walk-forward rows.** Fold results persisted before r13 carry a PERCENT magnitude
+> (`desk_forward`'s `return_pct`) and no `unit` key. They are retained untouched and SERVED with
+> the explicit historical token `legacy_percent` — never converted, never rewritten, never
+> relabelled `return_bps`, and never pooled into a new r13 computation: a sequence whose sufficient
+> folds carry a non-canonical unit REFUSES a verdict rather than averaging percent into basis
+> points. Each served row and decay-view row discloses its own unit, so no reader — and no column
+> header — can take 0.019 percent for 0.019 bps.
+> Detail → §0 Units, §4, §5.5, §6.6, §8.1. Traps → TR-34, TR-35.
 
 ---
 
@@ -266,6 +304,23 @@
   Direction-signing uses `positive = the thesis direction`. An unsided candidate is `null` and is
   not flipped. **A value outside its vocabulary raises; it is never silently treated as
   positive.** Conversion between the two happens only through the one named adapter.
+- **The sign is applied ONCE (r13).** The pipeline is
+  `raw market return → direction signing (exactly one application) → canonical return_bps`.
+  After that single signing, for a long and a short candidate alike:
+
+  | raw move | registered direction | canonical `return_bps` | reading |
+  |---|---|---|---|
+  | up | `long` | **positive** | thesis worked |
+  | down | `long` | **negative** | thesis failed |
+  | down | `short` | **positive** | thesis worked |
+  | up | `short` | **negative** | thesis failed |
+
+  **No downstream layer may re-invert a sign on the basis of `long` vs `short`.** Scout,
+  walk-forward, the sealed evaluator, graduation and every serving surface read a canonical
+  effect the same way: positive = the registered thesis succeeded, negative = it failed. Where a
+  rule says the effect must lie "in the registered direction" (§6.6 condition 3, §8.1 condition
+  2), that means POSITIVE — for both directions. `sidedness` remains recorded and served as the
+  candidate's registered direction; it is never a second sign derivation.
 - **Sessions.** A session is an ET RTH trading date (`session_date`); the desk's session-honesty
   module (`desk_sessions.py`) is the arbiter of what counts as a session.
 - **Determinism.** Every random draw uses `random.Random` streams under the recipe
@@ -623,10 +678,13 @@ qualifies as `walkforward_survivor` iff ALL of:
 1. ≥ `WF_MIN_SUFFICIENT_FOLDS` sufficient folds, every one of class `historical_oos` and
    process label `rule_process` (§6.8);
 2. fold-sign agreement with the registered sidedness ≥ `WF_SURVIVOR_SIGN_CONSISTENCY` over the
-   sufficient folds (a zero or opposite-sign fold counts against);
-3. the pooled session-clustered effect lies in the registered direction with magnitude ≥ the
-   family's pre-registered economic floor (§5.5);
-4. no sufficient fold passes the §5.3 screen in the OPPOSITE direction;
+   sufficient folds (a zero or opposite-sign fold counts against) — **in canonical signed space
+   (§0) agreement means POSITIVE, identically for a long and a short candidate (r13)**;
+3. the pooled session-clustered effect lies in the registered direction — **i.e. is POSITIVE
+   (r13)** — with magnitude ≥ the family's pre-registered economic floor (§5.5), **both sides of
+   that comparison proved to be in their declared unit, never assumed from a field name**;
+4. no sufficient fold passes the §5.3 screen in the OPPOSITE direction — **i.e. no eligible fold
+   is NEGATIVE at floor-clearing magnitude (r13)**;
 5. zero voiding events on the corpus-era.
 Anything less is not a survivor — there is no discretionary override.
 
@@ -1185,9 +1243,16 @@ persistence and transition machinery and neither accepts nor invents the scienti
    BREADTH — `WF_SURVIVOR_RULE_V1` establishes temporal, session and symbol breadth before a
    candidate may reach the sealed stage at all. The sealed stage owns UNTOUCHED REPLICATION on one
    hidden symbol-day. Mechanically reusing breadth floors at shard scope conflates the two.*
-2. the session-clustered effect lies in the family's REGISTERED direction (§5.1 sidedness);
+2. the session-clustered effect lies in the family's REGISTERED direction (§5.1 sidedness) —
+   **i.e. is POSITIVE in canonical signed space (§0, r13). The observations were direction-signed
+   ONCE by the canonical outcome machinery step 4 recomputes them from, so a successful SHORT
+   candidate arrives positive exactly as a successful long one does; this condition never
+   re-derives a sign from `sidedness`.** The observations must also PROVE their unit before they
+   are pooled — a caller-supplied magnitude with no declared unit is refused here, before any
+   verdict is derived and before the single shot is consumed;
 3. its magnitude ≥ the family's own pre-registered economic floor (§5.5) — the same floor the
-   walk-forward applied, not a new one;
+   walk-forward applied, not a new one, **with both the effect's unit and the floor's unit proved
+   rather than assumed (r13)**;
 4. the evaluation rule id/version/hash recorded at assignment is byte-identical to the one applied
    (a rule changed after assignment fails CLOSED). **(r9) The rule hash is computed from the
    SEALED-SPECIFIC rule actually executed; it must never certify one set of floors while execution
@@ -1275,7 +1340,8 @@ boundary by its `observed_through`.
 | TR-27 nonced rule commitment (r7 §7.2) | One ledger-tracked shard exposed while untracked pool members remain withheld ⇒ rule contents hidden · ALL tracked shards exposed but one untracked ORIGINAL-pool member still withheld ⇒ still hidden · after the final pool member is released ⇒ `symbol_rule` + `date_rule` + nonce reveal and recompute EXACTLY to the registered `rule_commitment` · a plausible-rule dictionary attack against the served commitment cannot verify guesses without the nonce · no other API/UI/MCP surface serves the symbol or date axes pre-release |
 | TR-28 coarse pre-release volumes (r7 §7.1, NON-LIVE surfaces) | A one-symbol-day run while withheld ⇒ no exact trade/quote/byte count appears on ANY surface · a multi-shard pool ⇒ coarse bucket labels only, never rounded numbers · expose one shard and re-query ⇒ the remaining withheld counts cannot be solved exactly from the before/after response pair (differencing resistance) · buckets never narrow as the pool shrinks · the final ORIGINAL-pool member released ⇒ exact totals may be served. **LIVE recorder progress is governed by TR-32 instead, which serves no volume field at all.** |
 | TR-32 live-progress composition (r11 §7.1) | Poll/observe any live progress transport (REST, CLI, UI, MCP) frequently enough that `chunks_done` advances by exactly one, and difference every served field against the deterministic operator-known plan ⇒ NO specific chunk's realized success/failure is recoverable with certainty · a coarse volume bucket TRANSITION across a single-chunk advance must not prove that chunk was `fetched` (running totals advance only on fetch) · bucketing the outcome counters is NOT sufficient (an exact 0→1 boundary still pins the first failure) · internal exact state and the TERMINAL TR-4 disclosed-failure list remain lawful |
-| TR-33 measurement semantics (r13 §0/§4/§5.5) | Price-scale invariance: $10.00→$10.05 and $100.00→$100.50 produce the IDENTICAL outcome (+50 bps), and $10.00→$10.05 vs $100.00→$100.05 produce DIFFERENT ones (+50 vs +5 bps) despite an identical dollar delta · rescaling both prices by any positive factor leaves the outcome unchanged · every `*_bps` magnitude reaching a gate is proved to be basis points at the Scout, walk-forward and sealed-evaluation stages · a floor that does not declare `bps` (including every pre-r13 floor) is refused, never silently compared · a direction outside `long|short` and an aggressor side outside `buy|sell` each RAISE, including on an unmeasured or truncated row, and a `short` candidate's outcome is the exact negation of the `long` one |
+| TR-34 measurement semantics (r13 §0/§4/§5.5) | Price-scale invariance: $10.00→$10.05 and $100.00→$100.50 produce the IDENTICAL outcome (+50 bps), and $10.00→$10.05 vs $100.00→$100.05 produce DIFFERENT ones (+50 vs +5 bps) despite an identical dollar delta · rescaling both prices by any positive factor leaves the outcome unchanged · every `*_bps` magnitude reaching a gate is proved to be basis points at the Scout, walk-forward and sealed-evaluation stages · a floor that does not declare `bps` (including every pre-r13 floor) is refused, never silently compared · a direction outside `long|short` and an aggressor side outside `buy|sell` each RAISE, including on an unmeasured or truncated row, and a `short` candidate's outcome is the exact negation of the `long` one |
+| TR-35 sign-once + unit provenance (r13 completion §0/§4/§5.5/§6.6/§8.1) | A successful SHORT candidate (canonical effect POSITIVE) passes the walk-forward and sealed direction conditions exactly as a successful long one does, and a failed short (NEGATIVE) fails both · a side-relative positive short return survives percent→bps conversion, fold summary and pooled effect without becoming negative · opposite-direction detection is NEGATIVE for both directions · every public boundary (candidate registration, spec freeze, anchor extraction, screening, fold-spec registration, survivor evaluation) refuses `buy`/`sell`/`SHORT`/`Long`/`positive`/`negative`/`flat`/`""` while `None` stays legal · mixed-unit and missing-unit observations refuse BEFORE averaging, at the walk-forward and sealed boundaries alike · a percent effect against a bps floor refuses · a pre-r13 fold row serves as `legacy_percent` with its magnitude verbatim, is never displayed as bps, and is refused entry to any new r13 sequence verdict |
 | TR-26 depletion revealing quote (r6 §3) | Price-change termination: `available_at` equals the first CHANGED-price quote, not the last same-price one · bound termination: `available_at` equals the bound-hitting quote · truncating immediately BEFORE the revealing quote makes the depletion value non-existent/unavailable, and including it makes the value appear deterministically |
 
 Plus the standing suite: engine golden trace + observer equivalence + frozen-default profile,

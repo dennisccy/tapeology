@@ -80,6 +80,8 @@ __all__ = [
     "direction_sign",
     "direction_for_aggressor",
     "require_bps_floor",
+    "require_return_bps_effect",
+    "validate_candidate_direction",
     "clears_economic_floor",
     "mid_outcome",
     "last_trade_outcome",
@@ -449,18 +451,53 @@ def require_bps_floor(econ_floor: dict) -> float:
     return float(floor_bps)
 
 
-def clears_economic_floor(effect_bps: float | None, econ_floor: dict | None) -> bool | None:
-    """Spec section 5.5's economic-relevance column: ``|effect_bps| >= floor_bps``, **bps against
-    bps**, both sides unit-checked. ``None`` when either input is genuinely absent -- never a
-    fabricated ``False``.
+def validate_candidate_direction(direction: str | None) -> str | None:
+    """The PUBLIC-BOUNDARY validator for a registered candidate's direction. ``None`` is a genuine,
+    legal unsided exploratory candidate and passes; anything else must be a member of
+    ``CANDIDATE_DIRECTIONS`` or this raises.
+
+    Helper-level validation inside the outcome signer is not enough on its own: a bad vocabulary
+    must be refused BEFORE it reaches a corpus read, an outcome read, or a frozen candidate spec,
+    so it can never be laundered into the permanent record by a candidate that later happens to
+    die as ``killed_insufficient_n`` (which never reaches the signer at all)."""
+    if direction is not None:
+        direction_sign(direction)  # raises UnknownSideVocabularyError on anything else
+    return direction
+
+
+def require_return_bps_effect(value: float | None, unit: str | None) -> float | None:
+    """Proves a scientific effect magnitude is expressed in the canonical ``return_bps`` unit
+    before anything compares, pools or gates it. Returns the value unchanged.
+
+    r13's first pass proved the FLOOR's unit but took the effect on trust because a Python
+    variable happened to be named ``effect_bps``. A name is not a proof: ``0.25`` percent placed
+    in a field called ``effect`` must never reach the gate and be read as ``0.25`` bps."""
+    if unit != OUTCOME_UNIT:
+        raise UnitMismatchError(
+            f"effect magnitude declares unit {unit!r}, not the canonical {OUTCOME_UNIT!r} -- "
+            "refused. A magnitude with no declared unit, or one in a legacy/percent convention, "
+            "is never compared, pooled, or gated as though it were basis points."
+        )
+    return value
+
+
+def clears_economic_floor(
+    effect_value: float | None, effect_unit: str | None, econ_floor: dict | None
+) -> bool | None:
+    """Spec section 5.5's economic-relevance column: ``|effect| >= floor_bps`` -- with **BOTH**
+    sides proved, the effect through ``require_return_bps_effect`` and the floor through
+    ``require_bps_floor``. ``None`` when either magnitude is genuinely absent -- never a fabricated
+    ``False``. The unit is checked FIRST and unconditionally: a wrongly-united effect is a contract
+    breach whether or not there is a value to compare.
 
     This answers "is the measured effect larger than the quoted-spread cost proxy", i.e. whether
     the effect is **economically interesting**. It is NOT a profitability finding: profitability
     requires an execution model (entry/exit rules, fill basis, slippage, fees, latency, capacity,
     borrow) that this era does not build. The proxy sentence travels with every served floor."""
-    if effect_bps is None or econ_floor is None:
+    require_return_bps_effect(effect_value, effect_unit)
+    if effect_value is None or econ_floor is None:
         return None
-    return abs(effect_bps) >= require_bps_floor(econ_floor)
+    return abs(effect_value) >= require_bps_floor(econ_floor)
 
 
 def mid_outcome(

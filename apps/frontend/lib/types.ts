@@ -2664,6 +2664,7 @@ export interface WalkForwardFoldResultRow {
   n_sessions: number;
   n_symbols: number;
   effect: number | null;
+  unit: string;
   sign: string | null;
   missing: Record<string, string>;
 }
@@ -2672,6 +2673,10 @@ export interface WalkForwardDecayFoldRow {
   fold_index: number;
   status: string;
   effect: number | null;
+  // r13: the unit this row's own `effect` is in — `return_bps` for a row written under the r13
+  // contract, `legacy_percent` for a pre-r13 row that declared none. Served per row precisely so
+  // a percent magnitude can never be read under a bps column header.
+  unit: string;
   n: number;
   n_sessions: number;
   sign: string | null;

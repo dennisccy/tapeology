@@ -69,7 +69,7 @@ def _append_sufficient_fold(
         "spec_hash": spec_hash, "fold_index": fold_index, "sidedness": sidedness, "econ_floor": econ_floor,
         "evidence_class": evidence_class, "process_label": process_label, "registered_at": registered_at,
         "status": wf.FOLD_STATUS_SUFFICIENT, "n": 40, "n_sessions": 10, "n_symbols": 3,
-        "effect": effect, "sign": sign, "missing": {},
+        "effect": effect, "unit": wf.WF_OBSERVATION_UNIT, "sign": sign, "missing": {},
     }
     return wl.append_fold_result(wf_ledger, fields)
 
@@ -117,7 +117,7 @@ def _sealed_artifact(*, passed: bool, spec_hash: str = "spec-fixture-hash-1", **
         "spec_hash": spec_hash,
         "verdict": "pass" if passed else "fail",
         "failure_reason": None if passed else "below_economic_floor",
-        "effect": 10.0 if passed else 1.0, "sign": "positive", "n": 40, "n_sessions": 10, "n_symbols": 3,
+        "effect": 10.0 if passed else 1.0, "unit": wf.WF_OBSERVATION_UNIT, "sign": "positive", "n": 40, "n_sessions": 10, "n_symbols": 3,
         "missing": {}, "econ_floor": _ECON_FLOOR, "registered_direction": "long",
         "evidence_class": wf.EVIDENCE_CLASS_HISTORICAL_OOS, "process_label": wf.PROCESS_LABEL_RULE,
         "rule_id": "SEALED_PASS_RULE_V1", "rule_version": 1, "rule_hash": "fixture-rule-hash",
@@ -608,7 +608,7 @@ def _append_fold_with_reveal(
         "process_label": wf.PROCESS_LABEL_RULE, "registered_at": registered_at,
         "spec_hash_recorded_at": registered_at, "validation_revealed_at": validation_revealed_at,
         "status": wf.FOLD_STATUS_SUFFICIENT, "n": 40, "n_sessions": 10, "n_symbols": 3,
-        "effect": 10.0, "sign": "positive", "missing": {},
+        "effect": 10.0, "unit": wf.WF_OBSERVATION_UNIT, "sign": "positive", "missing": {},
     }
     fields.update(overrides)
     return wl.append_fold_result(wf_ledger, fields)

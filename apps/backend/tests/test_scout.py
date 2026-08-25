@@ -297,7 +297,7 @@ def test_screen_candidate_survives_a_genuine_planted_effect():
     anchors = _planted_effect_anchors()
     result = scout.screen_candidate(
         feature_name="cumulative_delta", transform="threshold", params={"op": "ge", "value": 0.0},
-        sidedness="buy", horizon_key="trades_20", econ_floor=_ECON_FLOOR_TINY, anchors=anchors,
+        sidedness="long", horizon_key="trades_20", econ_floor=_ECON_FLOOR_TINY, anchors=anchors,
         family_id="survive-fixture", n_variants_tried=1,
     )
     assert result["decision"] == "survive"
@@ -335,7 +335,7 @@ def test_screen_candidate_kills_direction_on_a_wrong_signed_effect():
     flipped = [{**a, "outcome_bps": -a["outcome_bps"]} for a in anchors]
     result = scout.screen_candidate(
         feature_name="cumulative_delta", transform="threshold", params={"op": "ge", "value": 0.0},
-        sidedness="buy", horizon_key="trades_20", econ_floor=_ECON_FLOOR_TINY, anchors=flipped,
+        sidedness="long", horizon_key="trades_20", econ_floor=_ECON_FLOOR_TINY, anchors=flipped,
         family_id="direction-fixture", n_variants_tried=1,
     )
     assert result["decision"] == "killed_direction"
@@ -350,7 +350,7 @@ def test_screen_candidate_kills_economic_below_the_floor():
     }
     result = scout.screen_candidate(
         feature_name="cumulative_delta", transform="threshold", params={"op": "ge", "value": 0.0},
-        sidedness="buy", horizon_key="trades_20", econ_floor=huge_floor, anchors=anchors,
+        sidedness="long", horizon_key="trades_20", econ_floor=huge_floor, anchors=anchors,
         family_id="economic-fixture", n_variants_tried=1,
     )
     assert result["decision"] == "killed_economic"
@@ -377,7 +377,7 @@ def test_screen_candidate_kills_concentration_when_the_effect_is_symbol_skewed()
             )
     result = scout.screen_candidate(
         feature_name="cumulative_delta", transform="threshold", params={"op": "ge", "value": 0.0},
-        sidedness="buy", horizon_key="trades_20", econ_floor=_ECON_FLOOR_TINY, anchors=anchors,
+        sidedness="long", horizon_key="trades_20", econ_floor=_ECON_FLOOR_TINY, anchors=anchors,
         family_id="concentration-fixture", n_variants_tried=1,
     )
     assert result["decision"] == "killed_concentration"
@@ -424,7 +424,7 @@ def test_screen_candidate_kills_fragile_when_the_sign_depends_on_one_dominant_se
 
     result = scout.screen_candidate(
         feature_name="cumulative_delta", transform="threshold", params={"op": "ge", "value": 0.0},
-        sidedness="buy", horizon_key="trades_20", econ_floor=_ECON_FLOOR_TINY, anchors=anchors,
+        sidedness="long", horizon_key="trades_20", econ_floor=_ECON_FLOOR_TINY, anchors=anchors,
         family_id="fragile-fixture", n_variants_tried=1,
     )
     assert result["decision"] == "killed_fragile"

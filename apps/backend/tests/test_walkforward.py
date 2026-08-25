@@ -49,7 +49,8 @@ _ECON_FLOOR = {"floor_bps": 5.0, "unit": "bps"}  # r13: an economic floor must d
 
 
 def _observation(session_date: str, symbol: str, value: float) -> dict:
-    return {"session_date": session_date, "symbol": symbol, "value": value}
+    # r13: an r13 scientific observation must declare its unit -- see require_canonical_observation_units.
+    return {"session_date": session_date, "symbol": symbol, "value": value, "value_unit": wf.WF_OBSERVATION_UNIT}
 
 
 def _sufficient_fold_row(
@@ -63,7 +64,8 @@ def _sufficient_fold_row(
     return {
         "fold_index": fold_index, "sequence_id": sequence_id, "corpus_id": corpus_id,
         "status": wf.FOLD_STATUS_SUFFICIENT, "evidence_class": evidence_class, "process_label": process_label,
-        "effect": effect, "sign": sign, "n": n, "n_sessions": n_sessions, "n_symbols": n_symbols, "missing": {},
+        "effect": effect, "unit": wf.WF_OBSERVATION_UNIT, "sign": sign, "n": n, "n_sessions": n_sessions,
+        "n_symbols": n_symbols, "missing": {},
     }
 
 
@@ -1627,7 +1629,7 @@ def test_t3_a_sealed_shards_date_IS_still_seeded_when_an_unsealed_sibling_shares
 
 
 def _observations(*, session_dates: list[str], symbol: str = "DVA", value: float = 1.0) -> list[dict]:
-    return [{"session_date": s, "symbol": symbol, "value": value} for s in session_dates]
+    return [{"session_date": s, "symbol": symbol, "value": value, "value_unit": wf.WF_OBSERVATION_UNIT} for s in session_dates]
 
 
 def test_iter21_tc6_a_fresh_never_initialized_registry_counts_zero_oos_sessions(tmp_path):
@@ -1679,7 +1681,7 @@ def test_iter21_tc6_enough_never_exposed_sessions_and_observations_clears_the_fl
     observations = []
     for i, session_date in enumerate(session_dates):
         symbol = "DVA" if i % 2 == 0 else "DVB"  # WF_FOLD_MIN_SYMBOLS(2) needs >= 2 symbols
-        observations.append({"session_date": session_date, "symbol": symbol, "value": float(i)})
+        observations.append({"session_date": session_date, "symbol": symbol, "value": float(i), "value_unit": wf.WF_OBSERVATION_UNIT})
 
     result = wf.scout_candidate_walkforward_floor_check(
         registry, corpus_id="c2", observations=observations, registered_at="2026-08-20T00:00:00.000000Z",

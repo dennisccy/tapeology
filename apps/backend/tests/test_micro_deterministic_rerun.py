@@ -136,7 +136,7 @@ def _planted_effect_anchors(n_sessions=6, n_per_session=20, effect=3.0, seed=1):
 
 def _wf_observations() -> list[dict]:
     return [
-        {"session_date": f"2026-05-{d:02d}", "symbol": "PG", "value": 4.0}
+        {"session_date": f"2026-05-{d:02d}", "symbol": "PG", "value": 4.0, "value_unit": wf.WF_OBSERVATION_UNIT}
         for d in range(1, 5)
     ] * 3  # 12 observations across 4 sessions, one symbol -- comfortably above the tiny custom floors
 
@@ -234,12 +234,12 @@ def test_tc2_screen_candidate_is_byte_identical_across_two_independent_calls():
 
     result_1 = scout.screen_candidate(
         feature_name="cumulative_delta", transform="threshold", params={"op": "ge", "value": 0.0},
-        sidedness="buy", horizon_key="trades_20", econ_floor=_ECON_FLOOR_TINY, anchors=anchors_1,
+        sidedness="long", horizon_key="trades_20", econ_floor=_ECON_FLOOR_TINY, anchors=anchors_1,
         family_id="tc2-pure-rerun", n_variants_tried=1,
     )
     result_2 = scout.screen_candidate(
         feature_name="cumulative_delta", transform="threshold", params={"op": "ge", "value": 0.0},
-        sidedness="buy", horizon_key="trades_20", econ_floor=_ECON_FLOOR_TINY, anchors=anchors_2,
+        sidedness="long", horizon_key="trades_20", econ_floor=_ECON_FLOOR_TINY, anchors=anchors_2,
         family_id="tc2-pure-rerun", n_variants_tried=1,
     )
     assert result_1["decision"] == "survive"  # a genuine, non-trivial numeric result -- not insufficient_n
@@ -251,7 +251,7 @@ def _screen_planted(anchors: list, *, family_id: str) -> dict:
     that can ever differ between two invocations is the computation itself."""
     return scout.screen_candidate(
         feature_name="cumulative_delta", transform="threshold", params={"op": "ge", "value": 0.0},
-        sidedness="buy", horizon_key="trades_20", econ_floor=_ECON_FLOOR_TINY, anchors=anchors,
+        sidedness="long", horizon_key="trades_20", econ_floor=_ECON_FLOOR_TINY, anchors=anchors,
         family_id=family_id, n_variants_tried=1,
     )
 
@@ -368,12 +368,12 @@ def test_tc4b_scout_screen_result_rerun_comparison_fails_on_a_perturbed_effect_b
     anchors = _planted_effect_anchors()
     result_1 = scout.screen_candidate(
         feature_name="cumulative_delta", transform="threshold", params={"op": "ge", "value": 0.0},
-        sidedness="buy", horizon_key="trades_20", econ_floor=_ECON_FLOOR_TINY, anchors=anchors,
+        sidedness="long", horizon_key="trades_20", econ_floor=_ECON_FLOOR_TINY, anchors=anchors,
         family_id="tc4b-mutation-proof", n_variants_tried=1,
     )
     result_2 = scout.screen_candidate(
         feature_name="cumulative_delta", transform="threshold", params={"op": "ge", "value": 0.0},
-        sidedness="buy", horizon_key="trades_20", econ_floor=_ECON_FLOOR_TINY, anchors=anchors,
+        sidedness="long", horizon_key="trades_20", econ_floor=_ECON_FLOOR_TINY, anchors=anchors,
         family_id="tc4b-mutation-proof", n_variants_tried=1,
     )
     assert result_1["screen_result"]["effect_bps"] is not None

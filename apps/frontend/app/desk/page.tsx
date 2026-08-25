@@ -6607,11 +6607,14 @@ function WalkForwardSection({
                           <th className="px-1.5 py-1 text-right">Fold</th>
                           <th className="px-1.5 py-1">Status</th>
                           {/* r13: a magnitude column with no unit is the ambiguity that let
-                              dollars masquerade as basis points for a whole era. Every fold
-                              effect is `return_bps` by spec invariant (rapid-validation-spec
-                              section 4), so the header names it. Label only -- the served value
-                              is still rendered verbatim, with no client-side arithmetic. */}
-                          <th className="px-1.5 py-1 text-right">Effect (bps)</th>
+                              dollars masquerade as basis points for a whole era. The header can
+                              NOT name a unit, because a pre-r13 persisted fold carries a percent
+                              magnitude while an r13 fold carries return_bps -- so each row prints
+                              its OWN served unit beside its own value. Label only: the served
+                              value is rendered verbatim, with no client-side arithmetic and no
+                              conversion. */}
+                          <th className="px-1.5 py-1 text-right">Effect</th>
+                          <th className="px-1.5 py-1">Unit</th>
                           <th className="px-1.5 py-1 text-right">N</th>
                           <th className="px-1.5 py-1 text-right">Sessions</th>
                           <th className="px-1.5 py-1">Sign</th>
@@ -6629,6 +6632,7 @@ function WalkForwardSection({
                             <td className="px-1.5 py-1 text-right font-mono text-slate-300">
                               {fold.effect ?? "—"}
                             </td>
+                            <td className="px-1.5 py-1 font-mono text-slate-400">{fold.unit}</td>
                             <td className="px-1.5 py-1 text-right font-mono text-slate-300">
                               {fold.n}
                             </td>

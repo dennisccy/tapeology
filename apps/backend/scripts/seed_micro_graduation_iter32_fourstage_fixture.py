@@ -161,7 +161,10 @@ def _events_for_store(symbol: str) -> list:
 
 
 def _observation(session_date: str, symbol: str, value: float) -> dict:
-    return {"session_date": session_date, "symbol": symbol, "value": value}
+    # r13: an r13 scientific observation must declare its unit -- the sealed evaluator proves
+    # it at its own boundary before any verdict is derived.
+    return {"session_date": session_date, "symbol": symbol, "value": value,
+            "value_unit": wf.WF_OBSERVATION_UNIT}
 
 
 def _passing_observations(session_date: str, symbol: str) -> list[dict]:
@@ -275,7 +278,8 @@ def _append_sufficient_fold(
         "spec_hash": spec_hash, "fold_index": fold_index, "sidedness": "long", "econ_floor": _ECON_FLOOR,
         "evidence_class": wf.EVIDENCE_CLASS_HISTORICAL_OOS, "process_label": wf.PROCESS_LABEL_RULE,
         "registered_at": _WF_REGISTERED_AT, "status": wf.FOLD_STATUS_SUFFICIENT, "n": 40,
-        "n_sessions": 10, "n_symbols": 3, "effect": 10.0, "sign": "positive", "missing": {},
+        "n_sessions": 10, "n_symbols": 3, "effect": 10.0, "unit": wf.WF_OBSERVATION_UNIT,
+        "sign": "positive", "missing": {},  # r13: a fold effect declares its own unit
     }
     return wl.append_fold_result(wf_ledger, fields)
 

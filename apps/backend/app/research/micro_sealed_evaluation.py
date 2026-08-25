@@ -214,8 +214,22 @@ class SealedEvaluationRefusedError(Exception):
         )
 
 
+# r13 canonical sign space: a sealed evaluation's observations are recomputed from the SAME
+# canonical outcome machinery, which direction-signs ONCE at the outcome (`micro_features.
+# mid_outcome`). A successful SHORT candidate therefore arrives POSITIVE, exactly as a successful
+# long one does. Re-deriving an expected sign from `sidedness` here applied a SECOND direction
+# interpretation and would have failed a genuinely successful short candidate as `wrong_direction`.
+# Spec section 8.1 condition 2 says "in the registered direction" -- in canonical signed space that
+# IS positive, for both directions. Latent before this correction: no sealed evaluation exists.
+_SIGN_THESIS_WORKED = "positive"
+
+
 def _expected_sign(sidedness: str) -> str:
-    return "positive" if sidedness == "long" else "negative"
+    """The sign a fold must carry for the REGISTERED thesis to have worked. Identical for long and
+    short (canonical signed space); `sidedness` is validated as a closed vocabulary but never
+    re-derives a sign that the outcome layer already applied."""
+    wf.mf.validate_candidate_direction(sidedness)
+    return _SIGN_THESIS_WORKED
 
 
 def _sealed_floors() -> dict:
@@ -256,7 +270,8 @@ def _derive_verdict(
         and econ_floor.get("floor_bps") is not None
         # r13: the SAME unit-checked door Scout and walk-forward use -- bps against bps, with a
         # pre-r13 unitless floor refused rather than silently reinterpreted.
-        and bool(wf.mf.clears_economic_floor(summary["effect"], econ_floor))
+        # r13: proves BOTH the effect unit (from the recomputed summary) and the floor unit.
+        and bool(wf.mf.clears_economic_floor(summary["effect"], summary.get("unit"), econ_floor))
     )
     condition_5_class_process = (
         evidence_class == REQUIRED_EVIDENCE_CLASS and process_label == REQUIRED_PROCESS_LABEL
@@ -397,6 +412,11 @@ def evaluate_sealed_verdict(
     # consult (never reimplemented). (r9) The floors handed in are FIXED and evaluator-owned
     # (SEALED_PASS_RULE_V1 condition 1's own sealed-specific rule, never the candidate spec's). -----
     floors = _sealed_floors()
+    # r13: the sealed evaluator is a scientific BOUNDARY and its observations are caller-supplied,
+    # so their unit is proved here before any verdict is derived -- a caller must not be able to
+    # hand over {"value": 0.25} and have it read as 0.25 bps. Fails closed, before a sealed verdict
+    # is written and before the single-shot exposure is consumed.
+    wf.require_canonical_observation_units(observations)
     summary = wf.summarize_fold_observations(observations, floors)
 
     evaluated_at_value = evaluated_at if evaluated_at is not None else _iso_utc_now()

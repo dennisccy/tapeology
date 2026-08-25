@@ -357,3 +357,189 @@ to attack, because growth will be measured in a unit that means something.
 **Not verified in a browser:** the one-word `/desk` header change (`Effect` → `Effect (bps)`).
 It is a static label with no golden-replay or guard-test dependency, and `tsc --noEmit` passes,
 but no screenshot was taken — so by the era's own T-10 rule it is `unknown`, not `passing`.
+
+---
+---
+
+# Part 4 — r13 completion (2026-08-25): sign applied once, units proved
+
+A review after the r13 landing found three places where r13's own semantics were not yet carried
+through. All are corrected under the **same revision** — no methodology, constant, threshold, or
+gate changed — so a new revision number would misrepresent a completion as a change.
+
+## 20. Root cause A — direction was applied TWICE
+
+r13 made the canonical outcome direction-signed at the outcome. But two downstream stages
+re-derived an expected sign from `sidedness`, applying a **second** direction interpretation to an
+already-signed value:
+
+| site | pre-completion |
+|---|---|
+| `walkforward._pooled_sign_agreement` | `expected = "positive" if sidedness == "long" else "negative"` |
+| `walkforward._opposite_direction_eligible_fold_exists` | `opposite = "negative" if sidedness == "long" else "positive"` |
+| `walkforward.evaluate_survivor_rule` cond. 3 | `(pooled_effect > 0) == (expected_sign == "positive")` |
+| `micro_sealed_evaluation._expected_sign` | `"positive" if sidedness == "long" else "negative"` |
+
+**The source proves the value arrives already signed.** `desk_forward.py:42-46`: *"Every
+directional return is SIGNED TO THE ROW'S OWN SIDE... a POSITIVE number means price went the way
+the wall implied."* `walkforward.playbook_observations` restates it and forbids exactly what the
+predicate below it did: *"already side-relative signed... **never a second, independent sign
+derivation**."* The module contradicted its own documented contract.
+
+**Consequence:** a genuinely successful SHORT candidate arrives POSITIVE, was compared against an
+expected "negative", and would have been refused as wrong-direction — at both the walk-forward and
+sealed stages. **Latent, never fired:** every registered candidate and sequence to date is `long`
+or unsided, where the two readings coincide.
+
+**Scout was already correct** (`scout.py:1285` requires `effect_bps > 0` regardless of
+`sidedness`) — which is why the inconsistency mattered: two stages of one pipeline disagreed.
+
+**The spec needed no rule change.** §6.6 condition 3 says the effect must lie *"in the registered
+direction"*; §8.1 condition 2 says the same. Neither says "negative if short". In canonical signed
+space, "in the registered direction" **is** positive. Only the operationalization was wrong.
+
+## 21. Root cause B — legacy walk-forward rows could be read as bps
+
+The persisted ledger holds fold 3 = `0.019176` and fold 4 = `-0.007731`, both **percent**, with no
+`unit` key. `list_walkforward_sequences` served those rows verbatim and `decay_view` copied the
+magnitude while dropping any unit — and the r13 commit had labelled the UI column
+**`Effect (bps)`**. That combination would have displayed 0.019 percent (≈1.9 bps) as 0.019 bps: a
+100× mislabel of persisted evidence, introduced by the r13 commit itself.
+
+**Fix — disclose, never convert.** A row with no `unit` key predates the contract and is served
+with the explicit historical token `legacy_percent` (deliberately distinct from both `percent` and
+`return_bps`: it states the unit AND that it was established from the pre-r13 convention rather
+than declared by the writer). The stored magnitude is served verbatim. The ledger on disk is
+untouched. `decay_view` now carries the unit per row, and the UI prints each row's own unit in its
+own column instead of a hardcoded header. A sequence whose sufficient folds carry a non-canonical
+unit **refuses a verdict** rather than pooling percent into basis points.
+
+## 22. Root cause C — the effect unit was trusted, not proved
+
+r13 proved the *floor's* unit (`require_bps_floor`) but took the *effect* on trust because a
+variable was named `effect_bps`. A name is not a proof.
+
+`require_return_bps_effect(value, unit)` now gates: every economic-floor comparison (both sides),
+every pooled fold effect, every fold observation before averaging (missing, unknown, legacy **and
+mixed** units all refuse), and every sealed observation at its own boundary — before a verdict is
+derived and before the single shot is consumed.
+
+## 23. Canonical sign convention (stated once, in spec §0)
+
+`raw market return → direction signing (exactly one application) → canonical return_bps`
+
+| raw move | direction | canonical `return_bps` | reading |
+|---|---|---|---|
+| up | `long` | **positive** | thesis worked |
+| down | `long` | **negative** | thesis failed |
+| down | `short` | **positive** | thesis worked |
+| up | `short` | **negative** | thesis failed |
+
+No downstream layer re-inverts on `long` vs `short`. `sidedness` stays recorded, served and
+vocabulary-checked — it is never a second sign derivation.
+
+## 24. Side validation — every public scientific boundary
+
+| boundary | protection |
+|---|---|
+| `scout.register_and_screen_candidate` | validated first, before corpus read, spread floor, spec freeze, ledger write |
+| `scout.build_candidate_spec_fields` | validated before the direction can be frozen into a spec |
+| `scout.extract_anchors` | validated before any corpus or outcome read |
+| `scout.screen_candidate` | validated before any screening arithmetic |
+| `walkforward.register_mode_b_spec` | validated at registration |
+| `walkforward.evaluate_survivor_rule` | validated before the predicate runs |
+| `walkforward.sequence_verdict` | protected via its delegation to `evaluate_survivor_rule` — its refusal paths perform no scientific computation, so there is nothing to protect there |
+| `micro_sealed_evaluation._expected_sign` | validated on every sealed verdict |
+| `micro_features.mid_outcome` / `last_trade_outcome` | validated eagerly, before unmeasured/truncated short-circuits |
+
+`None` remains legal everywhere (a genuine unsided exploratory candidate). `buy`, `sell`, `SHORT`,
+`Long`, `positive`, `negative`, `flat`, `""` all raise.
+
+**Ten test fixtures registered `sidedness="buy"`** and expected a normal result. That contract was
+invalid after r13 and is corrected to `"long"`, not preserved.
+
+## 25. Unit validation — where every magnitude is proved
+
+| stage | what is proved | how |
+|---|---|---|
+| Scout economic gate | effect **and** floor | `clears_economic_floor(effect, mf.OUTCOME_UNIT, econ_floor)` |
+| Walk-forward observation feed | every observation before averaging | `require_canonical_observation_units` inside `summarize_fold_observations` — missing, unknown, legacy and **mixed** all refuse |
+| Walk-forward pooled effect | every eligible fold before pooling | `require_return_bps_effect(f["effect"], f["unit"])` |
+| Walk-forward condition 3 | pooled effect **and** floor | `clears_economic_floor(pooled_effect, WF_OBSERVATION_UNIT, econ_floor)` |
+| Walk-forward condition 4 | each opposing fold's magnitude | `require_return_bps_effect` before the floor comparison |
+| Sealed evaluation input | caller-supplied observations, at its own boundary | `wf.require_canonical_observation_units(observations)` — before the verdict, before the single shot is consumed |
+| Sealed condition 3 | recomputed effect **and** floor | `clears_economic_floor(summary["effect"], summary["unit"], econ_floor)` |
+| Sequence verdict | every sufficient fold's unit | refuses the verdict outright if any is non-canonical |
+
+## 26. Browser verification (acceptance criterion 22)
+
+A scoped rig (`scripts/seed_micro_walkforward_unit_disclosure_fixture.py`, fixture root outside the
+real store) seeds ONE sequence carrying BOTH conventions, then serves it on an isolated backend
+(`:8399`) and frontend (`:3399`). Screenshot:
+`reports/browser-qa/r13-completion-walkforward-unit-disclosure.png`.
+
+The `/desk` Walk-Forward fold table renders:
+
+| Fold | Status | Effect | Unit |
+|---|---|---|---|
+| 0 | sufficient | `0.019176079727258294` | `legacy_percent` |
+| 1 | sufficient | `25` | `return_bps` |
+
+The column header is `Effect` + `Unit` — it names no unit itself, because no single header can be
+truthful for both rows. The legacy magnitude is displayed **verbatim**, never ×100. The sequence
+verdict reads `refused — 2 < 3 sufficient folds`. No vault shard was consumed; the real store was
+not written to; the operator's own `:8301` backend was left running untouched.
+
+## 27. Real corpus — no re-run required, and proved rather than assumed
+
+The mandate's own condition is *"re-run only if code changes touch Scout scientific semantics."*
+They do not, and that is demonstrated, not asserted:
+
+- **The frozen candidate identity is unchanged.** Re-deriving all six specs from the persisted
+  ledger rows reproduces byte-identical `candidate_id`, `spec_hash` and `econ_floor` for every one.
+  Nothing entering a candidate's scientific identity moved.
+- **The Scout diff is exactly two things:** four `validate_candidate_direction(sidedness)` calls
+  (which pass for `sidedness: None`, what all six candidates carry), and a unit argument added to
+  the same `clears_economic_floor` comparison — same magnitudes, same `>=`, plus an assertion that
+  passes. `_observed_effect`, anchor extraction, the block-permutation null and the kill ladder are
+  untouched.
+
+A re-run would append six rows with identical ids and identical decisions: evaluations, not
+information. **The six r13 decisions therefore stand unchanged** — `killed_null` ×3,
+`killed_insufficient_n` ×1, `killed_economic` ×2, zero survivors.
+
+An interrupted re-run had already completed the snapshot rebuild before it was stopped; all 18
+snapshots verify fresh against the current `feature_source_hash`, and the ledger is unchanged at 18
+rows (12 pre-r13 + 6 r13) — the kill landed before any candidate was screened, so no partial
+scientific row exists.
+
+## 28. Verification
+
+| check | result |
+|---|---|
+| Full backend suite | **3583 passed, 8 skipped, 0 failed** (`PYTEST_EXIT=0`) |
+| Frontend `tsc --noEmit` | exit 0 |
+| Browser (legacy + r13 fixtures) | screenshot on record, §26 |
+| Frozen candidate specs | byte-identical for all six |
+| Snapshots | 18/18 fresh; feature rows unaffected by this change |
+
+## 29. Invariants — nothing weakened
+
+`ECON_FLOOR_SPREAD_MULTIPLE` 1.0 · `SCOUT_SCREEN_ALPHA` 0.05 · `SCOUT_BLOCK_PERMUTATIONS` 2000 ·
+`SCOUT_MIN_SESSION_CLUSTERS` 2 · `SCOUT_MIN_OBSERVATIONS_PER_CELL` 5 ·
+`SCOUT_MAX_TOP1_CONCENTRATION` 0.8 · `SCOUT_MAX_VARIANTS_PER_FAMILY` 24 ·
+`WF_MIN_SUFFICIENT_FOLDS` 3 · fold geometry 40/5/20/20 · embargo 5 · `SEALED_MIN_OBSERVATIONS` 30 ·
+`config_fingerprint` `08e471b10130e1e2` · zero `Config` fields · zero `referee_*` modules changed ·
+zero PnL logic changed · no feature meaning changed · no candidate family or pilot study added ·
+no append-only ledger rewritten · no pre-r13 evidence deleted · **no sealed vault data consumed**.
+
+The 105-session walk-forward requirement is untouched: `GET .../walkforward` still refuses
+`0 < 105`, and all three pilot studies still read `floor_unmet` (60 required, 11 available).
+
+## 30. Two defects of my own, found and corrected
+
+1. **`Effect (bps)` column header** (introduced by the r13 commit) would have displayed the
+   persisted `0.019176` **percent** as bps — a 100× mislabel of real evidence. Replaced by a
+   per-row served unit.
+2. **TR-33 collision**: r12's vault ruling already owned TR-33; the r13 commit added a second
+   TR-33. Renumbered to TR-34, with TR-35 added for the completion traps.

@@ -58,7 +58,7 @@ _ECON_FLOOR = {"floor_bps": 5.0, "unit": "bps"}  # r13: an economic floor must d
 
 
 def _observation(session_date: str, symbol: str, value: float) -> dict:
-    return {"session_date": session_date, "symbol": symbol, "value": value}
+    return {"session_date": session_date, "symbol": symbol, "value": value, "value_unit": wf.WF_OBSERVATION_UNIT}
 
 
 def _passing_observations(n: int = 30) -> list[dict]:
@@ -494,7 +494,8 @@ def test_every_fail_reason_derive_verdict_can_produce_is_in_the_closed_vocabular
     """``SEALED_FAIL_REASONS`` is a documented closed set (the ``scout.KILL_REASONS`` convention)
     -- this proves it is not merely decorative by exercising all three FAIL branches of
     ``_derive_verdict`` directly and checking each one lands inside the tuple."""
-    sufficient = {"status": wf.FOLD_STATUS_SUFFICIENT, "n": 3, "n_sessions": 1, "n_symbols": 1, "missing": {}}
+    sufficient = {"status": wf.FOLD_STATUS_SUFFICIENT, "n": 3, "n_sessions": 1, "n_symbols": 1,
+                  "unit": wf.WF_OBSERVATION_UNIT, "missing": {}}
 
     wrong_direction, reason1, _ = sealed_eval._derive_verdict(
         {**sufficient, "effect": -10.0, "sign": "negative"}, sidedness="long", econ_floor=_ECON_FLOOR,
@@ -529,7 +530,7 @@ def test_insufficient_verdict_is_never_coerced_to_fail_or_pass_in_the_graduation
             "econ_floor": _ECON_FLOOR, "evidence_class": wf.EVIDENCE_CLASS_HISTORICAL_OOS,
             "process_label": wf.PROCESS_LABEL_RULE, "registered_at": "2026-01-01T00:00:00.000000Z",
             "status": wf.FOLD_STATUS_SUFFICIENT, "n": 40, "n_sessions": 10, "n_symbols": 3,
-            "effect": 10.0, "sign": "positive", "missing": {},
+            "effect": 10.0, "unit": wf.WF_OBSERVATION_UNIT, "sign": "positive", "missing": {},
         })
     grad_ledger = g.GraduationLedger(str(tmp_path / "grad"))
     g.evaluate_walkforward_survivor_transition(grad_ledger, wf_ledger, family_root_id=family_root_id, sequence_id=sequence_id)

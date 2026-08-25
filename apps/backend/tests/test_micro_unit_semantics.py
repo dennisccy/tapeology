@@ -180,10 +180,10 @@ def test_the_adapter_between_the_vocabularies_is_explicit():
 
 
 def test_economic_floor_compares_bps_against_bps():
-    assert mf.clears_economic_floor(5.0, _bps_floor(2.0)) is True
-    assert mf.clears_economic_floor(1.0, _bps_floor(2.0)) is False
-    assert mf.clears_economic_floor(-5.0, _bps_floor(2.0)) is True    # magnitude, not sign
-    assert mf.clears_economic_floor(2.0, _bps_floor(2.0)) is True     # >= is inclusive
+    assert mf.clears_economic_floor(5.0, mf.OUTCOME_UNIT, _bps_floor(2.0)) is True
+    assert mf.clears_economic_floor(1.0, mf.OUTCOME_UNIT, _bps_floor(2.0)) is False
+    assert mf.clears_economic_floor(-5.0, mf.OUTCOME_UNIT, _bps_floor(2.0)) is True    # magnitude, not sign
+    assert mf.clears_economic_floor(2.0, mf.OUTCOME_UNIT, _bps_floor(2.0)) is True     # >= is inclusive
 
 
 def test_a_floor_that_does_not_declare_bps_is_refused_never_silently_compared():
@@ -191,11 +191,11 @@ def test_a_floor_that_does_not_declare_bps_is_refused_never_silently_compared():
     reinterpret old-semantics evidence under the new convention -- refused."""
     unlabelled = {"multiple": 1.0, "family_median_spread_bps": 2.0, "floor_bps": 2.0}
     with pytest.raises(mf.UnitMismatchError):
-        mf.clears_economic_floor(5.0, unlabelled)
+        mf.clears_economic_floor(5.0, mf.OUTCOME_UNIT, unlabelled)
 
     wrong_unit = {**unlabelled, "unit": "usd"}
     with pytest.raises(mf.UnitMismatchError):
-        mf.clears_economic_floor(5.0, wrong_unit)
+        mf.clears_economic_floor(5.0, mf.OUTCOME_UNIT, wrong_unit)
 
 
 # === 4. propagation through every scientific stage ================================================
@@ -252,7 +252,8 @@ def test_scout_screen_result_declares_its_own_outcome_unit():
 
 def _observations(value_bps: float, *, n: int = 40) -> list[dict]:
     return [
-        {"session_date": f"2026-06-{(i % 10) + 1:02d}", "symbol": f"S{i % 4}", "value": value_bps}
+        {"session_date": f"2026-06-{(i % 10) + 1:02d}", "symbol": f"S{i % 4}", "value": value_bps,
+         "value_unit": mf.OUTCOME_UNIT}
         for i in range(n)
     ]
 
@@ -328,3 +329,223 @@ def test_the_frozen_candidate_spec_records_its_outcome_unit_and_rekeys_the_candi
     # NOT collide with them.
     assert spec["candidate_id"] != "cand-e5dcfa1516c3c4f5"
     assert spec["candidate_id"] != "cand-4045a40f3ef2595a"
+
+
+# === 6. r13 completion: ONE canonical sign meaning, end to end =====================================
+#
+# A value reaching walk-forward or the sealed evaluator has ALREADY been direction-signed exactly
+# once -- at the outcome (`mid_outcome`), or at source for the playbook feed
+# (`desk_forward.DESK_FORWARD_RETURN_SIGN_CONVENTION`: "a POSITIVE number means price went the way
+# the wall implied"). Before this correction both stages re-derived an expected sign from
+# `sidedness`, applying a SECOND direction interpretation: a genuinely successful SHORT candidate
+# arrives positive, was compared against an expected "negative", and would have been refused as
+# wrong-direction. Latent only because every registered sequence carries sidedness="long".
+
+
+def _fold(effect_bps: float, *, index: int = 0) -> dict:
+    sign = "positive" if effect_bps > 0 else ("negative" if effect_bps < 0 else "zero")
+    return {
+        "fold_index": index, "status": wf.FOLD_STATUS_SUFFICIENT, "effect": effect_bps,
+        "unit": mf.OUTCOME_UNIT, "sign": sign, "n": 40, "n_sessions": 10, "n_symbols": 4,
+        "missing": {}, "evidence_class": wf.EVIDENCE_CLASS_HISTORICAL_OOS,
+        "process_label": wf.PROCESS_LABEL_RULE,
+    }
+
+
+def _folds(effect_bps: float) -> list[dict]:
+    return [_fold(effect_bps, index=i) for i in range(3)]
+
+
+@pytest.mark.parametrize(
+    "direction,effect_bps,worked",
+    [
+        ("long", +10.0, True),    # A: successful long
+        ("long", -10.0, False),   # B: failed long
+        ("short", +10.0, True),   # C: successful short -- the critical case
+        ("short", -10.0, False),  # D: failed short
+    ],
+)
+def test_canonical_sign_means_the_same_thing_for_long_and_short(direction, effect_bps, worked):
+    """Positive == the registered thesis worked, for BOTH directions, at the walk-forward stage."""
+    verdict = wf.evaluate_survivor_rule(
+        _folds(effect_bps), sidedness=direction, econ_floor=_bps_floor(2.0), voided=False
+    )
+    assert verdict["conditions"]["sign_agreement"] is worked
+    assert verdict["conditions"]["pooled_effect_clears_econ_floor"] is worked
+    assert (verdict["verdict"] == wf.WF_VERDICT_SURVIVOR) is worked
+
+
+@pytest.mark.parametrize("direction", ["long", "short"])
+def test_sealed_evaluation_treats_a_successful_short_exactly_like_a_successful_long(direction):
+    """The critical missing case: a successful SHORT must PASS the sealed direction condition."""
+    floors = {"wf_fold_min_observations": 1, "wf_fold_min_signal_sessions": 0, "wf_fold_min_symbols": 0}
+    passing = mse._derive_verdict(
+        wf.summarize_fold_observations(_observations(10.0), floors),
+        sidedness=direction, econ_floor=_bps_floor(2.0),
+        evidence_class=wf.EVIDENCE_CLASS_HISTORICAL_OOS, process_label=wf.PROCESS_LABEL_RULE,
+    )
+    assert passing[2]["registered_direction"] is True
+    assert passing[0] == mse.SEALED_VERDICT_PASS
+
+    failing = mse._derive_verdict(
+        wf.summarize_fold_observations(_observations(-10.0), floors),
+        sidedness=direction, econ_floor=_bps_floor(2.0),
+        evidence_class=wf.EVIDENCE_CLASS_HISTORICAL_OOS, process_label=wf.PROCESS_LABEL_RULE,
+    )
+    assert failing[2]["registered_direction"] is False
+    assert failing[1] == "wrong_direction"
+
+
+def test_a_short_candidates_success_is_never_double_signed_through_the_percent_feed():
+    """E: a side-relative POSITIVE short return from the playbook feed must stay positive through
+    percent->bps conversion, the fold summary, and the pooled effect. It must NOT become negative
+    merely because sidedness == "short"."""
+    floors = {"wf_fold_min_observations": 1, "wf_fold_min_signal_sessions": 0, "wf_fold_min_symbols": 0}
+    # desk_forward already signed this to the row's own side: +0.25% means the SHORT thesis worked.
+    observations = [
+        {"session_date": f"2026-06-{d:02d}", "symbol": "AAA",
+         "value": wf.observation_value_bps(0.25), "value_unit": wf.WF_OBSERVATION_UNIT}
+        for d in range(1, 11)
+    ]
+    summary = wf.summarize_fold_observations(observations, floors)
+    assert summary["effect"] == pytest.approx(25.0)   # 0.25% == 25 bps, sign preserved
+    assert summary["sign"] == "positive"
+
+    verdict = wf.evaluate_survivor_rule(
+        [{**_fold(25.0, index=i)} for i in range(3)],
+        sidedness="short", econ_floor=_bps_floor(2.0), voided=False,
+    )
+    assert verdict["pooled_effect"] == pytest.approx(25.0)
+    assert verdict["verdict"] == wf.WF_VERDICT_SURVIVOR
+
+
+def test_opposite_direction_detection_is_negative_for_both_directions():
+    """Condition 4 is defined in canonical signed space: an opposing fold is a NEGATIVE one."""
+    mixed = [_fold(10.0, index=0), _fold(10.0, index=1), _fold(-10.0, index=2)]
+    for direction in ("long", "short"):
+        verdict = wf.evaluate_survivor_rule(
+            mixed, sidedness=direction, econ_floor=_bps_floor(2.0), voided=False
+        )
+        assert verdict["conditions"]["no_opposite_direction_sufficient_fold"] is False
+
+
+# === 7. side vocabulary at every public scientific boundary =======================================
+
+_BAD_DIRECTIONS = ["buy", "sell", "SHORT", "Long", "positive", "negative", "flat", ""]
+
+
+@pytest.mark.parametrize("bogus", _BAD_DIRECTIONS)
+def test_scout_spec_freeze_refuses_an_invalid_direction(bogus):
+    with pytest.raises(mf.UnknownSideVocabularyError):
+        scout.build_candidate_spec_fields(
+            feature_name="cumulative_delta", transform="threshold", params={"op": "ge", "value": 0.0},
+            structure_context_kind="none", horizon_key="trades_20", sidedness=bogus,
+            fitting_rule=None, family_median_spread_bps=1.5, corpus_manifest=[], grid_version=1,
+        )
+
+
+@pytest.mark.parametrize("bogus", _BAD_DIRECTIONS)
+def test_scout_screen_refuses_an_invalid_direction(bogus):
+    with pytest.raises(mf.UnknownSideVocabularyError):
+        scout.screen_candidate(
+            feature_name="cumulative_delta", transform="threshold", params={"op": "ge", "value": 0.0},
+            sidedness=bogus, horizon_key="trades_20", econ_floor=_bps_floor(2.0),
+            anchors=_anchors(5.0), family_id="vocab-test", n_variants_tried=1,
+        )
+
+
+@pytest.mark.parametrize("bogus", _BAD_DIRECTIONS)
+def test_walkforward_and_sealed_boundaries_refuse_an_invalid_direction(bogus):
+    with pytest.raises(mf.UnknownSideVocabularyError):
+        wf.register_mode_b_spec(corpus_id="c", rule_id="r", sidedness=bogus, econ_floor=None)
+    with pytest.raises(mf.UnknownSideVocabularyError):
+        wf.evaluate_survivor_rule(_folds(10.0), sidedness=bogus, econ_floor=None, voided=False)
+
+
+def test_an_unsided_candidate_is_still_legal_everywhere():
+    assert mf.validate_candidate_direction(None) is None
+    spec = scout.build_candidate_spec_fields(
+        feature_name="cumulative_delta", transform="threshold", params={"op": "ge", "value": 0.0},
+        structure_context_kind="none", horizon_key="trades_20", sidedness=None, fitting_rule=None,
+        family_median_spread_bps=1.5, corpus_manifest=[], grid_version=1,
+    )
+    assert spec["outcome"]["sidedness"] is None
+
+
+# === 8. observation and effect unit provenance ====================================================
+
+
+def test_mixed_unit_observations_refuse_before_averaging():
+    """I: one bps observation + one percent observation must never be pooled."""
+    mixed = [
+        {"session_date": "2026-06-01", "symbol": "AAA", "value": 5.0, "value_unit": mf.OUTCOME_UNIT},
+        {"session_date": "2026-06-02", "symbol": "AAA", "value": 0.05, "value_unit": "percent"},
+    ]
+    with pytest.raises(mf.UnitMismatchError):
+        wf.summarize_fold_observations(mixed, {})
+
+
+def test_observations_with_no_declared_unit_refuse():
+    """J: an r13 scientific observation must PROVE its unit; a bare {"value": ...} refuses."""
+    bare = [{"session_date": "2026-06-01", "symbol": "AAA", "value": 0.25}]
+    with pytest.raises(mf.UnitMismatchError):
+        wf.summarize_fold_observations(bare, {})
+
+
+def test_sealed_observations_prove_their_unit_before_any_verdict():
+    """The sealed evaluator is its own boundary -- a caller cannot hand it a unitless magnitude."""
+    with pytest.raises(mf.UnitMismatchError):
+        wf.require_canonical_observation_units([{"session_date": "d", "symbol": "s", "value": 0.25}])
+
+
+def test_economic_gate_proves_the_effect_unit_not_only_the_floor_unit():
+    """K: percent effect vs bps floor must refuse; bps vs bps may compare."""
+    with pytest.raises(mf.UnitMismatchError):
+        mf.clears_economic_floor(0.25, "percent", _bps_floor(2.0))
+    with pytest.raises(mf.UnitMismatchError):
+        mf.clears_economic_floor(0.25, None, _bps_floor(2.0))
+    assert mf.clears_economic_floor(5.0, mf.OUTCOME_UNIT, _bps_floor(2.0)) is True
+
+
+# === 9. legacy walk-forward rows are disclosed, never relabelled ==================================
+
+
+def _legacy_fold(effect_percent: float, *, index: int = 0) -> dict:
+    """A fold_result row as persisted BEFORE r13: a percent magnitude and no `unit` key at all."""
+    return {
+        "fold_index": index, "status": wf.FOLD_STATUS_SUFFICIENT, "effect": effect_percent,
+        "sign": "positive" if effect_percent > 0 else "negative", "n": 330, "n_sessions": 20,
+        "n_symbols": 94, "missing": {}, "evidence_class": wf.EVIDENCE_CLASS_HISTORICAL_EXPOSED_DIAGNOSTIC,
+        "process_label": wf.PROCESS_LABEL_RULE,
+    }
+
+
+def test_a_legacy_fold_row_is_served_with_its_own_historical_unit_never_as_bps():
+    """G: the real persisted row (fold 3, effect 0.019176, no unit) is PERCENT. It must never be
+    served or displayed as basis points, and its stored magnitude must not be converted."""
+    legacy = _legacy_fold(0.019176079727258294, index=3)
+    assert wf.unit_of_fold_row(legacy) == wf.LEGACY_WF_EFFECT_UNIT
+    assert wf.LEGACY_WF_EFFECT_UNIT != mf.OUTCOME_UNIT
+
+    row = wf.decay_view([legacy])["fold_rows"][0]
+    assert row["unit"] == wf.LEGACY_WF_EFFECT_UNIT
+    assert row["effect"] == pytest.approx(0.019176079727258294)  # verbatim, never x100
+
+
+def test_a_new_row_declares_the_canonical_unit_unambiguously():
+    """H: an r13 row displays as bps because it says so itself."""
+    row = wf.decay_view([_fold(25.0)])["fold_rows"][0]
+    assert row["unit"] == mf.OUTCOME_UNIT
+    assert row["effect"] == pytest.approx(25.0)
+
+
+def test_legacy_rows_are_never_pooled_into_a_new_scientific_verdict():
+    """A serving concern must not become a scientific one: a sequence whose sufficient folds carry
+    a non-canonical unit refuses a verdict rather than averaging percent into bps."""
+    verdict = wf.sequence_verdict(
+        [_legacy_fold(0.02, index=i) for i in range(3)],
+        sidedness="long", econ_floor=_bps_floor(2.0), voided=False,
+    )
+    assert verdict["refused"] is True
+    assert verdict["n_non_canonical_unit_folds"] == 3
+    assert wf.LEGACY_WF_EFFECT_UNIT in verdict["reason"]

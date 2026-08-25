@@ -722,6 +722,8 @@ def extract_anchors(
     ``resolver`` is REQUIRED for ``structure_context_kind == "band_touch"`` (a band map cannot be
     resolved without one); ``playbook_store`` is REQUIRED for ``"playbook_signal"`` -- both raise a
     clear ``ValueError`` rather than an opaque ``AttributeError`` when omitted."""
+    # r13: refuse a bad direction BEFORE any corpus or outcome read happens.
+    mf.validate_candidate_direction(sidedness)
     if structure_context_kind not in STRUCTURE_CONTEXT_KINDS:
         raise ScoutUnsupportedStructureContextError(
             f"structure_context.kind={structure_context_kind!r} is outside the closed "
@@ -1201,6 +1203,7 @@ def screen_candidate(
     economic-relevance column (section 5.5), and the closed-vocabulary decision. Always returns a
     fully-shaped ``screen_result`` regardless of decision (TC-12: every served screen carries every
     disclosure, not only a surviving one's)."""
+    mf.validate_candidate_direction(sidedness)  # r13: public scientific boundary
     cell_of = [
         "candidate" if _feature_membership(a["feature_value"], transform, params) else "comparator"
         for a in anchors
@@ -1249,7 +1252,7 @@ def screen_candidate(
         # r13: bps against bps, through the ONE unit-checked door (`mf.require_bps_floor`).
         # Pre-r13 this read `abs(effect_bps) >= econ_floor["floor_bps"]` where the left side was a
         # raw DOLLAR mid-price difference and the right side genuine basis points.
-        econ_interesting = mf.clears_economic_floor(effect_bps, econ_floor)
+        econ_interesting = mf.clears_economic_floor(effect_bps, mf.OUTCOME_UNIT, econ_floor)
 
     screen_result = {
         "evidence_class": EVIDENCE_CLASS_HISTORICAL_EXPOSED_DIAGNOSTIC,
@@ -1344,6 +1347,11 @@ def build_candidate_spec_fields(
     proof does not depend on this key's presence -- ``family_root_id`` is computed from
     ``feature_family_name``/``structure_context_kind``/``outcome_horizon_family`` alone, never from
     ``setup_id``)."""
+    # r13: the registered direction is validated BEFORE it can be frozen into a candidate spec.
+    # An invalid vocabulary must never enter the permanent record -- and a candidate that dies as
+    # `killed_insufficient_n` never reaches the outcome signer, so helper-level validation alone
+    # would have let "buy"/"SHORT"/"" through into a hash-chained ledger row.
+    mf.validate_candidate_direction(sidedness)
     if structure_context_kind not in STRUCTURE_CONTEXT_KINDS:
         raise ValueError(f"unknown structure_context.kind {structure_context_kind!r}")
     if horizon_key not in HORIZON_KEYS:
@@ -1439,6 +1447,10 @@ def register_and_screen_candidate(
     several candidates against the SAME ``corpus_manifest`` (``run_scout_grid_and_record``, every
     call sharing one cache) reads each dataset's snapshot rows from disk exactly once for the WHOLE
     run, never once per candidate."""
+    # r13: the OUTERMOST scientific boundary -- refused before the corpus read, the spread-floor
+    # computation, the spec freeze, and the ledger write alike.
+    mf.validate_candidate_direction(sidedness)
+
     # Refused up front, before any corpus read or ledger write: a horizon this module cannot
     # block-size from spec section 5.3's own rule is never screened at all (iter-4 audit fix --
     # see `_block_length_for_horizon`), rather than refused only later and only when the candidate
