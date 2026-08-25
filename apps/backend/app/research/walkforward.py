@@ -564,10 +564,22 @@ def register_mode_a_origin(
     Mode A), and appends ONE permanent ``fold_result`` row. ``sequence_id`` is a pure function of
     ``(corpus_id, fitting_rule)`` (TR-14/TC-11): re-registering the SAME rule string at a different
     origin lands in the SAME sequence; a changed rule string starts a new one."""
+    # r13 fail-closed ordering. BOTH checks precede the work they protect:
+    #   1. the registered direction is validated BEFORE either observation provider is called, so a
+    #      malformed vocabulary can never reach a corpus read, a fit, or a frozen `spec_hash` (the
+    #      direction is one of `spec_fields` below, so an unvalidated one would be hashed into a
+    #      permanent ledger row);
+    #   2. the TRAINING observations prove their unit BEFORE `fit_training_quantile` consumes a
+    #      single value -- fitting a quantile over a mix of percent and basis-point magnitudes
+    #      produces a threshold in neither unit, and would then be frozen into the spec.
+    # The freeze order itself is unchanged (TC-12): train read -> fit -> spec freeze -> ONLY THEN
+    # the validation-window reveal. Both new checks sit strictly inside the training half.
+    mf.validate_candidate_direction(sidedness)
     rule_family, q = parse_fitting_rule(fitting_rule)
     train_observations = observations_in_sessions(
         train_observations_provider(), fold["train_sessions"], boundary_name="train_sessions"
     )
+    require_canonical_observation_units(train_observations)
     realized_fitted_value = fit_training_quantile([o["value"] for o in train_observations], q)
 
     sequence_id = sequence_id_for(corpus_id, fitting_rule)
@@ -587,6 +599,7 @@ def register_mode_a_origin(
     test_observations = observations_in_sessions(
         test_observations_provider(), fold["test_sessions"], boundary_name="test_sessions"
     )
+    require_canonical_observation_units(test_observations)  # r13: the revealed half proves its unit too
     validation_revealed_at = _iso_utc_now()
 
     evidence_class = classify_evidence_class(
@@ -816,6 +829,33 @@ def sequence_verdict(fold_results: list[dict], *, sidedness: str, econ_floor: di
             "sequence-level verdict is refused (spec section 6.6), never a fabricated result",
             "n_sufficient_folds": len(sufficient),
         }
+    # r13 direction-freeze contract. Scout may screen UNSIDED -- exploratory discovery legitimately
+    # asks "is there an effect", not "in which direction should I trade". But choosing `long` or
+    # `short` from that exposed discovery evidence is ITSELF a discovery-derived parameter, so a
+    # sequence that never froze one receives NO walk-forward survivor credit: its direction would
+    # still be selectable after the OOS windows were seen, which is exactly the post-hoc degree of
+    # freedom this funnel exists to prevent.
+    #
+    # Checked AFTER the sufficient-folds floor deliberately: with no ledgered folds at all the
+    # sidedness read off those rows is UNKNOWN, not "unsided", and "0 < 3 sufficient folds" is the
+    # honest answer there. This is the ONE door to survivor credit -- `micro_graduation.
+    # evaluate_walkforward_survivor_transition` delegates the ENTIRE predicate here and turns a
+    # refusal into a refused transition -- so the gate belongs here and nowhere else. Choosing the
+    # direction FROM Scout's exposed sign stays legal; freezing it into a registered spec (which
+    # re-keys `spec_hash` and stamps `registered_at`) before the OOS reveal is what makes it honest,
+    # and `classify_evidence_class` independently demotes any window already exposed at that instant
+    # to `historical_exposed_diagnostic`.
+    if sidedness not in mf.CANDIDATE_DIRECTIONS:
+        return {
+            "refused": True,
+            "reason": f"sequence carries sidedness={sidedness!r} -- an unsided (exploratory) "
+            "sequence receives no walk-forward survivor credit. A candidate direction must be "
+            f"frozen into the registered spec (one of {list(mf.CANDIDATE_DIRECTIONS)}) BEFORE the "
+            "out-of-sample windows are revealed; choosing it afterwards would be a post-hoc degree "
+            "of freedom.",
+            "n_sufficient_folds": len(sufficient),
+        }
+
     # r13: a persisted PRE-r13 fold carries a percent magnitude and no unit. Serving it is a
     # disclosure problem (`unit_of_fold_row`); feeding it into a NEW scientific verdict is not
     # allowed at all. Refuse rather than pool a magnitude whose unit cannot be proved.

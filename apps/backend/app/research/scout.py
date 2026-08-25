@@ -140,6 +140,7 @@ __all__ = [
     "scout_parameters_hash",
     "build_candidate_spec_fields",
     "extract_anchors",
+    "require_canonical_anchor_units",
     "compute_p_screen",
     "screen_candidate",
     "register_and_screen_candidate",
@@ -441,6 +442,9 @@ def _extract_none_anchors(
                     "trade_index": anchor_row["trade_index"],
                     "feature_value": feature_value,
                     "outcome_bps": outcome["mid"]["return_bps"],
+                    # r13: the unit is read OFF THE OUTCOME ROW, never asserted by a
+                    # downstream consumer -- provenance, not a hardcoded constant.
+                    "outcome_unit": outcome["mid"]["unit"],
                     "tod_bucket": tod_bucket_for_epoch(epoch_anchor + anchor_row["anchor_at"]),
                     "fallback_frac": anchor_row.get("fallback_frac_20t"),
                 }
@@ -493,6 +497,9 @@ def _extract_band_touch_anchors(
                     "trade_index": feature_at_trigger["trade_index"],
                     "feature_value": feature_value,
                     "outcome_bps": outcome["mid"]["return_bps"],
+                    # r13: the unit is read OFF THE OUTCOME ROW, never asserted by a
+                    # downstream consumer -- provenance, not a hardcoded constant.
+                    "outcome_unit": outcome["mid"]["unit"],
                     "tod_bucket": tod_bucket_for_epoch(touch["as_of_epoch"]),
                     "fallback_frac": feature_at_trigger.get("fallback_frac_20t"),
                 }
@@ -609,6 +616,9 @@ def _extract_divergence_anchors(
                         "trade_index": tau2_row["trade_index"],
                         "feature_value": feature_value,
                         "outcome_bps": outcome["mid"]["return_bps"],
+                        # r13: the unit is read OFF THE OUTCOME ROW, never asserted by a
+                        # downstream consumer -- provenance, not a hardcoded constant.
+                        "outcome_unit": outcome["mid"]["unit"],
                         "tod_bucket": tod_bucket_for_epoch(epoch_anchor + tau2_row["anchor_at"]),
                         "fallback_frac": tau2_row.get("fallback_frac_20t"),
                     }
@@ -682,6 +692,9 @@ def _extract_playbook_signal_anchors(
                     "trade_index": feature_at_trigger["trade_index"],
                     "feature_value": feature_value,
                     "outcome_bps": outcome["mid"]["return_bps"],
+                    # r13: the unit is read OFF THE OUTCOME ROW, never asserted by a
+                    # downstream consumer -- provenance, not a hardcoded constant.
+                    "outcome_unit": outcome["mid"]["unit"],
                     "tod_bucket": tod_bucket_for_epoch(trigger_epoch),
                     "fallback_frac": feature_at_trigger.get("fallback_frac_20t"),
                 }
@@ -837,6 +850,22 @@ def _session_delta(outcomes: np.ndarray, labels: np.ndarray) -> float | None:
     if cand.size == 0 or comp.size == 0:
         return None
     return float(cand.mean() - comp.mean())
+
+
+def require_canonical_anchor_units(anchors: list[dict]) -> None:
+    """Every anchor entering the screen must PROVE its outcome is the canonical ``return_bps``.
+
+    r13's first pass had `screen_candidate` pass ``mf.OUTCOME_UNIT`` to the economic gate as a
+    literal, so the unit's provenance existed only because THIS module asserted it -- an anchor
+    whose outcome was in percent, or carried no unit at all, would have been pooled and gated as
+    though it were basis points, and the key being spelled ``outcome_bps`` proves nothing about
+    what is inside it. The unit is now stamped onto every anchor by the extraction paths, read off
+    the outcome row itself, and verified here before any pooling, permutation or gate.
+
+    Missing, unknown, percent, legacy AND MIXED units all refuse. An empty anchor list has nothing
+    to prove and passes (its caller reports ``killed_insufficient_n`` on the counts)."""
+    for anchor_row in anchors:
+        mf.require_return_bps_effect(anchor_row.get("outcome_bps"), anchor_row.get("outcome_unit"))
 
 
 def _observed_effect(session_groups: dict) -> tuple[float | None, dict]:
@@ -1204,6 +1233,7 @@ def screen_candidate(
     fully-shaped ``screen_result`` regardless of decision (TC-12: every served screen carries every
     disclosure, not only a surviving one's)."""
     mf.validate_candidate_direction(sidedness)  # r13: public scientific boundary
+    require_canonical_anchor_units(anchors)     # r13: unit provenance, proved not asserted
     cell_of = [
         "candidate" if _feature_membership(a["feature_value"], transform, params) else "comparator"
         for a in anchors
@@ -1252,7 +1282,10 @@ def screen_candidate(
         # r13: bps against bps, through the ONE unit-checked door (`mf.require_bps_floor`).
         # Pre-r13 this read `abs(effect_bps) >= econ_floor["floor_bps"]` where the left side was a
         # raw DOLLAR mid-price difference and the right side genuine basis points.
-        econ_interesting = mf.clears_economic_floor(effect_bps, mf.OUTCOME_UNIT, econ_floor)
+        # r13: the unit passed here is the one the anchors themselves declared and
+        # `require_canonical_anchor_units` already proved above -- never a literal this
+        # function supplies on its own authority.
+        econ_interesting = mf.clears_economic_floor(effect_bps, anchors[0]["outcome_unit"], econ_floor)
 
     screen_result = {
         "evidence_class": EVIDENCE_CLASS_HISTORICAL_EXPOSED_DIAGNOSTIC,

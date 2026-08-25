@@ -164,11 +164,25 @@ def _label_quality(shards: list[dict]) -> dict:
         "shards_majority_inferred": sum(
             1 for f in fracs if f > _FALLBACK_FRAC_DISCLOSURE_THRESHOLD
         ),
+        # r13 contract pass: the caveat is FEATURE-FAMILY-SCOPED, and the note now says so. The
+        # code has always drawn this line (`scout.AGGRESSOR_DERIVED_FEATURES`: "F-FLOW and
+        # F-RESPONSE are derived from the engine's aggressor SIDE classification; F-LIQUIDITY ...
+        # is not -- it never reads `side` at all"), but this served sentence did not, and a reader
+        # could take it as "the whole corpus is weak". It is not: a high fallback fraction says
+        # nothing whatever about quote_imbalance, microprice or spread_change.
+        "affected_families": ["F-FLOW", "F-RESPONSE"],
+        "unaffected_families": ["F-LIQUIDITY"],
         "note": (
             "fallback_frac is the share of this corpus's aggressor (buy/sell) labels produced by "
-            "the tick test rather than the quote rule -- an INFERENCE, never ground truth. A flow "
-            "result measured largely on inferred labels is weak evidence however large its "
-            "sample. A disclosure only: nothing gates on these numbers."
+            "the tick test rather than the quote rule -- an INFERENCE, never ground truth. It is a "
+            "material caveat for the AGGRESSOR-DERIVED families only (F-FLOW, F-RESPONSE: "
+            "cumulative delta, imbalance, runs, bursts, impact efficiency, failed aggression): a "
+            "result from those measured largely on inferred labels is weak evidence however large "
+            "its sample. It says NOTHING about F-LIQUIDITY (quote imbalance, microprice, spread "
+            "change), which never reads the aggressor side at all, and it is not by itself "
+            "evidence that the corpus as a whole is weak. A disclosure only: nothing gates on "
+            "these numbers; the per-candidate fallback-tercile stratification is the mechanism "
+            "that actually stratifies an aggressor-derived result."
         ),
     }
 

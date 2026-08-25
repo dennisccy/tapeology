@@ -210,11 +210,11 @@ def _anchors(effect_bps: float) -> list[dict]:
             for i in range(8):
                 rows.append({
                     "session_date": session, "symbol": symbol, "feature_value": 1.0,
-                    "outcome_bps": effect_bps + (0.01 * i), "tod_bucket": "mid", "fallback_frac": 0.1,
+                    "outcome_bps": effect_bps + (0.01 * i), "outcome_unit": mf.OUTCOME_UNIT, "tod_bucket": "mid", "fallback_frac": 0.1,
                 })
                 rows.append({
                     "session_date": session, "symbol": symbol, "feature_value": -1.0,
-                    "outcome_bps": 0.0 + (0.01 * i), "tod_bucket": "mid", "fallback_frac": 0.1,
+                    "outcome_bps": 0.0 + (0.01 * i), "outcome_unit": mf.OUTCOME_UNIT, "tod_bucket": "mid", "fallback_frac": 0.1,
                 })
     return rows
 
@@ -549,3 +549,305 @@ def test_legacy_rows_are_never_pooled_into_a_new_scientific_verdict():
     assert verdict["refused"] is True
     assert verdict["n_non_canonical_unit_folds"] == 3
     assert wf.LEGACY_WF_EFFECT_UNIT in verdict["reason"]
+
+
+# === 10. r13 contract pass: every scientific boundary fails CLOSED, before the work it protects ===
+
+
+class _RecordingProvider:
+    """An observation provider that records whether it was ever called -- the only way to prove a
+    validation happened BEFORE the read it is supposed to precede."""
+
+    def __init__(self, observations: list[dict] | None = None) -> None:
+        self.called = False
+        self._observations = observations or []
+
+    def __call__(self) -> list[dict]:
+        self.called = True
+        return list(self._observations)
+
+
+def _mode_a_fold() -> dict:
+    return {"fold_index": 0, "train_sessions": ["2026-06-01"], "test_sessions": ["2026-06-02"]}
+
+
+def _obs(value: float, session: str, *, unit: str | None = mf.OUTCOME_UNIT) -> dict:
+    row = {"session_date": session, "symbol": "AAA", "value": value}
+    if unit is not None:
+        row["value_unit"] = unit
+    return row
+
+
+@pytest.mark.parametrize("bogus", ["buy", "sell", "SHORT", "flat", ""])
+def test_mode_a_refuses_an_invalid_direction_before_any_provider_is_read(tmp_path, bogus):
+    """A: the direction is validated before EITHER provider runs -- it is hashed into `spec_hash`
+    and written to a permanent row, so it must never reach a corpus read unvalidated."""
+    train, test = _RecordingProvider(), _RecordingProvider()
+    with pytest.raises(mf.UnknownSideVocabularyError):
+        wf.register_mode_a_origin(
+            wf.WalkForwardLedger(str(tmp_path / "wf")),
+            wf.ExposureRegistry(str(tmp_path / "exp")),
+            corpus_id="c", fitting_rule="training_quantile(0.90)", fold=_mode_a_fold(),
+            train_observations_provider=train, test_observations_provider=test,
+            floors={}, sidedness=bogus, econ_floor=None,
+        )
+    assert train.called is False, "training corpus was read before the direction was validated"
+    assert test.called is False, "validation window was revealed before the direction was validated"
+
+
+@pytest.mark.parametrize("bad_unit", [None, "percent", "legacy_percent"])
+def test_mode_a_refuses_bad_training_units_before_fitting_and_before_the_validation_reveal(tmp_path, bad_unit):
+    """B: training observations prove their unit BEFORE `fit_training_quantile` consumes a value --
+    a quantile fitted over mixed units is a threshold in no unit at all, and would then be frozen
+    into the spec. The validation window must still be unread when this fails."""
+    train = _RecordingProvider([_obs(0.25, "2026-06-01", unit=bad_unit)])
+    test = _RecordingProvider([_obs(5.0, "2026-06-02")])
+    fitted: list = []
+    original = wf.fit_training_quantile
+    wf.fit_training_quantile = lambda values, q: fitted.append(values) or original(values, q)
+    try:
+        with pytest.raises(mf.UnitMismatchError):
+            wf.register_mode_a_origin(
+                wf.WalkForwardLedger(str(tmp_path / "wf")),
+                wf.ExposureRegistry(str(tmp_path / "exp")),
+                corpus_id="c", fitting_rule="training_quantile(0.90)", fold=_mode_a_fold(),
+                train_observations_provider=train, test_observations_provider=test,
+                floors={}, sidedness="long", econ_floor=None,
+            )
+    finally:
+        wf.fit_training_quantile = original
+    assert train.called is True, "the training window is legitimately read"
+    assert fitted == [], "the fit consumed values whose unit was never proved"
+    assert test.called is False, "the validation window was revealed despite a malformed train half"
+
+
+def test_mode_a_canonical_path_preserves_train_then_freeze_then_reveal_order(tmp_path):
+    """C: the freeze-order guarantee is untouched -- the validation window is revealed only after
+    the training half has been read, proved and fitted."""
+    order: list[str] = []
+
+    def train():
+        order.append("train")
+        return [_obs(float(i), "2026-06-01") for i in range(1, 6)]
+
+    def test():
+        order.append("test")
+        return [_obs(5.0, "2026-06-02")]
+
+    row = wf.register_mode_a_origin(
+        wf.WalkForwardLedger(str(tmp_path / "wf")),
+        wf.ExposureRegistry(str(tmp_path / "exp")),
+        corpus_id="c", fitting_rule="training_quantile(0.90)", fold=_mode_a_fold(),
+        train_observations_provider=train, test_observations_provider=test,
+        floors={}, sidedness="short", econ_floor=None,
+    )
+    assert order == ["train", "test"]
+    assert row["realized_fitted_value"] is not None
+    assert row["spec_hash_recorded_at"] <= row["validation_revealed_at"]
+    assert row["unit"] == mf.OUTCOME_UNIT
+
+
+# --- the sealed evaluator refuses before any protected shard read --------------------------------
+
+
+class _SpyAccessor:
+    """Records every protected shard read. If `read_snapshot_rows` is ever reached, the boundary
+    failed too late."""
+
+    def __init__(self) -> None:
+        self.reads: list[str] = []
+
+    def read_snapshot_rows(self, dataset_id: str) -> list[dict]:
+        self.reads.append(dataset_id)
+        return []
+
+
+def _sealed_spec(**overrides) -> dict:
+    spec = {
+        "family_root_id": "f" * 16,
+        "spec_hash": "s" * 16,
+        "sidedness": "long",
+        "econ_floor": _bps_floor(2.0),
+        "registered_at": "2026-08-01T00:00:00.000000Z",
+        "sealed_pass_rule_hash": mse.sealed_pass_rule_hash(),
+    }
+    spec.update(overrides)
+    return spec
+
+
+@pytest.mark.parametrize("bogus", ["buy", "sell", "SHORT", "flat", ""])
+def test_sealed_refuses_an_invalid_direction_before_reading_any_shard(tmp_path, bogus):
+    """D: knowable from the call arguments, so the shard is never opened to discover it.
+
+    ``""`` is caught one step earlier, by the pre-existing spec-completeness check (an empty
+    sidedness IS an incomplete registered spec) -- a different exception, the same invariant, and
+    still before any shard read. Both are accepted; the assertion that matters is `reads == []`."""
+    accessor = _SpyAccessor()
+    with pytest.raises((mf.UnknownSideVocabularyError, mse.SealedEvaluationRefusedError)):
+        mse.evaluate_sealed_verdict(
+            mse.GraduationLedger(str(tmp_path / "grad")),
+            mse.vault.VaultShardLedger(str(tmp_path / "shard")),
+            mse.vault.VaultUniverseLedger(str(tmp_path / "uni")),
+            accessor,
+            candidate_spec=_sealed_spec(sidedness=bogus),
+            dataset_id="ds-never-read",
+            observations=[_obs(10.0, "2026-06-01")],
+        )
+    assert accessor.reads == [], "a sealed shard was read before the direction was validated"
+
+
+@pytest.mark.parametrize("bad_unit", [None, "percent", "legacy_percent"])
+def test_sealed_refuses_bad_observation_units_before_reading_any_shard(tmp_path, bad_unit):
+    """E: likewise for units -- both facts are in the call arguments; the shard is single-shot,
+    protected evidence and must not be opened to discover a caller's typo."""
+    accessor = _SpyAccessor()
+    with pytest.raises(mf.UnitMismatchError):
+        mse.evaluate_sealed_verdict(
+            mse.GraduationLedger(str(tmp_path / "grad")),
+            mse.vault.VaultShardLedger(str(tmp_path / "shard")),
+            mse.vault.VaultUniverseLedger(str(tmp_path / "uni")),
+            accessor,
+            candidate_spec=_sealed_spec(),
+            dataset_id="ds-never-read",
+            observations=[_obs(0.25, "2026-06-01", unit=bad_unit)],
+        )
+    assert accessor.reads == [], "a sealed shard was read before the observation units were proved"
+
+
+# --- Scout anchor unit provenance ----------------------------------------------------------------
+
+
+def _anchor(value: float, session: str, *, unit: str | None = mf.OUTCOME_UNIT, member: bool = True) -> dict:
+    row = {"session_date": session, "symbol": "AAA", "feature_value": 1.0 if member else -1.0,
+           "outcome_bps": value, "tod_bucket": "mid", "fallback_frac": 0.1}
+    if unit is not None:
+        row["outcome_unit"] = unit
+    return row
+
+
+def _screen(anchors: list[dict]) -> dict:
+    return scout.screen_candidate(
+        feature_name="cumulative_delta", transform="threshold", params={"op": "ge", "value": 0.0},
+        sidedness=None, horizon_key="trades_20", econ_floor=_bps_floor(2.0),
+        anchors=anchors, family_id="provenance-test", n_variants_tried=1,
+    )
+
+
+def _canonical_anchors() -> list[dict]:
+    rows = []
+    for session in ("2026-06-01", "2026-06-02"):
+        for i in range(8):
+            rows.append(_anchor(5.0 + 0.01 * i, session))
+            rows.append(_anchor(0.01 * i, session, member=False))
+    return rows
+
+
+def test_scout_accepts_anchors_whose_unit_provenance_is_canonical():
+    """F: the ordinary path -- every anchor declares the canonical unit, screening proceeds."""
+    result = _screen(_canonical_anchors())
+    assert result["screen_result"]["effect_bps"] == pytest.approx(5.0, abs=0.01)
+    assert result["decision"] in scout.CLOSED_DECISIONS
+
+
+@pytest.mark.parametrize("bad_unit", [None, "percent", "legacy_percent", "bps"])
+def test_scout_refuses_an_anchor_whose_unit_is_missing_or_wrong(bad_unit):
+    """G/H: a single anchor without canonical provenance refuses the whole screen. `outcome_bps`
+    being the key name proves nothing about what is inside it."""
+    anchors = _canonical_anchors()
+    anchors[3] = _anchor(5.0, "2026-06-01", unit=bad_unit)
+    with pytest.raises(mf.UnitMismatchError):
+        _screen(anchors)
+
+
+def test_scout_refuses_mixed_units_across_anchors():
+    """I: canonical + percent in one pool produces a number in neither unit."""
+    anchors = _canonical_anchors() + [_anchor(0.05, "2026-06-02", unit="percent")]
+    with pytest.raises(mf.UnitMismatchError):
+        _screen(anchors)
+
+
+def test_scout_unit_provenance_comes_from_the_anchors_not_from_a_hardcoded_constant():
+    """The invariant behind F-I: the economic gate's unit is the one the anchors declared and
+    `require_canonical_anchor_units` proved, never a literal `screen_candidate` supplies itself.
+    Proved by construction -- an anchor set that declares nothing cannot be screened at all."""
+    with pytest.raises(mf.UnitMismatchError):
+        _screen([_anchor(5.0, "2026-06-01", unit=None)] * 4)
+
+
+def test_unsided_scout_exploration_remains_legal():
+    """J: Scout is discovery. An unsided screen is a first-class, supported result."""
+    result = _screen(_canonical_anchors())
+    assert result["decision"] != "killed_direction"
+    spec = scout.build_candidate_spec_fields(
+        feature_name="cumulative_delta", transform="threshold", params={"op": "ge", "value": 0.0},
+        structure_context_kind="none", horizon_key="trades_20", sidedness=None, fitting_rule=None,
+        family_median_spread_bps=1.5, corpus_manifest=[], grid_version=1,
+    )
+    assert spec["outcome"]["sidedness"] is None
+
+
+# --- the direction-freeze contract ----------------------------------------------------------------
+
+
+def test_an_unsided_sequence_receives_no_walkforward_survivor_credit():
+    """K: choosing long/short from Scout's exposed sign is discovery-derived. A sequence that never
+    froze one could still have its direction picked after the OOS windows were seen."""
+    verdict = wf.sequence_verdict(
+        _folds(10.0), sidedness=None, econ_floor=_bps_floor(2.0), voided=False
+    )
+    assert verdict["refused"] is True
+    assert "unsided" in verdict["reason"]
+    assert "verdict" not in verdict
+
+
+@pytest.mark.parametrize("direction", ["long", "short"])
+def test_a_direction_frozen_before_the_oos_reveal_proceeds_normally(direction):
+    """L: once frozen, either direction survives on identical terms."""
+    verdict = wf.sequence_verdict(
+        _folds(10.0), sidedness=direction, econ_floor=_bps_floor(2.0), voided=False
+    )
+    assert verdict["refused"] is False
+    assert verdict["verdict"] == wf.WF_VERDICT_SURVIVOR
+
+
+def test_a_direction_frozen_after_exposure_cannot_earn_historical_oos_credit(tmp_path):
+    """M: proved through the REAL exposure registry, not a fabricated OOS. `sidedness` is part of
+    the frozen spec, so choosing a direction re-keys the spec and stamps a NEW `registered_at`; if
+    the window was already exposed at that instant, `classify_evidence_class` demotes it to
+    diagnostic -- and diagnostic folds are ineligible for survivor credit."""
+    registry = wf.ExposureRegistry(str(tmp_path / "exp"))
+    window = "2026-06-10"
+    registry.log_exposure(corpus_id="c", window=window, surface="scout_screen",
+                          logged_at="2026-08-01T00:00:00.000000Z")
+
+    before = wf.classify_evidence_class(
+        registry, corpus_id="c", window_sessions=[window],
+        registered_at="2026-07-01T00:00:00.000000Z",   # spec frozen BEFORE the exposure
+    )
+    after = wf.classify_evidence_class(
+        registry, corpus_id="c", window_sessions=[window],
+        registered_at="2026-08-02T00:00:00.000000Z",   # direction chosen AFTER seeing the window
+    )
+    assert before == wf.EVIDENCE_CLASS_HISTORICAL_OOS
+    assert after == wf.EVIDENCE_CLASS_HISTORICAL_EXPOSED_DIAGNOSTIC
+
+    # ... and a diagnostic fold earns no survivor credit, so the post-hoc direction is worthless.
+    diagnostic = [{**f, "evidence_class": after} for f in _folds(10.0)]
+    verdict = wf.sequence_verdict(diagnostic, sidedness="long", econ_floor=_bps_floor(2.0), voided=False)
+    assert verdict.get("verdict") != wf.WF_VERDICT_SURVIVOR
+
+
+# --- family-aware label quality --------------------------------------------------------------------
+
+
+def test_the_fallback_caveat_is_scoped_to_aggressor_derived_families_only():
+    """N: `fallback_frac` measures how many buy/sell labels were tick-test INFERENCES. F-FLOW and
+    F-RESPONSE read that label; F-LIQUIDITY never reads `side` at all, so the caveat does not
+    degrade quote_imbalance, microprice or spread_change."""
+    for feature in ("cumulative_delta", "failed_aggression_score", "divergence_at_level_bearish"):
+        assert feature in scout.AGGRESSOR_DERIVED_FEATURES, feature
+        assert scout.FEATURE_FAMILY_OF[feature] in ("F-FLOW", "F-RESPONSE")
+
+    for feature in ("quote_imbalance", "microprice", "spread_change_20t", "spread_change_100t"):
+        assert feature not in scout.AGGRESSOR_DERIVED_FEATURES, feature
+        assert scout.FEATURE_FAMILY_OF[feature] == "F-LIQUIDITY"

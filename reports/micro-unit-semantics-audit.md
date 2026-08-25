@@ -314,8 +314,16 @@ magnitude is an order of magnitude too small to clear the quoted-spread cost pro
    been superseded by valid ones that reach the same verdict.
 3. **On the exploratory corpus, none of the six reference candidates is economically
    interesting.** That is a statement about a 12-symbol-day, 11-session, 3.0-session-equivalent
-   corpus whose aggressor labels are 29–83% tick-test inferences — it is a screening result, not
-   a finding about markets.
+   corpus — a screening result, not a finding about markets.
+
+   **Corrected in the contract pass:** an earlier draft of this line attached the "29–83%
+   tick-test inferences" caveat to all six candidates. That overgeneralized. `fallback_frac`
+   measures aggressor-label quality, and only the **aggressor-derived** families read that label
+   (`scout.AGGRESSOR_DERIVED_FEATURES`). So it is a material caveat for `cumulative_delta` and
+   `failed_aggression_score` (F-FLOW / F-RESPONSE) — four of the six trials — and **not** for
+   `quote_imbalance`, which is F-LIQUIDITY and never reads `side` at all. The `quote_imbalance`
+   result (p at the permutation floor, 0.146 bps against a 1.526 bps floor) does not inherit the
+   label-quality caveat; it is limited by corpus SIZE, not by aggressor inference.
 4. **Nothing here is a profitability claim, and `econ_interesting` is not one either.** Clearing
    the spread proxy is necessary and very far from sufficient; profitability needs an execution
    model this era does not build (§5.5's three-concept table).
@@ -543,3 +551,137 @@ The 105-session walk-forward requirement is untouched: `GET .../walkforward` sti
    per-row served unit.
 2. **TR-33 collision**: r12's vault ruling already owned TR-33; the r13 commit added a second
    TR-33. Renumbered to TR-34, with TR-35 added for the completion traps.
+
+---
+---
+
+# Part 5 — r13 contract pass (2026-08-25): fail-closed boundaries + direction freeze
+
+Four remaining gaps. Three were real as described; one was **partly disproved** and only its
+genuine half was fixed. No constant, threshold, geometry or gate changed.
+
+## 31. Root cause A — Mode A fitted before it validated
+
+`register_mode_a_origin` never called `validate_candidate_direction`, and `sidedness` is one of
+`spec_fields` — so an invalid vocabulary would be hashed into `spec_hash` and written to a
+permanent ledger row. Worse, `fit_training_quantile([o["value"] for o in train_observations], q)`
+consumed the training values before any unit check; only the TEST observations were validated, and
+only at the end via `summarize_fold_observations`.
+
+**Call order, before → after:**
+
+| before | after |
+|---|---|
+| `parse_fitting_rule` | **`validate_candidate_direction(sidedness)`** |
+| `train_observations_provider()` | `parse_fitting_rule` |
+| `fit_training_quantile(...)` | `train_observations_provider()` |
+| freeze `spec_hash` | **`require_canonical_observation_units(train)`** |
+| `test_observations_provider()` | `fit_training_quantile(...)` |
+| `summarize_fold_observations(test)` | freeze `spec_hash` |
+| | `test_observations_provider()` |
+| | **`require_canonical_observation_units(test)`** |
+| | `summarize_fold_observations(test)` |
+
+The freeze-order guarantee is untouched: both new checks sit strictly inside the training half, so
+train → fit → freeze → reveal still holds (proved by an ordering test).
+
+## 32. Root cause B — the sealed evaluator failed too late
+
+Invalid direction and non-canonical units *did* fail — but at `:425` and `:419`, after
+`build_vault_state` (`:375`) and **`accessor.read_snapshot_rows` (`:406`)** had already read
+protected shard data. Both facts are knowable from the call arguments alone.
+
+**Validated now, before any shard read** (in order): `family_root_id` present → spec completeness
+(`spec_hash`/`sidedness`/`registered_at`) → no caller `floors` override → recorded rule hash matches
+→ **`validate_candidate_direction(sidedness)`** → **`require_canonical_observation_units(observations)`**
+→ *then* `build_vault_state` → assignment/exposure/family binding → `read_snapshot_rows`.
+
+No vault identity, rule-hash, assignment or exposure check was weakened; all still run on every
+call that gets past that point. Proved with a spy accessor asserting `reads == []`.
+
+## 33. Root cause C — Scout asserted its own unit provenance
+
+Anchors carried `outcome_bps` with **no unit**, and `screen_candidate` passed `mf.OUTCOME_UNIT` to
+the gate as a literal — so the provenance existed only because the consumer claimed it, and the
+key's *name* proved nothing about its contents.
+
+**Anchor schema now** (all four extraction paths):
+
+```python
+{"dataset_id", "symbol", "session_date", "anchor_at", "trade_index",
+ "feature_value", "outcome_bps": outcome["mid"]["return_bps"],
+ "outcome_unit": outcome["mid"]["unit"],      # read OFF the outcome row
+ "tod_bucket", "fallback_frac"}
+```
+
+`require_canonical_anchor_units(anchors)` runs in `screen_candidate` before any pooling,
+permutation or gate; the economic gate then reads `anchors[0]["outcome_unit"]` — the proved value —
+never a module literal. Missing, unknown, percent, legacy and MIXED all refuse.
+
+## 34. Root cause D — direction freeze: two thirds of this concern was already handled
+
+**Disproved, with evidence — no fix made:**
+
+- *Sealed credit for an unsided candidate.* Already impossible:
+  `if not (spec_hash and sidedness and spec_registered_at): raise` — `sidedness=None` is falsy and
+  the sealed evaluation is refused for spec incompleteness.
+- *Post-hoc direction selection earning OOS credit.* Already impossible: `sidedness` is part of the
+  frozen `spec_fields`, so changing it re-keys `spec_hash` and stamps a new `registered_at`; then
+  `classify_evidence_class` returns `historical_exposed_diagnostic` iff any window in the fold was
+  exposed before that instant. A direction chosen after seeing the window yields diagnostic
+  evidence, which earns zero graduation credit. Proved against the **real** exposure registry, not
+  a fabricated OOS.
+
+**Real, and fixed:** `sequence_verdict` granted `walkforward_survivor` to a sequence carrying
+`sidedness=None` (verified empirically before the fix). It now refuses. That is the correct and
+only place — `micro_graduation.evaluate_walkforward_survivor_transition` delegates the entire
+predicate to `sequence_verdict` and converts a refusal into a refused transition, so it is the
+single door to survivor credit.
+
+**Ordering note:** the gate is checked *after* the sufficient-folds floor. With zero ledgered folds
+the sidedness read off those rows is *unknown*, not "unsided", and `0 < 3 sufficient folds` is the
+honest answer there.
+
+**The contract:** `exposed Scout diagnostic → choose long|short from discovery evidence only →
+freeze in the registered spec → ONLY THEN reveal/evaluate OOS windows → sealed after that`.
+Choosing the direction from Scout's exposed sign **is allowed** — Scout is discovery evidence — and
+Scout itself stays legally unsided.
+
+## 35. Root cause E — an overgeneralized label-quality caveat (documentation only)
+
+The **code was already family-aware**: `scout.AGGRESSOR_DERIVED_FEATURES` carries the comment
+*"F-FLOW and F-RESPONSE are derived from the engine's aggressor SIDE classification; F-LIQUIDITY
+(quote imbalance, microprice, spread change) is not — it never reads `side` at all."* No formula
+was touched.
+
+What overgeneralized was my own wording — the readiness `label_quality.note` and §17 of this
+report attached the 29–83% fallback caveat to the whole corpus and all six candidates.
+
+| aggressor-derived (caveat applies) | not aggressor-derived (caveat does NOT apply) |
+|---|---|
+| F-FLOW: `cumulative_delta`, `rolling_imbalance_*`, `same_side_run_length`, `volume_burst_*`, `divergence_at_level_bearish` | F-LIQUIDITY: `quote_imbalance`, `microprice`, `spread_change_*` |
+| F-RESPONSE: `failed_aggression_score`, `absorption_score`, `impact_efficiency_*`, `efficiency_trend_*` | |
+
+So of the six real trials, the caveat bears on four (`cumulative_delta` ×2,
+`failed_aggression_score` ×2) and **not** on `quote_imbalance` ×2. The `quote_imbalance` result is
+limited by corpus **size**, not by aggressor inference. Readiness now serves `affected_families` /
+`unaffected_families` beside the note. The disclosure was made narrower and more accurate — never
+removed or weakened.
+
+## 36. Real corpus — no re-run, proved again
+
+All six frozen candidate specs still recompute **byte-identical** `candidate_id` and `spec_hash`.
+The production Scout numerical path for valid canonical anchors is unchanged: anchors gained a unit
+FIELD, the gate reads that field instead of a literal of the same value, and the direction
+validators pass for `sidedness: None`. `_observed_effect`, the block-permutation null and the kill
+ladder are untouched. The ledger stands at 18 rows; the six decisions are unchanged
+(3× `killed_null`, 1× `killed_insufficient_n`, 2× `killed_economic`, zero survivors). No redundant
+rows appended.
+
+## 37. Verification
+
+Full backend suite **3613 passed / 8 skipped / 0 failed** (`PYTEST_EXIT=0`); frontend
+`tsc --noEmit` exit 0. Invariants: no threshold, alpha, permutation count, concentration ceiling,
+sample floor, floor multiple, fold geometry, embargo, variant cap, feature formula, aggressor
+classifier, Referee module or PnL logic changed; `config_fingerprint` `08e471b10130e1e2`; exposure
+registry semantics unchanged; no append-only ledger rewritten; no sealed vault data consumed.

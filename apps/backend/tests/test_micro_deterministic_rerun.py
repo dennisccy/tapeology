@@ -59,6 +59,7 @@ import pytest
 
 from app.config import CONFIG
 from app.providers.base import QuoteEvent, Side, TradeEvent
+from app.research import micro_features as mf
 from app.research import micro_snapshots as ms
 from app.research import scout, scout_ledger
 from app.research import walkforward as wf
@@ -128,7 +129,7 @@ def _planted_effect_anchors(n_sessions=6, n_per_session=20, effect=3.0, seed=1):
             anchors.append(
                 {
                     "session_date": session_date, "symbol": "PG", "feature_value": feature_value,
-                    "outcome_bps": outcome, "tod_bucket": "mid", "fallback_frac": rng.random(),
+                    "outcome_bps": outcome, "outcome_unit": mf.OUTCOME_UNIT, "tod_bucket": "mid", "fallback_frac": rng.random(),
                 }
             )
     return anchors

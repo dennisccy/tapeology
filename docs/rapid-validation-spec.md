@@ -284,6 +284,49 @@
 > points. Each served row and decay-view row discloses its own unit, so no reader — and no column
 > header — can take 0.019 percent for 0.019 bps.
 > Detail → §0 Units, §4, §5.5, §6.6, §8.1. Traps → TR-34, TR-35.
+>
+> **r13 (contract pass, 2026-08-25) — every scientific boundary fails CLOSED, and discovery-derived
+> direction is frozen before OOS.** Four remaining gaps, all closed without changing any constant,
+> threshold, geometry or gate.
+>
+> **(1) Mode A fitted before it validated.** `register_mode_a_origin` neither validated `sidedness`
+> — which it hashes into `spec_hash` and writes to a permanent row — nor proved its TRAINING
+> observations' unit before `fit_training_quantile` consumed them. A quantile fitted over mixed
+> units is a threshold in no unit at all, and it was then frozen into the spec. Both checks now
+> precede the work they protect, inside the training half; the freeze order (train → fit → freeze →
+> ONLY THEN the validation reveal) is unchanged.
+>
+> **(2) The sealed evaluator failed too late.** An invalid direction or a wrongly-united
+> observation did fail — but only after `build_vault_state` and `accessor.read_snapshot_rows` had
+> already read protected shard data. Both facts are knowable from the call arguments alone, so both
+> are now checked BEFORE any shard read. No vault identity, rule-hash, assignment or exposure check
+> is weakened; they all still run on every call that gets past that point.
+>
+> **(3) Scout asserted its own unit provenance.** Anchors carried `outcome_bps` with no unit, and
+> `screen_candidate` passed the canonical unit to the economic gate as a literal — so the
+> provenance existed only because the consumer claimed it, and the key's NAME proved nothing about
+> its contents. Every extraction path now stamps `outcome_unit` read off the outcome row itself,
+> and `require_canonical_anchor_units` verifies it before any pooling, permutation or gate; missing,
+> unknown, percent, legacy and MIXED all refuse.
+>
+> **(4) The direction-freeze contract (§5.1, §6.6).** Scout may screen **unsided** — exploratory
+> discovery asks "is there an effect", not "which way do I trade" — and that stays legal. But
+> choosing `long` or `short` from Scout's exposed effect sign is **itself a discovery-derived
+> parameter**. That choice IS permitted (Scout is discovery evidence), on one condition: it must be
+> frozen into the registered spec BEFORE any out-of-sample window is revealed. The pipeline is
+> therefore:
+>
+> `exposed Scout diagnostic → choose long|short from discovery evidence only → freeze it in the
+> registered spec (re-keys spec_hash, stamps registered_at) → ONLY THEN reveal/evaluate
+> historical_oos windows → sealed only after that`.
+>
+> Enforced by two mechanisms that already existed plus one that did not: `sidedness` is part of the
+> frozen `spec_fields`, so changing it re-keys `spec_hash` and stamps a new `registered_at`;
+> `classify_evidence_class` (§6.7) then demotes any window already exposed at that instant to
+> `historical_exposed_diagnostic`, which earns zero graduation credit — so a post-hoc direction is
+> worthless by construction. **New:** `sequence_verdict` now refuses survivor credit outright to a
+> sequence carrying no frozen direction. (The sealed evaluator already refused an unsided spec via
+> its completeness check.) Detail → §5.1, §6.4, §6.6, §6.7, §8.1. Traps → TR-36.
 
 ---
 
@@ -591,7 +634,11 @@ anchor subsampling (every anchor at least one horizon apart within a session, se
 ### 5.4 Mandatory disclosures per screened candidate
 Session/symbol concentration (top-1 session share, top-1 symbol share); ToD-bucket slices
 (open/mid/close — the referee's buckets, reused); fallback-tercile stratification for any
-aggressor-derived feature (effect within low/mid/high `fallback_frac` terciles); the family's
+aggressor-derived feature (effect within low/mid/high `fallback_frac` terciles) — **the caveat is
+FAMILY-SCOPED (r13): F-FLOW and F-RESPONSE read the engine's aggressor side classification and
+carry it; F-LIQUIDITY (quote imbalance, microprice, spread change) never reads `side` at all and
+does not. A high corpus-wide `fallback_frac` is not by itself evidence that a F-LIQUIDITY result,
+or the corpus as a whole, is weak**; the family's
 best-of-N expected-max-under-null line (N = union variants tried; a DISCLOSURE, never a decision
 rule); `evidence_class` of the corpus screened.
 
@@ -1342,6 +1389,7 @@ boundary by its `observed_through`.
 | TR-32 live-progress composition (r11 §7.1) | Poll/observe any live progress transport (REST, CLI, UI, MCP) frequently enough that `chunks_done` advances by exactly one, and difference every served field against the deterministic operator-known plan ⇒ NO specific chunk's realized success/failure is recoverable with certainty · a coarse volume bucket TRANSITION across a single-chunk advance must not prove that chunk was `fetched` (running totals advance only on fetch) · bucketing the outcome counters is NOT sufficient (an exact 0→1 boundary still pins the first failure) · internal exact state and the TERMINAL TR-4 disclosed-failure list remain lawful |
 | TR-34 measurement semantics (r13 §0/§4/§5.5) | Price-scale invariance: $10.00→$10.05 and $100.00→$100.50 produce the IDENTICAL outcome (+50 bps), and $10.00→$10.05 vs $100.00→$100.05 produce DIFFERENT ones (+50 vs +5 bps) despite an identical dollar delta · rescaling both prices by any positive factor leaves the outcome unchanged · every `*_bps` magnitude reaching a gate is proved to be basis points at the Scout, walk-forward and sealed-evaluation stages · a floor that does not declare `bps` (including every pre-r13 floor) is refused, never silently compared · a direction outside `long|short` and an aggressor side outside `buy|sell` each RAISE, including on an unmeasured or truncated row, and a `short` candidate's outcome is the exact negation of the `long` one |
 | TR-35 sign-once + unit provenance (r13 completion §0/§4/§5.5/§6.6/§8.1) | A successful SHORT candidate (canonical effect POSITIVE) passes the walk-forward and sealed direction conditions exactly as a successful long one does, and a failed short (NEGATIVE) fails both · a side-relative positive short return survives percent→bps conversion, fold summary and pooled effect without becoming negative · opposite-direction detection is NEGATIVE for both directions · every public boundary (candidate registration, spec freeze, anchor extraction, screening, fold-spec registration, survivor evaluation) refuses `buy`/`sell`/`SHORT`/`Long`/`positive`/`negative`/`flat`/`""` while `None` stays legal · mixed-unit and missing-unit observations refuse BEFORE averaging, at the walk-forward and sealed boundaries alike · a percent effect against a bps floor refuses · a pre-r13 fold row serves as `legacy_percent` with its magnitude verbatim, is never displayed as bps, and is refused entry to any new r13 sequence verdict |
+| TR-36 fail-closed boundaries + direction freeze (r13 contract pass §5.1/§6.4/§6.6/§8.1) | Mode A refuses an invalid direction BEFORE either observation provider is called, and refuses missing/percent/mixed TRAINING units BEFORE `fit_training_quantile` consumes a value and BEFORE the validation window is revealed (proved with recording providers) · the sealed evaluator refuses an invalid direction and non-canonical observation units BEFORE `accessor.read_snapshot_rows` is reached (proved with a spy accessor) · every Scout anchor carries an `outcome_unit` read off the outcome row, and a missing/percent/legacy/MIXED anchor refuses the screen — the gate's unit is the anchors' proved one, never a literal the consumer supplies · an UNSIDED sequence receives no walk-forward survivor credit, while a direction frozen before the OOS reveal proceeds normally for `long` and `short` alike · a direction chosen AFTER a window's exposure earns `historical_exposed_diagnostic` from the real exposure registry, never `historical_oos` · the `fallback_frac` caveat is asserted only of F-FLOW/F-RESPONSE, never of F-LIQUIDITY |
 | TR-26 depletion revealing quote (r6 §3) | Price-change termination: `available_at` equals the first CHANGED-price quote, not the last same-price one · bound termination: `available_at` equals the bound-hitting quote · truncating immediately BEFORE the revealing quote makes the depletion value non-existent/unavailable, and including it makes the value appear deterministically |
 
 Plus the standing suite: engine golden trace + observer equivalence + frozen-default profile,

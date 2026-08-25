@@ -24,6 +24,7 @@ from fastapi.testclient import TestClient
 from app.config import CONFIG
 from app.main import app
 from app.providers.base import QuoteEvent, Side, TradeEvent
+from app.research import micro_features as mf
 from app.research import micro_join as mj
 from app.research import scout, scout_ledger
 from app.research.datasets import DatasetStore, parse_utc_epoch
@@ -84,7 +85,7 @@ def _autocorrelated_null_anchors(meta_seed: int, n_sessions: int = 15, n_per_ses
             anchors.append(
                 {
                     "session_date": session_date, "symbol": "PG", "feature_value": feature,
-                    "outcome_bps": outcome, "tod_bucket": "mid", "fallback_frac": rng.random(),
+                    "outcome_bps": outcome, "outcome_unit": mf.OUTCOME_UNIT, "tod_bucket": "mid", "fallback_frac": rng.random(),
                 }
             )
     return anchors
@@ -287,7 +288,7 @@ def _planted_effect_anchors(n_sessions=6, n_per_session=20, effect=3.0, seed=1):
             anchors.append(
                 {
                     "session_date": session_date, "symbol": "PG", "feature_value": feature_value,
-                    "outcome_bps": outcome, "tod_bucket": "mid", "fallback_frac": rng.random(),
+                    "outcome_bps": outcome, "outcome_unit": mf.OUTCOME_UNIT, "tod_bucket": "mid", "fallback_frac": rng.random(),
                 }
             )
     return anchors
@@ -318,7 +319,7 @@ def test_screen_candidate_kills_null_on_an_unrelated_feature():
             anchors.append(
                 {
                     "session_date": session_date, "symbol": "PG", "feature_value": rng.gauss(0, 1),
-                    "outcome_bps": rng.gauss(0, 1), "tod_bucket": "mid", "fallback_frac": rng.random(),
+                    "outcome_bps": rng.gauss(0, 1), "outcome_unit": mf.OUTCOME_UNIT, "tod_bucket": "mid", "fallback_frac": rng.random(),
                 }
             )
     result = scout.screen_candidate(
@@ -372,7 +373,7 @@ def test_screen_candidate_kills_concentration_when_the_effect_is_symbol_skewed()
             anchors.append(
                 {
                     "session_date": session_date, "symbol": symbol, "feature_value": feature_value,
-                    "outcome_bps": outcome, "tod_bucket": "mid", "fallback_frac": rng.random(),
+                    "outcome_bps": outcome, "outcome_unit": mf.OUTCOME_UNIT, "tod_bucket": "mid", "fallback_frac": rng.random(),
                 }
             )
     result = scout.screen_candidate(
@@ -406,16 +407,16 @@ def test_screen_candidate_kills_fragile_when_the_sign_depends_on_one_dominant_se
     anchors = []
     # session A (few candidate anchors): consistently mildly negative
     for i in range(8):
-        anchors.append({"session_date": "A", "symbol": "PG", "feature_value": 1.0, "outcome_bps": -0.2})
-        anchors.append({"session_date": "A", "symbol": "PG", "feature_value": -1.0, "outcome_bps": 0.0})
+        anchors.append({"session_date": "A", "symbol": "PG", "feature_value": 1.0, "outcome_bps": -0.2, "outcome_unit": mf.OUTCOME_UNIT})
+        anchors.append({"session_date": "A", "symbol": "PG", "feature_value": -1.0, "outcome_bps": 0.0, "outcome_unit": mf.OUTCOME_UNIT})
     # session B (the MOST candidate anchors -- "biggest"): strongly positive
     for i in range(12):
-        anchors.append({"session_date": "B", "symbol": "PG", "feature_value": 1.0, "outcome_bps": 2.0})
-        anchors.append({"session_date": "B", "symbol": "PG", "feature_value": -1.0, "outcome_bps": 0.0})
+        anchors.append({"session_date": "B", "symbol": "PG", "feature_value": 1.0, "outcome_bps": 2.0, "outcome_unit": mf.OUTCOME_UNIT})
+        anchors.append({"session_date": "B", "symbol": "PG", "feature_value": -1.0, "outcome_bps": 0.0, "outcome_unit": mf.OUTCOME_UNIT})
     # session C (few candidate anchors): consistently mildly negative, like A
     for i in range(8):
-        anchors.append({"session_date": "C", "symbol": "PG", "feature_value": 1.0, "outcome_bps": -0.2})
-        anchors.append({"session_date": "C", "symbol": "PG", "feature_value": -1.0, "outcome_bps": 0.0})
+        anchors.append({"session_date": "C", "symbol": "PG", "feature_value": 1.0, "outcome_bps": -0.2, "outcome_unit": mf.OUTCOME_UNIT})
+        anchors.append({"session_date": "C", "symbol": "PG", "feature_value": -1.0, "outcome_bps": 0.0, "outcome_unit": mf.OUTCOME_UNIT})
     for a in anchors:
         a["tod_bucket"] = "mid"
         a["fallback_frac"] = 0.4

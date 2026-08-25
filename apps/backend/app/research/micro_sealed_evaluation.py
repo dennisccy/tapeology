@@ -368,6 +368,18 @@ def evaluate_sealed_verdict(
             "assignment fails closed, never a pass",
         )
 
+    # --- r13 fail-closed ordering: MALFORMED SCIENTIFIC INPUT IS REJECTED BEFORE PROTECTED SHARD
+    # DATA IS TOUCHED. Both of these facts are already knowable from the call arguments alone -- the
+    # direction off `candidate_spec`, the units off `observations` -- so there is no reason to read
+    # a sealed shard's rows first. Before this, an invalid vocabulary or a percent-united
+    # observation still failed (inside `_derive_verdict`/`require_canonical_observation_units`), but
+    # only AFTER `build_vault_state` and `accessor.read_snapshot_rows` had already run. A sealed
+    # shard is single-shot, protected evidence; reading it to discover a caller typo is exactly the
+    # wrong order. Neither check weakens any vault identity, rule-hash, assignment or exposure
+    # check below -- they all still run, unchanged, on every call that gets past this point.
+    wf.mf.validate_candidate_direction(sidedness)
+    wf.require_canonical_observation_units(observations)
+
     # --- step 1 + step 3 (vault half): the shard must be genuinely EXPOSED and bound to this EXACT
     # family_root_id (never trust a caller's say-so -- the same confirmation the retired
     # record_sealed_evaluation used to perform, reused verbatim via the SAME build_vault_state call,

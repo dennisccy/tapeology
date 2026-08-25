@@ -39,6 +39,7 @@ import random
 
 import pytest
 
+from app.research import micro_features as mf
 from app.research import scout
 from app.research import walkforward as wf
 from app.research.micro_accessor import ExposureRegistry
@@ -69,7 +70,7 @@ def _build_synthetic_corpus(*, planted_effect_bps: float, seed_key: str) -> list
                 anchors.append(
                     {
                         "session_date": session_date, "symbol": symbol,
-                        "feature_value": feature_value, "outcome_bps": outcome_bps,
+                        "feature_value": feature_value, "outcome_bps": outcome_bps, "outcome_unit": mf.OUTCOME_UNIT,
                         "tod_bucket": "mid", "fallback_frac": 0.3,
                     }
                 )
