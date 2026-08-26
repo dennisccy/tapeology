@@ -5975,12 +5975,27 @@ function MicroReadinessSection({
                 </td>
               </tr>
               <tr className="border-b border-slate-900">
-                <td className="px-1.5 py-1 text-slate-500">Session-equivalents</td>
+                <td className="px-1.5 py-1 text-slate-500">
+                  Distinct session dates
+                  <span className="ml-1 text-[10px] text-slate-600">(fold-geometry unit)</span>
+                </td>
+                <td
+                  data-testid="micro-readiness-distinct-session-dates"
+                  className="px-1.5 py-1 text-right font-mono text-slate-300"
+                >
+                  {readiness.totals.distinct_session_dates}
+                </td>
+              </tr>
+              <tr className="border-b border-slate-900">
+                <td className="px-1.5 py-1 text-slate-500">
+                  Full-session equivalents
+                  <span className="ml-1 text-[10px] text-slate-600">(RTH coverage)</span>
+                </td>
                 <td
                   data-testid="micro-readiness-session-equivalents"
                   className="px-1.5 py-1 text-right font-mono text-slate-300"
                 >
-                  {readiness.totals.session_equivalents.toFixed(4)}
+                  {readiness.totals.full_session_equivalents.toFixed(4)}
                 </td>
               </tr>
               <tr>
@@ -6158,6 +6173,12 @@ function MicroReadinessSection({
 
       <div data-testid="micro-readiness-floors-block" className="mb-4">
         <h4 className="mb-2 text-xs font-semibold text-slate-400">Pilot-Study Floors</h4>
+        <p className="mb-2 text-[11px] text-slate-500">
+          Counted in DISTINCT SESSION DATES (spec §0), never in RTH coverage. A first fold needs
+          train + embargo + test contiguous dates; a walk-forward survivor verdict needs enough for
+          three sufficient folds. The older 40 + 20 = {readiness.study_floors[0]?.required_sessions}{" "}
+          arithmetic omits the embargo and never implied a fold could run.
+        </p>
         <div className="overflow-x-auto">
           <table
             data-testid="micro-readiness-floors-table"
@@ -6166,31 +6187,47 @@ function MicroReadinessSection({
             <thead>
               <tr className="border-b border-slate-800 text-left text-slate-500">
                 <th className="px-1.5 py-1">Study</th>
-                <th className="px-1.5 py-1">Floor</th>
-                <th className="px-1.5 py-1 text-right">Required sessions</th>
-                <th className="px-1.5 py-1 text-right">Available sessions</th>
-                <th className="px-1.5 py-1">Status</th>
+                <th className="px-1.5 py-1 text-right">Session dates</th>
+                <th className="px-1.5 py-1 text-right">First fold needs</th>
+                <th className="px-1.5 py-1 text-right">Survivor needs</th>
+                <th className="px-1.5 py-1 text-right">Folds</th>
+                <th className="px-1.5 py-1">First fold</th>
+                <th className="px-1.5 py-1">Survivor</th>
               </tr>
             </thead>
             <tbody data-testid="micro-readiness-floor-rows">
               {readiness.study_floors.map((floor) => (
                 <tr key={floor.study_id} className="border-b border-slate-900">
                   <td className="px-1.5 py-1 text-slate-300">{floor.study_id}</td>
-                  <td className="px-1.5 py-1 text-slate-400">{floor.floor_name}</td>
                   <td className="px-1.5 py-1 text-right font-mono text-slate-300">
-                    {floor.required_sessions}
+                    {floor.available_session_dates}
                   </td>
                   <td className="px-1.5 py-1 text-right font-mono text-slate-300">
-                    {floor.available_sessions}
+                    {floor.first_fold_min_session_dates}
+                  </td>
+                  <td className="px-1.5 py-1 text-right font-mono text-slate-300">
+                    {floor.survivor_min_session_dates}
+                  </td>
+                  <td className="px-1.5 py-1 text-right font-mono text-slate-300">
+                    {floor.folds_constructible}
                   </td>
                   <td
                     className={
-                      floor.status === "floor_met"
+                      floor.first_fold_status === "floor_met"
                         ? "px-1.5 py-1 text-emerald-400"
                         : "px-1.5 py-1 text-amber-300"
                     }
                   >
-                    {floor.status}
+                    {floor.first_fold_status}
+                  </td>
+                  <td
+                    className={
+                      floor.survivor_status === "floor_met"
+                        ? "px-1.5 py-1 text-emerald-400"
+                        : "px-1.5 py-1 text-amber-300"
+                    }
+                  >
+                    {floor.survivor_status}
                   </td>
                 </tr>
               ))}

@@ -88,6 +88,7 @@ from ..config import CONFIG, Config
 from . import micro_features as mf
 from . import micro_join as mj
 from . import walkforward as wf
+from .dataset_index import indexed_dataset_store
 from .datasets import DatasetNotFound, DatasetStore, parse_utc_epoch
 from .micro_accessor import MicroAccessor
 from .micro_snapshots import (
@@ -2178,7 +2179,9 @@ def main() -> int:
     args = parser.parse_args()
 
     config = CONFIG
-    dataset_store = DatasetStore(config.dataset_dir_resolved())
+    # r14 (performance, byte-identical): the Scout CLI enumerates the whole corpus to build its
+    # manifest -- see `dataset_index.resolve_dataset_index_db_path`.
+    dataset_store = indexed_dataset_store(config.dataset_dir_resolved(), DatasetStore)
     snapshots_dir = resolve_micro_snapshots_dir(config.dataset_dir_resolved())
     ledger_dir = resolve_scout_ledger_dir(config.dataset_dir_resolved())
 

@@ -98,6 +98,7 @@ from zoneinfo import ZoneInfo
 from ..config import CONFIG, Config
 from ..providers.adapters.base import HistoricalWindow, RawQuote, RawTrade, split_window
 from ..providers.base import QuoteEvent, TradeEvent
+from .dataset_index import indexed_dataset_store
 from .datasets import (
     DatasetAlreadyRegistered,
     DatasetStore,
@@ -1063,7 +1064,9 @@ def main() -> int:
     from .routes import get_bar_index, get_registry, get_study_market_adapter
 
     dataset_dir = CONFIG.dataset_dir_resolved()
-    dataset_store = DatasetStore(dataset_dir)
+    # r14 (performance, byte-identical): the recorder's own store-first short-circuit calls
+    # `list()` per run over a corpus that will reach hundreds of GB.
+    dataset_store = indexed_dataset_store(dataset_dir, DatasetStore)
     checkpoint_store = RecorderCheckpointStore(resolve_tick_recorder_checkpoint_dir(dataset_dir))
     run_log_dir = resolve_tick_recorder_log_dir(dataset_dir)
     adapter = get_study_market_adapter()

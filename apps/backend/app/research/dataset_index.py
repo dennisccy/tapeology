@@ -34,6 +34,33 @@ import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
+
+
+import os  # noqa: E402 -- co-located with the resolver below, the module's only os use
+
+
+def resolve_dataset_index_db_path(dataset_dir_resolved: str) -> str:
+    """The ONE resolution of where this index lives: the ``TAPEOLOGY_DATASET_INDEX_DB`` env var if
+    set, else a ``dataset_index.db`` SIBLING of the resolved dataset directory (the
+    ``get_bar_index`` env-else-sibling shape).
+
+    r14: previously inlined in ``routes.get_dataset_store``, which meant it was the ONLY caller
+    that passed ``index_db_path`` at all -- every CLI and module-level ``DatasetStore(dir)``
+    silently took the full-verify path and re-hashed the whole corpus on every ``list()``. Owned
+    here (the module the index belongs to) so every caller lands on the SAME file rather than a
+    second index, and deliberately not a ``Config`` field (``config_fingerprint`` untouched)."""
+    override = os.environ.get("TAPEOLOGY_DATASET_INDEX_DB")
+    if override:
+        return override
+    return str(Path(dataset_dir_resolved).parent / "dataset_index.db")
+
+
+def indexed_dataset_store(dataset_dir_resolved: str, store_cls):
+    """``store_cls(dataset_dir, index_db_path=<resolved>)`` -- the one-liner every CLI entry point
+    uses instead of a bare construction. ``store_cls`` is injected rather than imported to keep
+    this module free of any dependency on ``datasets.py`` (which imports THIS module)."""
+    return store_cls(dataset_dir_resolved, index_db_path=resolve_dataset_index_db_path(dataset_dir_resolved))
+
 # Mirrors ``bar_index.py``'s ``_BUSY_TIMEOUT_MS`` (5000ms) — the identical brief writer-contention
 # tolerance a low-frequency metadata cache needs.
 _BUSY_TIMEOUT_MS = 5000

@@ -327,6 +327,84 @@
 > worthless by construction. **New:** `sequence_verdict` now refuses survivor credit outright to a
 > sequence carrying no frozen direction. (The sealed evaluator already refused an unsided spec via
 > its completeness check.) Detail → §5.1, §6.4, §6.6, §6.7, §8.1. Traps → TR-36.
+>
+> **Revision r14 (2026-08-26, owner ruling — the corpus lifecycle is completed: session-count
+> semantics, executable readiness floors, corpus-era freshness provenance, production exposure
+> logging, and the exploratory release path for HMAC-NOT-selected pool members).** A data-bottleneck
+> preflight ([`reports/data-bottleneck-preflight.md`](../reports/data-bottleneck-preflight.md))
+> found five contract gaps between "the corpus is too small" and "the corpus can be grown lawfully".
+> Nothing here re-keys a candidate: no `spec_fields` member changes, no constant is re-valued, and
+> `config_fingerprint` stays `08e471b10130e1e2`. Five changes:
+>
+> **(1) Session COUNT vs session COVERAGE (§0, §1).** A session IS an ET RTH trading date, and every
+> fold-geometry floor counts DISTINCT SESSION DATES. RTH coverage is a different quantity. The
+> preflight itself made the error it was auditing for, writing "the corpus is 3 sessions, not 11" —
+> the corpus has ELEVEN session dates and 3.0089 full-session equivalents of coverage, and both
+> statements are true about different things. Readiness now serves `distinct_session_dates` and
+> `full_session_equivalents` under those names, with a basis sentence, and neither is ever
+> substituted for the other. `distinct_sessions`/`session_equivalents` are retained at identical
+> values as their pre-r14 spellings.
+>
+> **(2) The 60-session floor never meant a fold could run (§1, §6.6).**
+> `WF_TRAIN_MIN_SESSIONS + WF_TEST_MIN_SESSIONS = 60` is arithmetic over two constants;
+> `DIAGNOSTIC_GEOMETRY` carries `embargo_sessions = 5`, so `build_folds` emits nothing until 65.
+> Verified: 60 → **0 folds**, 65 → 1, 105 → 3. A corpus could therefore read `floor_met` while being
+> unable to construct a single fold. Readiness now serves `first_fold_min_session_dates` (65) and
+> `survivor_min_session_dates` (105) beside the actual `folds_constructible` count, and the retained
+> 60 carries the basis token `train_plus_test_arithmetic_only`. **No floor is lowered and
+> `DIAGNOSTIC_GEOMETRY` is untouched** — the numbers were always these; only the reporting was
+> misleading.
+>
+> **(3) Corpus-era freshness provenance (§6.7).** An empty exposure registry meant two different
+> things — "a legacy corpus nobody initialized" and "a fresh era where genuinely nothing has been
+> served" — and `scout_candidate_walkforward_floor_check` had to fail closed on both, counting zero
+> eligible windows. The tempting workaround was to serve a handful of clean sessions purely to make
+> the registry non-empty, which destroys evidence to satisfy a predicate. Instead the registry gains
+> ONE new row kind: a **corpus-era registration** naming a `corpus_id`, an instant and the
+> operator's stated provenance basis. It names no window, so it can never make a window read as
+> exposed. **The invariant: empty exposure rows ALONE are never proof of freshness** — a corpus is
+> baseline-established iff it carries either an era registration or at least one genuine exposure
+> row. Anything else refuses.
+>
+> **(4) Production exposure logging (§6.7).** §6.7 has always said every read of a window's outcomes
+> appends an exposure entry, but `log_exposure` had no production caller outside r2 initialization,
+> so the registry was write-once and `historical_oos` rested on freeze-order alone. The tick
+> observation reader is now that boundary. Both purposes log — a TRAIN read exposes its window
+> exactly as a TEST read does, which is what makes a training read masquerading as a clean test read
+> structurally impossible — and a TEST read must prove `logged_at` is strictly after the spec's
+> `registered_at`. Logging is deduped per `(corpus_id, window)`: exposure is a boolean fact, and a
+> Mode A sequence re-reading one training window at every origin must not grow the ledger without
+> bound. r2 initialization is unchanged.
+>
+> **(5) The exploratory release path — a FOURTH shard state (§7.4, §7.5 point 7).** `sealed →
+> assigned → exposed` is reachable only by an HMAC-SELECTED member. A registered universe's
+> NOT-selected members (~75 % of any pool at `VAULT_SEAL_HEX_BELOW = 4`) had no lawful way out at
+> all, with two consequences proven against the real tranche (80 recorded / 21 selected / 59 not
+> selected): those 59 could never become ordinary evidence, and `_whole_pool_released_universe_ids`
+> could never become true, so the nonced rule could never be revealed and audited. §7.5 point 7
+> already authorizes the missing act — "a shard's identity becomes public ONLY when that shard is
+> actually **exposed for exploratory use** OR assigned to a candidate family" — and §7.2 already
+> defines whole-pool release over members "the shard ledger never individually tracked". This is
+> that implementation, not a new methodology.
+>
+> `exploratory_released` is a SIBLING terminal state, never a fourth step: never sealed, bound to no
+> family, consuming no single shot, and structurally incapable of satisfying `SEALED_PASS_RULE_V1`
+> condition 5. `release_unselected_shard` refuses on six grounds, each recomputed rather than
+> asserted: unregistered universe · a secret that does not match the universe's own committed
+> `vault_secret_commitment` · a pair outside `expected_recording_pairs()` · an HMAC that says
+> SELECTED · a dataset that already carries any shard row · and a release that would breach §7.2.2's
+> residual-uncertainty floor.
+>
+> **That last refusal is the non-obvious one and it binds hard.** Every release publicly discloses
+> one pool position as NOT selected, so releases are self-limiting: release *all* of them and the
+> unknown positions collapse onto exactly the still-hidden selected set, pinning every sealed
+> shard's identity by subtraction. **At least one unselected member must therefore remain withheld
+> as a decoy while any selected member is still sealed.** For the existing 80-pair tranche that
+> means at most 58 of the 59 are ever releasable while all 21 stay sealed. Whole-pool release
+> becomes reachable for the first time — but only after every selected member has itself been
+> exposed, which is what lifts the floor. `VAULT_SEAL_HEX_BELOW` is unchanged.
+>
+> Detail → §0, §1, §6.7, §7.4, §7.5. Traps → TR-37, TR-38, TR-39.
 
 ---
 
@@ -340,6 +418,14 @@
   **An absolute price difference is never a scientific magnitude** — it is not comparable between
   price levels, so it never enters an estimator, a pooled average, or a gate; it may be served
   only as an explicitly named diagnostic (`delta_price`). Shares are integer counts.
+- **Session COUNT vs session COVERAGE (r14).** A **session** is an ET RTH trading date, and every
+  fold-geometry floor in this spec is counted in **`distinct_session_dates`** — never in coverage.
+  RTH coverage is the separate, differently-named quantity **`full_session_equivalents`**
+  (RTH minutes covered ÷ 390). They are not interchangeable in either direction: 11 dates of
+  90-minute windows is eleven session dates AND 2.54 session-equivalents, and substituting either
+  number for the other either overstates the corpus or understates it against the floors. Both are
+  served, under those names, with the basis stated on the payload. Coverage is a corpus QUALITY
+  measure and is never compared against a session-date floor.
 - **Side vocabularies (r13).** Two closed, disjoint vocabularies, never interchangeable.
   **Aggressor side** — `buy | sell` — names who crossed the spread on a trade; it is the
   observer's domain. **Candidate direction** — `long | short` — names the hypothesis a registered
@@ -410,9 +496,9 @@
 | `SCOUT_SCREEN_ALPHA` | `0.05` | Descriptive screening level for kill/advance ranking — never a confirmatory claim |
 | `SCOUT_MAX_VARIANTS_PER_FAMILY` | `24` | Hard grid bound per (family, corpus), counted over the UNION of all grid versions ever run there |
 | `ECON_FLOOR_SPREAD_MULTIPLE` | `1.0` | The §5.5 economic-relevance floor = this multiple × the family's median quoted spread (bps) at its discovery anchors. **A research cost PROXY, not an execution or tradability model** — served with that sentence |
-| `WF_TRAIN_MIN_SESSIONS` | `40` | Fold-geometry floor |
-| `WF_TEST_MIN_SESSIONS` | `20` | Fold-geometry floor |
-| `WF_MIN_SUFFICIENT_FOLDS` | `3` | Below this, sequence-level refusal |
+| `WF_TRAIN_MIN_SESSIONS` | `40` | Fold-geometry floor, in DISTINCT SESSION DATES. **(r14) Their sum (60) is arithmetic, NOT a fold floor** — `build_folds` needs `train + embargo + test` contiguous dates, so under `DIAGNOSTIC_GEOMETRY` fold 0 needs **65** and 60 yields ZERO folds. Served as `train_plus_test_arithmetic_only` |
+| `WF_TEST_MIN_SESSIONS` | `20` | Fold-geometry floor, in DISTINCT SESSION DATES (see above) |
+| `WF_MIN_SUFFICIENT_FOLDS` | `3` | Below this, sequence-level refusal. **(r14)** The first count at which a `walkforward_survivor` verdict is reachable under `DIAGNOSTIC_GEOMETRY` is therefore `(40+5+20) + 2*20 = 105` session dates, served as `survivor_min_session_dates` |
 | `WF_FOLD_MIN_SIGNAL_SESSIONS` | `8` | Per-fold floor: validation sessions carrying ≥1 observation |
 | `WF_FOLD_MIN_OBSERVATIONS` | `30` | Per-fold floor |
 | `WF_FOLD_MIN_SYMBOLS` | `2` | Per-fold floor whenever symbol breadth is claimed |
@@ -755,6 +841,32 @@ direct file/sqlite reads are guard-banned (TR-3), so there is no unlogged read p
 registered after any logged serving of its validation window is auto-classed
 `historical_exposed_diagnostic` (TR-22) — the rule needs no judgment about who remembers what.
 
+**Corpus-era freshness provenance (r14).** An empty registry means two different things and must
+not answer the same way to both. The registry therefore carries a second row kind: a **corpus-era
+registration** `{record_kind: "corpus_era_registration", corpus_id, registered_at, provenance}`. It
+names NO window, so it can never make a window read as exposed and never suppresses the r2 seeding
+guard. **The invariant: empty exposure rows ALONE are never proof of freshness.** A corpus is
+baseline-established iff it carries either an era registration (explicitly fresh) or at least one
+genuine exposure row (legacy, r2-initialized); anything else fails closed and counts ZERO eligible
+windows. **Serving clean sessions purely to make a registry non-empty is forbidden** — it destroys
+evidence to satisfy a predicate.
+
+**The production write path (r14).** §6.7 has always required a read to append an entry; before r14
+`log_exposure` had no production caller outside r2 initialization, so `historical_oos` rested on
+freeze-order alone. The tick observation reader is now that boundary. **Both purposes log** — a
+TRAIN read exposes its window exactly as a TEST read does, which is what makes a training read
+masquerading as a clean test read structurally impossible — and a TEST read must prove its
+`logged_at` is strictly after the spec's `registered_at`. Entries are deduped per
+`(corpus_id, window)`: exposure is a boolean fact, and a Mode A sequence re-reading one training
+window at every origin must not grow an append-only ledger without bound.
+
+**A retention/availability probe is a SACRIFICIAL exposure (r14).** A tick fetch on a date READS
+that date's tape. Calling it "metadata only" because the bytes were discarded is a fiction the
+registry cannot check, and unknown exposure history is never "never exposed" (§7.8). A probe is
+therefore logged as a real exposure under its own surface, and that date is thereafter barred from
+every clean-OOS date rule. Probe a date already burned (a §7.2.1(f) screening session) where one
+will do.
+
 ### 6.8 Process labels: candidate-rule vs proposer-process evidence (r2)
 Every sequence carries a process label. `rule_process`: every generation, ranking, and fitting
 step inside the walk-forward was the frozen algorithmic rule — no human/proposer choice
@@ -1091,6 +1203,34 @@ root-family-level and single-shot**: a renamed or re-parameterized family comput
 root and can never treat the same shard as fresh, and a failed sealed verdict is a permanent
 root-family fact carried in every later export bundle (TR-12, TR-20).
 
+**The exploratory release path (r14) — a SIBLING terminal state, not a fourth step.** The sealed
+path above is reachable only by an HMAC-SELECTED member. §7.5 point 7's other disjunct — a shard
+"actually **exposed for exploratory use**" — applies to the pool's NOT-selected members, and is
+implemented as the terminal state `exploratory_released`:
+
+`unresolved pool member → exploratory_released` (append-only, one row, no transition back)
+
+Its refusals are recomputed at the transition, never asserted by the caller: the universe must be
+registered; the supplied secret must match that universe's own committed `vault_secret_commitment`;
+the pair must be a member of `expected_recording_pairs()`; **the HMAC must independently recompute
+to NOT SELECTED**; the dataset must carry no shard row at all (which is what stops a SEALED member
+taking the shortcut, and stops a double release); and the release must not breach §7.2.2's
+residual-uncertainty floor.
+
+A released row is **never sealed, bound to no family, consumes no single shot, and earns no sealed
+or blind credit** — `family_root_id` and `assigned_at` are permanently `null`, `sealed_at` is
+`null`, and `SEALED_PASS_RULE_V1` condition 5 is structurally unsatisfiable for it. It serves its
+symbol, session date and raw `content_checksum` (so the salted commitment verifies against it, r3
+point 2), plus an explicit `release_basis` and `sealed_credit: false`.
+
+**Releases are self-limiting, and this binds hard.** Each release publicly discloses one pool
+position as NOT selected. Release every unselected member and the unknown positions collapse onto
+exactly the still-hidden selected set, pinning every sealed shard by subtraction. §7.2.2's floor is
+therefore enforced at this transition: **at least one unselected member remains withheld as a decoy
+while any selected member is still sealed.** Whole-pool release (§7.2) becomes reachable — for the
+first time, since before r14 a ~25 %-sealed universe could never satisfy it at all — but only after
+every selected member has itself been exposed, which is what lifts the floor.
+
 ### 7.5 Sealed metadata minimization — OPAQUE pre-exposure (r3)
 While sealed, a shard serves only: a surrogate `shard_id`, its `universe_id`, a coarse size
 bucket (order of magnitude), a **salted** commitment, `sealed_at`, and the exposure state.
@@ -1390,6 +1530,9 @@ boundary by its `observed_through`.
 | TR-34 measurement semantics (r13 §0/§4/§5.5) | Price-scale invariance: $10.00→$10.05 and $100.00→$100.50 produce the IDENTICAL outcome (+50 bps), and $10.00→$10.05 vs $100.00→$100.05 produce DIFFERENT ones (+50 vs +5 bps) despite an identical dollar delta · rescaling both prices by any positive factor leaves the outcome unchanged · every `*_bps` magnitude reaching a gate is proved to be basis points at the Scout, walk-forward and sealed-evaluation stages · a floor that does not declare `bps` (including every pre-r13 floor) is refused, never silently compared · a direction outside `long|short` and an aggressor side outside `buy|sell` each RAISE, including on an unmeasured or truncated row, and a `short` candidate's outcome is the exact negation of the `long` one |
 | TR-35 sign-once + unit provenance (r13 completion §0/§4/§5.5/§6.6/§8.1) | A successful SHORT candidate (canonical effect POSITIVE) passes the walk-forward and sealed direction conditions exactly as a successful long one does, and a failed short (NEGATIVE) fails both · a side-relative positive short return survives percent→bps conversion, fold summary and pooled effect without becoming negative · opposite-direction detection is NEGATIVE for both directions · every public boundary (candidate registration, spec freeze, anchor extraction, screening, fold-spec registration, survivor evaluation) refuses `buy`/`sell`/`SHORT`/`Long`/`positive`/`negative`/`flat`/`""` while `None` stays legal · mixed-unit and missing-unit observations refuse BEFORE averaging, at the walk-forward and sealed boundaries alike · a percent effect against a bps floor refuses · a pre-r13 fold row serves as `legacy_percent` with its magnitude verbatim, is never displayed as bps, and is refused entry to any new r13 sequence verdict |
 | TR-36 fail-closed boundaries + direction freeze (r13 contract pass §5.1/§6.4/§6.6/§8.1) | Mode A refuses an invalid direction BEFORE either observation provider is called, and refuses missing/percent/mixed TRAINING units BEFORE `fit_training_quantile` consumes a value and BEFORE the validation window is revealed (proved with recording providers) · the sealed evaluator refuses an invalid direction and non-canonical observation units BEFORE `accessor.read_snapshot_rows` is reached (proved with a spy accessor) · every Scout anchor carries an `outcome_unit` read off the outcome row, and a missing/percent/legacy/MIXED anchor refuses the screen — the gate's unit is the anchors' proved one, never a literal the consumer supplies · an UNSIDED sequence receives no walk-forward survivor credit, while a direction frozen before the OOS reveal proceeds normally for `long` and `short` alike · a direction chosen AFTER a window's exposure earns `historical_exposed_diagnostic` from the real exposure registry, never `historical_oos` · the `fallback_frac` caveat is asserted only of F-FLOW/F-RESPONSE, never of F-LIQUIDITY |
+| TR-37 session-count semantics + executable readiness floors (r14 §0/§1/§6.6) | `distinct_session_dates` and `full_session_equivalents` are BOTH served, carry different values on a partial-window corpus, and neither is substituted for the other · `build_folds` at 60 session dates yields ZERO folds, at 65 yields exactly one (train 40 / embargo 5 / test 20), at 104 yields two and at 105 yields `WF_MIN_SUFFICIENT_FOLDS` · the readiness floor row serves `first_fold_min_session_dates=65`, `survivor_min_session_dates=105` and the ACTUAL `folds_constructible`, while the retained 60 carries the `train_plus_test_arithmetic_only` basis · no geometry constant moves and `config_fingerprint` is unchanged |
+| TR-38 corpus-era freshness + production exposure logging (r14 §6.7) | A legacy corpus with an empty registry fails closed and counts ZERO eligible windows · a corpus carrying an explicit era registration with zero exposure rows counts its unexposed windows honestly · an era registration can never make any window read as exposed, and never suppresses the r2 re-seed guard · a TEST read logs exposure strictly after the spec's `registered_at`, and refuses when it cannot prove that ordering · a window revealed once classifies `historical_exposed_diagnostic` for every later spec · a TRAIN read exposes its window identically, so no training read can later pass as a clean test read · re-reading one window five times appends ONE row, not five · a retention probe is logged as a real exposure and its date is barred from the clean-OOS set thereafter |
+| TR-39 exploratory release of NOT-selected pool members (r14 §7.4/§7.5 point 7/§7.2.2) | An HMAC-NOT-selected registered-pool member releases to `exploratory_released` and stops being withheld · an HMAC-SELECTED member is REFUSED that path · a dataset already carrying any shard row is refused, and a released row can afterwards be neither sealed nor assigned — no sealed/blind credit, no single shot consumed · a pair outside `expected_recording_pairs()` is refused · a secret not matching the universe's committed `vault_secret_commitment` is refused · releasing every unselected member is refused at the LAST one, leaving at least one decoy, so the hidden set is never determinable by subtraction · whole-pool release becomes reachable once every selected member is exposed, and the revealed rule recomputes exactly to the registered `rule_commitment` · `VAULT_SEAL_HEX_BELOW` is unchanged |
 | TR-26 depletion revealing quote (r6 §3) | Price-change termination: `available_at` equals the first CHANGED-price quote, not the last same-price one · bound termination: `available_at` equals the bound-hitting quote · truncating immediately BEFORE the revealing quote makes the depletion value non-existent/unavailable, and including it makes the value appear deterministically |
 
 Plus the standing suite: engine golden trace + observer equivalence + frozen-default profile,

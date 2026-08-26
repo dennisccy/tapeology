@@ -40,6 +40,7 @@ from ..config import CONFIG, Config
 from . import micro_features as mf
 from . import micro_observer as mo
 from . import vault
+from .dataset_index import indexed_dataset_store
 from .datasets import DatasetNotFound, DatasetStore
 from .micro_observer import MicroObserver, MicroObserverFailure
 
@@ -702,7 +703,10 @@ def main() -> int:
     args = parser.parse_args()
 
     config = CONFIG
-    dataset_store = DatasetStore(config.dataset_dir_resolved())
+    # r14 (performance, byte-identical): the snapshot-build CLI walks the WHOLE store, so a bare
+    # construction re-hashes every dataset on every `list()`. Indexed here; an index hit is only
+    # ever written from a value the full verifier itself produced.
+    dataset_store = indexed_dataset_store(config.dataset_dir_resolved(), DatasetStore)
     root_dir = resolve_micro_snapshots_dir(config.dataset_dir_resolved())
 
     dataset_ids = None if (args.all or not args.dataset_ids) else args.dataset_ids

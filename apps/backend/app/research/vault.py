@@ -267,6 +267,8 @@ __all__ = [
     "STATE_SEALED",
     "STATE_ASSIGNED",
     "STATE_EXPOSED",
+    "STATE_EXPLORATORY_RELEASED",
+    "RELEASE_BASIS_HMAC_NOT_SELECTED",
     "VaultUniverseNotRegisteredError",
     "VaultUniverseAlreadyRegisteredError",
     "CherryPickedBatchError",
@@ -275,6 +277,13 @@ __all__ = [
     "SealedShardWithheldError",
     "VaultLedgerCorruptionError",
     "DisclosedPoolPositionError",
+    "NotAPoolMemberError",
+    "SelectedShardReleaseRefusedError",
+    "ResidualPoolUncertaintyError",
+    "release_unselected_shard",
+    "pool_partition_disclosure_state",
+    "require_residual_pool_uncertainty",
+    "releasable_unselected_capacity",
     "resolve_vault_dir",
     "shard_ledger_for_dataset_dir",
     "universe_ledger_for_dataset_dir",
@@ -351,9 +360,47 @@ STATE_SEALED = "sealed"
 STATE_ASSIGNED = "assigned"
 STATE_EXPOSED = "exposed"
 
+# --- r14: the FOURTH state, and why it is not a fourth step of the same lifecycle -----------------
+#
+# `sealed -> assigned -> exposed` is the SEALED path: single-shot, root-family-bound, and the only
+# path that ever confers blind/historical-OOS credit. It is reachable only by an HMAC-SELECTED
+# member (`compute_seal` true), because `assign_shard` requires a currently-`sealed` row and
+# `seal_shard` is only ever called for a selected member.
+#
+# That left a genuine hole. A registered universe's HMAC-NOT-selected members -- roughly 75 % of any
+# pool at `VAULT_SEAL_HEX_BELOW = 4` -- are withheld by `unresolved_pool_universe_by_dataset_id`
+# (they carry no shard row at all, so rule-membership test (b) catches them) and had NO lawful way
+# out: `assign_shard` refuses a never-sealed dataset, and sealing one to unlock the path would be a
+# lie about the HMAC. Two consequences followed, both confirmed against the operator's own tranche
+# (80 recorded / 21 selected / 59 not selected): the 59 could never become ordinary evidence, and
+# `_whole_pool_released_universe_ids` could never become true, so the nonced rule could never be
+# revealed and audited.
+#
+# Spec §7.5 point 7 already authorizes the missing act, in two disjuncts: "A shard's identity
+# becomes public ONLY when that shard is actually **exposed for exploratory use** OR assigned to a
+# candidate family". The second disjunct was implemented; the first was not. §7.2 likewise defines
+# whole-pool release over "every member of the ORIGINAL registered pool -- **including members the
+# shard ledger never individually tracked**". This state completes that implementation.
+#
+# It is a SIBLING terminal state, never a step: an `exploratory_released` shard was never sealed,
+# is bound to no family, consumes no single shot, and can never satisfy `SEALED_PASS_RULE_V1`
+# condition 5 -- `micro_sealed_evaluation` requires `exposure_state == STATE_EXPOSED` AND a matching
+# `family_root_id`, and this row has neither. `assign_shard` (which requires `sealed`) and
+# `seal_shard` (which refuses a dataset that already carries any row) both refuse it in turn, so the
+# two paths cannot be crossed in either direction.
+STATE_EXPLORATORY_RELEASED = "exploratory_released"
+
+# The states at which a shard has genuinely LEFT the pool. Both are terminal and both stop the
+# withholding predicates -- one via the sealed path, one via the exploratory path.
+_RELEASED_STATES = (STATE_EXPOSED, STATE_EXPLORATORY_RELEASED)
+
 # The universe rule's two serving stages (module docstring's join-resistance part 4). A DIFFERENT
 # vocabulary from the shard lifecycle above on purpose: a universe has no lifecycle of its own --
 # its rule's disclosure is a pure function of whether every shard it owns has reached `exposed`.
+# r14: what an `exploratory_released` row is asserting -- served on the row so the claim travels
+# with the evidence rather than living only in this module's docstring.
+RELEASE_BASIS_HMAC_NOT_SELECTED = "hmac_not_selected_exploratory_release"
+
 RULE_DISCLOSURE_COMMITTED = "committed"
 RULE_DISCLOSURE_REVEALED = "revealed"
 
@@ -479,6 +526,31 @@ class DisclosedPoolPositionError(Exception):
         self.symbol = symbol
         self.session_date = session_date
         self.incident_id = incident_id
+
+
+class NotAPoolMemberError(Exception):
+    """r14: a release was requested for a (symbol, session_date) that is not a member of the named
+    registered universe's own ``expected_recording_pairs()`` -- refused. A release is an assertion
+    ABOUT a registered pool position; it can never be made about a pair the rule never promised."""
+
+
+class SelectedShardReleaseRefusedError(Exception):
+    """r14: a release was requested for an HMAC-**SELECTED** pool position -- refused. The sealed
+    path is the only way a selected member ever becomes public, and it runs through
+    ``seal_shard -> assign_shard -> expose_shard`` so the single-shot, root-family binding is
+    recorded. Letting a selected member take the exploratory shortcut would both destroy the
+    single-shot discipline and hand blind credit to something that never earned it."""
+
+
+class ResidualPoolUncertaintyError(Exception):
+    """r14: the requested release would leave the hidden HMAC partition determinable -- refused.
+
+    Every release publicly discloses one pool position as NOT selected. Releases are therefore
+    self-limiting: release enough of them and the remaining unknown positions collapse onto exactly
+    the still-hidden selected set, which pins every sealed shard's identity by subtraction. §7.2.2
+    states the floor -- "strictly more unknown positions than remaining selected shards ... and at
+    least two candidate identities per sealed row" -- and this refusal is that floor, enforced at
+    the one transition that can breach it rather than audited after the fact."""
 
 
 class VaultLedgerCorruptionError(Exception):
@@ -1303,6 +1375,236 @@ def expose_shard(
     return ledger.append_row(fields)
 
 
+def pool_partition_disclosure_state(
+    shard_ledger: VaultShardLedger,
+    universe_ledger: VaultUniverseLedger,
+    incident_ledger: "VaultDisclosureIncidentLedger",
+    *,
+    universe_id: str,
+    vault_secret: bytes,
+) -> dict:
+    """r14: how much of a registered universe's hidden HMAC partition an attacker can already pin,
+    given everything the system has disclosed so far. Pure arithmetic over four inputs, all of which
+    an attacker genuinely has: the pool size, the selected COUNT (published), the positions
+    disclosed as NOT selected (incidents + exploratory releases), and the positions revealed as
+    SELECTED (assignment reveals symbol/session_date, §7.5).
+
+    The floor this feeds is §7.2.2's, verbatim: strictly more unknown positions than still-hidden
+    selected shards, and at least two candidate identities per sealed row.
+
+    ``scripts/j06_operator.residual_pool_uncertainty`` computes the same shape for its own TR-2
+    report; this is the version that GATES, so it is the stricter of the two -- it subtracts
+    revealed-selected positions from the unknown space (the operator report holds ``selected_count``
+    fixed) and compares against the still-HIDDEN selected count rather than the total."""
+    universe = find_universe(universe_ledger, universe_id)
+    if universe is None:
+        raise VaultUniverseNotRegisteredError(
+            f"universe_id {universe_id!r} is not registered -- refused: its pool has no defined "
+            "size, so no disclosure arithmetic over it can mean anything"
+        )
+    expected = expected_recording_pairs(universe)
+    selected_pairs = {
+        pair for pair in expected if compute_seal(vault_secret, pair[0], pair[1])
+    }
+
+    latest = _latest_rows_by_dataset_id(shard_ledger)
+    released_not_selected: set[tuple[str, str]] = set()
+    revealed_selected: set[tuple[str, str]] = set()
+    for row in latest.values():
+        if row["universe_id"] != universe_id:
+            continue
+        pair = (row.get("symbol"), row.get("session_date"))
+        if pair[0] is None or pair[1] is None:
+            continue  # still `sealed`: it has revealed nothing at all
+        if row["exposure_state"] == STATE_EXPLORATORY_RELEASED:
+            released_not_selected.add(pair)
+        else:
+            revealed_selected.add(pair)  # `assigned` or `exposed`: revealed AS selected
+
+    # Case-normalized on both sides, the way `_universe_pair_index` already normalizes for the
+    # withholding predicate: an incident recorded as `aapl` against a rule registered as `AAPL`
+    # must still COUNT as a disclosed position, otherwise the residual arithmetic reads
+    # optimistically at exactly the moment it is protecting something.
+    expected_normalized = {(_normalize_symbol(sym), date) for sym, date in expected}
+    incident_pairs = {
+        (_normalize_symbol(sym), date)
+        for sym, date in disclosed_pool_positions(incident_ledger)
+        if (_normalize_symbol(sym), date) in expected_normalized
+    }
+    released_not_selected = {
+        (_normalize_symbol(sym), date) for sym, date in released_not_selected
+    }
+    revealed_selected = {(_normalize_symbol(sym), date) for sym, date in revealed_selected}
+    disclosed_not_selected = released_not_selected | incident_pairs
+    unknown = len(expected) - len(disclosed_not_selected) - len(revealed_selected)
+    still_hidden_selected = len(selected_pairs) - len(revealed_selected)
+    determined = still_hidden_selected > 0 and unknown == still_hidden_selected
+    return {
+        "universe_id": universe_id,
+        "universe_pairs": len(expected),
+        "selected_count": len(selected_pairs),
+        "disclosed_not_selected_positions": len(disclosed_not_selected),
+        "revealed_selected_positions": len(revealed_selected),
+        "unknown_positions": unknown,
+        "still_hidden_selected_shards": still_hidden_selected,
+        "candidate_identities_per_hidden_selected_shard": unknown,
+        "hidden_set_fully_determined": determined,
+        "any_identity_certain": determined or (still_hidden_selected > 0 and unknown < 2),
+    }
+
+
+def require_residual_pool_uncertainty(state: dict) -> None:
+    """The §7.2.2 floor as a typed refusal. Fires only while something is still hidden: once every
+    selected shard has been exposed there IS no hidden partition left to protect, and the rule
+    itself is lawfully revealed by whole-pool release."""
+    if state["still_hidden_selected_shards"] <= 0:
+        return
+    if state["any_identity_certain"]:
+        raise ResidualPoolUncertaintyError(
+            f"this release would leave {state['unknown_positions']} unknown pool position(s) "
+            f"against {state['still_hidden_selected_shards']} still-hidden selected shard(s) -- "
+            "refused (§7.2.2): the hidden set would be determinable by subtraction. At least one "
+            "unselected member must remain withheld while any selected member is still sealed."
+        )
+
+
+def releasable_unselected_capacity(state: dict) -> int:
+    """How many FURTHER unselected positions may be released before the §7.2.2 floor bites -- a
+    planning number, so an operator sizes a release campaign up front instead of discovering the
+    wall at the refusal. Zero once nothing is hidden (the floor no longer applies) is reported as
+    the remaining unknown space itself."""
+    hidden = state["still_hidden_selected_shards"]
+    if hidden <= 0:
+        return state["unknown_positions"]
+    # Each release drops `unknown` by one; the floor is `unknown > hidden` and `unknown >= 2`.
+    return max(0, state["unknown_positions"] - max(hidden + 1, 2))
+
+
+def release_unselected_shard(
+    shard_ledger: VaultShardLedger,
+    universe_ledger: VaultUniverseLedger,
+    incident_ledger: "VaultDisclosureIncidentLedger",
+    *,
+    dataset_id: str,
+    universe_id: str,
+    symbol: str,
+    session_date: str,
+    content_checksum: str,
+    event_count: int,
+    vault_secret: bytes,
+    released_at: str | None = None,
+) -> dict:
+    """r14: release ONE HMAC-**not-selected** registered-pool member as ordinary historical
+    evidence -- spec §7.5 point 7's "exposed for exploratory use" disjunct, implemented.
+
+    Six refusals, every one BEFORE the append, every one recomputed here rather than taken from the
+    caller:
+
+    1. the universe must be registered (``VaultUniverseNotRegisteredError``);
+    2. the vault secret must match that universe's own recorded ``vault_secret_commitment``
+       (``VaultSecretUnavailable``) -- otherwise step 4's HMAC recomputation proves nothing, since
+       any secret at all would produce *some* answer;
+    3. ``(symbol, session_date)`` must be a member of the universe's own
+       ``expected_recording_pairs()`` (``NotAPoolMemberError``);
+    4. the HMAC must independently recompute to NOT SELECTED (``SelectedShardReleaseRefusedError``)
+       -- this is the load-bearing check, and it is deliberately not a parameter: a caller cannot
+       assert non-selection, only the secret can;
+    5. the dataset must carry NO shard-ledger row at all (``ShardLifecycleOrderError``), which is
+       what stops a SEALED member from taking this shortcut and what stops a double release;
+    6. the release must not pin the hidden partition (``ResidualPoolUncertaintyError``, §7.2.2).
+
+    The appended row is a terminal ``exploratory_released`` state carrying the symbol, session date
+    and raw ``content_checksum`` -- this member is now ordinary evidence and its manifest is
+    servable. It carries ``family_root_id: None`` and ``assigned_at: None`` forever: no family
+    binding was made, no single shot was consumed, and no sealed or blind credit is conferred.
+    ``shard_id`` is still the surrogate and ``checksum_commitment`` still the salted one, so an
+    auditor can verify this row against the same commitments every other row uses."""
+    if not vault_secret.strip():
+        raise VaultSecretUnavailable(
+            "release_unselected_shard was handed an empty vault secret -- refused: the HMAC "
+            "non-selection proof is the entire basis of this act"
+        )
+    universe = find_universe(universe_ledger, universe_id)
+    if universe is None:
+        raise VaultUniverseNotRegisteredError(
+            f"universe_id {universe_id!r} is not registered -- refused: nothing defines which "
+            "pairs are pool members or which of them the HMAC selected"
+        )
+    if commit_vault_secret(vault_secret) != universe.get("vault_secret_commitment"):
+        raise VaultSecretUnavailable(
+            f"the supplied vault secret does not match universe {universe_id!r}'s own recorded "
+            "vault_secret_commitment -- refused: a non-selection proof computed under the wrong "
+            "key is not a proof"
+        )
+    normalized = (_normalize_symbol(symbol), session_date)
+    expected = {(_normalize_symbol(sym), date) for sym, date in expected_recording_pairs(universe)}
+    if normalized not in expected:
+        raise NotAPoolMemberError(
+            f"({symbol!r}, {session_date!r}) is not a member of universe {universe_id!r}'s "
+            "registered pool -- refused: a release is an assertion about a registered pool "
+            "position, never about an arbitrary dataset"
+        )
+    if compute_seal(vault_secret, symbol, session_date):
+        raise SelectedShardReleaseRefusedError(
+            f"({symbol!r}, {session_date!r}) is HMAC-SELECTED -- refused: a selected member becomes "
+            "public only through seal -> assign -> expose, so its single-shot root-family binding "
+            "is recorded. The exploratory release path is for NOT-selected members only."
+        )
+    existing = _latest_shard_row(shard_ledger, dataset_id)
+    if existing is not None:
+        raise ShardLifecycleOrderError(dataset_id, None, existing["exposure_state"])
+    # §7.2.2's permanent consequence, applied to THIS transition as well as to `assign_shard`.
+    # A disclosed pool position "may never receive sealed, blind or historical_oos credit" -- and
+    # releasing it makes its tape servable, at which point a fold reading it would classify
+    # `historical_oos` from an exposure registry that has never heard of the incident. Counting the
+    # dataset toward corpus size and coverage is all the incident record leaves it entitled to, so
+    # the release is refused rather than the credit being clawed back downstream.
+    disclosed = disclosed_pool_positions(incident_ledger)
+    incident = disclosed.get((symbol, session_date))
+    if incident is not None:
+        raise DisclosedPoolPositionError(symbol, session_date, incident)
+
+    fields = {
+        "dataset_id": dataset_id,
+        "content_checksum": content_checksum,
+        "shard_id": compute_surrogate_shard_id(vault_secret, dataset_id),
+        "universe_id": universe_id,
+        "checksum_commitment": commit_content_checksum(vault_secret, content_checksum),
+        "size_bucket": _coarse_size_bucket(event_count),
+        # Never sealed: this row's own honest history is that it went straight from "unresolved
+        # pool member" to "ordinary evidence". `sealed_at` is None so no reader, and no
+        # `_coarsen_sealed_at_to_date` consumer, can mistake it for a sealed-path row.
+        "sealed_at": None,
+        "exposure_state": STATE_EXPLORATORY_RELEASED,
+        "family_root_id": None,
+        "symbol": symbol,
+        "session_date": session_date,
+        "assigned_at": None,
+        "exposed_at": released_at if released_at is not None else _iso_utc_now(),
+    }
+    # Refusal 6 is evaluated against the state this release WOULD produce, so the floor is checked
+    # before the append rather than reported after it.
+    prospective = pool_partition_disclosure_state(
+        shard_ledger, universe_ledger, incident_ledger,
+        universe_id=universe_id, vault_secret=vault_secret,
+    )
+    prospective = {
+        **prospective,
+        "disclosed_not_selected_positions": prospective["disclosed_not_selected_positions"] + 1,
+        "unknown_positions": prospective["unknown_positions"] - 1,
+    }
+    prospective["candidate_identities_per_hidden_selected_shard"] = prospective["unknown_positions"]
+    prospective["hidden_set_fully_determined"] = (
+        prospective["still_hidden_selected_shards"] > 0
+        and prospective["unknown_positions"] == prospective["still_hidden_selected_shards"]
+    )
+    prospective["any_identity_certain"] = prospective["hidden_set_fully_determined"] or (
+        prospective["still_hidden_selected_shards"] > 0 and prospective["unknown_positions"] < 2
+    )
+    require_residual_pool_uncertainty(prospective)
+    return shard_ledger.append_row(fields)
+
+
 def currently_sealed_dataset_ids(ledger: VaultShardLedger) -> frozenset[str]:
     """Every dataset id whose latest recorded row is still ``sealed`` -- the WALKFORWARD
     exposure-registry sealed filter's OWN read of this module's state (``walkforward.py``'s r2
@@ -1331,10 +1633,13 @@ def withheld_universe_by_dataset_id(ledger: VaultShardLedger) -> dict[str, str]:
     alike. The two predicates are kept as separate named functions rather than one, because they
     answer two genuinely different questions for two different modules (T-2 vocabulary
     discipline)."""
+    # r14: `_RELEASED_STATES`, not `STATE_EXPOSED` alone. A shard leaves the pool by EITHER terminal
+    # route -- the sealed path's `exposed`, or the exploratory path's `exploratory_released` -- and
+    # a member that has lawfully left the pool is ordinary evidence, not withheld evidence.
     return {
         dataset_id: row["universe_id"]
         for dataset_id, row in _latest_rows_by_dataset_id(ledger).items()
-        if row["exposure_state"] != STATE_EXPOSED
+        if row["exposure_state"] not in _RELEASED_STATES
     }
 
 
@@ -1483,15 +1788,18 @@ def unresolved_pool_dataset_ids(
 # === GET /research/desk/micro/vault (served verbatim, no second computation in the route) ==========
 
 
-def _coarsen_sealed_at_to_date(sealed_at: str) -> str:
+def _coarsen_sealed_at_to_date(sealed_at: str | None) -> str | None:
     """Iteration 24: the served-only precision narrowing ``_serialize_shard`` applies to
     ``sealed_at``. ``_iso_utc_now`` always produces ``YYYY-MM-DDTHH:MM:SS.ffffffZ`` (module's own
     ``isoformat(timespec="microseconds")`` format), so the date component is exactly the first 10
     characters -- no parse/reformat round-trip needed, and none of the ``+00:00``/``Z`` suffix
     handling above this function's call site can affect a slice that never reaches it. A single
     slice point (called from exactly one place, ``_serialize_shard``) means there is nowhere else
-    for a full-precision value to leak back in."""
-    return sealed_at[:10]
+    for a full-precision value to leak back in.
+
+    r14: ``None`` passes straight through -- an ``exploratory_released`` row was never sealed, so it
+    has no seal instant to coarsen and must not be given a fabricated one."""
+    return None if sealed_at is None else sealed_at[:10]
 
 
 def _serialize_shard(row: dict) -> dict:
@@ -1534,7 +1842,7 @@ def _serialize_shard(row: dict) -> dict:
     opaque = {key: row[key] for key in _OPAQUE_SHARD_KEYS}
     opaque["sealed_at"] = _coarsen_sealed_at_to_date(opaque["sealed_at"])
     state = row["exposure_state"]
-    if state not in (STATE_ASSIGNED, STATE_EXPOSED):
+    if state not in (STATE_ASSIGNED, STATE_EXPOSED, STATE_EXPLORATORY_RELEASED):
         return opaque
     revealed = {
         **opaque,
@@ -1545,8 +1853,17 @@ def _serialize_shard(row: dict) -> dict:
         "assigned_at": row["assigned_at"],
         "exposed_at": row["exposed_at"],
     }
-    if state == STATE_EXPOSED:
+    if state in (STATE_EXPOSED, STATE_EXPLORATORY_RELEASED):
+        # r14: the raw checksum is revealed on BOTH terminal routes, so the salted commitment can
+        # be re-derived and verified against it either way (r3 point 2). An exploratory release
+        # additionally states, on the row itself, that it earned NO sealed credit -- so no reader
+        # can mistake released-as-ordinary-evidence for passed-the-final-exam. `family_root_id` and
+        # `assigned_at` are structurally None here (nothing was ever bound), which is the same fact
+        # said a second way.
         revealed["content_checksum"] = row["content_checksum"]
+    if state == STATE_EXPLORATORY_RELEASED:
+        revealed["release_basis"] = RELEASE_BASIS_HMAC_NOT_SELECTED
+        revealed["sealed_credit"] = False
     return revealed
 
 
@@ -1589,11 +1906,17 @@ def _whole_pool_released_universe_ids(
     Tier-B resolution order's own registration path, but not excluded by this module's own types
     either) owns nothing to reveal and is never considered released, matching the pre-iteration-12
     predicate's own fail-closed-on-no-shards behaviour."""
+    # r14: "released" is either terminal state. Before r14 this read `== STATE_EXPOSED`, which made
+    # whole-pool release UNREACHABLE for any normal ~25 %-sealed universe: its HMAC-not-selected
+    # members can never reach `exposed` (that path requires a seal they never had), so test (b)'s
+    # `expected <= exposed_pairs` could never hold and the nonced rule could never be revealed and
+    # audited. Counting `exploratory_released` as released is what finally makes §7.2's own
+    # "including members the shard ledger never individually tracked" satisfiable.
     exposed_pairs_by_universe: dict[str, set[tuple[str, str]]] = {}
     withholding_universe_ids: set[str] = set()
     for row in latest_shard_rows.values():
         universe_id = row["universe_id"]
-        if row["exposure_state"] == STATE_EXPOSED:
+        if row["exposure_state"] in _RELEASED_STATES:
             exposed_pairs_by_universe.setdefault(universe_id, set()).add(
                 (row["symbol"], row["session_date"])
             )

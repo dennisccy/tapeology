@@ -41,20 +41,68 @@ from app.config import CONFIG  # noqa: E402
 from app.research import micro_tier_b_screen as tb  # noqa: E402
 from app.research import tick_recorder as tr  # noqa: E402
 from app.research import vault  # noqa: E402
+from app.research.dataset_index import indexed_dataset_store  # noqa: E402
 from app.research.datasets import DatasetStore  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[3]
 SCREEN_DIR = REPO / "reports" / "tier-b-screen-r10"
 STATE_DIR = REPO / "reports" / "j06-tranche"
 
-UNIVERSE_ID = "rapid-microscope-j06-starter"
+#: The ORIGINAL starter tranche's frozen identity. Immutable: `vault.register_universe` refuses a
+#: second registration of this id under any different rule, and nothing below may re-derive it.
+STARTER_UNIVERSE_ID = "rapid-microscope-j06-starter"
 SCREEN_ID = "rapid-microscope-tier-b-r11"
 EXPECTED_RESOLUTION_SHA = "fb89c5a276aa1a3b43eae2672bd62e478b933e6bb11970a3bb5e9b0dbea3dae5"
 
-#: §6, frozen by the owner. Tier-A PG/AAPL/MSFT/NVDA + the three resolved Tier-B + the Tier-C ETF.
+#: §7.2.1(i), frozen by the owner. Tier-A PG/AAPL/MSFT/NVDA + the three RESOLVED Tier-B + the
+#: Tier-C ETF. **Shared by every universe this script ever registers**: §7.2.1(j)'s screen-once
+#: discipline forbids re-running the Tier-B screen, and §7.2.1(i) names these exact eight slots, so
+#: a second era reuses the resolved list verbatim rather than deriving a new one.
 SYMBOL_RULE = ["PG", "AAPL", "MSFT", "NVDA", "AG", "LYFT", "WULF", "SPY"]
-DATE_RULE = ["2026-06-10", "2026-06-17", "2026-06-24", "2026-07-01", "2026-07-08",
-             "2026-07-15", "2026-07-22", "2026-07-29", "2026-08-05", "2026-08-12"]
+
+#: The starter tranche's own ten dates. A LATER era supplies its own via `--dates-file`; this list is
+#: never edited (doing so would silently redefine `expected_recording_pairs` for a registered
+#: universe, which `register_universe` refuses anyway).
+STARTER_DATE_RULE = ["2026-06-10", "2026-06-17", "2026-06-24", "2026-07-01", "2026-07-08",
+                     "2026-07-15", "2026-07-22", "2026-07-29", "2026-08-05", "2026-08-12"]
+
+# --- r14: the per-invocation universe, defaulting to the starter tranche ---------------------------
+#
+# Pre-r14 every stage read the two module constants directly, so a SECOND corpus era could not be
+# registered without editing this file -- which would have silently redefined the FIRST universe's
+# own rule for every later verification run. The two names below are what the stages read; they
+# default to the starter identity, so every existing invocation is byte-identical, and
+# `_select_universe` is the only thing that ever changes them.
+UNIVERSE_ID = STARTER_UNIVERSE_ID
+DATE_RULE = list(STARTER_DATE_RULE)
+
+
+def _select_universe(universe_id: str | None, dates_file: str | None) -> dict:
+    """r14: point this script at a DIFFERENT registered universe for a later corpus era.
+
+    Both must be given together -- a new universe id with the starter's dates, or new dates under
+    the starter's id, are each a way to corrupt a frozen registration, so neither is allowed alone.
+    `SYMBOL_RULE` is deliberately NOT parameterized: §7.2.1(i) fixes the panel at those eight slots
+    and §7.2.1(j) forbids re-screening Tier-B, so a second era reuses it unchanged."""
+    global UNIVERSE_ID, DATE_RULE
+    if universe_id is None and dates_file is None:
+        return {"universe_id": UNIVERSE_ID, "date_rule_size": len(DATE_RULE), "source": "starter"}
+    if universe_id is None or dates_file is None:
+        raise SystemExit(
+            "STOP: --universe-id and --dates-file must be given together. A new universe id under "
+            "the starter's dates (or vice versa) is a way to corrupt a frozen registration."
+        )
+    if universe_id == STARTER_UNIVERSE_ID:
+        raise SystemExit(
+            f"STOP: {STARTER_UNIVERSE_ID!r} is the ORIGINAL starter tranche and is immutable -- a "
+            "later era registers its own universe id, never a second rule under this one."
+        )
+    dates = [line.strip() for line in Path(dates_file).read_text().splitlines() if line.strip()]
+    if sorted(dates) != sorted(set(dates)):
+        raise SystemExit("STOP: duplicate date in --dates-file")
+    UNIVERSE_ID = universe_id
+    DATE_RULE = sorted(dates)
+    return {"universe_id": UNIVERSE_ID, "date_rule_size": len(DATE_RULE), "source": dates_file}
 
 
 def _utc() -> str:
@@ -74,8 +122,11 @@ def _write(name: str, payload: dict) -> Path:
 
 def _ledgers():
     d = CONFIG.dataset_dir_resolved()
+    # r14 (performance, byte-identical): every stage below walks the whole store, and at the
+    # projected corpus size a bare construction re-hashes hundreds of GB per call.
     return (vault.universe_ledger_for_dataset_dir(d), vault.shard_ledger_for_dataset_dir(d),
-            vault.screen_provenance_ledger_for_dataset_dir(d), DatasetStore(d), d)
+            vault.screen_provenance_ledger_for_dataset_dir(d),
+            indexed_dataset_store(d, DatasetStore), d)
 
 
 # === §2 + §4: verify the accepted screen, then bind it before any registration =====================
@@ -913,9 +964,27 @@ _STAGES = {"provenance": stage_provenance, "register": stage_register,
 
 def main() -> int:
     if len(sys.argv) < 2 or sys.argv[1] not in _STAGES:
-        print(f"usage: python -m scripts.j06_operator {{{'|'.join(_STAGES)}}}")
+        print(
+            f"usage: python -m scripts.j06_operator {{{'|'.join(_STAGES)}}} "
+            "[--universe-id ID --dates-file PATH]"
+        )
         return 2
-    out = _STAGES[sys.argv[1]]()
+    stage = sys.argv[1]
+    rest = sys.argv[2:]
+    universe_id = dates_file = None
+    while rest:
+        flag = rest.pop(0)
+        if flag == "--universe-id" and rest:
+            universe_id = rest.pop(0)
+        elif flag == "--dates-file" and rest:
+            dates_file = rest.pop(0)
+        else:
+            print(f"unknown argument {flag!r}")
+            return 2
+    selected = _select_universe(universe_id, dates_file)
+    out = _STAGES[stage]()
+    if selected["source"] != "starter":
+        out = {**out, "universe_selection": selected}
     print(json.dumps(out, indent=2, sort_keys=True))
     return 0
 

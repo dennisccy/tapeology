@@ -81,6 +81,14 @@ __all__ = [
     "resolve_micro_exposure_registry_dir",
     "initialize_r2_exposure_registry",
     "has_any_exposure_entries",
+    # r14 -- corpus-era freshness provenance (see `register_fresh_corpus_era`)
+    "RECORD_KIND_EXPOSURE",
+    "RECORD_KIND_CORPUS_ERA",
+    "UnregisteredCorpusEraError",
+    "register_fresh_corpus_era",
+    "fresh_corpus_era_record",
+    "corpus_exposure_baseline_established",
+    "require_corpus_exposure_baseline",
 ]
 
 # The r2 spec revision's own date (docs/rapid-validation-spec.md's revision header) -- the instant
@@ -173,6 +181,10 @@ class ExposureRegistry:
         ``registered_at`` is exactly the ``instant`` a caller (``walkforward.py``) passes here to
         decide ``historical_oos`` vs ``historical_exposed_diagnostic`` (TC-13)."""
         for row in self._ledger.all_rows():
+            # r14: only a genuine window-exposure row can prove exposure. A corpus-era registration
+            # names no window and must never be readable as one.
+            if not _is_exposure_row(row):
+                continue
             if row.get("corpus_id") == corpus_id and row.get("window") == window and row.get("logged_at") < instant:
                 return True
         return False
@@ -205,7 +217,117 @@ def has_any_exposure_entries(registry: ExposureRegistry, corpus_id: str) -> bool
     repeated compute-manager trigger against the SAME durable registry would append the whole
     playbook corpus's own window list again, growing the exposure ledger unboundedly on an
     append-only store that (correctly) offers no dedup at the primitive level."""
-    return any(row.get("corpus_id") == corpus_id for row in registry.all_rows())
+    # r14: counts genuine exposure rows ONLY. A corpus-era registration must not suppress the r2
+    # seeding guard this predicate exists to drive -- byte-identical for every pre-r14 row, which
+    # carries no `record_kind` and is an exposure row by default.
+    return any(
+        _is_exposure_row(row) and row.get("corpus_id") == corpus_id for row in registry.all_rows()
+    )
+
+
+# === r14 -- corpus-era freshness provenance ==========================================================
+#
+# **The problem.** ``ExposureRegistry`` is honest about a corpus it has heard of and silent about one
+# it has not, and those two states looked identical: zero rows. ``scout_candidate_walkforward_floor_
+# check`` therefore had to treat an empty registry as "nothing is PROVEN unexposed" and count ZERO
+# out-of-sample sessions -- correct for a legacy corpus whose aggregates have been served for months,
+# but wrong for a genuinely new corpus era, which starts empty precisely BECAUSE nothing has been
+# served. The pre-r14 workaround would have been to serve (and thereby burn) a handful of clean
+# sessions just to make the registry non-empty. That destroys evidence to satisfy a predicate, and is
+# forbidden.
+#
+# **The mechanism.** ONE new row kind in the SAME hash-chained registry: a corpus-era registration
+# that records "this corpus_id is a deliberately fresh era; its empty exposure history is a FACT
+# about the world, not an absence of initialization". It is provenance, never an exposure -- it names
+# no window, so it can never make any window read as exposed.
+#
+# **The invariant, stated exactly.** Empty exposure rows ALONE are never proof of freshness. A corpus
+# is baseline-established iff EITHER it carries a corpus-era registration (explicitly fresh) OR it
+# already carries at least one genuine exposure row (legacy, r2-initialized). Anything else fails
+# closed.
+RECORD_KIND_EXPOSURE = "exposure"
+RECORD_KIND_CORPUS_ERA = "corpus_era_registration"
+
+
+class UnregisteredCorpusEraError(Exception):
+    """A caller asked for out-of-sample eligibility under a ``corpus_id`` whose exposure history has
+    neither been r2-initialized nor explicitly registered as a fresh era -- refused (r14). Unknown
+    exposure history is NEVER interpretable as "never exposed" (the §7.8 invariant, applied to the
+    exposure registry rather than the vault ledger)."""
+
+
+def _is_exposure_row(row: dict) -> bool:
+    """A genuine window-exposure row. Every pre-r14 row carries no ``record_kind`` at all and is
+    therefore an exposure row by default -- so this predicate is byte-compatible with every row
+    already on disk, and the r14 corpus-era rows are the only thing it ever excludes."""
+    return row.get("record_kind", RECORD_KIND_EXPOSURE) == RECORD_KIND_EXPOSURE
+
+
+def register_fresh_corpus_era(
+    registry: "ExposureRegistry",
+    *,
+    corpus_id: str,
+    registered_at: str,
+    provenance: str,
+) -> dict:
+    """Append ONE permanent corpus-era registration for ``corpus_id`` (r14).
+
+    ``provenance`` is the operator's own stated basis for the freshness claim -- e.g. the fold spec
+    hash and the recording universe id the era's dates were registered under. It is recorded
+    verbatim and never parsed: the ledger's job is to make the claim permanent and attributable, not
+    to adjudicate it. What the CODE guarantees is narrower and mechanical: from this instant on, a
+    window of this corpus reads as exposed only if a genuine exposure row says so.
+
+    Names NO window on purpose. ``is_exposed_before`` and ``has_any_exposure_entries`` both filter to
+    exposure rows, so this row can never make a window read exposed and can never suppress the r2
+    seeding guard for a legacy corpus.
+
+    Idempotent-in-spirit but not content-deduped (the ``HashChainedLedger`` primitive's own "no
+    dedup, ever" rule): a caller registers an era exactly ONCE, and
+    ``fresh_corpus_era_record`` returns the FIRST registration if one already exists."""
+    existing = fresh_corpus_era_record(registry, corpus_id)
+    if existing is not None:
+        return existing
+    return registry._ledger.append_row(
+        {
+            "record_kind": RECORD_KIND_CORPUS_ERA,
+            "corpus_id": corpus_id,
+            "registered_at": registered_at,
+            "provenance": provenance,
+        }
+    )
+
+
+def fresh_corpus_era_record(registry: "ExposureRegistry", corpus_id: str) -> dict | None:
+    """The FIRST corpus-era registration row for ``corpus_id``, or ``None``. First, not last: an era
+    is registered once and its instant is the one a freshness claim is anchored to."""
+    for row in registry.all_rows():
+        if row.get("record_kind") == RECORD_KIND_CORPUS_ERA and row.get("corpus_id") == corpus_id:
+            return row
+    return None
+
+
+def corpus_exposure_baseline_established(registry: "ExposureRegistry", corpus_id: str) -> bool:
+    """r14: whether this registry can speak honestly about ``corpus_id`` at all.
+
+    ``True`` iff the corpus is EITHER explicitly registered as a fresh era OR already carries at
+    least one genuine exposure row (the legacy, r2-initialized case). ``False`` is the fail-closed
+    answer for a corpus this registry has simply never heard of -- for which "no exposure rows"
+    means "no initialization", not "no exposure"."""
+    if fresh_corpus_era_record(registry, corpus_id) is not None:
+        return True
+    return has_any_exposure_entries(registry, corpus_id)
+
+
+def require_corpus_exposure_baseline(registry: "ExposureRegistry", corpus_id: str) -> None:
+    """The typed refusal form of ``corpus_exposure_baseline_established`` -- for a caller that must
+    stop rather than silently degrade to a conservative zero."""
+    if not corpus_exposure_baseline_established(registry, corpus_id):
+        raise UnregisteredCorpusEraError(
+            f"corpus_id {corpus_id!r} has no exposure baseline -- refused (r14): it carries neither "
+            "a fresh-corpus-era registration nor any exposure entry, so its empty exposure history "
+            "proves nothing. Unknown exposure history is never 'never exposed'."
+        )
 
 
 class MicroAccessor:

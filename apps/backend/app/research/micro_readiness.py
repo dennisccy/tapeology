@@ -117,6 +117,39 @@ _FLOOR_NAME = "wf_fold_geometry"
 _FLOOR_STATUS_MET = "floor_met"
 _FLOOR_STATUS_UNMET = "floor_unmet"
 
+# --- r14: the 60-session floor never meant "a fold can run" ----------------------------------------
+#
+# ``WF_TRAIN_MIN_SESSIONS + WF_TEST_MIN_SESSIONS == 60`` is pure arithmetic over two §1 constants. It
+# is NOT a fold-construction floor, because ``DIAGNOSTIC_GEOMETRY`` carries ``embargo_sessions = 5``
+# and ``walkforward.build_folds`` needs ``train + embargo + test`` contiguous session dates before it
+# emits fold 0. Verified directly against ``build_folds``:
+#
+#     60 session dates -> 0 folds        105 session dates -> 3 folds
+#     65 session dates -> 1 fold         125 session dates -> 4 folds
+#
+# So a corpus could read ``floor_met`` at 60 and still be unable to construct a single fold. This
+# module now serves the two EXECUTABLE floors beside the arithmetic one, and labels the arithmetic
+# one for exactly what it is. The 60 value is retained (never removed, never re-valued) for API and
+# historical compatibility, under a basis token that says it implies nothing about folds.
+FLOOR_BASIS_TRAIN_PLUS_TEST_ARITHMETIC_ONLY = "train_plus_test_arithmetic_only"
+FLOOR_BASIS_NOTE = (
+    "train + test only: this arithmetic omits the fold spec's embargo and therefore does NOT imply "
+    "that a single fold can be constructed. Read first_fold_min_session_dates for 'can one fold "
+    "exist' and survivor_min_session_dates for 'can a walkforward_survivor verdict be reached'."
+)
+
+# --- r14: session COUNT vocabulary (spec §0) -------------------------------------------------------
+#
+# A session IS an ET RTH trading date, and every fold-geometry floor counts DISTINCT SESSION DATES.
+# RTH COVERAGE is a different quantity entirely: the current corpus carries 11 distinct session
+# dates and 3.0089 full-session equivalents, and conflating the two either overstates the corpus
+# (11 partial windows are not 11 full sessions) or understates it against the geometry floors
+# (the floors count dates, not minutes). Both names are served, explicitly, and neither is ever
+# substituted for the other.
+#
+#   distinct_session_dates   -- the fold-geometry unit; what 60/65/105 are counted in
+#   full_session_equivalents -- RTH minutes covered / 390; a COVERAGE quality measure, never a floor
+
 # This module's own private ZoneInfo constant -- the referee_evidence.py per-module idiom (module
 # docstring). RTH bounds are the spec's own "09:30-16:00 ET" (docs/rapid-validation-spec.md, and
 # goal.md's Data-contract section, verbatim).
@@ -618,16 +651,65 @@ def build_readiness(
             }
         )
 
-    available_sessions = len(session_dates)
+    # r14: DISTINCT SESSION DATES -- the fold-geometry unit (spec §0: a session is an ET RTH
+    # trading date). Never RTH coverage, which is `full_session_equivalents` below.
+    available_session_dates = len(session_dates)
+
+    # The two EXECUTABLE floors, read from `walkforward.py` -- the canonical owner of the geometry
+    # and of the fold arithmetic. Imported lazily INSIDE this function on purpose: `walkforward`
+    # imports THIS module at its own module scope (for WF_TRAIN_MIN_SESSIONS/WF_TEST_MIN_SESSIONS),
+    # so a module-scope import here would be a cycle. By the time any caller reaches
+    # `build_readiness`, `walkforward` is fully initialized. Never a second copy of the numbers.
+    from .walkforward import (  # noqa: PLC0415 -- deliberate, see above
+        DIAGNOSTIC_GEOMETRY,
+        WF_MIN_SUFFICIENT_FOLDS,
+        build_folds,
+        minimum_sessions_for_sufficient_folds,
+    )
+
+    first_fold_min_session_dates = (
+        DIAGNOSTIC_GEOMETRY["train_sessions"]
+        + DIAGNOSTIC_GEOMETRY["embargo_sessions"]
+        + DIAGNOSTIC_GEOMETRY["test_sessions"]
+    )
+    survivor_min_session_dates = minimum_sessions_for_sufficient_folds(DIAGNOSTIC_GEOMETRY)
+    # Not a formula: the ACTUAL fold count `build_folds` produces for this many session dates. A
+    # served number a reader can act on, computed by the same function the engine itself calls.
+    folds_constructible = len(build_folds(sorted(session_dates), DIAGNOSTIC_GEOMETRY))
+
+    # RETAINED, never re-valued: the pre-r14 arithmetic, now carrying its own basis token so no
+    # reader can take `floor_met` here as "a fold can run".
     required_sessions = WF_TRAIN_MIN_SESSIONS + WF_TEST_MIN_SESSIONS
-    floor_status = _FLOOR_STATUS_MET if available_sessions >= required_sessions else _FLOOR_STATUS_UNMET
+    floor_status = (
+        _FLOOR_STATUS_MET if available_session_dates >= required_sessions else _FLOOR_STATUS_UNMET
+    )
     study_floors = [
         {
             "study_id": study_id,
             "floor_name": _FLOOR_NAME,
+            # --- pre-r14 keys, unchanged in value and position -------------------------------
             "required_sessions": required_sessions,
-            "available_sessions": available_sessions,
+            "available_sessions": available_session_dates,
             "status": floor_status,
+            # --- r14: what that status actually rests on --------------------------------------
+            "required_sessions_basis": FLOOR_BASIS_TRAIN_PLUS_TEST_ARITHMETIC_ONLY,
+            "required_sessions_note": FLOOR_BASIS_NOTE,
+            # --- r14: the two EXECUTABLE floors, in explicit session-DATE units ---------------
+            "available_session_dates": available_session_dates,
+            "first_fold_min_session_dates": first_fold_min_session_dates,
+            "survivor_min_session_dates": survivor_min_session_dates,
+            "first_fold_status": (
+                _FLOOR_STATUS_MET
+                if available_session_dates >= first_fold_min_session_dates
+                else _FLOOR_STATUS_UNMET
+            ),
+            "survivor_status": (
+                _FLOOR_STATUS_MET
+                if available_session_dates >= survivor_min_session_dates
+                else _FLOOR_STATUS_UNMET
+            ),
+            "folds_constructible": folds_constructible,
+            "min_sufficient_folds": WF_MIN_SUFFICIENT_FOLDS,
         }
         for study_id in PILOT_STUDY_IDS
     ]
@@ -641,6 +723,19 @@ def build_readiness(
         "rth_minutes_covered": round(rth_minutes_total, 2),
         "session_equivalents": round(rth_minutes_total / _RTH_MINUTES_PER_SESSION, 4),
         "referee_tick_gate_symbol_days": REFEREE_TICK_GATE_SYMBOL_DAYS,
+        # r14: the two quantities named so they can never be substituted for one another.
+        # `distinct_session_dates` is the fold-geometry unit (spec §0); `full_session_equivalents`
+        # is RTH COVERAGE and is never compared against a session-date floor. `distinct_sessions`
+        # and `session_equivalents` above are their pre-r14 spellings, retained at identical
+        # values for API compatibility.
+        "distinct_session_dates": len(session_dates),
+        "full_session_equivalents": round(rth_minutes_total / _RTH_MINUTES_PER_SESSION, 4),
+        "session_count_basis": (
+            "distinct_session_dates counts ET RTH trading dates (spec §0) and is the unit every "
+            "fold-geometry floor is expressed in; full_session_equivalents is RTH minutes covered "
+            "/ 390 and measures COVERAGE QUALITY. They are different quantities and neither is "
+            "ever substituted for the other."
+        ),
         # r13: breadth and label quality, so corpus GROWTH can be judged by what the evidence is
         # worth and not only by how much of it there is. Every input is already served per shard
         # above -- this aggregates, it never introduces a second computation of anything.

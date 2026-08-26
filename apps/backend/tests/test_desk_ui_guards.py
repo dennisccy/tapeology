@@ -302,9 +302,18 @@ _PRICE_ARITHMETIC_FIELDS = (
     # arithmetic); no client-side symbol-day share, byte-to-MB conversion, fallback percentage,
     # or floor-shortfall arithmetic is ever legitimate here.
     r"|readiness\.totals\.(?:distinct_symbol_days|distinct_datasets|rth_minutes_covered"
-    r"|session_equivalents|referee_tick_gate_symbol_days)"
+    r"|session_equivalents|referee_tick_gate_symbol_days"
+    # r14: the two session quantities, named explicitly so neither can stand in for the other --
+    # `distinct_session_dates` is the fold-geometry unit (spec §0), `full_session_equivalents` is
+    # RTH coverage. Both render as served; the `.toFixed()` on the second is formatting.
+    r"|distinct_session_dates|full_session_equivalents)"
     r"|shard\.(?:trade_count|quote_count|bytes|fallback_frac)"
-    r"|floor\.(?:required_sessions|available_sessions)"
+    # r14: the pilot-floor row now serves the two EXECUTABLE floors (first fold / survivor), the
+    # actual constructible fold count, and the retained arithmetic-only pair. Every one renders as
+    # served -- the whole point of the change is that the browser stops implying a fold arithmetic
+    # the backend never performed.
+    r"|floor\.(?:required_sessions|available_sessions|available_session_dates"
+    r"|first_fold_min_session_dates|survivor_min_session_dates|folds_constructible)"
     # goal-rapid-microscope-iter-14 (J-08 half 1): the new Scout Ledger / Walk-Forward / Validation
     # Vault sections' own served numerics -- GET /research/desk/micro/{scout,walkforward,vault}
     # read verbatim for the first time in the browser. The Scout Ledger's `screen_result` and the

@@ -2483,6 +2483,12 @@ export interface MicroReadinessTotals {
   distinct_datasets: number;
   rth_minutes_covered: number;
   session_equivalents: number;
+  // r14: spec §0 -- a session IS an ET RTH trading date, and every fold floor counts DATES.
+  // `full_session_equivalents` is RTH COVERAGE (minutes / 390) and is a different quantity.
+  // Neither is ever substituted for the other.
+  distinct_session_dates: number;
+  full_session_equivalents: number;
+  session_count_basis: string;
   referee_tick_gate_symbol_days: number;
 }
 
@@ -2508,6 +2514,17 @@ export interface MicroReadinessStudyFloor {
   floor_name: string;
   required_sessions: number;
   available_sessions: number;
+  // r14: `required_sessions` (40 + 20) omits the fold spec's embargo and therefore never meant
+  // "a fold can run". The basis token says so, and the two executable floors sit beside it.
+  required_sessions_basis: string;
+  required_sessions_note: string;
+  available_session_dates: number;
+  first_fold_min_session_dates: number;
+  survivor_min_session_dates: number;
+  first_fold_status: string;
+  survivor_status: string;
+  folds_constructible: number;
+  min_sufficient_folds: number;
   status: string;
 }
 

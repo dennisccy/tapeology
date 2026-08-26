@@ -58,6 +58,7 @@ from .tradability_cache import (
     symbol_store_signature,
     tradability_cache_key,
 )
+from .dataset_index import resolve_dataset_index_db_path
 from .datasets import (
     VALID_SOURCE_KINDS as DATASET_SOURCE_KINDS,
     VALID_SPLITS,
@@ -291,10 +292,11 @@ def get_dataset_store() -> DatasetStore:
     ``get_bar_index`` env-else-sibling shape, mirrored exactly). Every existing test keeps this
     hermetically for free, since the derived default lives right beside whatever
     ``TAPEOLOGY_DATASET_DIR`` a test points at."""
+    # r14: the resolution moved to `dataset_index.py`, which OWNS the index -- so this route and
+    # every CLI/module path now land on the SAME file instead of two independently-spelled rules.
+    # Byte-identical to the inline version it replaces (env var, else sibling of the dataset dir).
     dataset_dir = CONFIG.dataset_dir_resolved()
-    override = os.environ.get("TAPEOLOGY_DATASET_INDEX_DB")
-    index_db_path = override if override else os.path.join(os.path.dirname(dataset_dir), "dataset_index.db")
-    return DatasetStore(dataset_dir, index_db_path=index_db_path)
+    return DatasetStore(dataset_dir, index_db_path=resolve_dataset_index_db_path(dataset_dir))
 
 
 @router.post("/datasets")

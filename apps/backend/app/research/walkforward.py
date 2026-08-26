@@ -59,13 +59,16 @@ from zoneinfo import ZoneInfo
 
 from ..config import CONFIG, Config
 from .bars import BarStore
+from .dataset_index import resolve_dataset_index_db_path as _resolve_dataset_index_db_path
 from .datasets import DatasetStore
 from .desk_playbook import PlaybookStore, compute_playbook_input_signature, resolve_desk_playbook_dir
 from .desk_universe import UniverseStore
 from .micro_accessor import (
     ExposureRegistry,
+    corpus_exposure_baseline_established,
     has_any_exposure_entries,
     initialize_r2_exposure_registry,
+    register_fresh_corpus_era,
     resolve_micro_exposure_registry_dir,
 )
 from . import micro_features as mf
@@ -121,6 +124,10 @@ __all__ = [
     "sequence_ids_for_corpus",
     "fold_results_for_sequence",
     "resolve_walkforward_ledger_dir",
+    "resolve_dataset_index_db_path",
+    "PROBE_SURFACE_RETENTION",
+    "record_sacrificial_probe_exposure",
+    "clean_oos_candidate_dates",
     "wf_stream",
     "walkforward_parameters",
     "walkforward_parameters_hash",
@@ -158,6 +165,8 @@ __all__ = [
     "PLAYBOOK_DIAGNOSTIC_HORIZON_LABEL",
     "PLAYBOOK_DIAGNOSTIC_ORPHAN_SESSION_DATE",
     "TICK_LEGACY_CORPUS_ID",
+    "register_fresh_corpus_era",
+    "corpus_exposure_baseline_established",
     "playbook_observations",
     "run_diagnostic_walkforward",
     "run_tick_family_fold_request",
@@ -1144,8 +1153,30 @@ TICK_LEGACY_CORPUS_ID = "tick_legacy_symbol_days_v1"
 _ET_ZONE = ZoneInfo("America/New_York")
 
 
+#: r14: re-exported from `dataset_index.py`, which OWNS this resolution -- never a second copy.
+resolve_dataset_index_db_path = _resolve_dataset_index_db_path
+
+
+def _indexed_dataset_store(config: Config) -> DatasetStore:
+    """A ``DatasetStore`` wired to the durable metadata index (r14).
+
+    ``DatasetStore.list()`` re-reads and re-hashes EVERY dataset file unless the store was
+    constructed with ``index_db_path``; before r14 only ``routes.get_dataset_store`` passed one, so
+    every CLI and module-level construction paid the full verify. Measured on the operator's own
+    27.5 GB store: **0.00 s indexed against >600 s un-indexed**. This is performance only -- a
+    durable index row is written exclusively from a value the full verifier itself produced, and a
+    lookup is keyed on ``(path, size, mtime_ns)``, so a stale or missing row falls through to the
+    same verifier and the served metadata is byte-identical either way."""
+    dataset_dir = config.dataset_dir_resolved()
+    return DatasetStore(dataset_dir, index_db_path=resolve_dataset_index_db_path(dataset_dir))
+
+
 def _tick_dataset_session_dates(
-    dataset_store: DatasetStore, *, excluded_dataset_ids: frozenset[str] = frozenset()
+    dataset_store: DatasetStore,
+    *,
+    excluded_dataset_ids: frozenset[str] = frozenset(),
+    records: list[dict] | None = None,
+    errors: list[dict] | None = None,
 ) -> tuple[list[str], list[dict]]:
     """Every currently-registered tick dataset's own ET session date (spec section 0: "a session
     is an ET RTH trading date"), one entry per DISTINCT date -- the SAME ET-conversion technique
@@ -1192,7 +1223,11 @@ def _tick_dataset_session_dates(
     section 7.7: the legacy corpus is permanently exploratory and disjoint from any sealed
     tranche); the vault's OWN shard-lifecycle ledger, not this one, is the authority on whether a
     sealed shard has been exposed."""
-    records, errors = dataset_store.list()
+    # r14: `records`/`errors` let a caller that ALREADY holds a verified `DatasetStore.list()`
+    # thread it through rather than paying a second full inventory (`run_tick_family_fold_request`
+    # did exactly that, twice per request). Omitted, the behavior is byte-identical to pre-r14.
+    if records is None or errors is None:
+        records, errors = dataset_store.list()
     session_dates: set[str] = set()
     for meta in records:
         if meta["id"] in excluded_dataset_ids:
@@ -1204,7 +1239,94 @@ def _tick_dataset_session_dates(
     return sorted(session_dates), errors
 
 
-def run_tick_family_fold_request(ledger: WalkForwardLedger, config: Config) -> dict:
+# === r14 -- clean-OOS date eligibility, and the sacrificial retention probe =========================
+
+#: The exposure surface a retention/availability probe logs under. A probe that FETCHES TICK DATA
+#: for a date has read that date's tape; calling it "metadata only" because the operator discarded
+#: the bytes would be a fiction the registry cannot check. It is logged as a real exposure, which
+#: permanently and mechanically removes that date from every clean-OOS rule below.
+PROBE_SURFACE_RETENTION = "retention_probe_sacrificial_read"
+
+
+def record_sacrificial_probe_exposure(
+    exposure_registry: ExposureRegistry,
+    *,
+    corpus_id: str,
+    session_date: str,
+    logged_at: str,
+    note: str = "",
+) -> dict:
+    """Log a retention/availability probe as the EXPOSURE it actually is (r14).
+
+    The preflight originally proposed probing a burned date and then the earliest clean date. The
+    second half was wrong: a tick fetch on a clean date reads that date's tape, so the date is no
+    longer clean and cannot afterwards carry ``historical_oos`` evidence. Pretending otherwise
+    would be exactly the "unknown exposure history interpreted as never exposed" failure §7.8 calls
+    the worst this system can have.
+
+    So a probe is SACRIFICIAL by design: it spends one date deliberately, records the spend, and
+    ``clean_oos_candidate_dates`` below then refuses that date forever. ``note`` records why the
+    date was spent."""
+    return exposure_registry.log_exposure(
+        corpus_id=corpus_id,
+        window=session_date,
+        surface=f"{PROBE_SURFACE_RETENTION}:{note}" if note else PROBE_SURFACE_RETENTION,
+        logged_at=logged_at,
+    )
+
+
+def clean_oos_candidate_dates(
+    exposure_registry: ExposureRegistry,
+    *,
+    corpus_id: str,
+    candidate_dates: list[str],
+    instant: str,
+    screening_exposed_sessions: tuple[str, ...] | frozenset[str] = (),
+) -> dict:
+    """Which of ``candidate_dates`` can still carry ``historical_oos`` evidence for ``corpus_id``
+    as of ``instant`` -- the mechanical form of the preflight's date rule, so a recording universe
+    is derived from a predicate rather than from a hand-maintained list.
+
+    A date is barred iff EITHER it already carries an exposure entry for this corpus stamped before
+    ``instant`` (which covers the r2-initialized legacy windows, every window a fold has revealed,
+    AND any sacrificial retention probe) OR it is a member of ``screening_exposed_sessions``
+    (``micro_tier_b_screen.SCREENING_EXPOSED_SESSIONS`` -- §7.2.1(f)'s five spread-screening
+    sessions, which may never be J-06 sealed historical-OOS recording dates).
+
+    Returns the eligible dates AND the barred ones with their reason, because a caller sizing a
+    corpus needs to know what it lost and why, not merely what survived."""
+    screened = set(screening_exposed_sessions)
+    eligible: list[str] = []
+    barred: list[dict] = []
+    for session_date in sorted(set(candidate_dates)):
+        if session_date in screened:
+            barred.append({"session_date": session_date, "reason": "screening_exposed_session"})
+            continue
+        if exposure_registry.is_exposed_before(
+            corpus_id=corpus_id, window=session_date, instant=instant
+        ):
+            barred.append({"session_date": session_date, "reason": "already_exposed_for_corpus"})
+            continue
+        eligible.append(session_date)
+    return {
+        "corpus_id": corpus_id,
+        "eligible_session_dates": eligible,
+        "eligible_count": len(eligible),
+        "barred": barred,
+        "barred_count": len(barred),
+        "survivor_min_session_dates": minimum_sessions_for_sufficient_folds(DIAGNOSTIC_GEOMETRY),
+        "clears_survivor_floor": len(eligible)
+        >= minimum_sessions_for_sufficient_folds(DIAGNOSTIC_GEOMETRY),
+    }
+
+
+def run_tick_family_fold_request(
+    ledger: WalkForwardLedger,
+    config: Config,
+    *,
+    corpus_id: str = TICK_LEGACY_CORPUS_ID,
+    dataset_store: DatasetStore | None = None,
+) -> dict:
     """The tick-family fold request (goal.md J-05, iter-7) — the genuine production entry point
     goal.md's own acceptance clause names: "the tick-family fold request returns the typed
     floor-refusal naming `11 < 105`". Before this function, the ONE production fold-building call
@@ -1239,20 +1361,32 @@ def run_tick_family_fold_request(ledger: WalkForwardLedger, config: Config) -> d
     ``build_readiness`` already serves (no second error-reporting convention), so a damaged tick
     recording is reported to this function's caller rather than quietly excluded from the
     known-session-dates count."""
-    tick_dataset_store = DatasetStore(config.dataset_dir_resolved())
+    # r14 (performance, byte-identical): the store is constructed WITH the durable metadata index
+    # unless the caller supplies its own. Pre-r14 this was a bare `DatasetStore(dir)`, which the
+    # `_cached_meta` contract leaves on the full-verifier path -- every call re-read and re-hashed
+    # the entire corpus. Measured on the 27.5 GB store: 0.00 s indexed vs >600 s un-indexed. The
+    # index is only ever written from a value the full verifier itself produced, so an indexed hit
+    # returns exactly what the un-indexed path would have.
+    tick_dataset_store = dataset_store if dataset_store is not None else _indexed_dataset_store(config)
     # Spec section 7.5 point 6 (r4) + iter-9 audit finding B4: this inventory is a corpus-wide
-    # enumerator, so a withheld shard must not contribute its session date to `TICK_LEGACY_CORPUS_
-    # ID`'s floor count or to the `corpus_manifest_hash` registered in the fold ledger -- section
-    # 7.7 makes the legacy corpus permanently exploratory and disjoint from any sealed tranche, so
-    # a sealed shard silently inflating it is exactly the "code path that has never heard of
-    # sealing" this era set out to close. The count is DISCLOSED in the returned body below (never
-    # the ids). Wider than the r2 seed's `sealed`-only filter on purpose -- see
-    # `_tick_dataset_session_dates`' own docstring for why the two callers differ.
-    records, _list_errors = tick_dataset_store.list()
+    # enumerator, so a withheld shard must not contribute its session date to this corpus's floor
+    # count or to the `corpus_manifest_hash` registered in the fold ledger -- section 7.7 makes the
+    # legacy corpus permanently exploratory and disjoint from any sealed tranche, so a sealed shard
+    # silently inflating it is exactly the "code path that has never heard of sealing" this era set
+    # out to close. The count is DISCLOSED in the returned body below (never the ids). Wider than
+    # the r2 seed's `sealed`-only filter on purpose -- see `_tick_dataset_session_dates`' own
+    # docstring for why the two callers differ.
+    #
+    # r14 (performance): ONE inventory, not two. Pre-r14 this body called `list()` directly AND
+    # again inside `_tick_dataset_session_dates`, paying the full-verify cost twice per request.
+    # The already-verified `records` are threaded through instead -- the same list, so the derived
+    # session dates and the disclosure count are computed from one consistent snapshot of the store
+    # rather than from two reads that could disagree.
+    records, list_errors = tick_dataset_store.list()
     kept, withheld_excluded = exclude_withheld(records, tick_dataset_store)
     excluded_ids = frozenset(r["id"] for r in records) - frozenset(k["id"] for k in kept)
     session_dates, errors = _tick_dataset_session_dates(
-        tick_dataset_store, excluded_dataset_ids=excluded_ids
+        tick_dataset_store, excluded_dataset_ids=excluded_ids, records=records, errors=list_errors
     )
     corpus_manifest_hash = _sha256(_canonical(session_dates))
     floors = {
@@ -1276,11 +1410,11 @@ def run_tick_family_fold_request(ledger: WalkForwardLedger, config: Config) -> d
     # pre-iter-8 ordering did for this same case (idempotent on repeat calls via
     # `register_fold_spec`'s own "identical geometry replays the existing row" contract).
     register_fold_spec(
-        ledger, corpus_id=TICK_LEGACY_CORPUS_ID, corpus_manifest_hash=corpus_manifest_hash,
+        ledger, corpus_id=corpus_id, corpus_manifest_hash=corpus_manifest_hash,
         geometry=DIAGNOSTIC_GEOMETRY, floors=floors,
     )
     return {
-        "corpus_id": TICK_LEGACY_CORPUS_ID,
+        "corpus_id": corpus_id,
         "session_count": len(session_dates),
         "integrity_errors": errors,
         # Spec section 7.5 point 6 (r4): how many registered datasets this inventory excluded
@@ -1329,7 +1463,13 @@ def scout_candidate_walkforward_floor_check(
     actually SCORED through -- this function only decides whether that call would be legitimate
     (T-8, applied to a floor rather than a compute)."""
     all_sessions = sorted({o["session_date"] for o in observations})
-    if not has_any_exposure_entries(exposure_registry, corpus_id):
+    # r14: the pre-r14 guard was `has_any_exposure_entries`, which conflated two states that are
+    # not the same thing -- "a legacy corpus nobody initialized" and "a corpus era deliberately
+    # registered as fresh, whose emptiness is the POINT". It answered zero to both. The fix is a
+    # provenance record, never a sacrificed session: `corpus_exposure_baseline_established` is true
+    # for an r2-initialized corpus (at least one genuine exposure row) OR for one carrying an
+    # explicit fresh-era registration. Empty rows ALONE still prove nothing.
+    if not corpus_exposure_baseline_established(exposure_registry, corpus_id):
         oos_sessions: list[str] = []
     else:
         oos_sessions = [
@@ -1487,7 +1627,7 @@ def run_diagnostic_walkforward(
     # served, per-shard `exposure_state` is untouched by this). Fires from this SAME operator-act
     # entry point -- never a GET route (era Non-Goal: "No scheduling").
     if not has_any_exposure_entries(exposure_registry, TICK_LEGACY_CORPUS_ID):
-        tick_dataset_store = DatasetStore(config.dataset_dir_resolved())
+        tick_dataset_store = _indexed_dataset_store(config)  # r14: indexed, byte-identical
         # iter-9 (closes the known latent hole the iter-9 spec's BACKGROUND names): before this
         # seed reaches `initialize_r2_exposure_registry`, exclude any dataset id `vault.py`
         # currently reports `sealed` -- read via the SAME sibling-of-the-dataset-dir resolution
