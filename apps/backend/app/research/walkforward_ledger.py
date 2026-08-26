@@ -43,6 +43,7 @@ __all__ = [
     "register_fold_spec",
     "record_voiding_event",
     "record_mode_b_predeclaration",
+    "ConflictingModeBPredeclarationError",
     "mode_b_predeclarations_for_sequence",
     "latest_fold_spec",
     "voiding_events_for_corpus",
@@ -232,6 +233,22 @@ def mode_b_predeclarations_for_sequence(ledger: WalkForwardLedger, sequence_id: 
     return [row for row in ledger.rows_of_kind(ROW_KIND_MODE_B_SPEC) if row.get("sequence_id") == sequence_id]
 
 
+class ConflictingModeBPredeclarationError(Exception):
+    """r14.2: ``(corpus_id, rule_id)`` is already predeclared under a DIFFERENT frozen spec --
+    refused.
+
+    **The hole this closes.** The dedupe below matched on ``sequence_id`` AND ``spec_hash``, so a
+    re-registration that CHANGED the spec (a flipped ``sidedness``, a loosened ``econ_floor``) did
+    not match, fell through, and simply appended a second ``mode_b_spec`` row. The ledger then held
+    two contradictory predeclarations for one sequence, each with its own ``registered_at`` -- and a
+    reader picking either could justify whichever evidence class or direction suited the result.
+    That is exactly the freedom predeclaration exists to remove.
+
+    A predeclaration is a promise made before the outcome is read. Replaying the byte-identical
+    promise is free; changing it is a NEW hypothesis and needs a new ``rule_id``, which produces a
+    new ``sequence_id`` and its own honest registration instant."""
+
+
 def record_mode_b_predeclaration(ledger: WalkForwardLedger, spec: dict) -> dict:
     """spec section 6.5's own "a human-authored spec is registered (LEDGER ROW, spec hash,
     timestamp) FIRST; evaluation then runs on later windows": persists ONE permanent
@@ -245,6 +262,16 @@ def record_mode_b_predeclaration(ledger: WalkForwardLedger, spec: dict) -> dict:
     for row in mode_b_predeclarations_for_sequence(ledger, spec["sequence_id"]):
         if row.get("spec_hash") == spec["spec_hash"]:
             return dict(row)
+        # r14.2: same sequence, DIFFERENT spec -- a changed promise, not a replay. Refuse rather
+        # than appending a second, contradictory predeclaration for one sequence.
+        raise ConflictingModeBPredeclarationError(
+            f"sequence {spec['sequence_id']!r} (corpus {spec.get('corpus_id')!r}, rule "
+            f"{spec.get('rule_id')!r}) is already predeclared as spec_hash "
+            f"{row.get('spec_hash')!r} at {row.get('registered_at')!r}; this registration is "
+            f"{spec['spec_hash']!r} -- refused (r14.2): a predeclaration is a promise made before "
+            "the outcome was read and cannot be amended. A changed hypothesis needs its own "
+            "rule_id."
+        )
     return ledger.append_row({"row_kind": ROW_KIND_MODE_B_SPEC, **spec})
 
 

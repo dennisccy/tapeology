@@ -67,6 +67,7 @@ __all__ = [
     "price_extreme_trailing",
     "divergence_delta_threshold",
     "divergence_at_level",
+    "DIVERGENCE_CONTINUOUS_EQUIVALENCE",
     "OutcomeRefused",
     "resolve_outcome_start",
     "require_outcome_start_not_before_conditioning",
@@ -259,7 +260,19 @@ def divergence_at_level(
     caller (a future ``micro_join.py``, J-03 -- out of scope this iteration, since no band-touch
     join exists yet) supplies the two cumulative-delta readings and the trailing price history
     directly; this function performs no lookup of its own. ``available_at = tau2`` (the later
-    touch fixes when the comparison could first be made)."""
+    touch fixes when the comparison could first be made).
+
+    **r14.2 -- the continuous representation, added alongside (never in place of) the boolean.**
+    goal.md requires continuous mechanism-defined representations first and threshold variants
+    second. This returns Card 9.1's own two conjuncts as two independent, mechanism-preserving
+    coordinates -- ``price_extension_bps`` (how much further price extended, in bps of the earlier
+    extreme) and ``delta_weakening_multiple`` (how many threshold-widths of cumulative delta were
+    given up) -- and ``bearish_divergence`` is then exactly the predeclared corner
+    ``price_extension_bps > 0 and delta_weakening_multiple >= 1``. No weighted composite, no
+    z-score, no fitted weights, no new threshold: the axes are the mechanism, and the boolean is
+    one transform of them. Card 9.1's semantics are unchanged -- every input that produced ``True``
+    before produces ``True`` now. See ``DIVERGENCE_CONTINUOUS_EQUIVALENCE`` for the algebra and for
+    the single disclosed domain asymmetry (``delta == 0``)."""
     price_extreme_tau1 = price_extreme_trailing(price_history, tau1)
     price_extreme_tau2 = price_extreme_trailing(price_history, tau2)
     delta = divergence_delta_threshold(baseline_volumes)
@@ -270,6 +283,36 @@ def divergence_at_level(
         bearish = (price_extreme_tau2 > price_extreme_tau1) and (
             cum_delta_at_tau2 <= cum_delta_at_tau1 - delta
         )
+
+    # --- r14.2: the CONTINUOUS mechanism-defined coordinates (goal.md's "continuous
+    # mechanism-defined representations first; threshold variants second"). Two axes, each one of
+    # Card 9.1's own two conjuncts measured on its own scale -- never a weighted composite, a
+    # z-score, or a fitted blend, all of which would introduce a free parameter this era has not
+    # predeclared and could not falsify.
+    #
+    # Axis 1: how much FURTHER price extended at the later touch, in basis points of the earlier
+    # extreme. Undefined without a positive basis to divide by.
+    if (
+        price_extreme_tau1 is None
+        or price_extreme_tau2 is None
+        or price_extreme_tau1 <= 0
+    ):
+        price_extension_bps = None
+    else:
+        price_extension_bps = (
+            (price_extreme_tau2 - price_extreme_tau1) / price_extreme_tau1 * 10_000.0
+        )
+
+    # Axis 2: how many THRESHOLD-WIDTHS of cumulative delta were given up between the touches. The
+    # threshold is the unit, so 1.0 is exactly Card 9.1's own bar and the axis is dimensionless.
+    # `delta` is None on a thin baseline (<5 windows) and can legitimately be 0.0 when the median
+    # baseline volume is zero -- neither is a positive measured denominator, so both read None
+    # rather than infinity or a divide-by-zero.
+    if delta is None or delta <= 0:
+        delta_weakening_multiple = None
+    else:
+        delta_weakening_multiple = (cum_delta_at_tau1 - cum_delta_at_tau2) / delta
+
     return {
         "tau1": tau1,
         "tau2": tau2,
@@ -278,9 +321,39 @@ def divergence_at_level(
         "cum_delta_tau1": cum_delta_at_tau1,
         "cum_delta_tau2": cum_delta_at_tau2,
         "delta_volume_fraction_threshold": delta,
+        # The continuous representation (r14.2). The boolean below is one predeclared threshold
+        # transform OF these two coordinates, not an independent measurement:
+        #   bearish_divergence  <=>  price_extension_bps > 0 AND delta_weakening_multiple >= 1
+        # exactly, whenever both coordinates are defined (see `DIVERGENCE_CONTINUOUS_EQUIVALENCE`).
+        "price_extension_bps": price_extension_bps,
+        "delta_weakening_multiple": delta_weakening_multiple,
         "bearish_divergence": bearish,
         "available_at": tau2,
     }
+
+
+#: r14.2 -- the exact, hand-checkable algebra tying Card 9.1's boolean to the continuous axes above,
+#: recorded next to the code that must keep satisfying it.
+#:
+#:   price_extension_bps > 0
+#:     <=> (p2 - p1)/p1 * 10000 > 0        [p1 > 0, so the divisor is sign-preserving]
+#:     <=> p2 > p1                          [Card 9.1's price conjunct, exactly]
+#:
+#:   delta_weakening_multiple >= 1
+#:     <=> (cd1 - cd2)/delta >= 1           [delta > 0, so the inequality direction is preserved]
+#:     <=> cd1 - cd2 >= delta
+#:     <=> cd2 <= cd1 - delta               [Card 9.1's delta conjunct, exactly]
+#:
+#: **The one disclosed asymmetry.** When `delta == 0.0` (>=5 baseline windows whose median volume is
+#: zero -- thin tape, not a bug) the BOOLEAN is still defined and reduces to `cd2 <= cd1`, while the
+#: continuous multiple is undefined (no positive unit to express weakening in). Card 9.1's semantics
+#: are frozen and are NOT changed here; the equivalence is therefore stated over the domain where
+#: both coordinates are defined, and a consumer of the continuous representation drops those anchors
+#: honestly rather than imputing a value for them.
+DIVERGENCE_CONTINUOUS_EQUIVALENCE = (
+    "bearish_divergence <=> price_extension_bps > 0 and delta_weakening_multiple >= 1 "
+    "(over anchors where both coordinates are defined)"
+)
 
 
 # --- F-RESPONSE ----------------------------------------------------------------------------------

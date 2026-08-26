@@ -1004,6 +1004,10 @@ CORPUS_ID: str | None = None
 PROBE_DATE: str | None = None
 PROBE_NOTE: str = ""
 COMMIT: bool = False
+# r14.2 (§5): the real-tick Mode B predeclaration stage's own inputs.
+RULE_ID: str | None = None
+SIDEDNESS: str | None = None
+ECON_FLOOR_BPS: float | None = None
 
 
 def _exposure_registry():
@@ -1088,13 +1092,25 @@ def stage_release_plan() -> dict:
 
 
 def stage_release() -> dict:
-    """r14.1: release every plan-releasable member that has a genuine dataset in this store."""
+    """r14.1: release every plan-releasable member that has a genuine dataset in this store.
+
+    r14.2: each release now PRECOMMITS its session window as exposed under the universe's own
+    bound corpus era, before the dataset becomes servable -- so this stage requires the era to
+    exist first (stage ``corpus-era --commit``)."""
     from app.research import micro_corpus as mc  # noqa: F401 -- symmetry with the other stages
+    from app.research.micro_accessor import corpus_era_record_for_universe
 
     uled, sled, _pled, store, d = _ledgers()
     universe = vault.find_universe(uled, UNIVERSE_ID)
     if universe is None:
         raise SystemExit(f"STOP: universe {UNIVERSE_ID!r} is not registered")
+    registry = _exposure_registry()
+    era = corpus_era_record_for_universe(registry, UNIVERSE_ID)
+    if era is None:
+        raise SystemExit(
+            "STOP: no corpus era is bound to this universe -- run stage corpus-era --commit "
+            "first (r14.2: a release is an exposure event and needs a corpus_id to record it under)"
+        )
     secret = vault.load_vault_secret()
     incidents = vault.disclosure_incident_ledger_for_dataset_dir(d)
     plan_ledger = vault.release_plan_ledger_for_dataset_dir(d)
@@ -1123,6 +1139,12 @@ def stage_release() -> dict:
         "releasable_positions": len(releasable),
         "datasets_eligible_now": len(candidates),
         "reserved_decoy_size": len(plan["reserved_decoy"]),
+        # r14.2: what this act will BURN. Named in the dry run, before anything is released.
+        "corpus_id": era["corpus_id"],
+        "session_windows_to_expose": len(
+            {vault._et_session_date_of(m["window_start_utc"])
+             for m in records if m["id"] in set(candidates)}
+        ),
     }
     out = _require_commit("release the eligible members", payload)
     if out["committed"]:
@@ -1130,7 +1152,7 @@ def stage_release() -> dict:
         for dataset_id in sorted(candidates):
             try:
                 vault.release_unselected_dataset(
-                    store, sled, uled, incidents, plan_ledger,
+                    store, sled, uled, incidents, plan_ledger, registry,
                     dataset_id=dataset_id, universe_id=UNIVERSE_ID,
                     vault_secret=secret, released_at=_utc(),
                 )
@@ -1171,13 +1193,105 @@ def stage_probe() -> dict:
     return out
 
 
+
+def stage_mode_b_predeclare() -> dict:
+    """r14.2 (§5): PERMANENTLY predeclare a real-tick Mode B hypothesis, before any release.
+
+    **Why this stage has to exist.** ``walkforward.register_mode_b_spec`` is a pure in-memory
+    constructor, and the only production code that ever persisted its output is
+    ``run_diagnostic_walkforward`` -- which predeclares one hardcoded PLAYBOOK-BAR rule. A real tick
+    campaign therefore had no operator path to freeze a hypothesis at all, and the entire
+    ``historical_oos`` claim rests on the spec being on disk, hash-chained, BEFORE its validation
+    windows were ever exposed.
+
+    **The order this stage makes possible** (spec §6.5 + §6.7):
+
+        register universe -> bind corpus era -> commit release plan -> PREDECLARE (here, T1)
+        -> record while withheld -> release + exposure precommit (T2 > T1) -> evaluate
+
+    Because ``classify_evidence_class`` compares ``spec.registered_at`` against each window's
+    exposure instant and nothing else, a spec frozen at T1 earns ``historical_oos`` on windows
+    released at T2, while a spec frozen at T3 > T2 gets ``historical_exposed_diagnostic`` on the
+    very same windows. No special-casing anywhere -- timestamps and the existing rule.
+
+    Freezes ``corpus_id``, ``rule_id``, ``sidedness`` and ``econ_floor``; records ``spec_hash`` and
+    ``registered_at``; append-only; a byte-identical replay is idempotent and a CHANGED spec for
+    the same sequence refuses (``ConflictingModeBPredeclarationError``)."""
+    from app.research import walkforward as wf
+    from app.research.micro_corpus import corpus_is_bound
+
+    if not CORPUS_ID:
+        raise SystemExit("STOP: --corpus-id is required for the mode-b-predeclare stage")
+    if not RULE_ID:
+        raise SystemExit("STOP: --rule-id is required for the mode-b-predeclare stage")
+    if SIDEDNESS not in ("long", "short"):
+        raise SystemExit(
+            "STOP: --sidedness must be long or short (r14.2: an unsided Mode B hypothesis passes "
+            "its own test in either direction and falsifies nothing)"
+        )
+    registry = _exposure_registry()
+    if not corpus_is_bound(registry, CORPUS_ID):
+        raise SystemExit(
+            f"STOP: corpus {CORPUS_ID!r} is not bound to a registered universe -- run stage "
+            "corpus-era --commit first. A hypothesis frozen against an unbound corpus names no "
+            "body of evidence."
+        )
+    econ_floor = None if ECON_FLOOR_BPS is None else {
+        "kind": "median_spread_multiple", "unit": "return_bps", "value_bps": ECON_FLOOR_BPS,
+    }
+    ledger = wf.WalkForwardLedger(wf.resolve_walkforward_ledger_dir(CONFIG.dataset_dir_resolved()))
+
+    # Built (not appended) first, so the DRY RUN reports the exact spec_hash that would be frozen.
+    preview = wf.register_mode_b_spec(
+        corpus_id=CORPUS_ID, rule_id=RULE_ID, sidedness=SIDEDNESS, econ_floor=econ_floor,
+        registered_at=_utc(),
+    )
+    existing = [
+        r for r in wf.mode_b_predeclarations_for_sequence(ledger, preview["sequence_id"])
+    ]
+    payload = {
+        "stage": "mode_b_predeclare",
+        "at": _utc(),
+        "corpus_id": CORPUS_ID,
+        "rule_id": RULE_ID,
+        "sequence_id": preview["sequence_id"],
+        "sidedness": SIDEDNESS,
+        "econ_floor": econ_floor,
+        "spec_hash": preview["spec_hash"],
+        "already_predeclared": [
+            {"spec_hash": r.get("spec_hash"), "registered_at": r.get("registered_at")}
+            for r in existing
+        ],
+        "consequence": (
+            "PERMANENT: this hypothesis is frozen from registered_at. Every validation window "
+            "first exposed AFTER that instant can carry historical_oos evidence for it; every "
+            "window already exposed before it is historical_exposed_diagnostic, forever."
+        ),
+    }
+    out = _require_commit("freeze this Mode B hypothesis", payload)
+    if out["committed"]:
+        spec = wf.register_mode_b_spec(
+            corpus_id=CORPUS_ID, rule_id=RULE_ID, sidedness=SIDEDNESS, econ_floor=econ_floor,
+            registered_at=_utc(),
+        )
+        row = wf.record_mode_b_predeclaration(ledger, spec)
+        out["spec_hash"] = row["spec_hash"]
+        out["registered_at"] = row["registered_at"]
+        out["row_index"] = row["row_index"]
+        out["idempotent_replay"] = row["spec_hash"] == preview["spec_hash"] and bool(existing)
+    _write("mode-b-predeclaration.json", out)
+    return out
+
+
 _STAGES = {"provenance": stage_provenance, "register": stage_register,
            "preflight": stage_preflight, "record": stage_record,
            "bars": stage_bars, "verify": stage_verify,
            "disclosure": stage_disclosure, "tr2": stage_tr2,
            # r14.1 (H): the four acts r14 left as library-only primitives.
            "corpus-era": stage_corpus_era, "release-plan": stage_release_plan,
-           "release": stage_release, "probe": stage_probe}
+           "release": stage_release, "probe": stage_probe,
+           # r14.2 (§5): the durable real-tick Mode B predeclaration this era had no operator path for.
+           "mode-b-predeclare": stage_mode_b_predeclare}
 
 
 def main() -> int:
@@ -1185,10 +1299,11 @@ def main() -> int:
         print(
             f"usage: python -m scripts.j06_operator {{{'|'.join(_STAGES)}}} "
             "[--universe-id ID --dates-file PATH] [--corpus-id ID] "
-            "[--probe-date YYYY-MM-DD] [--probe-note TEXT] [--commit]"
+            "[--probe-date YYYY-MM-DD] [--probe-note TEXT] "
+            "[--rule-id ID --sidedness long|short] [--econ-floor-bps N] [--commit]"
         )
         return 2
-    global CORPUS_ID, PROBE_DATE, PROBE_NOTE, COMMIT
+    global CORPUS_ID, PROBE_DATE, PROBE_NOTE, COMMIT, RULE_ID, SIDEDNESS, ECON_FLOOR_BPS
     stage = sys.argv[1]
     rest = sys.argv[2:]
     universe_id = dates_file = None
@@ -1204,6 +1319,12 @@ def main() -> int:
             PROBE_DATE = rest.pop(0)
         elif flag == "--probe-note" and rest:
             PROBE_NOTE = rest.pop(0)
+        elif flag == "--rule-id" and rest:
+            RULE_ID = rest.pop(0)
+        elif flag == "--sidedness" and rest:
+            SIDEDNESS = rest.pop(0)
+        elif flag == "--econ-floor-bps" and rest:
+            ECON_FLOOR_BPS = float(rest.pop(0))
         elif flag == "--commit":
             COMMIT = True
         else:

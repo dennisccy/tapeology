@@ -2520,11 +2520,17 @@ export interface MicroReadinessStudyFloor {
   required_sessions_note: string;
   available_session_dates: number;
   first_fold_min_session_dates: number;
+  // r14.2: the accurate name. `survivor_min_session_dates` is the SAME number under r14's own
+  // misnomer -- a session COUNT can say folds are CONSTRUCTIBLE, never that a survivor is
+  // reachable, which depends on the observation floors inside each test window.
+  constructible_folds_min_session_dates: number;
   survivor_min_session_dates: number;
   first_fold_status: string;
+  constructible_folds_status: string;
   survivor_status: string;
   folds_constructible: number;
   min_sufficient_folds: number;
+  sufficiency_note: string;
   status: string;
 }
 

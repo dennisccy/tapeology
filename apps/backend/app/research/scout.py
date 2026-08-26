@@ -622,6 +622,13 @@ def _extract_divergence_anchors(
                         "outcome_unit": outcome["mid"]["unit"],
                         "tod_bucket": tod_bucket_for_epoch(epoch_anchor + tau2_row["anchor_at"]),
                         "fallback_frac": tau2_row.get("fallback_frac_20t"),
+                        # r14.2: Card 9.1's own two conjuncts, carried through UNAGGREGATED so the
+                        # continuous diagnostic can read the mechanism rather than only its
+                        # thresholded corner. Purely additive: `screen_candidate` reads named keys
+                        # (`feature_value`, `session_date`, `symbol`, `outcome_bps`) and never
+                        # hashes or enumerates the anchor dict, so no ledgered value moves.
+                        "price_extension_bps": divergence["price_extension_bps"],
+                        "delta_weakening_multiple": divergence["delta_weakening_multiple"],
                     }
                 )
     return anchors

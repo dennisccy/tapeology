@@ -47,6 +47,7 @@ from . import vault
 __all__ = [
     "CorpusNotBoundError",
     "CorpusMembershipError",
+    "DuplicateCorpusPositionError",
     "register_bound_corpus_era",
     "resolve_corpus_binding",
     "corpus_is_bound",
@@ -67,6 +68,27 @@ class CorpusMembershipError(Exception):
     """A bound corpus's membership could not be resolved honestly -- the universe named by its
     registration is gone, the committed release plan is missing, or the plan no longer recomputes
     to what was committed."""
+
+
+class DuplicateCorpusPositionError(CorpusMembershipError):
+    """r14.2: more than ONE genuine recorder dataset resolves to a single registered
+    ``(symbol, session_date)`` -- refused.
+
+    **Why this is not a filtering problem.** A registered position is one session of one symbol:
+    one physical body of tape. Retries, interrupted recordings and re-recordings can each leave a
+    complete, conforming dataset behind on the same pair. Admitting both would put that session's
+    observations into the corpus twice -- double-weighting its session cluster in every fold mean,
+    and inflating the distinct-session and distinct-symbol breadth counts the per-fold floors are
+    computed from. The corpus would look broader than the evidence actually is.
+
+    **Why it fails closed instead of choosing.** Picking the latest, the earliest, the largest or
+    the first would each be a supersession rule -- a methodology decision about which recording of
+    a session is THE recording, and what makes the others void. No such rule is frozen in the spec,
+    so this module refuses to invent one silently at read time. The duplicate is an operational
+    fact a human resolves, permanently and on the record, before the corpus is read.
+
+    A subclass of ``CorpusMembershipError``: a caller that already handles membership-resolution
+    failure keeps handling this one, and can never mistake it for an empty corpus."""
 
 
 def _sha256_hex(payload: bytes) -> str:
@@ -178,6 +200,10 @@ def eligible_oos_members(
       * its ``created_utc`` reaches the binding's ``freshness_boundary``;
       * it is not currently withheld by the vault (i.e. it has actually been released).
 
+    And exactly ONE dataset may resolve to each registered position (r14.2): two genuine recorder
+    datasets on one ``(symbol, session_date)`` raise ``DuplicateCorpusPositionError`` rather than
+    being silently deduplicated by an invented supersession rule.
+
     Returns the members AND the class counts every one of the other positions falls into, because a
     fold that quietly evaluated a subset is exactly the failure this whole structure prevents. No
     events and no snapshot rows are read: the sealed members' ids never enter the returned manifest,
@@ -265,6 +291,26 @@ def eligible_oos_members(
             }
         )
     members.sort(key=lambda m: (m["session_date"], m["symbol"], m["dataset_id"]))
+
+    # r14.2 §3 -- ONE registered position, ONE scientific dataset. Checked after the class filters
+    # (a duplicate that is not even a member is not this corpus's problem) and before anything is
+    # returned, so no caller ever sees a corpus whose session clusters are silently double-weighted.
+    by_position: dict[tuple[str, str], list[str]] = {}
+    for m in members:
+        by_position.setdefault(
+            (vault._normalize_symbol(m["symbol"]), m["session_date"]), []
+        ).append(m["dataset_id"])
+    collisions = {pos: ids for pos, ids in by_position.items() if len(ids) > 1}
+    if collisions:
+        detail = "; ".join(
+            f"({sym}, {date}) -> {sorted(ids)}" for (sym, date), ids in sorted(collisions.items())
+        )
+        raise DuplicateCorpusPositionError(
+            f"corpus {corpus_id!r} resolves {len(collisions)} registered position(s) to more than "
+            f"one genuine recorder dataset -- refused (r14.2): {detail}. Each is a complete "
+            "recording of the same session, and no frozen supersession rule says which one is THE "
+            "recording. Resolve the duplicate on the record before this corpus is read."
+        )
     resolved_positions = {(vault._normalize_symbol(m["symbol"]), m["session_date"]) for m in members}
     rejected["not_in_releasable_class"] = len(releasable) - len(resolved_positions)
 

@@ -476,6 +476,79 @@
 >
 > Detail → §6.2, §6.7, §7.2.2, §7.4, §7.5. Traps → TR-40, TR-41, TR-42.
 
+### r14.2 — physical evidence may earn out-of-sample credit exactly ONCE
+
+> r14.1 bound a corpus to a universe and made partial-pool OOS work. A post-commit review found four
+> further ways evidence could be re-earned, double-counted, or claimed on a date count alone.
+>
+> **(1) One registered universe founds exactly ONE corpus era (§6.7).** `corpus_id → universe` was
+> enforced; the inverse was free. Bind `corpus_A` to universe `U`, spend it, then bind a fresh
+> `corpus_B` to the same `U`: because exposure is scoped by `corpus_id`, `corpus_B` opens a pristine
+> exposure namespace over physically identical bytes, and every window `corpus_A` already spent
+> reads `historical_oos` again — evidence re-earned without re-recording a tick. A universe is the
+> physical body of evidence; it is spent once and founds one era
+> (`UniverseAlreadyBoundToCorpusError`). The refusal is read from the durable registry, holds when
+> the first era has ZERO exposure rows (the exploit is the fresh NAMESPACE, not the rows in it), and
+> leaves a byte-identical replay idempotent.
+>
+> **(2) Release IS a physical exposure event (§7.4/§6.7).** Exploratory release turns a withheld
+> dataset into ordinary servable evidence — its outcomes become inspectable the instant the shard row
+> lands. r14.1 recorded no exposure for that, so a rule frozen AFTERWARDS could claim out-of-sample
+> credit over tape anyone could already read. Release now resolves its `corpus_id` from the
+> universe's own era (never operator-supplied) and **appends the exposure row BEFORE the shard row**.
+> The two ledgers cannot be made atomic, so the order is chosen for which failure is survivable: a
+> crash between them burns the window and leaves the dataset withheld — evidence destroyed, which is
+> acceptable. The reverse order would leave servable data with no exposure fact, which never is.
+> Exposure is deduped per `(corpus_id, session window)`, and only by a row already stamped at or
+> before the release instant.
+>
+> **(3) One registered position holds exactly ONE scientific dataset (§6.2/§7.4).** A retry or
+> re-recording can leave two complete recorder datasets on one `(symbol, session_date)`. Admitting
+> both double-weights that session's cluster in every fold mean and inflates the distinct-session and
+> distinct-symbol breadth counts the per-fold floors read. Both the membership resolver
+> (`DuplicateCorpusPositionError`) and the release boundary (`DuplicateReleasedPositionError`) now
+> fail closed. They do **not** pick the latest, earliest, largest or first: that would be a
+> supersession rule, and no such rule is frozen in this spec. A human resolves the duplicate on the
+> record.
+>
+> **(4) 105 is a CONSTRUCTIBILITY floor, not a sufficiency one (§6.2).** r14.1 proved that 105
+> distinct session dates under `DIAGNOSTIC_GEOMETRY` yield three **constructible** walk-forward folds
+> while every sealed shard stays unread. That claim is valid and unchanged. It does **not** establish
+> three **sufficient** folds, which additionally require `WF_FOLD_MIN_OBSERVATIONS`(30),
+> `WF_FOLD_MIN_SIGNAL_SESSIONS`(8) and `WF_FOLD_MIN_SYMBOLS`(2) — properties of the OBSERVATIONS
+> inside a test window, unknowable from any date count. A sparse candidate produces three
+> constructible folds and zero sufficient ones. State it exactly:
+>
+> > **105 = the minimum distinct session dates required for 3 constructible folds under
+> > `DIAGNOSTIC_GEOMETRY`. 105 does NOT guarantee a walk-forward survivor is reachable on a sparse
+> > candidate.**
+>
+> No floor, no geometry and no threshold moved. `minimum_sessions_for_constructible_folds` is the
+> accurate name (the old `minimum_sessions_for_sufficient_folds` survives as a documented
+> deprecated alias — its name was itself the confusion), and `fold_sufficiency_summary` reports
+> `constructible_fold_count` and `sufficient_fold_count` separately.
+>
+> **(5) Mode B predeclaration is durable and unamendable (§6.5).** `record_mode_b_predeclaration`
+> deduped on `(sequence_id, spec_hash)`, so a CHANGED spec — a flipped `sidedness`, a loosened
+> `econ_floor` — simply appended a second, contradictory predeclaration for one sequence, leaving a
+> reader free to pick. It now refuses (`ConflictingModeBPredeclarationError`); a changed hypothesis
+> needs a new `rule_id`. Mode B also refuses an UNSIDED spec (`UnsidedModeBSpecError`): unsided is
+> legal for an exploratory Scout candidate, which is a question, but a fixed hypothesis that passes
+> its own test in either direction falsifies nothing. A dry-by-default operator stage
+> (`mode-b-predeclare`) freezes `corpus_id`/`rule_id`/`sidedness`/`econ_floor` and records
+> `spec_hash`/`registered_at` — the production path a real tick campaign never had.
+>
+> **(6) Study 2's continuous representation (§3, Card 9.1).** goal.md requires continuous
+> mechanism-defined representations first and threshold variants second. `divergence_at_level` now
+> also returns Card 9.1's own two conjuncts as coordinates — `price_extension_bps` and
+> `delta_weakening_multiple` — and the boolean is exactly the predeclared corner
+> `price_extension_bps > 0 AND delta_weakening_multiple >= 1`. No weighted composite, no z-score, no
+> fitted weights, no new threshold; Card 9.1's semantics are unchanged. One asymmetry is disclosed:
+> at `delta == 0` (≥5 baseline windows of zero median volume) the boolean stays defined and the
+> multiple does not, so the equivalence is stated over the domain where both coordinates are defined.
+>
+> Detail → §3, §6.2, §6.5, §6.7, §7.4. Traps → TR-43, TR-44, TR-45, TR-46.
+
 ---
 
 ## 0. Shared conventions
@@ -1605,6 +1678,10 @@ boundary by its `observed_through`.
 | TR-39 exploratory release of NOT-selected pool members (r14 §7.4/§7.5 point 7/§7.2.2) | An HMAC-NOT-selected registered-pool member releases to `exploratory_released` and stops being withheld · an HMAC-SELECTED member is REFUSED that path · a dataset already carrying any shard row is refused, and a released row can afterwards be neither sealed nor assigned — no sealed/blind credit, no single shot consumed · a pair outside `expected_recording_pairs()` is refused · a secret not matching the universe's committed `vault_secret_commitment` is refused · releasing every unselected member is refused at the LAST one, leaving at least one decoy, so the hidden set is never determinable by subtraction · whole-pool release becomes reachable once every selected member is exposed, and the revealed rule recomputes exactly to the registered `rule_commitment` · `VAULT_SEAL_HEX_BELOW` is unchanged |
 | TR-40 partial-pool OOS on a mixed date (r14.1 §7.4/§6.2) | A date holding 6 HMAC-not-selected released members and 2 sealed ones is USABLE: the reader reads exactly the 6, the 2 sealed dataset ids receive ZERO read calls, and the fold's realized symbol breadth is reported as 6 rather than the panel's 8 · a bound corpus's members never include a legacy same-date sibling, a member of another registered universe, a dataset created before the freshness boundary, or a still-withheld one · every expected member missing a snapshot REFUSES rather than silently shrinking the corpus · a 105-date universe with a real HMAC partition produces `WF_MIN_SUFFICIENT_FOLDS` folds with no sealed id in any fold window |
 | TR-41 corpus identity binding + anti-laundering (r14.1 §6.7/§6.2) | An unbound `corpus_id` has no membership and refuses · a corpus era can only bind to a universe that exists · conflicting re-registration of the same `corpus_id` refuses while a byte-identical replay is idempotent · an already-exposed legacy dataset given a brand-new `corpus_id` can neither enter its membership nor be released into it · `corpus_manifest_hash` moves when a member id, a member checksum or the member count changes, and is order-independent |
+| TR-43 one universe, one corpus era (r14.2 §6.7) | Binding a SECOND `corpus_id` to an already-bound universe refuses, and refuses identically when the first era carries zero exposure rows · the refusal is read from the durable registry, so a fresh registry object over the same directory sees it · a byte-identical re-registration is idempotent and returns the FIRST registration instant · the same `corpus_id` re-pointed at a different universe identity still raises the r14.1 conflict · a DIFFERENT universe may still found its own era |
+| TR-44 release is an exposure event (r14.2 §7.4/§6.7) | A release resolves its `corpus_id` from the universe (never operator-supplied) and appends the exposure row BEFORE the shard row · a registry that refuses to append leaves the dataset withheld · a crash after the exposure append leaves the window burned and the dataset withheld · a spec frozen before the release classifies `historical_oos` and one frozen after classifies `historical_exposed_diagnostic`, on the same window and by timestamps alone · release under a universe with no bound era refuses · N releases on one date produce exactly ONE exposure row, and a row stamped LATER than the release never discharges it |
+| TR-45 one registered position, one dataset (r14.2 §6.2/§7.4) | Two genuine recorder datasets on one `(symbol, session_date)` refuse membership resolution rather than being deduplicated by an invented supersession rule · a second dataset at an already-released position refuses release · every manifest position is unique, so no session cluster is weighted twice |
+| TR-46 constructible vs sufficient folds (r14.2 §6.2/§6.5) | 105 dates yield exactly 3 CONSTRUCTIBLE folds under `DIAGNOSTIC_GEOMETRY` and 104 yield 2 · 105 dates with a sparse candidate yield 3 constructible and 0 sufficient folds, each naming which floor bit, and the sequence verdict REFUSES · 105 dates with dense canonical observations yield 3 sufficient `historical_oos` folds and a real verdict · a Mode B predeclaration is a hash-chained row, an identical replay is idempotent, a conflicting replay refuses, and an unsided spec refuses while the Scout boundary stays unsided-legal |
 | TR-42 precommitted release plan + store-derived release (r14.1 §7.2.2/§7.4) | The release boundary takes NO caller-supplied `symbol`/`session_date`/`checksum`/`event_count` -- all are derived from the store · a dataset whose store identity is not a pool member, is not recorder output, or predates the universe REFUSES · release without a committed plan refuses · the reserved decoy refuses while anything is sealed and becomes releasable exactly when nothing is · the same universe + same secret yields the same decoy and the same final released set under ANY release order · a conflicting plan commitment refuses and the commitment serves class SIZES only · exposure is present in the registry before the first outcome row is read, and survives a crash mid-read |
 | TR-26 depletion revealing quote (r6 §3) | Price-change termination: `available_at` equals the first CHANGED-price quote, not the last same-price one · bound termination: `available_at` equals the bound-hitting quote · truncating immediately BEFORE the revealing quote makes the depletion value non-existent/unavailable, and including it makes the value appear deterministically |
 

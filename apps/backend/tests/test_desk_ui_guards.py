@@ -313,7 +313,11 @@ _PRICE_ARITHMETIC_FIELDS = (
     # served -- the whole point of the change is that the browser stops implying a fold arithmetic
     # the backend never performed.
     r"|floor\.(?:required_sessions|available_sessions|available_session_dates"
-    r"|first_fold_min_session_dates|survivor_min_session_dates|folds_constructible)"
+    # r14.2: `constructible_folds_min_session_dates` is the accurate name for the same number --
+    # a session COUNT proves folds are BUILDABLE, never that a survivor is reachable. Renders as
+    # served, like every other floor value here.
+    r"|first_fold_min_session_dates|survivor_min_session_dates"
+    r"|constructible_folds_min_session_dates|folds_constructible)"
     # goal-rapid-microscope-iter-14 (J-08 half 1): the new Scout Ledger / Walk-Forward / Validation
     # Vault sections' own served numerics -- GET /research/desk/micro/{scout,walkforward,vault}
     # read verbatim for the first time in the browser. The Scout Ledger's `screen_result` and the

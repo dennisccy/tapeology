@@ -6175,9 +6175,12 @@ function MicroReadinessSection({
         <h4 className="mb-2 text-xs font-semibold text-slate-400">Pilot-Study Floors</h4>
         <p className="mb-2 text-[11px] text-slate-500">
           Counted in DISTINCT SESSION DATES (spec §0), never in RTH coverage. A first fold needs
-          train + embargo + test contiguous dates; a walk-forward survivor verdict needs enough for
-          three sufficient folds. The older 40 + 20 = {readiness.study_floors[0]?.required_sessions}{" "}
-          arithmetic omits the embargo and never implied a fold could run.
+          train + embargo + test contiguous dates. These are CONSTRUCTIBILITY floors: clearing them
+          means the folds can be built, never that a walk-forward survivor is reachable — a fold is
+          SUFFICIENT only if enough qualifying observations land in its test window (30 observations
+          / 8 signal sessions / 2 symbols), which no date count can predict. The older 40 + 20 ={" "}
+          {readiness.study_floors[0]?.required_sessions} arithmetic omits the embargo and never
+          implied a fold could run.
         </p>
         <div className="overflow-x-auto">
           <table
@@ -6189,10 +6192,10 @@ function MicroReadinessSection({
                 <th className="px-1.5 py-1">Study</th>
                 <th className="px-1.5 py-1 text-right">Session dates</th>
                 <th className="px-1.5 py-1 text-right">First fold needs</th>
-                <th className="px-1.5 py-1 text-right">Survivor needs</th>
+                <th className="px-1.5 py-1 text-right">3 folds need</th>
                 <th className="px-1.5 py-1 text-right">Folds</th>
                 <th className="px-1.5 py-1">First fold</th>
-                <th className="px-1.5 py-1">Survivor</th>
+                <th className="px-1.5 py-1">3 folds buildable</th>
               </tr>
             </thead>
             <tbody data-testid="micro-readiness-floor-rows">
@@ -6206,7 +6209,7 @@ function MicroReadinessSection({
                     {floor.first_fold_min_session_dates}
                   </td>
                   <td className="px-1.5 py-1 text-right font-mono text-slate-300">
-                    {floor.survivor_min_session_dates}
+                    {floor.constructible_folds_min_session_dates}
                   </td>
                   <td className="px-1.5 py-1 text-right font-mono text-slate-300">
                     {floor.folds_constructible}
@@ -6222,12 +6225,12 @@ function MicroReadinessSection({
                   </td>
                   <td
                     className={
-                      floor.survivor_status === "floor_met"
+                      floor.constructible_folds_status === "floor_met"
                         ? "px-1.5 py-1 text-emerald-400"
                         : "px-1.5 py-1 text-amber-300"
                     }
                   >
-                    {floor.survivor_status}
+                    {floor.constructible_folds_status}
                   </td>
                 </tr>
               ))}

@@ -76,6 +76,20 @@ def _register_universe(universe_ledger, dates: list[str], universe_id: str = _UN
     )
 
 
+def _bound_registry(tmp_path: Path, universe_ledger, *, universe_id: str = _UNIVERSE,
+                    corpus_id: str = _CORPUS, registered_at: str = "2026-03-03T00:00:00.000000Z"):
+    """r14.2: a release resolves its corpus era from the universe, so every release fixture needs
+    one. Returns the registry with the bound era already registered."""
+    registry = ma.ExposureRegistry(
+        ma.resolve_micro_exposure_registry_dir(str(tmp_path / "datasets"))
+    )
+    mc.register_bound_corpus_era(
+        registry, universe_ledger, corpus_id=corpus_id, universe_id=universe_id,
+        registered_at=registered_at,
+    )
+    return registry
+
+
 def _record_dataset(store: DatasetStore, symbol: str, session_date: str, *, n_trades: int = 40,
                     schema_basis: str | None = vault.RECORDER_SCHEMA_BASIS, seed: float = 0.0):
     """One conforming recorder-shaped dataset. ``schema_basis=None`` mints a LEGACY dataset -- the
@@ -172,7 +186,7 @@ def _release_all_eligible(rig, order=None):
         if dataset_id is None:
             continue
         vault.release_unselected_dataset(
-            rig["store"], rig["sled"], rig["uled"], rig["iled"], rig["pled"],
+            rig["store"], rig["sled"], rig["uled"], rig["iled"], rig["pled"], rig["registry"],
             dataset_id=dataset_id, universe_id=_UNIVERSE, vault_secret=_SECRET,
             released_at="2026-03-04T00:00:00.000000Z",
         )
@@ -313,7 +327,7 @@ def test_the_corpus_relabel_attack_is_refused(tmp_path):
     # And it cannot be released into the corpus either -- the store proves what it is.
     with pytest.raises(vault.DatasetIdentityMismatchError, match="schema_basis"):
         vault.release_unselected_dataset(
-            rig["store"], rig["sled"], rig["uled"], rig["iled"], rig["pled"],
+            rig["store"], rig["sled"], rig["uled"], rig["iled"], rig["pled"], rig["registry"],
             dataset_id=legacy["id"], universe_id=_UNIVERSE, vault_secret=_SECRET,
         )
 
@@ -350,7 +364,7 @@ def test_a_dataset_created_before_the_universe_cannot_be_adopted(tmp_path):
     meta = _record_dataset(store, symbol, session_date, seed=1)
     with pytest.raises(vault.DatasetIdentityMismatchError, match="before universe"):
         vault.release_unselected_dataset(
-            store, sled, uled, iled, pled,
+            store, sled, uled, iled, pled, _bound_registry(tmp_path, uled),
             dataset_id=meta["id"], universe_id=_UNIVERSE, vault_secret=_SECRET,
         )
 
@@ -396,7 +410,7 @@ def test_release_derives_identity_from_the_store_so_a_pair_claim_is_impossible(t
         if vault._normalize_symbol(s) == symbol and d == session_date
     )
     row = vault.release_unselected_dataset(
-        rig["store"], rig["sled"], rig["uled"], rig["iled"], rig["pled"],
+        rig["store"], rig["sled"], rig["uled"], rig["iled"], rig["pled"], rig["registry"],
         dataset_id=dataset_id, universe_id=_UNIVERSE, vault_secret=_SECRET,
         released_at="2026-03-04T00:00:00.000000Z",
     )
@@ -417,7 +431,7 @@ def test_a_selected_member_cannot_be_released(tmp_path):
     )
     with pytest.raises(vault.SelectedShardReleaseRefusedError, match="HMAC-SELECTED"):
         vault.release_unselected_dataset(
-            rig["store"], rig["sled"], rig["uled"], rig["iled"], rig["pled"],
+            rig["store"], rig["sled"], rig["uled"], rig["iled"], rig["pled"], rig["registry"],
             dataset_id=dataset_id, universe_id=_UNIVERSE, vault_secret=_SECRET,
         )
 
@@ -443,7 +457,7 @@ def test_an_incident_barred_member_cannot_be_released(tmp_path):
     meta = _record_dataset(store, barred_symbol, barred_date, seed=3)
     with pytest.raises(vault.DisclosedPoolPositionError):
         vault.release_unselected_dataset(
-            store, sled, uled, iled, pled,
+            store, sled, uled, iled, pled, _bound_registry(tmp_path, uled),
             dataset_id=meta["id"], universe_id=_UNIVERSE, vault_secret=_SECRET,
         )
 
@@ -513,7 +527,7 @@ def test_a_release_without_a_committed_plan_refuses(tmp_path):
     meta = _record_dataset(store, symbol, session_date, seed=1)
     with pytest.raises(vault.ReleasePlanNotCommittedError, match="no committed release plan"):
         vault.release_unselected_dataset(
-            store, sled, uled, iled, pled,
+            store, sled, uled, iled, pled, _bound_registry(tmp_path, uled),
             dataset_id=meta["id"], universe_id=_UNIVERSE, vault_secret=_SECRET,
         )
 
@@ -528,7 +542,7 @@ def test_the_reserved_decoy_itself_is_refused_by_the_frozen_plan(tmp_path):
     )
     with pytest.raises(vault.NotInReleasePlanError, match="RESERVED DECOY"):
         vault.release_unselected_dataset(
-            rig["store"], rig["sled"], rig["uled"], rig["iled"], rig["pled"],
+            rig["store"], rig["sled"], rig["uled"], rig["iled"], rig["pled"], rig["registry"],
             dataset_id=dataset_id, universe_id=_UNIVERSE, vault_secret=_SECRET,
         )
 
@@ -635,6 +649,10 @@ def test_missing_snapshots_for_expected_members_fail_closed(tmp_path):
         rig["registry"], rig["store"], rig["sled"], rig["uled"], rig["iled"], rig["pled"],
         corpus_id=_CORPUS, vault_secret=_SECRET,
     )
+    # r14.2: the RELEASE above already burned this window (release IS exposure), so "is the window
+    # exposed?" no longer isolates what this test is about. What must hold is that the refused READ
+    # adds nothing of its own -- a fold that never ran burns nothing FURTHER.
+    before = list(rig["registry"].all_rows())
     with pytest.raises(tobs.TickObservationIncompleteError, match="EXPECTED corpus member"):
         tobs.tick_observations_for_sessions(
             members=membership["members"], corpus_id=_CORPUS,
@@ -645,10 +663,13 @@ def test_missing_snapshots_for_expected_members_fail_closed(tmp_path):
             exposure_registry=rig["registry"], purpose=tobs.PURPOSE_TRAIN,
             logged_at="2026-03-05T00:00:01.000000Z",
         )
-    # And the refusal happened BEFORE the precommit -- a fold that never ran burns nothing.
-    assert rig["registry"].is_exposed_before(
-        corpus_id=_CORPUS, window=date, instant="2999-01-01T00:00:00.000000Z"
-    ) is False
+    assert rig["registry"].all_rows() == before, (
+        "the refusal happened BEFORE the precommit -- a fold that never ran appends no row"
+    )
+    assert not any(
+        r.get("surface", "").startswith("tick_observations")
+        for r in rig["registry"].all_rows()
+    ), "no read-surface exposure row exists for a read that was refused"
 
 
 # =====================================================================================================
@@ -808,11 +829,11 @@ def test_an_already_rowed_dataset_can_never_be_released_again(tmp_path):
         released_at="2026-03-04T00:00:00.000000Z",
     )
     vault.release_unselected_dataset(
-        rig["store"], rig["sled"], rig["uled"], rig["iled"], rig["pled"], **args
+        rig["store"], rig["sled"], rig["uled"], rig["iled"], rig["pled"], rig["registry"], **args
     )
     with pytest.raises(vault.ShardLifecycleOrderError):
         vault.release_unselected_dataset(
-            rig["store"], rig["sled"], rig["uled"], rig["iled"], rig["pled"], **args
+            rig["store"], rig["sled"], rig["uled"], rig["iled"], rig["pled"], rig["registry"], **args
         )
     # And it can never afterwards be sealed or assigned -- no sealed/blind credit, ever.
     with pytest.raises(vault.ShardLifecycleOrderError):
@@ -836,7 +857,7 @@ def test_a_released_row_serves_as_evidence_that_earned_no_sealed_credit(tmp_path
         if vault._normalize_symbol(s) == symbol and d == session_date
     )
     vault.release_unselected_dataset(
-        rig["store"], rig["sled"], rig["uled"], rig["iled"], rig["pled"],
+        rig["store"], rig["sled"], rig["uled"], rig["iled"], rig["pled"], rig["registry"],
         dataset_id=dataset_id, universe_id=_UNIVERSE, vault_secret=_SECRET,
         released_at="2026-03-04T00:00:00.000000Z",
     )
@@ -906,7 +927,7 @@ def test_whole_pool_release_is_reachable_and_the_decoy_lifts_only_when_nothing_i
         )
     with pytest.raises(vault.NotInReleasePlanError, match="RESERVED DECOY"):
         vault.release_unselected_dataset(
-            rig["store"], rig["sled"], rig["uled"], rig["iled"], rig["pled"],
+            rig["store"], rig["sled"], rig["uled"], rig["iled"], rig["pled"], rig["registry"],
             dataset_id=decoy_id, universe_id=_UNIVERSE, vault_secret=_SECRET,
         )
     # Take every selected member all the way through the sealed path.
@@ -922,7 +943,7 @@ def test_whole_pool_release_is_reachable_and_the_decoy_lifts_only_when_nothing_i
         )
     # Nothing is hidden any more, so the reserve lifts and whole-pool release completes.
     vault.release_unselected_dataset(
-        rig["store"], rig["sled"], rig["uled"], rig["iled"], rig["pled"],
+        rig["store"], rig["sled"], rig["uled"], rig["iled"], rig["pled"], rig["registry"],
         dataset_id=decoy_id, universe_id=_UNIVERSE, vault_secret=_SECRET,
         released_at="2026-03-07T00:00:00.000000Z",
     )
@@ -950,6 +971,14 @@ def operator(monkeypatch):
     from scripts import j06_operator as op
 
     saved = (op.UNIVERSE_ID, list(op.DATE_RULE), op.STATE_DIR, op.CORPUS_ID, op.COMMIT)
+    # RESET, not merely save/restore. `_select_universe` rebinds these module globals, and a test in
+    # ANOTHER file that rebound them leaves this fixture saving (and restoring) the polluted value
+    # -- which made `STATE_DIR == STARTER_STATE_DIR` fail purely on file order. Entering from a
+    # known starter state makes every test here hermetic regardless of what ran before.
+    op.UNIVERSE_ID = op.STARTER_UNIVERSE_ID
+    op.DATE_RULE = list(op.STARTER_DATE_RULE)
+    op.STATE_DIR = op.STARTER_STATE_DIR
+    op.CORPUS_ID, op.COMMIT = None, False
     yield op
     op.UNIVERSE_ID, op.DATE_RULE, op.STATE_DIR, op.CORPUS_ID, op.COMMIT = (
         saved[0], saved[1], saved[2], saved[3], saved[4]

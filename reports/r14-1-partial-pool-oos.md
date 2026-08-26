@@ -198,9 +198,9 @@ Audited against goal.md's own stated mechanisms, not against the convenience of 
 
 | pilot | verdict | why |
 |---|---|---|
-| **1. range-wall failed aggression** | **PARTIAL_PROXY_ONLY** | The mechanism is a THREE-part conjunction: high aggression into the wall · collapsing impact efficiency · **opposite-side `refill_consistent` replenishment**. `failed_aggression_score = dominant_side_volume_share × flatness` covers the first two as one composite; the `refill_consistent` co-occurrence is genuinely unbuilt, and `scout.py`'s own frozen comment says so ("remains T-1 … never invented here"). The current request is a defensible proxy, not the study. |
-| **2. delta divergence at level tests** | **FULL_MECHANISM_READY** | `micro_features.divergence_at_level` implements Card 9.1 verbatim, and `scout._extract_divergence_anchors` supplies the dedicated PAIRED-touch path: consecutive touches τ1 < τ2 of the SAME band within one dataset, cumulative delta read off each touch's own snapshot row, `available_at = τ2`. Nothing is proxied. *(Mechanism-complete ≠ Mode-B-freezable: `sidedness` is still `None`.)* |
-| **3. capitulation exhaustion** | **PARTIAL_PROXY_ONLY** | The mechanism is a SEQUENCE — extreme **sell** aggression, *then* collapsing negative impact efficiency / replenishment — separating capitulation signals that snap back from those that do not. The request is a single `failed_aggression_score ≥ 0.7` threshold at a `capitulation` playbook signal: direction-agnostic (dominant-side share, not sell-specific), with no then-sequence and no replenishment term. |
+| **1. range-wall failed aggression** | **PARTIAL_PROXY_ONLY** → *r14.2:* **`PARKED_PENDING_OWNER_SPEC`** | The mechanism is a THREE-part conjunction: high aggression into the wall · collapsing impact efficiency · **opposite-side `refill_consistent` replenishment**. `failed_aggression_score = dominant_side_volume_share × flatness` covers the first two as one composite; the `refill_consistent` co-occurrence is genuinely unbuilt, and `scout.py`'s own frozen comment says so ("remains T-1 … never invented here"). The current request is a defensible proxy, not the study. |
+| **2. delta divergence at level tests** | **FULL_MECHANISM_READY** *(r14.2: now CONTINUOUS-first — `price_extension_bps` × `delta_weakening_multiple`)* | `micro_features.divergence_at_level` implements Card 9.1 verbatim, and `scout._extract_divergence_anchors` supplies the dedicated PAIRED-touch path: consecutive touches τ1 < τ2 of the SAME band within one dataset, cumulative delta read off each touch's own snapshot row, `available_at = τ2`. Nothing is proxied. *(Mechanism-complete ≠ Mode-B-freezable: `sidedness` is still `None`.)* |
+| **3. capitulation exhaustion** | **PARTIAL_PROXY_ONLY** → *r14.2:* **`PARKED_PENDING_OWNER_SPEC`** | The mechanism is a SEQUENCE — extreme **sell** aggression, *then* collapsing negative impact efficiency / replenishment — separating capitulation signals that snap back from those that do not. The request is a single `failed_aggression_score ≥ 0.7` threshold at a `capitulation` playbook signal: direction-agnostic (dominant-side share, not sell-specific), with no then-sequence and no replenishment term. |
 
 **A gap shared by all three**: goal.md J-09 step 1 says *"Continuous mechanism-defined
 representations first; any threshold variant from the bounded grid"*. All three requests are
@@ -249,6 +249,22 @@ any real universe.
 
 ## VERIFICATION
 
+> ### ⚠ CORRECTED BY r14.2 — read this first
+>
+> The proof below establishes **3 CONSTRUCTIBLE folds**, not 3 *sufficient* ones. 105 distinct
+> session dates are the calendar minimum for `build_folds` to produce three folds under
+> `DIAGNOSTIC_GEOMETRY`; whether any of them clears `WF_FOLD_MIN_OBSERVATIONS`(30),
+> `WF_FOLD_MIN_SIGNAL_SESSIONS`(8) and `WF_FOLD_MIN_SYMBOLS`(2) depends on the OBSERVATIONS inside
+> each test window and is unknowable from a date count. A sparse candidate yields three
+> constructible folds and zero sufficient ones. **105 does NOT guarantee a walk-forward survivor is
+> reachable.**
+>
+> One line of the proof below also overstated its own scope: the per-fold
+> `WF_FOLD_MIN_SIGNAL_SESSIONS` assertion compares a **dataset-date** count against a floor that
+> means **signal sessions** (sessions carrying qualifying observations). It reads as a sufficiency
+> check and is not one. See `reports/r14-2-evidence-once.md` → *105 CONSTRUCTIBLE VS SUFFICIENT*,
+> and the two hermetic tests (negative and positive) added there.
+
 The claim the brief required before anything may be called recordable:
 
 > **a 105-date synthetic universe with an actual HMAC mixed partition produces 3 walk-forward folds
@@ -262,10 +278,12 @@ Proven by `test_a_105_date_bound_corpus_produces_three_folds_with_every_selected
 - every plan-releasable member is released; membership excludes every selected position and the
   decoy **by precommitment**;
 - `mc.corpus_session_dates` yields **105** dates and `wf.build_folds` yields
-  **`WF_MIN_SUFFICIENT_FOLDS` = 3** folds covering 60 validation sessions;
+  **`WF_MIN_SUFFICIENT_FOLDS` = 3 CONSTRUCTIBLE** folds covering 60 validation sessions
+  *(r14.2: constructible — sufficiency is a separate, observation-dependent question)*;
 - for each fold, and for each of its train/embargo/test windows, the resolved member ids are
-  **disjoint from every sealed id**; each fold clears `WF_FOLD_MIN_SYMBOLS` and
-  `WF_FOLD_MIN_SIGNAL_SESSIONS` on realized membership;
+  **disjoint from every sealed id**; each fold clears `WF_FOLD_MIN_SYMBOLS` on realized membership
+  *(r14.2: the `WF_FOLD_MIN_SIGNAL_SESSIONS` assertion here counts DATASET dates, not sessions
+  carrying qualifying observations — it is a membership-breadth check, never a sufficiency one)*;
 - per-date membership is genuinely mixed (`min < 8`), so the fix is exercised, not bypassed;
 - `run_tick_family_fold_request` on the bound corpus registers the **membership hash**, not a date
   list, and returns the excluded-class disclosure.

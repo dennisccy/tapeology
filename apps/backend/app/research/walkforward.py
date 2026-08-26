@@ -88,6 +88,8 @@ from .walkforward_ledger import (
     is_corpus_era_voided,
     latest_fold_spec,
     record_mode_b_predeclaration,
+    mode_b_predeclarations_for_sequence,
+    ConflictingModeBPredeclarationError,
     record_voiding_event,
     register_fold_spec,
     sequence_ids_for_corpus,
@@ -120,6 +122,7 @@ __all__ = [
     "register_fold_spec",
     "record_voiding_event",
     "record_mode_b_predeclaration",
+    "mode_b_predeclarations_for_sequence",
     "latest_fold_spec",
     "is_corpus_era_voided",
     "sequence_ids_for_corpus",
@@ -133,7 +136,9 @@ __all__ = [
     "walkforward_parameters",
     "walkforward_parameters_hash",
     "build_folds",
+    "minimum_sessions_for_constructible_folds",
     "minimum_sessions_for_sufficient_folds",
+    "fold_sufficiency_summary",
     "InsufficientSessionsForFoldsError",
     "require_sufficient_sessions_for_folds",
     "assert_purge_exact",
@@ -152,6 +157,8 @@ __all__ = [
     "fit_training_quantile",
     "register_mode_a_origin",
     "register_mode_b_spec",
+    "UnsidedModeBSpecError",
+    "ConflictingModeBPredeclarationError",
     "evaluate_mode_b_fold",
     "evaluate_survivor_rule",
     "sequence_verdict",
@@ -386,30 +393,87 @@ def build_folds(session_dates: list[str], geometry: dict) -> list[dict]:
     return folds
 
 
-def minimum_sessions_for_sufficient_folds(geometry: dict) -> int:
-    """The fewest total sessions a corpus must carry for ``build_folds`` to ever produce
+def minimum_sessions_for_constructible_folds(geometry: dict) -> int:
+    """The fewest total sessions a corpus must carry for ``build_folds`` to CONSTRUCT
     ``WF_MIN_SUFFICIENT_FOLDS`` folds under ``geometry`` -- fold 1's own span
-    (``train+embargo+test``) plus ``WF_MIN_SUFFICIENT_FOLDS - 1`` further steps (TC-20's own "11 <
-    105" arithmetic: ``DIAGNOSTIC_GEOMETRY``'s 40+5+20 + 2*20 = 105)."""
+    (``train+embargo+test``) plus ``WF_MIN_SUFFICIENT_FOLDS - 1`` further steps
+    (``DIAGNOSTIC_GEOMETRY``'s 40+5+20 + 2*20 = 105).
+
+    **r14.2 -- read this number for exactly what it is.** 105 is the minimum number of distinct
+    session dates required for THREE CONSTRUCTIBLE FOLDS under ``DIAGNOSTIC_GEOMETRY``. It is
+    calendar arithmetic over the fold windows and nothing else. It says nothing whatsoever about
+    whether any of those folds will be SUFFICIENT, because sufficiency is a property of the
+    OBSERVATIONS that land inside a fold's test window -- ``WF_FOLD_MIN_OBSERVATIONS``(30),
+    ``WF_FOLD_MIN_SIGNAL_SESSIONS``(8) and ``WF_FOLD_MIN_SYMBOLS``(2), all checked in
+    ``summarize_fold_observations`` and none of them knowable from a date count.
+
+    A sparse candidate -- one that fires on a handful of anchors across 105 dates -- produces three
+    constructible folds and zero sufficient ones. So:
+
+        105 dates = 3 constructible folds, guaranteed.
+        105 dates = a walk-forward survivor is reachable. FALSE. Never claim it.
+
+    Whether a survivor is reachable depends on signal density, which is an empirical question about
+    the candidate and the tape, answerable only by counting real qualifying observations."""
     fold_one_span = geometry["train_sessions"] + geometry["embargo_sessions"] + geometry["test_sessions"]
     return fold_one_span + (WF_MIN_SUFFICIENT_FOLDS - 1) * geometry["step_sessions"]
 
 
+def minimum_sessions_for_sufficient_folds(geometry: dict) -> int:
+    """Deprecated r14.2 alias of ``minimum_sessions_for_constructible_folds`` -- kept so no call
+    site breaks, and kept DOCUMENTED as a misnomer so no reader is misled by it again.
+
+    The old name was itself the confusion this revision corrects: it computes the session floor for
+    three CONSTRUCTIBLE folds, never for three sufficient ones. Prefer the accurate name."""
+    return minimum_sessions_for_constructible_folds(geometry)
+
+
+def fold_sufficiency_summary(fold_results: list[dict]) -> dict:
+    """r14.2: the two fold counts, reported separately and never conflated.
+
+    ``constructible_fold_count`` -- how many folds the geometry produced over the corpus's dates.
+    ``sufficient_fold_count``   -- how many of those cleared all three per-fold observation floors.
+
+    The gap between them is the honest measure of signal density: three constructible and zero
+    sufficient means the calendar was long enough and the evidence was not."""
+    constructible = len(fold_results)
+    sufficient = [f for f in fold_results if f.get("status") == FOLD_STATUS_SUFFICIENT]
+    return {
+        "constructible_fold_count": constructible,
+        "sufficient_fold_count": len(sufficient),
+        "insufficient_fold_count": constructible - len(sufficient),
+        "min_sufficient_folds_required": WF_MIN_SUFFICIENT_FOLDS,
+        "meets_sequence_floor": len(sufficient) >= WF_MIN_SUFFICIENT_FOLDS,
+        # Why each shortfall happened, so a reader sees WHICH floor bit.
+        "shortfalls": [
+            {"fold_index": f.get("fold_index"), "missing": f.get("missing", {})}
+            for f in fold_results if f.get("status") != FOLD_STATUS_SUFFICIENT
+        ],
+    }
+
+
 class InsufficientSessionsForFoldsError(Exception):
-    """TR-15: a corpus does not carry enough sessions to ever produce ``WF_MIN_SUFFICIENT_FOLDS``
+    """TR-15: a corpus does not carry enough sessions to CONSTRUCT ``WF_MIN_SUFFICIENT_FOLDS``
     folds under a given geometry -- a typed refusal (TC-20: "the 18-dataset/11-session tick corpus
-    ... a typed floor-refusal naming 11 < 105"), never an empty fold report standing in for one."""
+    ... a typed floor-refusal naming 11 < 105"), never an empty fold report standing in for one.
+
+    r14.2: this is a CONSTRUCTIBILITY floor. Clearing it proves the calendar is long enough and
+    proves nothing at all about observation density -- see
+    ``minimum_sessions_for_constructible_folds``."""
 
 
 def require_sufficient_sessions_for_folds(session_dates: list[str], geometry: dict) -> None:
     """Raises ``InsufficientSessionsForFoldsError`` (naming the exact shortfall) when
     ``session_dates`` cannot possibly support ``WF_MIN_SUFFICIENT_FOLDS`` folds under ``geometry``
     -- the check a caller makes BEFORE ``build_folds`` when it wants a typed refusal rather than a
-    merely-empty fold list (TC-20)."""
-    minimum = minimum_sessions_for_sufficient_folds(geometry)
+    merely-empty fold list (TC-20).
+
+    r14.2: passing this check means the folds can be BUILT. It is not a prediction that any of
+    them will clear the per-fold observation floors."""
+    minimum = minimum_sessions_for_constructible_folds(geometry)
     if len(session_dates) < minimum:
         raise InsufficientSessionsForFoldsError(
-            f"{len(session_dates)} < {minimum} -- refused (TR-15): this corpus cannot produce "
+            f"{len(session_dates)} < {minimum} -- refused (TR-15): this corpus cannot CONSTRUCT "
             f"WF_MIN_SUFFICIENT_FOLDS({WF_MIN_SUFFICIENT_FOLDS}) folds under this geometry"
         )
 
@@ -640,13 +704,31 @@ def register_mode_a_origin(
 # === Mode B -- fixed hypothesis (spec section 6.5) ===================================================
 
 
+class UnsidedModeBSpecError(Exception):
+    """r14.2: a Mode B fixed-hypothesis spec was registered without a direction -- refused. See
+    ``register_mode_b_spec`` for why unsided is legal for a Scout candidate but never for Mode B."""
+
+
 def register_mode_b_spec(*, corpus_id: str, rule_id: str, sidedness: str, econ_floor: dict | None, registered_at: str | None = None) -> dict:
     """A human-authored, fixed-hypothesis spec (spec section 6.5) -- registered ONCE (a pure,
     in-memory construction; the PERMANENT record is the ``fold_result`` row(s) ``evaluate_mode_b_
     fold`` appends, exactly as Mode A's spec is never separately ledgered either -- module
     docstring's "one abstract input" design keeps the spec itself a plain dict a caller threads
-    through, not a second store). ``sequence_id`` is a pure function of ``(corpus_id, rule_id)``."""
+    through, not a second store). ``sequence_id`` is a pure function of ``(corpus_id, rule_id)``.
+
+    **r14.2: Mode B is SIDED, always.** ``validate_candidate_direction`` admits ``None`` because an
+    unsided exploratory Scout candidate is a legitimate thing to register -- it is a question, not
+    a claim. Mode B is the opposite: a fixed hypothesis evaluated against a frozen economic floor,
+    where the direction IS the falsifiable content. An unsided Mode B spec could be scored a
+    survivor whichever way the effect came out, which is not a test of anything. Refused here, at
+    the boundary, rather than left to be noticed downstream."""
     mf.validate_candidate_direction(sidedness)  # r13: closed vocabulary at registration
+    if sidedness is None:
+        raise UnsidedModeBSpecError(
+            f"Mode B spec for rule_id {rule_id!r} was registered with no sidedness -- refused "
+            "(r14.2): a fixed hypothesis must commit to long or short before any outcome is read. "
+            "An unsided rule passes its own test in either direction and falsifies nothing."
+        )
     sequence_id = sequence_id_for(corpus_id, rule_id)
     spec_fields = {"mode": "B", "corpus_id": corpus_id, "rule_id": rule_id, "sidedness": sidedness, "econ_floor": econ_floor}
     spec_hash = compute_spec_hash(spec_fields)

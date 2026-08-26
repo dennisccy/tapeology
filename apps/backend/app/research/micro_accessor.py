@@ -81,12 +81,16 @@ __all__ = [
     "resolve_micro_exposure_registry_dir",
     "initialize_r2_exposure_registry",
     "has_any_exposure_entries",
+    "log_exposure_once",
     # r14 -- corpus-era freshness provenance (see `register_fresh_corpus_era`)
     "RECORD_KIND_EXPOSURE",
     "RECORD_KIND_CORPUS_ERA",
     "UnregisteredCorpusEraError",
     "CORPUS_ERA_FROZEN_FIELDS",
     "ConflictingCorpusEraError",
+    # r14.2 -- the INVERSE binding: one registered universe may found exactly one corpus era
+    "UniverseAlreadyBoundToCorpusError",
+    "corpus_era_record_for_universe",
     "register_fresh_corpus_era",
     "fresh_corpus_era_record",
     "corpus_exposure_baseline_established",
@@ -212,6 +216,46 @@ def initialize_r2_exposure_registry(
     return len(windows)
 
 
+def log_exposure_once(
+    registry: ExposureRegistry,
+    *,
+    corpus_id: str,
+    window: str,
+    surface: str,
+    logged_at: str,
+) -> tuple[dict | None, bool]:
+    """r14.2: append ONE exposure row for ``(corpus_id, window)`` unless the window's exposure is
+    ALREADY an established fact at or before ``logged_at``. Returns ``(row, appended)``.
+
+    **Why deduped.** A release burns a SESSION WINDOW, and a healthy date carries several members;
+    releasing six symbols on one date is one exposure fact, not six. The hash-chained primitive
+    offers no dedup of its own (deliberately), so the caller that knows the semantic unit does it
+    here.
+
+    **Why "at or before ``logged_at``", not merely "exists".** An existing row stamped LATER than
+    this act would leave a gap: a spec registered between the two instants would read the window as
+    never-exposed even though this release had already made it inspectable. Only a row that is
+    already at or before this instant discharges the obligation; anything later and this appends
+    its own, earlier, honest row.
+
+    Never a wall-clock read -- ``logged_at`` is supplied, exactly as ``log_exposure`` requires."""
+    for row in registry.all_rows():
+        if not _is_exposure_row(row):
+            continue
+        if (
+            row.get("corpus_id") == corpus_id
+            and row.get("window") == window
+            and row.get("logged_at", "") <= logged_at
+        ):
+            return dict(row), False
+    return (
+        registry.log_exposure(
+            corpus_id=corpus_id, window=window, surface=surface, logged_at=logged_at
+        ),
+        True,
+    )
+
+
 def has_any_exposure_entries(registry: ExposureRegistry, corpus_id: str) -> bool:
     """``True`` iff ``registry`` already carries at least one exposure entry for ``corpus_id`` --
     the guard a production caller (``walkforward.run_diagnostic_walkforward``) uses to run
@@ -287,6 +331,28 @@ class ConflictingCorpusEraError(Exception):
     """
 
 
+class UniverseAlreadyBoundToCorpusError(Exception):
+    """r14.2: this registered universe already founded a corpus era, and a SECOND corpus id was
+    asked to draw from it -- refused.
+
+    **The replay this closes.** r14.1 enforced ``corpus_id -> one universe`` and stopped there. The
+    inverse was free, and that is the whole exploit: bind ``corpus_A`` to universe ``U``, evaluate
+    it, burn its windows; then bind a brand-new ``corpus_B`` to the SAME ``U``. Because exposure is
+    scoped by ``corpus_id``, ``corpus_B`` starts with a pristine, empty exposure namespace over
+    physically identical bytes -- and every window that ``corpus_A`` already spent reads
+    ``historical_oos`` again. The evidence would be re-earned without re-recording a single tick.
+
+    A universe is the physical body of evidence. It can be spent exactly once, so it may found
+    exactly one out-of-sample era. Registering the same ``corpus_id`` again with byte-identical
+    frozen fields is an idempotent replay and stays legal (nothing new is claimed); anything that
+    would give one universe a second exposure namespace refuses here.
+
+    **Derived from the durable registry, never from process state.** The refusal reads the
+    hash-chained corpus-era rows themselves, so it survives a restart, a different process, and a
+    different operator -- and it holds when the first era has ZERO exposure rows, because the
+    exploit is the fresh NAMESPACE, not the rows already in it."""
+
+
 def register_fresh_corpus_era(
     registry: "ExposureRegistry",
     *,
@@ -345,6 +411,21 @@ def register_fresh_corpus_era(
             f"(differs on: {', '.join(differing)}) -- refused (r14.1): a corpus id names one "
             "specific body of evidence and can never be re-pointed at another"
         )
+
+    # r14.2 -- THE INVERSE. Checked only once the corpus_id itself is proven new: an idempotent
+    # replay of an existing era returned above and must never be refused for being bound to the
+    # universe it is itself the binding of. A DIFFERENT corpus id reaching this point wants a
+    # second, empty exposure namespace over the same physical evidence -- the replay route
+    # `UniverseAlreadyBoundToCorpusError` exists to close.
+    incumbent = corpus_era_record_for_universe(registry, universe_id)
+    if incumbent is not None:
+        raise UniverseAlreadyBoundToCorpusError(
+            f"universe_id {universe_id!r} already founded corpus era "
+            f"{incumbent['corpus_id']!r} (registered {incumbent.get('registered_at')!r}) -- "
+            f"refused (r14.2): corpus_id {corpus_id!r} would open a SECOND exposure namespace "
+            "over the same physical recordings, so every window the first era already spent "
+            "would read as never-exposed again. A universe is spent once and founds one era."
+        )
     return registry._ledger.append_row(fields)
 
 
@@ -353,6 +434,24 @@ def fresh_corpus_era_record(registry: "ExposureRegistry", corpus_id: str) -> dic
     is registered once and its instant is the one a freshness claim is anchored to."""
     for row in registry.all_rows():
         if row.get("record_kind") == RECORD_KIND_CORPUS_ERA and row.get("corpus_id") == corpus_id:
+            return row
+    return None
+
+
+def corpus_era_record_for_universe(registry: "ExposureRegistry", universe_id: str) -> dict | None:
+    """r14.2: the FIRST corpus era founded on ``universe_id``, or ``None`` if it has founded none.
+
+    The inverse index of ``fresh_corpus_era_record``, and the durable basis of
+    ``UniverseAlreadyBoundToCorpusError``. First, not last: the era a universe founded is the one
+    that spent it, and a later row (which this module refuses to write anyway) could never
+    un-spend it.
+
+    Pre-r14.1 unstructured rows carry no ``universe_id`` and are invisible here -- correct, since
+    they bound no universe and therefore spent none."""
+    for row in registry.all_rows():
+        if row.get("record_kind") != RECORD_KIND_CORPUS_ERA:
+            continue
+        if row.get("universe_id") and row.get("universe_id") == universe_id:
             return row
     return None
 

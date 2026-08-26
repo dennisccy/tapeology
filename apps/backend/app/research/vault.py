@@ -282,6 +282,10 @@ __all__ = [
     "SelectedShardReleaseRefusedError",
     "ResidualPoolUncertaintyError",
     "release_unselected_dataset",
+    # r14.2 -- release is an exposure event; one registered position holds one dataset
+    "UnboundReleaseCorpusError",
+    "DuplicateReleasedPositionError",
+    "released_positions",
     "build_release_plan",
     "commit_release_plan",
     "find_release_plan_commitment",
@@ -1732,6 +1736,51 @@ class DatasetIdentityMismatchError(Exception):
     ``created_utc``; a release must DERIVE them, never accept them."""
 
 
+class UnboundReleaseCorpusError(Exception):
+    """r14.2: a release was attempted for a universe that has founded no corpus era -- refused.
+
+    Release makes a withheld dataset inspectable, so it IS an exposure event and must be recorded
+    as one. An exposure row is meaningless without the ``corpus_id`` that scopes it, and that id is
+    never supplied by the operator -- it is RESOLVED from the universe's own unique corpus-era
+    registration (r14.2 §1 guarantees there is at most one). No binding means there is nowhere
+    honest to record the exposure, so the release cannot proceed."""
+
+
+class DuplicateReleasedPositionError(Exception):
+    """r14.2: a SECOND dataset was offered for release at a registered ``(symbol, session_date)``
+    that another dataset has already taken through a shard lifecycle -- refused.
+
+    A registered position names one session of one symbol: one physical body of tape. Retries and
+    re-recordings can leave several genuine recorder datasets sitting on the same pair, and
+    releasing two of them would put the same session into the corpus twice -- double-weighting its
+    observations, double-counting its session cluster, and silently inflating every breadth floor
+    that counts distinct sessions. There is no frozen supersession rule that says which recording
+    of a pair is THE recording, so this fails closed rather than picking one."""
+
+
+def released_positions(ledger: VaultShardLedger, universe_id: str) -> dict[tuple[str, str], str]:
+    """r14.2: ``{(normalized_symbol, session_date): dataset_id}`` for every dataset of
+    ``universe_id`` that has taken a position through a shard lifecycle far enough to name it.
+
+    **Only rows that actually carry an identity are indexed, and that is not a limitation.** A
+    ``sealed`` row records ``symbol``/``session_date`` as ``None`` on purpose (§7.5's opaque
+    projection -- ``seal_shard`` writes the nulls explicitly), so a sealed position is invisible
+    here. It does not need to be visible: a sealed position is HMAC-selected, the frozen release
+    plan never marks it releasable, and ``release_unselected_dataset`` refuses it earlier and for a
+    stronger reason. What this index exists to catch is the case the plan cannot see -- two
+    distinct dataset ids occupying ONE releasable position."""
+    index: dict[tuple[str, str], str] = {}
+    for row in ledger.all_rows():
+        if row.get("universe_id") != universe_id:
+            continue
+        symbol = row.get("symbol")
+        session_date = row.get("session_date")
+        if not symbol or not session_date:
+            continue
+        index.setdefault((_normalize_symbol(symbol), session_date), row["dataset_id"])
+    return index
+
+
 def _release_identity_from_store(dataset_store, dataset_id: str, universe: dict) -> dict:
     """Everything a release needs to know about a dataset, read from the STORE (r14.1).
 
@@ -1793,6 +1842,7 @@ def release_unselected_dataset(
     universe_ledger: VaultUniverseLedger,
     incident_ledger: "VaultDisclosureIncidentLedger",
     plan_ledger: VaultReleasePlanLedger,
+    exposure_registry,
     *,
     dataset_id: str,
     universe_id: str,
@@ -1807,17 +1857,38 @@ def release_unselected_dataset(
     against the FROZEN release plan, so which member ends up withheld cannot depend on the order an
     operator happens to release in.
 
-    Refusals, all before the append:
+    **r14.2: release IS an exposure event, and its record is written FIRST.** Releasing turns a
+    withheld dataset into ordinary servable evidence -- its outcomes become inspectable the instant
+    the shard row lands. A release that did not record that fact would leave the window looking
+    never-exposed, and a rule frozen AFTERWARDS could then claim ``historical_oos`` credit over
+    tape anyone could already have read. So this function appends the exposure row BEFORE the
+    shard row, under the corpus era the universe itself founded (resolved here, never supplied by
+    the operator -- see ``UnboundReleaseCorpusError``).
+
+    The two appends span two independent hash-chained ledgers and cannot be made atomic. The order
+    is therefore chosen for which failure is survivable: a crash BETWEEN them leaves an exposure
+    row with no release -- the window is burned and the dataset stays withheld. That destroys
+    evidence, and it is the acceptable direction. The reverse order would leave a servable dataset
+    with no exposure fact on record, which is unfalsifiable contamination and is never acceptable.
+
+    Refusals, all before either append:
       1. empty secret / secret not matching the universe's committed ``vault_secret_commitment``;
       2. unregistered universe;
-      3. dataset identity (genuine recorder output, post-registration, real pool member);
-      4. no committed release plan (``ReleasePlanNotCommittedError``);
-      5. the plan does not mark this position releasable (``NotInReleasePlanError``) -- which
+      3. no corpus era founded on this universe (``UnboundReleaseCorpusError``, r14.2);
+      4. dataset identity (genuine recorder output, post-registration, real pool member);
+      5. no committed release plan (``ReleasePlanNotCommittedError``);
+      6. the plan does not mark this position releasable (``NotInReleasePlanError``) -- which
          covers the sealed path, the barred positions AND the reserved decoy in one check;
-      6. the dataset already carries a shard row (``ShardLifecycleOrderError``);
-      7. §7.2.2's residual-uncertainty floor, re-checked against the state this release would
+      7. the dataset already carries a shard row (``ShardLifecycleOrderError``);
+      8. another dataset already holds this registered position
+         (``DuplicateReleasedPositionError``, r14.2);
+      9. §7.2.2's residual-uncertainty floor, re-checked against the state this release would
          produce (belt and braces: the plan already guarantees it, and the arithmetic still runs).
     """
+    # Lazy import: `micro_accessor` reaches `DatasetStore`/`Config`, and this module's own
+    # discipline is to keep those out of its module scope (see the module docstring's injection
+    # rule). The `micro_readiness` -> `walkforward` precedent, mirrored.
+    from .micro_accessor import corpus_era_record_for_universe, log_exposure_once
     if not vault_secret.strip():
         raise VaultSecretUnavailable(
             "release_unselected_dataset was handed an empty vault secret -- refused: the HMAC "
@@ -1835,6 +1906,14 @@ def release_unselected_dataset(
             "vault_secret_commitment -- refused: a non-selection proof computed under the wrong "
             "key is not a proof"
         )
+    era = corpus_era_record_for_universe(exposure_registry, universe_id)
+    if era is None:
+        raise UnboundReleaseCorpusError(
+            f"universe {universe_id!r} has founded no corpus era -- refused (r14.2): a release is "
+            "an exposure event, and there is no corpus_id under which to record it. Register the "
+            "bound corpus era first (micro_corpus.register_bound_corpus_era)."
+        )
+    corpus_id = era["corpus_id"]
     identity = _release_identity_from_store(dataset_store, dataset_id, universe)
 
     commitment = find_release_plan_commitment(plan_ledger, universe_id)
@@ -1888,11 +1967,38 @@ def release_unselected_dataset(
     if existing is not None:
         raise ShardLifecycleOrderError(dataset_id, None, existing["exposure_state"])
 
-    return _append_exploratory_release(
+    # r14.2 §3: one registered position, one scientific dataset. A retry or a re-recording can
+    # leave two genuine recorder datasets on the same pair; releasing both would put one session
+    # into the corpus twice.
+    incumbent = released_positions(shard_ledger, universe_id).get(
+        (_normalize_symbol(identity["symbol"]), identity["session_date"])
+    )
+    if incumbent is not None and incumbent != dataset_id:
+        raise DuplicateReleasedPositionError(
+            f"position ({identity['symbol']!r}, {identity['session_date']!r}) of universe "
+            f"{universe_id!r} is already held by dataset {incumbent!r} -- refused (r14.2): "
+            f"dataset {dataset_id!r} is a SECOND recording of the same registered session, and no "
+            "frozen supersession rule says which one is the recording. Resolve the duplicate "
+            "before releasing."
+        )
+
+    # THE PRECOMMIT. The exposure fact is written before the dataset becomes servable; see the
+    # docstring for why this order, and why a crash between the two appends burns the window.
+    release_instant = released_at if released_at is not None else _iso_utc_now()
+    log_exposure_once(
+        exposure_registry,
+        corpus_id=corpus_id,
+        window=identity["session_date"],
+        surface="vault_exploratory_release",
+        logged_at=release_instant,
+    )
+
+    row = _append_exploratory_release(
         shard_ledger, universe_ledger, incident_ledger,
         identity=identity, universe_id=universe_id, vault_secret=vault_secret,
-        released_at=released_at,
+        released_at=release_instant,
     )
+    return {**row, "corpus_id": corpus_id, "exposure_window": identity["session_date"]}
 
 
 def _append_exploratory_release(

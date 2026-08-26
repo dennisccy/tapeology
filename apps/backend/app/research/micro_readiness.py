@@ -87,6 +87,9 @@ __all__ = [
     "WF_TRAIN_MIN_SESSIONS",
     "WF_TEST_MIN_SESSIONS",
     "PILOT_STUDY_IDS",
+    "PILOT_STUDY_STATUS",
+    "STUDY_STATUS_PARKED_PENDING_OWNER_SPEC",
+    "STUDY_STATUS_FULL_MECHANISM_READY",
     "SPLIT_PROVENANCE_HAND_ASSIGNED",
     "EXPOSURE_STATE_EXPLORATORY",
     "MicroReadinessCache",
@@ -109,6 +112,51 @@ PILOT_STUDY_IDS = (
     "delta_divergence_level_tests",
     "capitulation_exhaustion",
 )
+
+# --- r14.2: which pilots are actually screenable AS THEIR STATED MECHANISM -------------------------
+#
+# The three pilot ids above name three mechanisms. Only one of them is currently implemented as
+# stated, and running the other two anyway -- against a defensible proxy, under the mechanism's own
+# name -- would put a result on the record that answers a different question than its label claims.
+# So the status is recorded here, in code, beside the ids it qualifies.
+#
+# `range_wall_failed_aggression` states a THREE-part conjunction: high aggression into the wall,
+# collapsing impact efficiency, AND opposite-side `refill_consistent` replenishment.
+# `failed_aggression_score` covers the first two as one composite; the refill co-occurrence is
+# genuinely unbuilt, and `scout.py`'s own frozen comment says so.
+#
+# `capitulation_exhaustion` states an ORDERED SEQUENCE: extreme SELL aggression, THEN collapsing
+# negative impact efficiency / replenishment. The available request is a single direction-agnostic
+# threshold at a `capitulation` signal -- no then-sequence, no replenishment term, not sell-specific.
+#
+# Neither gap is a coding task. Each needs the owner to SPECIFY the missing mechanism (what counts as
+# "then", over what window, with what replenishment measure) before anything can implement it, and
+# inventing that specification here would be choosing the hypothesis after seeing the tape. Both are
+# therefore PARKED, and must not be screened as if they were their full stated mechanisms.
+STUDY_STATUS_PARKED_PENDING_OWNER_SPEC = "PARKED_PENDING_OWNER_SPEC"
+STUDY_STATUS_FULL_MECHANISM_READY = "FULL_MECHANISM_READY"
+
+PILOT_STUDY_STATUS = {
+    "range_wall_failed_aggression": {
+        "status": STUDY_STATUS_PARKED_PENDING_OWNER_SPEC,
+        "missing": "opposite-side refill_consistent co-occurrence is unbuilt and unspecified",
+        "do_not": "screen the failed_aggression_score proxy under this mechanism's name",
+    },
+    "delta_divergence_level_tests": {
+        "status": STUDY_STATUS_FULL_MECHANISM_READY,
+        "missing": "",
+        "do_not": "",
+        # r14.2 §7: continuous coordinates first (micro_features.divergence_at_level), the Card 9.1
+        # boolean second as one predeclared corner of that plane.
+        "representation": "continuous: price_extension_bps x delta_weakening_multiple",
+    },
+    "capitulation_exhaustion": {
+        "status": STUDY_STATUS_PARKED_PENDING_OWNER_SPEC,
+        "missing": "the ordered sell-aggression-THEN-collapse sequence is unimplemented and "
+                   "underspecified (no defined then-window, no replenishment measure)",
+        "do_not": "screen a single direction-agnostic threshold under this mechanism's name",
+    },
+}
 
 SPLIT_PROVENANCE_HAND_ASSIGNED = "hand_assigned"
 EXPOSURE_STATE_EXPLORATORY = "exploratory"
@@ -135,7 +183,30 @@ FLOOR_BASIS_TRAIN_PLUS_TEST_ARITHMETIC_ONLY = "train_plus_test_arithmetic_only"
 FLOOR_BASIS_NOTE = (
     "train + test only: this arithmetic omits the fold spec's embargo and therefore does NOT imply "
     "that a single fold can be constructed. Read first_fold_min_session_dates for 'can one fold "
-    "exist' and survivor_min_session_dates for 'can a walkforward_survivor verdict be reached'."
+    "exist' and constructible_folds_min_session_dates for 'can the minimum number of folds be "
+    "BUILT'. Neither is a claim that any fold will hold enough observations to be SUFFICIENT."
+)
+
+# --- r14.2: the sufficiency correction -------------------------------------------------------------
+#
+# r14's own field name -- `survivor_min_session_dates` -- asserted the very thing this revision has
+# to deny: that a session COUNT can tell you whether a walk-forward survivor is reachable. It cannot.
+# 105 dates guarantee three CONSTRUCTIBLE folds under DIAGNOSTIC_GEOMETRY and nothing more; whether
+# any of those folds is SUFFICIENT depends on WF_FOLD_MIN_OBSERVATIONS / WF_FOLD_MIN_SIGNAL_SESSIONS
+# / WF_FOLD_MIN_SYMBOLS, which are properties of the observations inside a test window and are
+# unknowable from a calendar. A sparse candidate yields three constructible folds and zero sufficient
+# ones.
+#
+# The r14 keys are RETAINED at their exact values (wire compatibility -- the desk page reads them),
+# and the accurate key is served beside them. The note below is what a reader acts on.
+SUFFICIENCY_NOTE = (
+    "constructible_folds_min_session_dates (105) is the fewest distinct session dates for which "
+    "build_folds can CONSTRUCT min_sufficient_folds folds under DIAGNOSTIC_GEOMETRY. It is calendar "
+    "arithmetic. It does NOT guarantee a walk-forward survivor is reachable: a sparse candidate "
+    "produces the full fold count with zero SUFFICIENT folds, because sufficiency is decided by the "
+    "per-fold observation floors (30 observations / 8 signal sessions / 2 symbols) on the anchors "
+    "that actually land in a test window. survivor_min_session_dates is a deprecated r14 alias of "
+    "constructible_folds_min_session_dates and its name is a misnomer."
 )
 
 # --- r14: session COUNT vocabulary (spec §0) -------------------------------------------------------
@@ -664,7 +735,7 @@ def build_readiness(
         DIAGNOSTIC_GEOMETRY,
         WF_MIN_SUFFICIENT_FOLDS,
         build_folds,
-        minimum_sessions_for_sufficient_folds,
+        minimum_sessions_for_constructible_folds,
     )
 
     first_fold_min_session_dates = (
@@ -672,7 +743,9 @@ def build_readiness(
         + DIAGNOSTIC_GEOMETRY["embargo_sessions"]
         + DIAGNOSTIC_GEOMETRY["test_sessions"]
     )
-    survivor_min_session_dates = minimum_sessions_for_sufficient_folds(DIAGNOSTIC_GEOMETRY)
+    constructible_folds_min_session_dates = minimum_sessions_for_constructible_folds(
+        DIAGNOSTIC_GEOMETRY
+    )
     # Not a formula: the ACTUAL fold count `build_folds` produces for this many session dates. A
     # served number a reader can act on, computed by the same function the engine itself calls.
     folds_constructible = len(build_folds(sorted(session_dates), DIAGNOSTIC_GEOMETRY))
@@ -697,19 +770,29 @@ def build_readiness(
             # --- r14: the two EXECUTABLE floors, in explicit session-DATE units ---------------
             "available_session_dates": available_session_dates,
             "first_fold_min_session_dates": first_fold_min_session_dates,
-            "survivor_min_session_dates": survivor_min_session_dates,
+            # r14.2: the accurate name. `survivor_min_session_dates` below is the SAME number under
+            # r14's misnomer, retained for wire compatibility only.
+            "constructible_folds_min_session_dates": constructible_folds_min_session_dates,
+            "survivor_min_session_dates": constructible_folds_min_session_dates,
             "first_fold_status": (
                 _FLOOR_STATUS_MET
                 if available_session_dates >= first_fold_min_session_dates
                 else _FLOOR_STATUS_UNMET
             ),
+            "constructible_folds_status": (
+                _FLOOR_STATUS_MET
+                if available_session_dates >= constructible_folds_min_session_dates
+                else _FLOOR_STATUS_UNMET
+            ),
             "survivor_status": (
                 _FLOOR_STATUS_MET
-                if available_session_dates >= survivor_min_session_dates
+                if available_session_dates >= constructible_folds_min_session_dates
                 else _FLOOR_STATUS_UNMET
             ),
             "folds_constructible": folds_constructible,
             "min_sufficient_folds": WF_MIN_SUFFICIENT_FOLDS,
+            # r14.2: served so no reader can take a met date-floor as "a survivor is reachable".
+            "sufficiency_note": SUFFICIENCY_NOTE,
         }
         for study_id in PILOT_STUDY_IDS
     ]

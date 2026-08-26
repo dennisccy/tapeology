@@ -112,7 +112,7 @@ beside it, and the 60 carries the basis token `train_plus_test_arithmetic_only`:
 |---|---|---|
 | `available_session_dates` | 11 | the fold-geometry unit |
 | `first_fold_min_session_dates` | **65** | `train + embargo + test` — the fewest dates for fold 0 |
-| `survivor_min_session_dates` | **105** | the fewest for `WF_MIN_SUFFICIENT_FOLDS` folds |
+| `survivor_min_session_dates` | **105** | the fewest for `WF_MIN_SUFFICIENT_FOLDS` folds to be **CONSTRUCTED** — *[r14.2 CORRECTION]* the field name is a misnomer; renamed `constructible_folds_min_session_dates`. 105 does NOT guarantee a survivor is reachable: sufficiency depends on the per-fold observation floors, not on any date count |
 | `folds_constructible` | **0** | not a formula — what `build_folds` actually returns |
 | `required_sessions` (retained) | 60 | `train_plus_test_arithmetic_only`; implies nothing about folds |
 
@@ -696,7 +696,7 @@ headroom above the 105 floor rather than a separate block with a job.
 
 ### The buffer reasoning, from non-outcome evidence only
 
-Fold count is a **step function** of session count: 105 → 3 folds, 125 → 4, 145 → 5. Any target in
+Fold count is a **step function** of session count: 105 → 3 **constructible** folds, 125 → 4, 145 → 5 *[r14.2 CORRECTION: constructible, never sufficient — a sparse candidate yields 3 constructible and 0 sufficient folds]*. Any target in
 [105, 124] buys **zero additional folds**. Its entire value is tolerance against *losing* sessions.
 So the honest question is only: how many sessions can we expect to lose?
 
