@@ -28,6 +28,15 @@ Updated at iter-2: rows 3-8's computing modules move from "(planned)" to real, h
 implementations (`foundry_interpreter.py`, `foundry_family.py`, `foundry_freeze.py`,
 `foundry_ledger.py`, `foundry_runner.py`) — see the iteration note under the table. No row added, no
 IA/nav change; no `blueprint.reapproval-requested` needed.
+
+Updated at iter-3: the same rows 2/7/8's already-registered computing modules
+(`foundry_source_registry.py`, `foundry_runner.py`, `foundry_ledger.py`) gained a hermetic
+“complete factory” oracle-suite proof (composite multi-outcome epoch, all-blocked, all-
+killed, multi-survivor, large-scale checkpoint/resume, protected-data-trip/evidence-class-
+immutability) plus two schema fields (`SourceRecord.source_hash`,
+`SourceRecord.alternatives`) and a resume-identity integrity fix — see the iteration note
+under the table. No row added, no IA/nav change; no `blueprint.reapproval-requested`
+needed.
 -->
 
 ## Information Architecture
@@ -116,6 +125,23 @@ materialized econ floor, protected-access census) still await J-06/J-07. J-01's 
 (row 1) also became visible to the scoped QA rig this iteration via a read-only
 `TAPEOLOGY_FOUNDRY_DIR`-style visibility fix — the computing module and endpoint are unchanged, so
 this is not a new Data Contract row.
+
+**Iteration note (iter-3):** shipped for real, hermetically — the composite “complete
+factory” hermetic oracle suite (`apps/backend/tests/test_foundry_hermetic_epoch.py`)
+exercises the full compiler → interpreter → family → freeze/ledger → runner path under
+every outcome type at once (compiled/blocked/excluded/aliased sources;
+insufficient/killed/survivor terminal variants), plus all-blocked, all-killed,
+multi-survivor, large-scale checkpoint/resume, and
+protected-data-trip/evidence-class-immutability fixtures (reusing the existing
+`micro_accessor` `MicroAccessorSealedShardError`/`MicroAccessorOriginFenceError` exception
+types — no new accessor abstraction). `foundry_runner.run_one_candidate`'s
+already-terminal fast path now re-verifies `manifest_hash`/`econ_floor_bps` before
+returning a cached row (closes the iter-2-carried resume-identity gap).
+`foundry_source_registry.SourceRecord` gains `source_hash` (`sha256(source_excerpt)`, per
+`docs/hypothesis-foundry-spec.md` §1.4) and `alternatives` (closes the iter-1-carried §1.4
+field gap; see `state/assumptions.md` iter-3 for the exact-shape reading). All of this
+still operates on hermetic fixture epoch ids only — no real epoch, no real candidate
+outcome read, no UI; real `MicroAccessor` wiring for the real corpus stays J-07 territory.
 
 An optional read-only MCP proxy (`desk_micro_foundry`) is deferrable per the goal; if built later it
 must be a byte-identical GET proxy of this same endpoint and joins the existing MCP contract tests —

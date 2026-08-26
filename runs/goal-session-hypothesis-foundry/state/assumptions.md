@@ -113,3 +113,37 @@ meaningless). ESCALATE was reached instead through the "lean iteration surfaced 
 complexity" clause, grounded in the arbiter's documented full-to-lean demotion of a spec-declared
 cross-cutting iteration.
 **Reversible:** yes
+
+## iter-3 — goal-decomposer
+
+**Ambiguity:** Constitution §1.4 requires every source record to disclose "every finite alternative
+the compiler is allowed to enumerate," and the iteration-state's carried blocker names this as a
+missing `SourceRecord` field, but `docs/hypothesis-foundry-spec.md`'s own §1.4 field table — the
+document that already pins `source_hash`'s exact definition (`sha256(source_excerpt)`) — does not
+define `alternatives`'s shape. §2.1/2.2's own "Enumeration vs. block" text describes alternatives as
+SEPARATE sibling `SourceRecord`s sharing one `foundry_family_key`, which could mean no per-record
+field is needed at all (the sibling records already ARE the enumeration).
+**We chose:** add `alternatives: tuple[str, ...]` as a per-record disclosure field naming the
+sibling representation(s) it legally alternates with, rather than relying solely on shared
+`foundry_family_key` membership to imply it — because J-02 step 3 asks to "confirm each record
+shows... alternatives" as something visible ON that record during audit, and a reader auditing one
+record in isolation should not have to reconstruct the family membership elsewhere to see what its
+legal alternatives are. This is additive disclosure on top of the existing family-key mechanism, not
+a replacement for it, so it cannot let the compiler enumerate anything the family-key rule wouldn't
+already allow.
+**Reversible:** yes
+
+**Ambiguity:** J-05 step 5 requires proving hermetically that "withheld/sealed reads fail closed,"
+but `docs/hypothesis-foundry-spec.md` §10 explicitly marks the sanctioned-accessor evidence-boundary
+wiring as "future work, meaning fixed here," and the iter-2 dev handoff's own Known Issues describe
+all real-corpus/accessor wiring as J-06/J-07 territory — so it is unclear whether J-05 needs the
+Foundry runner to actually call through `micro_accessor.MicroAccessor` this iteration, or only prove
+the fail-closed CONTRACT against a hermetic stand-in.
+**We chose:** scope iter-3 to prove the fail-closed contract hermetically by reusing the real,
+already-tested `MicroAccessorSealedShardError`/`MicroAccessorOriginFenceError` exception types (no
+new accessor abstraction, no mock exception family), without wiring the runner into
+`MicroAccessor`'s real-corpus resolution path — that full wiring stays J-07 territory, consistent
+with the spec's own "future work" framing and the "no real candidate outcome read before step 7"
+anti-goal. This keeps J-05 hermetic-only while still exercising the exact exception types the real
+J-07 integration will raise.
+**Reversible:** yes
