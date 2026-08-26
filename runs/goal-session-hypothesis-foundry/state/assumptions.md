@@ -176,3 +176,28 @@ against the claims, and re-ran the module myself (10 passed) rather than citing 
 output. Treating an in-audit fix as unverifiable would have forced an artificial extra iteration for
 work that is present and checkable in the tree.
 **Reversible:** yes
+
+## iter-4 — goal-decomposer
+
+**Ambiguity:** J-02 step 5 bundles two separate checks: (a) confirming injected effect/p-value/n
+fixture noise cannot move a compiled `CandidateSpec`/disposition (purely hermetic, buildable now),
+and (b) "inspect the committed fresh-context registry-audit report" at
+`reports/hypothesis-foundry/source-registry-audit.md` — a path iter-1's own assumption-ledger entry
+already tied to the REAL 11-source registry that only J-06 commits, which does not exist yet.
+**We chose:** scope iter-4's Sources/Compiler fixture view to deliver only (a), and state explicitly
+in the iteration spec that J-02's step 5b — and therefore J-02 as a whole — may still be scored
+`partial` by the evaluator after this iteration, pending J-06's real committed audit report. This is
+a known, disclosed limit of the read-surface stage, not a defect in this iteration's execution.
+**Reversible:** yes
+
+**Ambiguity:** J-04 step 4 names the literal real-epoch tracked artifact path
+`docs/hypothesis-foundry/freeze-set.json` (§8.2's checked-in namespace) inside a step explicitly
+scoped to inspecting a "fixture freeze record," but no real epoch/manifest/source-registry exists yet
+to produce that committed file, and `docs/hypothesis-foundry/` is confirmed absent from the repo.
+**We chose:** the fixture Freeze/Integrity view invokes the already-built, already hermetically-proven
+`foundry_freeze.generate_freeze_set` / `build_freeze_record` functions over the same small
+deterministic fixture module set `test_foundry_freeze.py` already uses, and displays that real target
+path only as the schema/wiring destination the eventual REAL freeze-set will occupy once J-06/J-07
+commit it — it does not write, fabricate, or pre-create the real committed file, and the UI must
+visibly label this subview as fixture-scope, distinct from any future real freeze record.
+**Reversible:** yes

@@ -60,9 +60,14 @@ Tapeology
                                 existing shipped sections, using its own new `data-testid` family
                                 (`foundry-*`), per `docs/goal.md` Product Shape: "No dedicated
                                 mutation page is introduced. The Foundry surface is read-only."
-                                iter-1 ships only the panel HEADER (era identity + era-open
-                                baseline); the Sources/Compiler/Interpreter/Freeze subsections are
-                                still [PLANNED, not yet built].
+                                iter-1 shipped the panel HEADER (era identity + era-open
+                                baseline). iter-4 additionally ships four fixture-scope subsections
+                                below the header — Sources/Compiler, Interpreter fixtures, Freeze/
+                                Integrity, Hermetic Oracles — each a HERMETIC/FIXTURE demonstration
+                                of the already-built compiler/interpreter/family/freeze/ledger
+                                machinery, visibly labelled as fixture-scope and distinct from the
+                                header's real era-open baseline. The real Epoch/Manifest and Runner/
+                                Checkpoint subsections (J-06/J-07) remain [PLANNED, not yet built].
 ```
 
 **Feature / journey homes** (each reachable in ≤2 clicks from the nav):
@@ -100,6 +105,10 @@ iteration that first ships each row (see iteration note below the table).
 | Materialized econ floor + unit/provenance, Scout decision, p-screen/effect-bps/concentration/economic/fragility disclosures, best-of-N disclosure, `DIAGNOSTIC_SURVIVOR_OOS_RULE_FROZEN` state | `app/research/foundry_runner.py` calling the unchanged `scout.screen_candidate` (ships hermetically at iter-2 for fixture candidates; real corpus/econ-floor materialization still awaits J-07) | `GET /research/desk/micro/foundry` | Foundry never adds a second statistical rail; values are the verbatim Scout screen payload |
 | Protected/withheld/sealed ids read by the real Foundry runner (must be zero; identity-safe aggregate only) | `app/research/foundry_runner.py` (module ships hermetically at iter-2; real protected-access census still awaits J-07) | `GET /research/desk/micro/foundry` | never sealed identities, joins the existing TR-2-style inference sweep |
 | Current runner checkpoint / next manifest ordinal, ledger chain/integrity verification | `app/research/foundry_ledger.py` (ships hermetically at iter-2) | `GET /research/desk/micro/foundry` | Foundry's own hash-chained append-only trial ledger; never registered into the Scout ledger |
+| `sources_compiler` (7 hermetic J-02 source fixtures + compiled `CandidateSpec`/block reason + outcome-noise immutability proof) | `app/research/foundry_source_registry.py` + `app/research/foundry_compiler.py` (reused, no new module) | `GET /research/desk/micro/foundry` (`sources_compiler` key) | ships iter-4; fixture-scope only, visibly labelled distinct from any future real registry (J-06) |
+| `interpreter_fixtures` (5 hermetic J-03 interpreter scenarios: immediate-scalar equivalence, conjunction, deferred `refill_consistent`, mirrored direction, unsupported-relation block) | `app/research/foundry_interpreter.py` (reused, no new module) | `GET /research/desk/micro/foundry` (`interpreter_fixtures` key) | ships iter-4; fixture-scope only |
+| `freeze_integrity` (family denominator fixtures, late-insertion refusal, generation replay verify/drift-refusal, fixture freeze record/freeze-set schema, first-read-lock + hash-drift + non-science-file exemption, replay idempotence/conflict/single-flight) | `app/research/foundry_family.py` + `app/research/foundry_freeze.py` + `app/research/foundry_ledger.py` (reused, no new module) | `GET /research/desk/micro/foundry` (`freeze_integrity` key) | ships iter-4; fixture-scope only — `freeze_record.freeze_set_target_path` NAMES the real `docs/hypothesis-foundry/freeze-set.json` path without that file existing yet (see `state/assumptions.md` iter-4) |
+| `hermetic_oracles` (composite multi-outcome-type epoch coverage + all-blocked/all-killed/multi-survivor/crash-resume-at-scale/protected-data-trip/evidence-class-immutability pass/fail summary) | NEW: `app/research/foundry_hermetic_summary.py` — a thin summary builder over `apps/backend/tests/test_foundry_hermetic_epoch.py`'s existing hermetic suite; introduces no second oracle implementation | `GET /research/desk/micro/foundry` (`hermetic_oracles` key) | ships iter-4; precomputed once (module-level cache or checked-in snapshot), never recomputed per request, per the router's established GET-never-computes convention |
 
 **Iteration note (iter-1):** shipped for real — the `GET /research/desk/micro/foundry` route itself
 (new, mounted on the existing `micro_routes.py` router, GET-only / never-computes); row 1's era
@@ -142,6 +151,21 @@ returning a cached row (closes the iter-2-carried resume-identity gap).
 field gap; see `state/assumptions.md` iter-3 for the exact-shape reading). All of this
 still operates on hermetic fixture epoch ids only — no real epoch, no real candidate
 outcome read, no UI; real `MicroAccessor` wiring for the real corpus stays J-07 territory.
+
+**Iteration note (iter-4):** shipped for real — the consolidated Binding Execution Order step-5 read
+surface. `GET /research/desk/micro/foundry` gains four new top-level keys (`sources_compiler`,
+`interpreter_fixtures`, `freeze_integrity`, `hermetic_oracles`, table rows above), each read verbatim
+by four new `/desk` → Hypothesis Foundry subsections (Sources/Compiler, Interpreter fixtures, Freeze/
+Integrity, Hermetic Oracles) — all four rendered from a precomputed/cached fixture result, never
+computed per GET request. Two carried integrity repairs also closed: `foundry_source_registry.py`
+gained a fail-closed batch lint over `SourceRecord.alternatives` (rejects a nonexistent, wrong-family,
+or self-referential sibling id — auditor B7); `foundry_runner.run_one_candidate`'s
+intent-without-terminal ("crash") branch now also re-verifies the pinned intent row's `manifest_hash`
+against the current invocation, mirroring the already-terminal path's iter-3 fix (auditor B4). No IA/
+nav change (all four subsections live under the already-registered blueprint homes); no
+`blueprint.reapproval-requested` needed. Real epoch/manifest (J-06), the real committed
+`reports/hypothesis-foundry/source-registry-audit.md` J-02 depends on, and the Runner/Checkpoint
+subview (J-07) remain unbuilt.
 
 An optional read-only MCP proxy (`desk_micro_foundry`) is deferrable per the goal; if built later it
 must be a byte-identical GET proxy of this same endpoint and joins the existing MCP contract tests —
