@@ -1,0 +1,28 @@
+{
+  "phase": "goal-hypothesis-foundry-iter-2",
+  "status": "in_progress",
+  "current_step": "dev_complete",
+  "updated_at": "2026-08-26T22:35:00Z",
+  "started_at": "2026-08-26T20:37:00Z",
+  "cli": "claude",
+  "blockers": [],
+  "changed_files": [
+    "apps/backend/app/research/foundry_interpreter.py",
+    "apps/backend/app/research/foundry_family.py",
+    "apps/backend/app/research/foundry_freeze.py",
+    "apps/backend/app/research/foundry_ledger.py",
+    "apps/backend/app/research/foundry_runner.py",
+    "apps/backend/tests/test_foundry_interpreter.py",
+    "apps/backend/tests/test_foundry_family.py",
+    "apps/backend/tests/test_foundry_freeze.py",
+    "apps/backend/tests/test_foundry_ledger.py",
+    "apps/backend/tests/test_foundry_runner.py",
+    "apps/backend/scripts/qa_playbook_iter7_fixture_scoped_backend.sh"
+  ],
+  "tests_run": true,
+  "tests_passed": true,
+  "browser_checks_run": false,
+  "fix_mode": false,
+  "notes": "Full backend suite: 3825 passed, 8 skipped, 0 failed (verified via real shell exit code 0, not a truncated log) -- includes 39 new hermetic Foundry tests, no regressions against the iter-1 baseline (3787 passed/8 skipped). Frontend tsc --noEmit: 0 errors (no frontend files touched). Built the five new J-03/J-04 modules: foundry_interpreter.py (generic population resolution per spec Sec4.1 -- component resolution/exclusion/typed-reason counting, outcome_start via the existing micro_features.resolve_outcome_start timing helper, closed relation-kind corner dispatch, boolean projection into scout.screen_candidate called DIRECTLY never via the registration/ledger path, proven byte-identical to the existing direct scalar path on hermetic fixtures -- TC-4..TC-8); foundry_family.py (frozen per-family variant denominator, hard-cap whole-family block, unconditional late-insertion refusal -- TC-9/TC-10); foundry_freeze.py (deterministic manifest generation with idempotent verify-replay and drift refusal, an AST-based freeze-set generator over the 10 required + transitively-discovered same-directory modules, the freeze record, a real git-merge-base ancestry check, and a first-read-lock drift verifier that only inspects enumerated freeze-set paths so it cannot false-refuse on Goal Mode session dirt or non-scientific UI-only files -- TC-11/TC-12/TC-13); foundry_ledger.py (built on the existing shared micro_chain_ledger.HashChainedLedger primitive; intent/terminal rows, idempotent exact-duplicate replay, conflicting-replay refusal, deterministic pre-outcome rule_id, mechanical prospective_root_status -- TC-14/TC-18/TC-19); foundry_runner.py (mechanical closed Scout-verdict mapping, canonical manifest-order exhaustion structurally invariant to results, crash-safe intent-without-terminal resume with an economic-floor identity check, and a real fcntl single-flight lock -- TC-14/TC-15/TC-16/TC-17). Also closed the J-01 QA-rig visibility gap (TC-1/TC-2/TC-3): qa_playbook_iter7_fixture_scoped_backend.sh now copies the real apps/backend/.data/foundry/era_open_baseline.json artifact (read-only source) into the scoped rig's own throwaway root before backend start; live-verified the rig now serves the genuine recorded values and that the real artifact stays byte-identical (md5sum) before/after. Service startup verified via scripts/dev.sh: healthy start, clean stop (no lingering uvicorn/next-dev/next-server children), clean restart with no port conflicts; both servers killed before finishing. No anti-goal violation: no real Foundry candidate outcome read anywhere, scout.py untouched, no Foundry trial ever reaches the Scout ledger (foundry_ledger.py never imports scout_ledger), docs/hypothesis-foundry/ tracked artifacts remain absent (confirmed). Known, disclosed limitations recorded in the dev handoff for reviewer/auditor triage: the freeze-set transitive scanner only follows same-directory (level==1) relative imports (a cross-package import like micro_join.py's `from ..providers.base import TradeEvent` is not discovered -- does not affect TC-12's required-module coverage, all ten live flat in app/research/); resume-identity verification checks only the pinned econ-floor identity this iteration (full freeze-hash/eligible-corpus verification is real-epoch/J-06+ wiring); Sec4.4's optional aggressor-derived descriptive seam was not built (no TC requires it, spec frames it as optional); no CLI entry point wired yet for foundry_runner.py (library functions only, proven hermetically; a CLI wrapper is J-06/J-07 orchestration work).",
+  "next_action": "reviewer"
+}

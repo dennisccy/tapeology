@@ -1,0 +1,99 @@
+{
+  "journeys": {
+    "J-01": {
+      "id": "J-01",
+      "name": "The Foundry opens as a new finite era and the old self-extension loop is inactive",
+      "status": "partial",
+      "last_verified_iter": "goal-hypothesis-foundry-iter-1",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-hypothesis-foundry-iter-0",
+      "last_evidence_path": "reports/qa/goal-hypothesis-foundry-iter-1-evidence/J-01-fail.png",
+      "spec_hash": "59e3ae49662b4b867a8df72a472b4ad02a5fbf79ce36d95bd34fc1f20dd3acd5",
+      "gap": "Steps 1-4 now hold. Step 1-2 verified ON SCREEN for the first time (screenshot J-01-fail.png: expanded 'HYPOTHESIS FOUNDRY' panel showing 'Previous era: rapid-microscope (closed)', 'Current era: hypothesis-foundry (active)', 'Source registry hash: not_yet_generated', spec version v1). Steps 3-4 re-verified by browser-qa via repo/git checks (archived goal docs/goal-archive/goal-2026-08-26.md, dated opening note docs/research-directions.md:1126, runs/goal-session-rapid-microscope/ clean, no active project-extensions/proposer-guidance.md). Step 5 NOT demonstrated in the browser: on the scoped :8301 QA rig GET /research/desk/micro/foundry returns era_open_baseline: null and the panel renders 'The era-open baseline has not been recorded yet.' A genuine baseline artifact DOES exist under the operator's real store (apps/backend/.data/foundry/era_open_baseline.json); the evaluator independently recomputed all six referee_*.py SHA-256 hashes and they match byte-for-byte, and its 3787/8/0 suite counts equal the iter-0 baseline 3747/8/0 plus the 40 new Foundry tests. Cause is store scope, not the product: foundry_source_registry.resolve_foundry_dir() derives the foundry dir from TAPEOLOGY_DATASET_DIR, which the QA rig points at its own throwaway root, and no TAPEOLOGY_FOUNDRY_DIR override or rig-side copy step exists. Not scored evidence_makeup: closing it needs a launch/provisioning change (developer work), not merely a re-capture, and the rig must show the REAL recorded values (fabricating rig baseline numbers is an explicit anti-goal)."
+    },
+    "J-02": {
+      "id": "J-02",
+      "name": "Ratified sources compile into auditable CandidateSpecs or typed blocks without outcome input",
+      "status": "partial",
+      "last_verified_iter": "goal-hypothesis-foundry-iter-1",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-hypothesis-foundry-iter-0",
+      "last_evidence_path": "reports/qa/goal-hypothesis-foundry-iter-1-evidence/J-02-fail.png",
+      "spec_hash": "1f5990f0ef773d9740a427d44bb5d593ac40ca6d4b65e704ae64270226c273db",
+      "gap": "ZERO of J-02's five acceptance steps have browser evidence - all five are UI-inspection steps and no Sources/Compiler view exists anywhere on /desk (screenshot J-02-fail.png; browser-qa DOM text search for 'Sources / Compiler', 'CandidateSpec', 'fixture view' all false). The UI subview was deliberately deferred by the iteration spec (OUT OF SCOPE, Binding Execution Order step 5). Scored partial - not passing, not failing - because the backend machinery underneath the journey is real and was independently re-run by the reviewer (40/40 new Foundry tests, TC-3..TC-12): apps/backend/app/research/foundry_source_registry.py (closed 14-member disposition vocabulary, SourceRecord schema, owner meta-policy precedence, exact-quote lint that fails closed) and foundry_compiler.py (CandidateSpec schema, order-invariant/content-sensitive candidate_spec_hash, family grouping). Two blockers before J-02 can ever reach passing: (1) the Sources/Compiler read surface does not exist; (2) SourceRecord (foundry_source_registry.py:159-188) omits two fields J-02 step 3 itself requires each record to show - `alternatives` and `source_hash` - although docs/hypothesis-foundry-spec.md §1.4 and the iteration's own IN SCOPE list claim they are present (reviewer MINOR finding, independently confirmed by the evaluator by reading the dataclass)."
+    },
+    "J-03": {
+      "id": "J-03",
+      "name": "Generic interpretation preserves timing, population symmetry, direction, and exact Scout decisions",
+      "status": "failing",
+      "last_verified_iter": "goal-hypothesis-foundry-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-hypothesis-foundry-iter-0",
+      "last_evidence_path": "docs/handoffs/goal-hypothesis-foundry-iter-0-dev.md",
+      "spec_hash": "2df19ba402256be32c1e1bef5ab444f53932d7a6e1910ef1550475f69efc0d05",
+      "gap": "entirely unbuilt - no generic interpreter, no Scout adapter, no equivalence oracle (foundry_interpreter.py explicitly out of scope in iter-1). Not targeted or attempted in iter-1; status carried forward from the iter-0 evaluator-reproduced check."
+    },
+    "J-04": {
+      "id": "J-04",
+      "name": "Foundry owns the denominator, append-only state, freeze barrier, and integrity lock",
+      "status": "failing",
+      "last_verified_iter": "goal-hypothesis-foundry-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-hypothesis-foundry-iter-0",
+      "last_evidence_path": "docs/handoffs/goal-hypothesis-foundry-iter-0-dev.md",
+      "spec_hash": "046f4d7aa4cd1a09254c0645b97cce49ff848582688dd49a4911cc2f1fa4a71b",
+      "gap": "entirely unbuilt - no family registry, no freeze-set.json / freeze-record.json (docs/hypothesis-foundry/ still does not exist, evaluator re-checked in iter-1), no integrity lock. Not targeted in iter-1. Partial credit exists only inside foundry_compiler.compile_sources (family grouping bookkeeping), which is not the J-04 denominator/freeze machinery."
+    },
+    "J-05": {
+      "id": "J-05",
+      "name": "The complete factory passes hermetic known-null, planted-effect, leakage, and honest-stop oracles",
+      "status": "failing",
+      "last_verified_iter": "goal-hypothesis-foundry-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-hypothesis-foundry-iter-0",
+      "last_evidence_path": "docs/handoffs/goal-hypothesis-foundry-iter-0-dev.md",
+      "spec_hash": "5b0b7ba56f92f1618b478620a75b4e3e0061935ce90ed66d5ad623f278b06de6",
+      "gap": "the four named oracles (known-null, planted-effect, leakage, honest-stop) do not exist. iter-1 added the first four Foundry test files (TC-2..TC-15 fixture-level coverage), which is a small down payment on the 55 required hermetic/trap items, not the oracle suite this journey names. Not targeted in iter-1."
+    },
+    "J-06": {
+      "id": "J-06",
+      "name": "One complete real epoch is generated and committed with zero Foundry outcome reads",
+      "status": "failing",
+      "last_verified_iter": "goal-hypothesis-foundry-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-hypothesis-foundry-iter-0",
+      "last_evidence_path": "docs/handoffs/goal-hypothesis-foundry-iter-0-dev.md",
+      "spec_hash": "92dd2d434a1cfa8ce4683e1df6b094d67ab5ec88a92febdc1b56a3ec4e4e8aac",
+      "gap": "entirely unbuilt and correctly not attempted - evaluator re-confirmed in iter-1 that docs/hypothesis-foundry/ does not exist (no source-registry.json, epoch-manifest.json, freeze-set.json, freeze-record.json) and no registry-audit report was committed. Binding Execution Order forbids this before steps 2-5 exist."
+    },
+    "J-07": {
+      "id": "J-07",
+      "name": "Goal Mode deterministically exhausts the frozen real epoch without changing science",
+      "status": "failing",
+      "last_verified_iter": "goal-hypothesis-foundry-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-hypothesis-foundry-iter-0",
+      "last_evidence_path": "docs/handoffs/goal-hypothesis-foundry-iter-0-dev.md",
+      "spec_hash": "f3a5ff9577806a161eb3a7cf7d9b695e9e06e581943c436920f5f7868ed37803",
+      "gap": "entirely unbuilt and correctly not attempted - no exhaust runner, no Foundry trial ledger, no checkpoint surface. Real outcome reads remain illegal before the J-06 freeze commit."
+    },
+    "J-08": {
+      "id": "J-08",
+      "name": "The operator sees the final Foundry truth and all foundation rails still hold",
+      "status": "failing",
+      "last_verified_iter": "goal-hypothesis-foundry-iter-1",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-hypothesis-foundry-iter-0",
+      "last_evidence_path": "reports/qa/goal-hypothesis-foundry-iter-1-evidence/J-01-fail.png",
+      "spec_hash": "61cc1f15a3805d73e63bac6d4d109a9fda53ead5e6c75d1618e0eb253f9c0ed8",
+      "gap": "Two facts changed in iter-1 and are evidence-backed: GET /research/desk/micro/foundry now exists (micro_routes.py, GET-only) and the /desk Hypothesis Foundry panel header renders (screenshot J-01-fail.png). Everything this journey actually asks for is still absent: no final epoch truth (survivors, honest stop, exhaust results) is displayed because none exists, and the era-open baseline block does not render on the scoped QA rig. Foundation rails half remains healthy: backend suite 3787 passed / 8 skipped / 0 failed, tsc --noEmit 0 errors, config_fingerprint 08e471b10130e1e2 (unmoved), store-scope guard CLEAN (11395 protected files byte-identical)."
+    }
+  },
+  "anti_goal_violations": [],
+  "notes": {
+    "browser_lane_iter_1": "The iter-0 blocker is FIXED and independently confirmed: the scoped :8301 QA rig came up healthy and browser-qa drove a live Chrome session against http://localhost:3301/desk + http://localhost:8301, producing the first two screenshots of this session. No browser-infra.json exists for iter-1. The fix was made the right way - apps/backend/scripts/seed_micro_graduation_iter18_fixture.py::_observation() now declares value_unit=wf.WF_OBSERVATION_UNIT, and the evaluator confirmed apps/backend/app/research/walkforward.py is untouched in both HEAD..snapshot diff and the working tree, with no xfail/skip markers added anywhere in the iteration diff.",
+    "open_non_anti_goal_defects_iter_1": "(1) SourceRecord omits the §1.4 fields `source_hash` and `alternatives` while docs/hypothesis-foundry-spec.md §1.4 claims the dataclass mirrors the list verbatim - must be fixed before J-06 authors real sources against the schema, and `alternatives` is required by J-02 step 3 itself. (2) BLOCKED_UNIT_CONTRACT is not reachable from declared fields (collapsed into the BLOCKED_SPEC_GAP branch) - a real cross-unit-arithmetic source would be mis-dispositioned. (3) CandidateBlueprint is a hand-authored compiler input pending foundry_interpreter.py (J-03). All three are developer/reviewer-declared and evaluator-confirmed; none is an anti-goal violation.",
+    "baseline_reference": "era-open baseline recorded once via apps/backend/scripts/record_foundry_era_open_baseline.py into apps/backend/.data/foundry/era_open_baseline.json (gitignored): 3787 passed / 8 skipped / 0 failed, tsc_error_count 0, config_fingerprint 08e471b10130e1e2, six referee_*.py SHA-256 hashes - all six independently recomputed and matched by the evaluator."
+  },
+  "updated_at": "2026-08-26T21:55:00Z"
+}

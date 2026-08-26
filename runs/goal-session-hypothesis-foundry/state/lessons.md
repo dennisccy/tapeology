@@ -37,3 +37,22 @@ the real artifact (or `TAPEOLOGY_FOUNDRY_DIR`) before the pass — and planting 
 instead is an explicit anti-goal ("no browser proof based on fabricated fixture state").
 **Applies to:** every future iteration whose journey evidence is a Foundry read surface over a
 recorded artifact — J-01 step 5, J-02, J-04, J-06, J-07, J-08 — and to any QA-rig provisioning work.
+
+## iter-2 — 2026-08-26T23:05:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** A spec that declares `Depth: full` does not get full depth — the deterministic depth
+arbiter demoted iter-2 to lean for `budget-breach` while explicitly citing `prior verdict: CONTINUE`
+(engine.log 21:47:43), so the era's linchpin machinery (interpreter + freeze + ledger + runner, incl.
+the byte-identical Scout-equivalence oracle) shipped with no auditor. An evaluator ESCALATE verdict,
+not a depth *recommendation*, is the lever that actually forces the full pipeline.
+**Applies to:** any iteration whose spec sets a full-depth trigger, and any evaluator deciding
+between CONTINUE-with-`full`-recommendation and ESCALATE.
+
+**Lesson:** The reusable honest fix for "the scoped QA rig cannot see a real recorded artifact" is a
+plain `cp` of the genuine file into the rig's own throwaway root guarded by `if [[ -f ... ]]`, so a
+missing real artifact degrades to the product's honest empty state instead of a fabricated one
+(`apps/backend/scripts/qa_playbook_iter7_fixture_scoped_backend.sh`, iter-2). It leaves the store-scope
+guard CLEAN and lets the evaluator re-derive the served values from the source file independently.
+**Applies to:** every future Foundry journey whose evidence is a read surface over a recorded
+artifact — J-02, J-04, J-06, J-07, J-08.

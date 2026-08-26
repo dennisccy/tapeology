@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "journey": "J-01",
+  "name": "The Foundry opens as a new finite era and the old self-extension loop is inactive",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "journey": "J-01",
+      "action": {"type": "goto", "url": "/desk"},
+      "expect": {"text": "Hypothesis Foundry"}
+    },
+    {
+      "n": 2,
+      "journey": "J-01",
+      "action": {"type": "click", "target": {"text": "Hypothesis Foundry"}},
+      "expect": {"text": "08e471b10130e1e2"}
+    }
+  ]
+}

@@ -63,3 +63,41 @@ two record fields that are missing today ("alternatives" and a source hash) so t
 the code agree before any real source is written against them. Then begin the next required stage:
 the general reader that turns a frozen candidate description into the existing Scout decision
 unchanged, plus the family and freeze machinery (J-03 and J-04). Run that iteration at full depth.
+
+## Iteration 2 — goal-hypothesis-foundry-iter-2
+
+**Date:** 2026-08-26T23:05:00Z
+**Verdict:** ESCALATE
+**Depth dispatched:** lean (spec asked for full; the engine's budget rule downgraded it — engine.log 21:47:43)
+**Journey deltas:**
+- Newly passing: J-01 "The Foundry opens as a new finite era"
+- Newly partial: J-03 "Generic interpretation preserves timing, direction and Scout decisions",
+  J-04 "Foundry owns the denominator, ledger, freeze barrier and integrity lock" (both were failing)
+- Newly failing: none
+- Regressed: none
+- Anti-goal violations: none. scan-report CLEAN; coherence COHERENCE-PASS; store-scope guard CLEAN
+  (11395 protected files byte-identical); disposition counts total=0 / blocking=0 / non-blocking=0 /
+  critical=0
+
+**Reasoning:** The blocker that held the first journey back for two iterations is gone, and it was
+closed the honest way. The Desk page now shows the true recorded opening numbers, and I checked them
+myself rather than trusting the report: I recomputed all six Referee file fingerprints and they match
+the stored record, the numbers on screen match that record exactly, and the test rig was fixed by
+copying the real recorded file in — with a plain "not recorded yet" fallback if no real file exists,
+so nothing is invented. The real file was not touched (its timestamp predates this run). Five new
+back-end pieces landed and I re-ran all 71 of their tests myself: they pass, and the key one is a
+genuine comparison test — it runs the same case through the old proven path and the new path and
+demands the entire result be identical. That is why the two machinery journeys moved up to partly
+done. They are not done: every check those journeys ask a person to make is an on-screen inspection,
+and that screen was deliberately left for a later iteration. I escalated because the iteration's own
+plan said this work needed the deeper review pipeline, the engine's budget rule downgraded it, and
+the lighter review still found a real hole: on restart, a candidate whose inputs have changed is
+quietly handed the old stored result instead of being refused.
+
+**Next-step recommendation:** Build the hermetic proof suite next — one practice run containing every
+possible outcome at once, plus an all-blocked run, an all-killed run, and the tests that must fail
+shut when protected data is touched. Carry two small repairs in the same iteration: make the restart
+check refuse a candidate whose inputs have changed, and add the two record fields the written method
+document already promises ("alternatives" and a source fingerprint). Run this iteration with the
+deeper review pipeline; a recommendation alone was already overridden once. The operator may still
+want to raise the session cap from 60 to 80 iterations.

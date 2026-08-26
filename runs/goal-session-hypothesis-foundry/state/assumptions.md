@@ -89,3 +89,27 @@ step 5-6 name them directly. The full multi-family, multi-verdict-type "complete
 killed + survivor all together) and the protected-data trip fixtures stay reserved for J-05 / step 4
 next iteration, matching the goal's own explicit journey split.
 **Reversible:** yes
+
+## iter-2 — goal-evaluator
+
+**Ambiguity:** J-03's five and J-04's six acceptance steps are ALL on-screen fixture inspections, and
+the iteration spec deferred every Foundry fixture view to the step-5 consolidated read surface — so
+literally zero assertion steps have browser evidence, yet the machinery underneath is real and its
+equivalence oracle is genuine. The status vocabulary ("partial = only some assertion steps passed")
+does not cover a journey whose substance is proven at a layer its own steps never name.
+**We chose:** score both `partial`, not `failing`, on the same precedent this session already set for
+J-02 in iter-1 — and only after the evaluator independently re-ran all 71 Foundry tests (exit 0) and
+read TC-4 to confirm it compares the whole screen dict against the pre-existing direct Scout path
+rather than against itself. Unit tests are never journey evidence, so this can never support
+`passing`.
+**Reversible:** yes
+
+**Ambiguity:** decision-tree rung 4's "the SAME journey has now failed 2+ consecutive iterations"
+would fire on J-05..J-08, which have been `failing` since iter-0 — but they are staged-out journeys
+the Binding Execution Order forbids attempting yet, never targets of any iteration.
+**We chose:** do not treat never-targeted, order-blocked journeys as the rung-4 repeat-failure signal
+(it would fire every single iteration of an 8-journey staged build and make adaptive depth
+meaningless). ESCALATE was reached instead through the "lean iteration surfaced cross-cutting
+complexity" clause, grounded in the arbiter's documented full-to-lean demotion of a spec-declared
+cross-cutting iteration.
+**Reversible:** yes
