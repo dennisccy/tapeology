@@ -21,6 +21,7 @@ import type {
   DeskForwardPinsResult,
   DeskForwardReadResult,
   DeskForwardRunsListResult,
+  DeskFoundryResponse,
   DeskGraduationResponse,
   DeskMicroSnapshotsResponse,
   DeskMicroSnapshotRunsResponse,
@@ -2779,6 +2780,33 @@ export async function fetchDeskMicroSnapshotsRuns(): Promise<{
       return { ok: true, data: (await res.json()) as DeskMicroSnapshotRunsResponse };
     }
     let error = "The snapshot build-run history could not be loaded.";
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") error = data.detail;
+    } catch {
+      /* keep default */
+    }
+    return { ok: false, data: null, error };
+  } catch {
+    return { ok: false, data: null, error: "Backend unreachable — is the API running?" };
+  }
+}
+
+// GET /research/desk/micro/foundry (goal-hypothesis-foundry-iter-1, J-01) — era/session identity
+// + the era-open baseline, read verbatim (no client-side recomputation). The ONLY fetch the
+// Hypothesis Foundry panel header issues this iteration — the Sources/Compiler and every other
+// Foundry subview are deferred to a later, consolidated read-surface iteration.
+export async function fetchDeskFoundry(): Promise<{
+  ok: boolean;
+  data: DeskFoundryResponse | null;
+  error?: string;
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/research/desk/micro/foundry`);
+    if (res.ok) {
+      return { ok: true, data: (await res.json()) as DeskFoundryResponse };
+    }
+    let error = "The Hypothesis Foundry panel could not be loaded.";
     try {
       const data = await res.json();
       if (typeof data?.detail === "string") error = data.detail;

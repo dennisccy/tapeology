@@ -2961,3 +2961,33 @@ export interface DeskMicroSnapshotRunLogEntry {
 export interface DeskMicroSnapshotRunsResponse {
   runs: DeskMicroSnapshotRunLogEntry[];
 }
+
+// --- Era "The Hypothesis Foundry" -- GET /research/desk/micro/foundry (goal-hypothesis-foundry-
+// iter-1, J-01): the panel header only this iteration -- era/session identity + the era-open
+// baseline (full-suite pass/skip/failed counts, tsc error count, config fingerprint, six
+// Referee-module SHA-256 hashes). `source_registry_hash` is always `null` this iteration (the
+// real registry does not exist until J-06) -- rendered beside an explicit status string, never a
+// fabricated placeholder hash.
+export interface FoundryEraIdentity {
+  previous_era: string;
+  previous_era_status: string;
+  current_era: string;
+  current_era_status: string;
+  foundry_spec_version: string;
+}
+
+export interface FoundryEraOpenBaseline {
+  backend_suite: { passed: number; skipped: number; failed: number };
+  tsc_error_count: number;
+  config_fingerprint: string;
+  referee_module_sha256: Record<string, string>;
+}
+
+export interface DeskFoundryResponse {
+  era: FoundryEraIdentity;
+  // `null` on a fresh install before the operator's one-time recording act has run -- never
+  // fabricated (the same honest-absence convention every other Desk section already uses).
+  era_open_baseline: FoundryEraOpenBaseline | null;
+  source_registry_hash: string | null;
+  source_registry_status: string;
+}

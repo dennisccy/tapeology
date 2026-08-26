@@ -46,6 +46,11 @@ from .desk_playbook import PlaybookStore
 from .desk_playbook_context import BandMapResolver
 from .desk_routes import get_playbook_store, get_universe_store
 from .desk_universe import UniverseStore
+from .foundry_source_registry import (
+    foundry_era_identity,
+    read_era_open_baseline,
+    resolve_foundry_dir,
+)
 from .micro_accessor import ExposureRegistry, resolve_micro_exposure_registry_dir
 from .micro_graduation import EMPTY_LEDGER_MESSAGE, GraduationLedger, list_graduation_families, resolve_micro_graduation_dir
 from .micro_readiness import (
@@ -728,4 +733,42 @@ def get_graduation(graduation_dir: str = Depends(get_micro_graduation_dir)) -> d
         "families": families,
         "message": None if families else EMPTY_LEDGER_MESSAGE,
         "chain_verification": ledger.verify_chain(),
+    }
+
+
+# --- Era "The Hypothesis Foundry" -- J-01: the panel header (era identity + era-open baseline) --
+# GET-only this iteration, exactly like every sibling route above (T-8: page-load GETs never
+# compute). This route's OWN scope this iteration (goal-hypothesis-foundry-iter-1) is deliberately
+# narrow: era/session identity, the Foundry methodology spec version, and the era-open baseline
+# block -- see `docs/phases/goal-hypothesis-foundry-iter-1.md` IN SCOPE. `source_registry_hash`
+# renders `null` with an explicit `not_yet_generated` status (goal.md: "the real registry does not
+# exist until Binding Execution Order step 6 / J-06") -- never a fabricated placeholder hash. The
+# CandidateSpec/compiler machinery this iteration DOES build (`foundry_source_registry.py`/
+# `foundry_compiler.py`) is proven hermetically by its own test suite and is NOT yet served here --
+# the consolidated Foundry read surface (Sources/Compiler and every other subview) is a later,
+# single iteration per the goal's own Binding Execution Order step 5 (state/assumptions.md's
+# iter-1 entry).
+
+
+def get_foundry_dir() -> str:
+    """The era-open baseline snapshot's storage directory -- ``TAPEOLOGY_FOUNDRY_DIR`` if set,
+    else a ``foundry`` SIBLING of the config-owned dataset directory
+    (``foundry_source_registry.resolve_foundry_dir`` -- see that function's own docstring)."""
+    return resolve_foundry_dir(CONFIG.dataset_dir_resolved())
+
+
+@router.get("/foundry")
+def get_foundry(foundry_dir: str = Depends(get_foundry_dir)) -> dict:
+    """Serves era/session identity (``foundry_source_registry.foundry_era_identity`` -- a static
+    dict, never derived per-request), the persisted era-open baseline snapshot VERBATIM
+    (``read_era_open_baseline`` -- ``None`` until the operator's one-time recording act has run,
+    never fabricated), and the explicit not-yet-generated `source_registry_hash` state. Never
+    404/500 before that recording act runs -- the desk router's own never-404-on-absence
+    convention: an honest ``era_open_baseline: null`` on a fresh install, exactly like ``GET
+    /vault``'s honest empty ``shards``/``universes`` before the first registration."""
+    return {
+        "era": foundry_era_identity(),
+        "era_open_baseline": read_era_open_baseline(foundry_dir),
+        "source_registry_hash": None,
+        "source_registry_status": "not_yet_generated",
     }

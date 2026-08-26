@@ -101,7 +101,15 @@ def _events_for_store() -> list:
 
 
 def _observation(session_date: str, symbol: str, value: float) -> dict:
-    return {"session_date": session_date, "symbol": symbol, "value": value}
+    # goal-hypothesis-foundry-iter-1 (TC-1/TC-2): every observation must declare the canonical
+    # unit its `value` is already expressed in, or `walkforward.require_canonical_observation_units`
+    # refuses it before a single value is averaged (r13/r14 unit-discipline guard -- see that
+    # function's own docstring). This fixture's values were ALWAYS basis points (`_ECON_FLOOR`
+    # above compares them against a `floor_bps` in the SAME `long`/positive direction) -- the bug
+    # was a missing declaration, never a wrong unit, so the fix names the SAME canonical constant
+    # the guard itself checks against (`walkforward.WF_OBSERVATION_UNIT`, itself
+    # `micro_features.OUTCOME_UNIT` -- never a second, independently-spelled unit string).
+    return {"session_date": session_date, "symbol": symbol, "value": value, "value_unit": wf.WF_OBSERVATION_UNIT}
 
 
 def _passing_observations() -> list[dict]:

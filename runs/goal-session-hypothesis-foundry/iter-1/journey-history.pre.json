@@ -1,0 +1,98 @@
+{
+  "journeys": {
+    "J-01": {
+      "id": "J-01",
+      "name": "The Foundry opens as a new finite era and the old self-extension loop is inactive",
+      "status": "partial",
+      "last_verified_iter": "goal-hypothesis-foundry-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-hypothesis-foundry-iter-0",
+      "last_evidence_path": "docs/handoffs/goal-hypothesis-foundry-iter-0-dev.md",
+      "spec_hash": "59e3ae49662b4b867a8df72a472b4ad02a5fbf79ce36d95bd34fc1f20dd3acd5",
+      "gap": "steps 2-4 verified true (docs/goal-archive/goal-2026-08-26.md exists; dated opening note at docs/research-directions.md:1126; runs/goal-session-rapid-microscope/ 527 tracked files all clean and nothing touched since session start; proposer two-file opt-in broken - project-extensions/hooks/post-goal.sh present but project-extensions/proposer-guidance.md absent, archived at docs/goal-archive/proposer-guidance-2026-08-26.md). Steps 1 and 5 cannot pass: zero 'Hypothesis Foundry' string in apps/frontend/app/desk/page.tsx and no Foundry read model exists to record the era-open baseline into."
+    },
+    "J-02": {
+      "id": "J-02",
+      "name": "Ratified sources compile into auditable CandidateSpecs or typed blocks without outcome input",
+      "status": "failing",
+      "last_verified_iter": "goal-hypothesis-foundry-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-hypothesis-foundry-iter-0",
+      "last_evidence_path": "docs/handoffs/goal-hypothesis-foundry-iter-0-dev.md",
+      "spec_hash": "1f5990f0ef773d9740a427d44bb5d593ac40ca6d4b65e704ae64270226c273db",
+      "gap": "entirely unbuilt - `ls docs/hypothesis-foundry` => No such file or directory; no source-registry.json, no CandidateSpec schema, no Sources/Compiler fixture view. Independently re-verified by the evaluator; NOT an infra-absence inference."
+    },
+    "J-03": {
+      "id": "J-03",
+      "name": "Generic interpretation preserves timing, population symmetry, direction, and exact Scout decisions",
+      "status": "failing",
+      "last_verified_iter": "goal-hypothesis-foundry-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-hypothesis-foundry-iter-0",
+      "last_evidence_path": "docs/handoffs/goal-hypothesis-foundry-iter-0-dev.md",
+      "spec_hash": "2df19ba402256be32c1e1bef5ab444f53932d7a6e1910ef1550475f69efc0d05",
+      "gap": "entirely unbuilt - `find apps/backend -name 'foundry*'` returns zero hits; no generic interpreter, no Scout adapter, no equivalence oracle. Independently re-verified by the evaluator."
+    },
+    "J-04": {
+      "id": "J-04",
+      "name": "Foundry owns the denominator, append-only state, freeze barrier, and integrity lock",
+      "status": "failing",
+      "last_verified_iter": "goal-hypothesis-foundry-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-hypothesis-foundry-iter-0",
+      "last_evidence_path": "docs/handoffs/goal-hypothesis-foundry-iter-0-dev.md",
+      "spec_hash": "046f4d7aa4cd1a09254c0645b97cce49ff848582688dd49a4911cc2f1fa4a71b",
+      "gap": "entirely unbuilt - no family registry, no freeze-set.json / freeze-record.json (docs/hypothesis-foundry/ does not exist), no integrity lock. Independently re-verified by the evaluator."
+    },
+    "J-05": {
+      "id": "J-05",
+      "name": "The complete factory passes hermetic known-null, planted-effect, leakage, and honest-stop oracles",
+      "status": "failing",
+      "last_verified_iter": "goal-hypothesis-foundry-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-hypothesis-foundry-iter-0",
+      "last_evidence_path": "docs/handoffs/goal-hypothesis-foundry-iter-0-dev.md",
+      "spec_hash": "5b0b7ba56f92f1618b478620a75b4e3e0061935ce90ed66d5ad623f278b06de6",
+      "gap": "entirely unbuilt - `find apps/backend/tests -iname '*foundry*'` returns zero hits; none of the 55 required hermetic/trap coverage items exists. Independently re-verified by the evaluator."
+    },
+    "J-06": {
+      "id": "J-06",
+      "name": "One complete real epoch is generated and committed with zero Foundry outcome reads",
+      "status": "failing",
+      "last_verified_iter": "goal-hypothesis-foundry-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-hypothesis-foundry-iter-0",
+      "last_evidence_path": "docs/handoffs/goal-hypothesis-foundry-iter-0-dev.md",
+      "spec_hash": "92dd2d434a1cfa8ce4683e1df6b094d67ab5ec88a92febdc1b56a3ec4e4e8aac",
+      "gap": "entirely unbuilt and correctly not attempted - no tracked docs/hypothesis-foundry/ artifacts, no registry audit report, no freeze commit. Binding Execution Order forbids this before steps 2-5 exist. Independently re-verified by the evaluator."
+    },
+    "J-07": {
+      "id": "J-07",
+      "name": "Goal Mode deterministically exhausts the frozen real epoch without changing science",
+      "status": "failing",
+      "last_verified_iter": "goal-hypothesis-foundry-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-hypothesis-foundry-iter-0",
+      "last_evidence_path": "docs/handoffs/goal-hypothesis-foundry-iter-0-dev.md",
+      "spec_hash": "f3a5ff9577806a161eb3a7cf7d9b695e9e06e581943c436920f5f7868ed37803",
+      "gap": "entirely unbuilt and correctly not attempted - `grep -ril foundry apps/backend/app/` returns zero hits; no exhaust runner, no trial ledger, no checkpoint surface. Real outcome reads are illegal before the J-06 freeze commit. Independently re-verified by the evaluator."
+    },
+    "J-08": {
+      "id": "J-08",
+      "name": "The operator sees the final Foundry truth and all foundation rails still hold",
+      "status": "failing",
+      "last_verified_iter": "goal-hypothesis-foundry-iter-0",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-hypothesis-foundry-iter-0",
+      "last_evidence_path": "docs/handoffs/goal-hypothesis-foundry-iter-0-dev.md",
+      "spec_hash": "61cc1f15a3805d73e63bac6d4d109a9fda53ead5e6c75d1618e0eb253f9c0ed8",
+      "gap": "entirely unbuilt - GET /research/desk/micro/foundry does not exist (no foundry route in apps/backend/app/research/micro_routes.py) and no /desk Hypothesis Foundry panel exists. Foundation half of the journey is healthy at baseline: backend suite 3747 passed / 8 skipped / 0 failed, frontend tsc --noEmit 0 errors, config_fingerprint 08e471b10130e1e2 (pinned). Independently re-verified by the evaluator for the absence half."
+    }
+  },
+  "anti_goal_violations": [],
+  "notes": {
+    "browser_lane_iter_0": "No browser evidence exists for any journey this iteration: the store-scope guard refused both the replay and LLM browser lanes because the backend on :8301 was the operator's REAL store, and the scoped fixture rig could not be brought up (apps/backend/scripts/seed_micro_graduation_iter18_fixture.py crashed with UnitMismatchError - its _observation() helper omits value_unit). runs/goal-session-hypothesis-foundry/iter-0/browser-infra.json lists all 8 journeys, attempts=1. pending_infra was deliberately NOT set: every status above rests on deterministic repository evidence the evaluator reproduced itself, not on infra absence, and a verify-only make-up ride over surfaces that do not exist would be waste. The rig MUST be repaired before any journey can ever be promoted to passing (the no-screenshot rail is absolute).",
+    "baseline_reference": "backend suite 3747 passed / 8 skipped / 0 failed; frontend tsc --noEmit 0 errors; config_fingerprint 08e471b10130e1e2; store-scope guard CLEAN (11395 protected files unchanged)."
+  },
+  "updated_at": "2026-08-26T20:30:00Z"
+}

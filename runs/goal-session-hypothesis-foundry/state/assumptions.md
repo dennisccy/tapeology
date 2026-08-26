@@ -38,3 +38,27 @@ iter-1/2/3, and matching the goal's own explicit staging. iter-1 ships only J-01
 (era identity + era-open baseline), which is itself required by J-01's own acceptance and cannot
 wait.
 **Reversible:** yes
+
+## iter-1 — goal-evaluator
+
+**Ambiguity:** J-02's five acceptance steps are all on-screen inspections of a Sources/Compiler
+view, and that view was deliberately deferred by the iteration spec — so literally zero of its
+assertion steps have browser evidence, yet its backend compile rules exist and were independently
+re-run by the reviewer (40/40, TC-3..TC-12). The status vocabulary ("partial = only some assertion
+steps passed") does not say how to score a journey whose substance is proven at a layer its own
+steps never name.
+**We chose:** score J-02 `partial`, not `failing`, on the reviewer's independent test re-run, while
+recording in journey-history that no UI step has evidence and that J-02 additionally cannot pass
+until `SourceRecord` gains the `alternatives` field its step 3 requires. Unit tests are explicitly
+never journey evidence, so this can never support `passing`.
+**Reversible:** yes
+
+**Ambiguity:** Methodology A.7 (`capture defect ≠ product failure`) could arguably cover J-01 step
+5: the era-open baseline artifact is genuine (I recomputed all six Referee hashes and they match),
+and the screenshot shows the panel behaving correctly for an EMPTY store rather than misbehaving —
+the data simply is not visible to the scoped QA rig.
+**We chose:** do NOT apply `evidence_makeup`, and keep J-01 `partial`. The asserted behaviour
+(baseline block renders the recorded values) has never been observed by anyone but the developer,
+and closing the gap needs a rig launch/provisioning change by a developer rather than a re-capture,
+so an `evidence` depth iteration could not fix it.
+**Reversible:** yes

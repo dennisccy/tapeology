@@ -22,3 +22,18 @@ fixture to declare its unit, never relax the guard.
 **Applies to:** any iteration that needs browser evidence (i.e. all of them) — and any future
 science-contract revision (r15+) that adds a required field, which should sweep
 `apps/backend/scripts/seed_*_fixture.py` in the same commit.
+
+## iter-1 — 2026-08-26T21:55:00Z
+
+**Verdict:** CONTINUE
+**Lesson:** A one-time operator-recorded artifact written under the REAL store
+(`apps/backend/.data/foundry/era_open_baseline.json`) is invisible to the scoped `:8301` QA rig,
+because `foundry_source_registry.resolve_foundry_dir()` derives the foundry directory from
+`TAPEOLOGY_DATASET_DIR`, which the rig points at a throwaway root — so a panel that renders
+correctly against the real store renders "not recorded yet" in every browser pass. Any Foundry
+journey whose acceptance shows a recorded artifact (era-open baseline, source registry, manifest,
+freeze record, exhaust results) will fail browser QA for this reason alone unless the rig is given
+the real artifact (or `TAPEOLOGY_FOUNDRY_DIR`) before the pass — and planting invented rig values
+instead is an explicit anti-goal ("no browser proof based on fabricated fixture state").
+**Applies to:** every future iteration whose journey evidence is a Foundry read surface over a
+recorded artifact — J-01 step 5, J-02, J-04, J-06, J-07, J-08 — and to any QA-rig provisioning work.

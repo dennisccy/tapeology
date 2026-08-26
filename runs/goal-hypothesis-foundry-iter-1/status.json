@@ -1,0 +1,30 @@
+{
+  "phase": "goal-hypothesis-foundry-iter-1",
+  "status": "in_progress",
+  "current_step": "dev_complete",
+  "updated_at": "2026-08-26T21:15:00Z",
+  "started_at": "2026-08-26T20:37:00Z",
+  "cli": "claude",
+  "blockers": [],
+  "changed_files": [
+    "apps/backend/scripts/seed_micro_graduation_iter18_fixture.py",
+    "apps/backend/app/research/foundry_source_registry.py",
+    "apps/backend/app/research/foundry_compiler.py",
+    "apps/backend/app/research/micro_routes.py",
+    "apps/backend/scripts/record_foundry_era_open_baseline.py",
+    "apps/backend/tests/test_foundry_source_registry.py",
+    "apps/backend/tests/test_foundry_compiler.py",
+    "apps/backend/tests/test_foundry_route.py",
+    "apps/backend/tests/test_foundry_fixture_unit_regression.py",
+    "apps/frontend/app/desk/page.tsx",
+    "apps/frontend/lib/api.ts",
+    "apps/frontend/lib/types.ts",
+    "docs/hypothesis-foundry-spec.md"
+  ],
+  "tests_run": true,
+  "tests_passed": true,
+  "browser_checks_run": false,
+  "fix_mode": false,
+  "notes": "Full backend suite: 3787 passed, 8 skipped, 0 failed (3795 collected, 0 errors), including 40 new Foundry tests. Frontend tsc --noEmit: 0 errors. Fixed the QA-rig-crashing fixture bug (seed_micro_graduation_iter18_fixture.py::_observation() now declares value_unit) without weakening walkforward.require_canonical_observation_units; confirmed the scoped :8301 QA rig starts healthy end-to-end via a live run of qa_playbook_iter7_fixture_scoped_backend.sh (seed-micro-graduation-iter18 step now completes with a real pass verdict, backend reaches Application startup complete). Wrote docs/hypothesis-foundry-spec.md (Foundry Methodology Spec, section-numbered to match docs/goal.md verbatim). Built app/research/foundry_source_registry.py (closed §7.1 disposition vocabulary, §1.4 SourceRecord schema, §2 owner meta-policy precedence, §1.4 exact-quote lint, era-open baseline record/read, era identity) and app/research/foundry_compiler.py (§3 CandidateSpec schema + order-invariant/science-field-sensitive hash, batch compile_sources with family denominator bookkeeping) -- both proven hermetically against the 7 required fixture source archetypes (TC-3..TC-12 all pass). Added GET /research/desk/micro/foundry to micro_routes.py (era identity + era-open baseline + null/not_yet_generated source_registry_hash, never computes). Appended the Hypothesis Foundry panel header to apps/frontend/app/desk/page.tsx (foundry-panel testid family, verbatim render, no client recomputation, no new useEffect -- test_desk_refresh_chain_guard.py's pinned effect census unaffected). Recorded the real era-open baseline into apps/backend/.data/foundry/era_open_baseline.json (gitignored) with the final suite numbers; live-verified via scripts/dev.sh that GET /research/desk/micro/foundry serves that snapshot byte-for-byte and that /desk renders the collapsed Hypothesis Foundry header with the correct expand-control testid (the interactive expand+screenshot pass is browser-qa-agent's next step). Service startup verified clean (dev.sh up/down/up, no port conflicts once next-server's own child PID is also killed). No anti-goal violations: GET route never computes, no real source authored, no real epoch/candidate outcome touched, require_canonical_observation_units left unweakened, docs/hypothesis-foundry/ tracked artifacts not created (correctly out of scope until J-06). Known issues and two open interpretive gaps (BLOCKED_UNIT_CONTRACT reachability; CandidateBlueprint as an explicit input pending foundry_interpreter.py) are recorded in the dev handoff for reviewer/auditor triage.",
+  "next_action": "reviewer"
+}
