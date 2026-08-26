@@ -8,7 +8,11 @@ Fixtures cover exactly the seven hermetic source archetypes ``docs/goal.md`` J-0
 Each fixture's ``source_excerpt``/``quoted_spans`` are deliberately synthetic sentences invented
 for this test -- never real ratified repository text -- since J-02 step 2 explicitly scopes this
 iteration to compiler-RULE machinery proven on hermetic fixtures, not the real 11 required source
-objects (that is J-06)."""
+objects (that is J-06).
+
+TC-10 (``docs/phases/goal-hypothesis-foundry-iter-3.md``) covers the ``source_hash``/
+``alternatives`` fields added this iteration; the two-frozen-legal-variant ``alternatives`` case
+(TC-11) lives in ``test_foundry_compiler.py`` beside the fixture pair it extends."""
 
 from __future__ import annotations
 
@@ -408,3 +412,50 @@ def test_resolve_foundry_dir_defaults_to_a_sibling_of_dataset_dir(monkeypatch, t
     monkeypatch.delenv("TAPEOLOGY_FOUNDRY_DIR", raising=False)
     dataset_dir = str(tmp_path / "datasets")
     assert fsr.resolve_foundry_dir(dataset_dir) == str(tmp_path / "foundry")
+
+
+# --- TC-10 (goal-hypothesis-foundry-iter-3): source_hash == sha256(source_excerpt), recomputed --
+# never caller-supplied -- so it can never drift from source_excerpt. -----------------------------
+
+
+def test_tc10_source_hash_is_sha256_of_source_excerpt():
+    import hashlib
+
+    record = _good_record("hash-check")
+    assert record.source_hash == hashlib.sha256(record.source_excerpt.encode("utf-8")).hexdigest()
+
+
+def test_tc10_source_hash_changes_when_source_excerpt_changes():
+    import dataclasses
+    import hashlib
+
+    record = _good_record("hash-mutation")
+    original_hash = record.source_hash
+    mutated = dataclasses.replace(record, source_excerpt=record.source_excerpt + " (a mutated tail)")
+    assert mutated.source_hash != original_hash
+    assert mutated.source_hash == hashlib.sha256(mutated.source_excerpt.encode("utf-8")).hexdigest()
+
+
+def test_tc10_source_hash_is_not_a_constructor_parameter():
+    """`source_hash` is `init=False` -- a caller cannot pass a value for it at all (it can only be
+    derived), so a stale/forged hash can never be smuggled in at construction time."""
+    import inspect
+
+    assert "source_hash" not in inspect.signature(fsr.SourceRecord.__init__).parameters
+
+
+# --- `alternatives` (goal-hypothesis-foundry-iter-3): defaults to empty; participates in the
+# registry hash (real disclosure content, unlike the derived `source_hash`). --------------------
+
+
+def test_alternatives_defaults_to_an_empty_tuple_when_no_ratified_alternative_exists():
+    record = _good_record("no-alternative")
+    assert record.alternatives == ()
+
+
+def test_source_registry_hash_changes_when_alternatives_changes():
+    import dataclasses
+
+    record = _good_record("alt-hash")
+    with_alt = dataclasses.replace(record, alternatives=("some-sibling-source-id",))
+    assert fsr.source_registry_hash([record]) != fsr.source_registry_hash([with_alt])

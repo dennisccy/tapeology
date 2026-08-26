@@ -186,6 +186,18 @@ class SourceRecord:
     # fixture field lives here and provably cannot move a disposition or a CandidateSpec hash,
     # because nothing below ever looks at this mapping.
     extra: Mapping[str, object] = field(default_factory=dict)
+    # §1.4 (goal.md): "every finite alternative the compiler is allowed to enumerate" -- a
+    # per-record disclosure naming the source_id(s) of the sibling representation(s) this record
+    # legally alternates with. Additive on top of, never a replacement for, `foundry_family_key`
+    # membership (the mechanism that actually lets the compiler enumerate them, spec §2.1) -- an
+    # auditor reading ONE record in isolation should not have to reconstruct family membership
+    # elsewhere to see what its legal alternatives are. Empty when no ratified alternative exists.
+    alternatives: tuple[str, ...] = ()
+    # `sha256(source_excerpt)` -- `init=False` so it can never be caller-supplied (and therefore
+    # never drift from `source_excerpt`): `__post_init__` below recomputes it fresh on every
+    # construction, mirroring `source_registry_hash`'s own "always recomputed, never cached"
+    # determinism discipline one level up (spec §1.4).
+    source_hash: str = field(init=False, default="")
 
     def __post_init__(self) -> None:
         if self.threshold_provenance is not None and self.threshold_provenance not in LEGAL_THRESHOLD_PROVENANCES:
@@ -204,6 +216,7 @@ class SourceRecord:
             DISPOSITION_EXCLUDED_GATE_CLOSED,
         ):
             raise ValueError(f"{self.source_id}: explicit_exclusion must be one of the three EXCLUDED_* dispositions")
+        object.__setattr__(self, "source_hash", hashlib.sha256(self.source_excerpt.encode("utf-8")).hexdigest())
 
 
 class QuoteMismatch(Exception):
@@ -279,6 +292,11 @@ def _canonical_source_record(record: SourceRecord) -> dict:
         ),
         "explicit_exclusion": record.explicit_exclusion,
         "aliases_lineage_ids": list(record.aliases_lineage_ids),
+        "alternatives": list(record.alternatives),
+        # `source_hash` is deliberately EXCLUDED here -- it is a pure derivation of
+        # `source_excerpt` (already present above), so including it would only echo information
+        # this projection already carries, exactly like `CandidateSpec._canonical_fields` excludes
+        # `candidate_spec_hash` from its own hash input one level down.
     }
 
 

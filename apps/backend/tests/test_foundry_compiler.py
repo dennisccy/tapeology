@@ -1,7 +1,11 @@
 """``foundry_compiler.py`` -- the Hypothesis Foundry's ``CandidateSpec`` schema and batch compiler
 (goal-hypothesis-foundry-iter-1). Test-first contract: TC-3, TC-4, TC-10, TC-11 in
 ``docs/phases/goal-hypothesis-foundry-iter-1.md``. TC-5 through TC-9/TC-12 (the blocked/aliased/
-lint cases) live in ``test_foundry_source_registry.py`` -- those need no ``CandidateBlueprint``."""
+lint cases) live in ``test_foundry_source_registry.py`` -- those need no ``CandidateBlueprint``.
+
+TC-11 in ``docs/phases/goal-hypothesis-foundry-iter-3.md`` (a distinct, later TC-11 -- the
+``alternatives`` field) extends the SAME two-frozen-legal-variant fixture pair this file's own
+iter-1 TC-4 already uses, below."""
 
 from __future__ import annotations
 
@@ -79,7 +83,7 @@ def test_tc3_natural_boundary_scalar_compiles_to_a_candidate_spec_with_a_hash():
 # foundry_family_variant_count == 2, and have distinct variant_ordinal values. --------------------
 
 
-def _variant_record(source_id: str, ordinal: int) -> fsr.SourceRecord:
+def _variant_record(source_id: str, ordinal: int, *, alternatives: tuple[str, ...] = ()) -> fsr.SourceRecord:
     excerpt = f"{source_id}: trades_20 and trades_100 are both already-legal outcome horizons."
     span_text = "trades_20 and trades_100 are both already-legal outcome horizons"
     return fsr.SourceRecord(
@@ -95,6 +99,7 @@ def _variant_record(source_id: str, ordinal: int) -> fsr.SourceRecord:
         audit_note="two already-defined legal outcome horizons enumerated per the frozen vocabulary, §2.1",
         foundry_family_key="fixture-family-horizon-variants",
         variant_ordinal=ordinal,
+        alternatives=alternatives,
     )
 
 
@@ -117,6 +122,34 @@ def test_tc4_two_legal_variants_share_family_and_have_distinct_ordinals():
     assert spec_b.foundry_family_variant_count == 2
     assert spec_a.variant_ordinal != spec_b.variant_ordinal
     assert {spec_a.variant_ordinal, spec_b.variant_ordinal} == {0, 1}
+
+
+# --- TC-11 (goal-hypothesis-foundry-iter-3): the SAME two-frozen-legal-variant fixture pair
+# populates `alternatives` naming each other as the sibling representation; a fixture with no
+# ratified alternative (the natural-boundary-scalar record used by TC-3, above) shows an empty
+# tuple -- confirmed already by test_foundry_source_registry.py's own default-empty-tuple test. ---
+
+
+def test_tc11_two_legal_variants_name_each_other_as_their_alternative():
+    record_a = _variant_record("fixture-variant-alt-a", 0, alternatives=("fixture-variant-alt-b",))
+    record_b = _variant_record("fixture-variant-alt-b", 1, alternatives=("fixture-variant-alt-a",))
+    assert record_a.alternatives == ("fixture-variant-alt-b",)
+    assert record_b.alternatives == ("fixture-variant-alt-a",)
+
+    # additive, not a replacement: BOTH the family-key mechanism and the alternatives disclosure
+    # agree about the same two siblings.
+    result = fc.compile_sources(
+        [record_a, record_b],
+        foundry_spec_version="v1",
+        epoch_id="hermetic-fixture-epoch",
+        blueprints={
+            "fixture-variant-alt-a": _blueprint(horizon="trades_20"),
+            "fixture-variant-alt-b": _blueprint(horizon="trades_100"),
+        },
+    )
+    spec_a = result.candidate_specs["fixture-variant-alt-a"]
+    spec_b = result.candidate_specs["fixture-variant-alt-b"]
+    assert spec_a.foundry_family_id == spec_b.foundry_family_id  # same family the alternatives agree with
 
 
 def test_family_ordinal_collision_is_refused():

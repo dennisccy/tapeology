@@ -147,3 +147,32 @@ with the spec's own "future work" framing and the "no real candidate outcome rea
 anti-goal. This keeps J-05 hermetic-only while still exercising the exact exception types the real
 J-07 integration will raise.
 **Reversible:** yes
+
+## iter-3 — goal-evaluator
+
+**Ambiguity:** J-05 is the first Foundry journey whose acceptance steps are NOT worded as on-screen
+inspections — J-02/J-03/J-04 all say "Open the ... fixture view"/"Inspect ...", but J-05 says "Run a
+hermetic epoch ..." and "Confirm ...", naming no browser surface at all. So the reason those three
+were capped at `partial` (their own steps demand a view that does not exist) does not literally
+apply to J-05, and its acceptance sentence ("the same production compiler/interpreter/exhaust/screen
+paths ... are proved on hermetic oracles") is arguably fully satisfied by a hermetic test run.
+**We chose:** score J-05 `partial`, not `passing`. Two independent grounds: (a) the no-screenshot
+rail is absolute — no results row and no screenshot exist for J-05, and unit tests are never journey
+evidence no matter how the step is worded; (b) `state/blueprint.md` homes J-05 in a "Hermetic
+Oracles" read-surface subsection, so the era's own design expects an operator-visible rendering, and
+the audit disclosed real completeness gaps anyway (freeze never exercised in the composite path; the
+simulated crash discards no state; the checkpoint mechanism the step names does not exist). J-05 can
+reach `passing` only after the Binding Execution Order step-5 read surface renders these fixture
+states and a browser pass photographs them.
+**Reversible:** yes
+
+**Ambiguity:** the auditor fixed two IMPORTANT findings (B1 compiler→runner seam, B2 TC-3's runner
+clause) DURING the audit pass rather than sending the iteration back to the developer, so the tests
+I scored J-05 on are partly the auditor's own work — and an agent verifying its own fix is exactly
+what the non-self-verification rule guards against.
+**We chose:** count them, after verifying independently rather than accepting them: I opened both
+added tests (`tests/test_foundry_hermetic_epoch.py:343-386` and `:405-432`), read their assertions
+against the claims, and re-ran the module myself (10 passed) rather than citing the audit's own test
+output. Treating an in-audit fix as unverifiable would have forced an artificial extra iteration for
+work that is present and checkable in the tree.
+**Reversible:** yes

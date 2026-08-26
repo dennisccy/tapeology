@@ -1,7 +1,9 @@
 """``foundry_runner.py`` (goal-hypothesis-foundry-iter-2, J-04/J-03 integration): canonical-order
 exhaustion, mechanical Scout-verdict mapping, and checkpoint/resume/single-flight (spec §7.2/§9).
 TC-14 (runner-level parts)/TC-15/TC-16/TC-17 in
-``docs/phases/goal-hypothesis-foundry-iter-2.md``."""
+``docs/phases/goal-hypothesis-foundry-iter-2.md``. TC-9 in
+``docs/phases/goal-hypothesis-foundry-iter-3.md`` (the already-terminal fast path's resume-identity
+re-verification, closing the gap iter-2's own review/coherence-audit carried forward)."""
 
 from __future__ import annotations
 
@@ -138,6 +140,34 @@ def test_tc51_resume_econ_floor_mismatch_halts(tmp_path):
     )
     with pytest.raises(fr.FoundryResumeIdentityMismatch):
         fr.run_one_candidate(spec, anchors, ledger=ledger, econ_floor=_ECON_FLOOR, manifest_hash="m1", family=family)
+
+
+def test_tc9_already_terminal_fast_path_raises_on_manifest_hash_drift(tmp_path):
+    """iter-3's closed resume-identity gap: a resumed already-terminal candidate whose caller now
+    supplies a DIFFERENT ``manifest_hash`` than the one stored on its own terminal row must halt,
+    never silently return the stale row."""
+    family = ff.build_family_registry({"family:drift-manifest": ["family:drift-manifest:0"]})["family:drift-manifest"]
+    spec = _scalar_spec(0, family_id="family:drift-manifest", family_count=1)
+    anchors = _anchors(8, effect_bps=50.0)
+    ledger = fl.FoundryLedger(tmp_path)
+    fr.run_one_candidate(spec, anchors, ledger=ledger, econ_floor=_ECON_FLOOR, manifest_hash="m1", family=family)
+
+    with pytest.raises(fr.FoundryResumeIdentityMismatch):
+        fr.run_one_candidate(spec, anchors, ledger=ledger, econ_floor=_ECON_FLOOR, manifest_hash="m2-drifted", family=family)
+
+
+def test_tc9_already_terminal_fast_path_raises_on_econ_floor_drift(tmp_path):
+    """Same gap, the other pinned identity: a resumed already-terminal candidate whose caller now
+    supplies a DIFFERENT ``econ_floor_bps`` than the one pinned on its own intent row must halt."""
+    family = ff.build_family_registry({"family:drift-floor": ["family:drift-floor:0"]})["family:drift-floor"]
+    spec = _scalar_spec(0, family_id="family:drift-floor", family_count=1)
+    anchors = _anchors(9, effect_bps=50.0)
+    ledger = fl.FoundryLedger(tmp_path)
+    fr.run_one_candidate(spec, anchors, ledger=ledger, econ_floor=_ECON_FLOOR, manifest_hash="m1", family=family)
+
+    drifted_floor = {**_ECON_FLOOR, "floor_bps": 999.0}
+    with pytest.raises(fr.FoundryResumeIdentityMismatch):
+        fr.run_one_candidate(spec, anchors, ledger=ledger, econ_floor=drifted_floor, manifest_hash="m1", family=family)
 
 
 def test_tc14_single_flight_lock_rejects_a_concurrent_second_runner(tmp_path):

@@ -101,6 +101,7 @@ Every checked-in source record — real or hermetic-fixture — carries exactly 
 | `proxy_of` | non-`None` only for a pilot-proxy record; carries the parked study it stands in for and its preserved `do_not` restriction |
 | `supersession` | non-`None` only for an older, formula-superseded record; carries the newer ref and the alias disposition it selects |
 | `aliases_lineage_ids` | lineage/alias ids this record is linked to |
+| `alternatives` | source_ids of the sibling representation(s) this record legally alternates with — a per-record disclosure of `§1.4`'s "every finite alternative the compiler is allowed to enumerate", additive alongside `foundry_family_key` membership and never a replacement for it (the family key is still what actually lets the compiler enumerate them, `§2.1`); empty when no ratified alternative exists |
 | `audit_note` | why each decision follows from the quoted rules — **never** citing a candidate outcome, p-value, effect, observation count, Scout verdict, or PnL result |
 | `extra` | caller-supplied metadata the compiler NEVER reads (proves TC-11: an injected `effect_bps`/`p_value`/`n` cannot move a disposition or hash) |
 

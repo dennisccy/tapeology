@@ -101,3 +101,46 @@ check refuse a candidate whose inputs have changed, and add the two record field
 document already promises ("alternatives" and a source fingerprint). Run this iteration with the
 deeper review pipeline; a recommendation alone was already overridden once. The operator may still
 want to raise the session cap from 60 to 80 iterations.
+
+## Iteration 3 — goal-hypothesis-foundry-iter-3
+
+**Date:** 2026-08-27T00:40:00Z
+**Verdict:** CONTINUE
+**Depth dispatched:** full (the iter-2 ESCALATE forced it; the engine did not demote it this time)
+**Journey deltas:**
+- Newly passing: none
+- Newly partial: J-05 "The complete factory passes hermetic oracles" (was failing)
+- Newly failing: none
+- Regressed: none
+- Blockers closed (status unchanged, both carried since iter-1/iter-2): J-04's restart hole,
+  J-02's two missing record fields
+- Anti-goal violations: none. scan-report CLEAN; coherence COHERENCE-PASS; closure CLOSURE-PASS;
+  disposition counts total=0 / blocking=0 / non-blocking=0 / critical=0
+
+**Reasoning:** The deeper review pipeline that the last verdict demanded was worth the cost, and that
+is the main finding. The new test bench is genuine and I ran it myself: one practice run holds every
+possible ending at once — a blocked source, an excluded one, a renamed one, and seven live candidates
+that finish as too-small, no-effect, wrong-direction, one-symbol-driven, not-worth-the-cost, fragile,
+and one survivor — each landing on exactly the right ending, in the right order, with the same
+seven-candidate denominator written on every row. The all-blocked, all-killed, two-survivor,
+crash-and-restart, and touched-protected-data runs all pass, and no record can ever be relabelled
+into the protected evidence class. But the strict reviewer found two real holes the lighter checks
+had missed: the practice run never once fed a candidate built by the real compiler into the real
+runner (nothing anywhere in the codebase did), and the all-blocked case never actually ran the runner
+it claimed to. Both were fixed during that review and I confirmed the two new checks exist and pass.
+Nothing shipped that an operator can see, so J-05 gets partly done, not done — the same line this
+session already drew for three other journeys. Two long-carried repairs also closed: the restart check
+now refuses a candidate whose inputs changed, and source records now carry the two fields the written
+method document promised.
+
+**Next-step recommendation:** Build the one Foundry screen. All the machinery is proven behind the
+scenes, but an operator can still see none of it, and that alone is why J-02 "Sources compile into
+auditable CandidateSpecs", J-03 "Generic interpretation preserves Scout decisions", J-04 "Foundry owns
+the denominator, ledger, freeze barrier and lock" and J-05 "The complete factory passes hermetic
+oracles" are all stuck at partly done — twenty-two on-screen checks between them, none ever
+photographed. This is the goal's own next required stage and the only work that can turn four
+journeys green at once. Carry three small written-down repairs with it: refuse a source record that
+names a sibling which does not exist or is not in its family; extend the restart check to the crash
+path too; and stop the QA report claiming the J-01 screen check was covered by the backend test run —
+it was covered by the browser replay. Run it at full depth. The operator may still want to raise the
+session cap from 60 to 80 iterations.

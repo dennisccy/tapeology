@@ -56,3 +56,33 @@ missing real artifact degrades to the product's honest empty state instead of a 
 guard CLEAN and lets the evaluator re-derive the served values from the source file independently.
 **Applies to:** every future Foundry journey whose evidence is a read surface over a recorded
 artifact — J-02, J-04, J-06, J-07, J-08.
+
+## iter-3 — 2026-08-27T00:40:00Z
+
+**Verdict:** CONTINUE
+**Lesson:** A "complete factory" oracle suite can pass every one of its own test cases and still not
+test the seam it was built to prove. `test_foundry_hermetic_epoch.py` shipped green, reviewer-PASS
+and QA-PASS, yet the hard auditor's repo-wide grep found that `fc.compile_sources` output had NEVER
+been fed into `interpret_candidate`/`run_one_candidate`/`run_family` anywhere in the codebase —
+every interpreter and runner fixture in every `test_foundry_*.py` hand-builds its own
+`fc.CandidateSpec` — so the compiler→runner handoff J-06's real epoch depends on was untested while
+the suite claimed to drive "the real production compiler → … → runner path". The same pass also
+caught TC-3 asserting a runner clause it never invoked.
+**Applies to:** any iteration whose Definition of Done claims an END-TO-END path across modules —
+grep for the producing function's name in the consuming test and confirm the object actually crosses
+the boundary, rather than trusting a test name or a handoff sentence. Also: never demote a
+spec-declared `full` depth on an iteration whose own trigger names a cross-module seam.
+
+## iter-3 — 2026-08-27T00:41:00Z
+
+**Verdict:** CONTINUE
+**Lesson:** Two "proof" claims in this iteration were unfalsifiable rather than false, and only a
+skeptical read caught it: TC-6 simulates a crash with `del ledger_run1`, but `FoundryLedger` keeps
+no in-memory state (every read hits disk via `micro_chain_ledger.py:116-139`), so deleting the
+instance discards nothing a resume could have gotten wrong; and "never trusting a stale checkpoint"
+cannot be falsified at all because no checkpoint file exists anywhere in `foundry_runner.py` —
+`goal.md` §9.2's derived checkpoint cache is simply not built yet. The resume proof is still real and
+useful; the CLAIM attached to it is broader than the evidence.
+**Applies to:** any crash/resume/cache-invalidation test — ask what state the simulated failure
+actually destroys, and whether the mechanism named in the assertion exists at all. Carry this into
+J-06/J-07 rather than treating checkpoint safety as already proven.

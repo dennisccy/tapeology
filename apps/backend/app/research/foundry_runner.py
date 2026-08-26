@@ -3,14 +3,18 @@ built by the other four ``foundry_*.py`` modules over one hermetic manifest in c
 Foundry family order, then variant ordinal within family (§9.1) -- never reordered by effect,
 p-value, n, or a sibling's own verdict.
 
-**Scope this iteration (goal-hypothesis-foundry-iter-2).** This module operates on hermetic
-fixture epoch ids only (module docstring convention shared with every sibling ``foundry_*.py``
-this iteration) -- there is no real freeze/manifest wiring yet, so the post-first-read-lock
-science-hash verification this module will eventually need before EVERY resumed candidate
-(``foundry_freeze.verify_freeze_set_unchanged``) is not yet called from here; that wiring is real-
-epoch (J-06/J-07) territory. What IS in scope and proven here is the one identity this era's
-hermetic runner already has something meaningful to verify on resume: the pinned intent row's own
-economic-floor pin (§6/TC-51) -- see ``FoundryResumeIdentityMismatch`` below."""
+**Scope this iteration (goal-hypothesis-foundry-iter-2/iter-3).** This module operates on
+hermetic fixture epoch ids only (module docstring convention shared with every sibling
+``foundry_*.py`` this iteration) -- there is no real freeze/manifest wiring yet, so the
+post-first-read-lock science-hash verification this module will eventually need before EVERY
+resumed candidate (``foundry_freeze.verify_freeze_set_unchanged``) is not yet called from here;
+that wiring is real-epoch (J-06/J-07) territory. What IS in scope and proven here is the identity
+this era's hermetic runner already has something meaningful to verify on resume: BOTH the
+already-terminal fast path (``manifest_hash`` off the stored terminal row itself,
+``econ_floor_bps`` off its own pinned intent row) and the intent-without-terminal/crash path
+(``econ_floor_bps`` off the pinned intent row) -- see ``FoundryResumeIdentityMismatch`` below
+(§6/TC-51 in iter-2; the already-terminal half closed in iter-3 per the carried resume-identity
+gap the iter-2 review/coherence-audit flagged)."""
 
 from __future__ import annotations
 
@@ -73,8 +77,10 @@ def run_one_candidate(
 ) -> dict:
     """One candidate's full §9.2 resume-aware lifecycle:
 
-    - already-terminal (a prior run, or THIS run's own already-appended row) -> verify identity and
-      return the existing row WITHOUT re-executing the screen (TC-14's "verify and skip");
+    - already-terminal (a prior run, or THIS run's own already-appended row) -> verify identity
+      (``manifest_hash`` off the terminal row itself, ``econ_floor_bps`` off its own pinned intent
+      row -- TC-9, iter-3's closed resume-identity gap) and return the existing row WITHOUT
+      re-executing the screen (TC-14's "verify and skip");
     - an intent row exists with no terminal result (a simulated crash) -> verify the intent row's
       own pinned econ-floor identity against what THIS invocation was given (halting on mismatch --
       TC-51), then deterministically re-execute the exact same screen and append exactly one
@@ -88,6 +94,19 @@ def run_one_candidate(
     alone, exactly as §9.2 requires."""
     existing_terminal = ledger.terminal_row_for(spec.candidate_spec_hash)
     if existing_terminal is not None:
+        if existing_terminal["manifest_hash"] != manifest_hash:
+            raise FoundryResumeIdentityMismatch(
+                f"resume manifest_hash mismatch for candidate_spec_hash="
+                f"{spec.candidate_spec_hash!r}: terminal={existing_terminal['manifest_hash']!r}, "
+                f"resumed with={manifest_hash!r}"
+            )
+        pinned_intent = ledger.intent_row_for(spec.candidate_spec_hash)
+        if pinned_intent is not None and pinned_intent["econ_floor_bps"] != econ_floor.get("floor_bps"):
+            raise FoundryResumeIdentityMismatch(
+                f"resume econ_floor_bps mismatch for candidate_spec_hash="
+                f"{spec.candidate_spec_hash!r}: pinned intent={pinned_intent['econ_floor_bps']!r}, "
+                f"resumed with={econ_floor.get('floor_bps')!r}"
+            )
         return existing_terminal
 
     existing_intent = ledger.intent_row_for(spec.candidate_spec_hash)
