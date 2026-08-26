@@ -1,975 +1,1456 @@
-# Tapeology — Project Goal (The Rapid Microscope — many candidates in, few survivors out, every kill on the record)
+# Tapeology — Project Goal (The Hypothesis Foundry — freeze the finite universe, then exhaust it)
 
-> Eras 1–6 are the **foundation** of this goal. Eras 1–2 are archived at
-> [`docs/goal-archive/goal-2026-07-03.md`](goal-archive/goal-2026-07-03.md); the structure-UI
-> interlude at [`docs/goal-archive/goal-2026-07-07.md`](goal-archive/goal-2026-07-07.md);
-> **Era 5 "The Library"** at [`docs/goal-archive/goal-2026-07-14.md`](goal-archive/goal-2026-07-14.md);
-> the **"Fast Wall" interlude** at [`docs/goal-archive/goal-2026-07-17.md`](goal-archive/goal-2026-07-17.md);
-> the **"Clean Slate" demolition** at [`docs/goal-archive/goal-2026-07-25.md`](goal-archive/goal-2026-07-25.md);
-> **Era B "The Desk"** at [`docs/goal-archive/goal-2026-08-10.md`](goal-archive/goal-2026-08-10.md);
-> **Era B2 "The Playbook"** at [`docs/goal-archive/goal-2026-08-14.md`](goal-archive/goal-2026-08-14.md);
-> and **Era 6 "The Referee" (GOAL_ACHIEVED 2026-08-16, session `referee`, J-01–J-12)** at
-> [`docs/goal-archive/goal-2026-08-16.md`](goal-archive/goal-2026-08-16.md). Eras 3, 4, 5B, and
-> 5C are frozen foundation; their records live in git history and `reports/`.
+> **OPERATIVE GOAL — v2.1, ratified 2026-08-26 after adversarial review + final verification (READY_TO_COMMIT). Predecessor archived at [docs/goal-archive/goal-2026-08-26.md](goal-archive/goal-2026-08-26.md).**
 >
-> **This chapter is "The Rapid Microscope" — an operator-directed era
-> ([`docs/research-directions.md`](research-directions.md) §5.6, the Era-B/B2 operator-pivot
-> precedent) that brings the catalog's Era-9 Wave 1 and Card 5.2 forward and adds the
-> rapid-validation machinery the catalog never had.** The product today is exactly
-> **Cockpit (`/`) + Structure (`/structure`) + Desk (`/desk`)**, the fingerprint epoch is
-> `08e471b10130e1e2`, the MCP surface is **22 read-only tools**, and the honesty machinery
-> (stores, gates, registry, Referee, PnL promotion interlock) is fully intact. The Referee is
-> deliberately conservative — a registered hypothesis waits ~50–120 calendar days for genuinely
-> new sessions, and that is right for FINAL claims. What is missing is the FRONT of the funnel:
-> a way to try many intraday microstructure candidate mechanisms and kill most of them quickly
-> on historical evidence, so only genuinely promising, provenance-complete candidates ever
-> consume real future calendar time. This era builds that funnel:
-> **many candidates → cheap Scout falsification → chronological pseudo-forward survival →
-> sealed-vault OOS → the untouched Referee.**
+> This chapter begins after **The Rapid Microscope** is formally closed and integrated into `main`.
+> Its terminal Goal Mode session, ledgers, reports, and research verdicts are immutable foundation.
+> The Rapid Microscope proved that Tapeology can falsify candidates honestly: thirteen exploratory
+> candidates were recorded, none survived, Study 2 was killed, Studies 1 and 3 were left
+> `PARKED_PENDING_OWNER_SPEC`, no candidate earned `historical_oos`, graduation remained empty, and
+> the Validation Vault remained untouched.
 >
-> **Two hard rails govern everything:** (1) every constant, contract, fold rule, sealing rule,
-> ledger schema, graduation gate, and trap test is fixed in advance in
-> [`docs/rapid-validation-spec.md`](rapid-validation-spec.md) (the canonical spec; developers
-> implement from it, never re-derive or re-tune — a change is a named revision that re-keys
-> future results, never a sweep); (2) every research output carries its **evidence class**
-> (`historical_exposed_diagnostic` / `historical_oos` / `live_confirmatory`) and classes never
-> mix — nothing in this era emits `live_confirmatory`, which remains the untouched Referee's
-> exclusive territory. The Playbook detector family, the band-context revision, the engine, and
-> every `referee_*` module are FROZEN research vocabulary for this whole era (genuine bug fixes
-> excepted, each its own named revision). **The era succeeds if it kills bad ideas honestly; it
-> does NOT need to discover an edge.**
+> **Zero survivors is not a defect.** The new problem is upstream: the repository contains more
+> tape-reading ideas than mechanically complete hypotheses. This era builds a finite, deterministic
+> Foundry that distinguishes those two things, freezes every legal candidate before the first new
+> Foundry outcome read, then exhausts that frozen universe through the existing Scout decision rail.
 >
-> **Measurement correction — spec revision r13 (2026-08-25).** A post-GOAL_ACHIEVED audit
-> ([`reports/micro-unit-semantics-audit.md`](../reports/micro-unit-semantics-audit.md)) found the
-> spec internally contradictory and the contradiction faithfully implemented: §4 defined the
-> primary outcome as a mid-price DIFFERENCE (dollars) while §5.5 gated it against a floor in basis
-> points, so the economic-relevance gate compared **dollars against basis points** for the whole
-> era, and the pooled estimator was incommensurable across a corpus spanning ~$160 to ~$600.
-> [Spec r13](rapid-validation-spec.md) makes the canonical outcome
-> `return_bps = (mid_horizon − mid_start) / mid_start × 10_000`, separates the aggressor
-> (`buy|sell`) and candidate-direction (`long|short`) vocabularies, and routes every magnitude
-> comparison through one unit-checked door. **No gate was weakened**: no threshold, grid, embargo,
-> fold parameter, floor multiple, p-value rule, sample floor or concentration ceiling moved. The
-> era's journeys below are the record of what was BUILT and are not rewritten; what r13 changes is
-> the unit those journeys' numbers were always meant to be in. Every pre-r13 `killed_economic`
-> decision is void as an economic judgement and is superseded by a re-keyed r13 row beside it —
-> old rows are never deleted and never reinterpreted.
+> **Binding owner policy for this era:** unresolved science is **blocked, not guessed**. The owner is
+> deliberately NOT pre-filling Study 1 / Study 3 case-by-case choices. If the ratified sources plus
+> the general rules in this goal do not uniquely determine a feature meaning, threshold, sequence lag,
+> direction, comparator, or other scientific choice, the Foundry records a typed `BLOCKED_*`
+> disposition and continues. A sparse or even empty first epoch is an acceptable result. This one
+> policy replaces case-by-case owner rulings during the run.
+>
+> **No Goal-Proposer research loop in this era.** The scientific workload is finite and predeclared.
+> All research execution belongs to the fixed human-authored journeys below. The project-specific
+> continuous-improvement proposer must be inactive before final `GOAL_ACHIEVED`; no AUTO journey is
+> allowed to create or schedule scientific work for this chapter.
+
+---
 
 ## Vision
 
-Era B2 taught the desk to detect the book's chart patterns; the band-context interlude placed
-them against the wall map; Era 6 built the judge. But the judge's docket is starved: candidate
-mechanisms arrive one hand-written hypothesis at a time, wait months, and (honestly) mostly die.
-Meanwhile the project's refined objective — short-horizon, low-capacity intraday microstructure
-effects suitable for small capital — lives at a layer the product has never measured: what order
-flow DOES inside the structural states the desk already detects. This era builds the Rapid
-Microscope in five pillars:
-
-1. **The honest corpus truth.** A readiness surface that states, from disk, what the tick corpus
-   actually is (today: 12 symbol-days ≈ 3 full-session equivalents, every one of them exposed
-   discovery data; splits hand-assigned; aggressor labels 29–76% tick-test fallbacks) and which
-   predeclared study floors are met — so no downstream claim can pretend to power that does not
-   exist.
-2. **One observer, one pass, honest features.** A research micro-observer on the engine's
-   sanctioned observer seam reads the SAME canonical replay stream (never a second replay, never
-   a recomputed side), and persists prefix-disciplined feature snapshots: flow (cumulative
-   delta, event-time imbalance, runs, bursts), price-response (impact efficiency and its trend,
-   failed aggression, response asymmetry), and L1 liquidity (spread change, quote imbalance,
-   microprice, depletion, `refill_consistent` replenishment) — each with per-row `side_source`
-   and per-window fallback/unknown fractions, because an inferred aggressor label is never
-   ground truth.
-3. **Structure × Flow × Price Response.** The frozen structural vocabulary (playbook signals,
-   band-map walls) joined read-side and lookahead-clean to event-level flow — so the research
-   question becomes "what does flow do inside this structural state, and does the interaction
-   predict the response?", not "chart pattern → buy/sell" and not "flow feature alone →
-   buy/sell".
-4. **Validation that replays the research process.** A Scout that screens cheaply against
-   dependence-honest nulls and ledgers EVERY trial (the denominator never disappears); a
-   chronological walk-forward engine with origin-fenced discovery, exact purge, derived embargo,
-   frozen fold geometry, and a temporal-stability view that makes decay visible; a Validation
-   Vault whose shards seal at ingest under an opaque committed-secret assignment and expose
-   exactly once per family; and a recorder (Card 5.2, at last) that grows the tick corpus with
-   pre-registered universes instead of cherry-picked days.
-5. **Graduation into the untouched Referee.** Stage vocabulary `exploratory →
-   walkforward_survivor → sealed_survivor → referee_handoff_ready`, where only
-   `historical_oos`-class evidence advances anything, and the export bundle carries the complete
-   exposure history — every trial, every kill, every fold, every shard, every failure — so the
-   Referee (byte-untouched this era) receives candidates with nothing laundered.
-
-The deliverable: Tapeology moves from "one hypothesis, months of waiting" to a funnel that can
-try many microstructure mechanisms against history, kill most of them in days with auditable
-reasons, and hand the survivors to the Referee with their full paper trail. Zero survivors is a
-passing grade.
+Tapeology already owns the measurement rails needed to reject weak microstructure ideas, but candidate
+construction is still bespoke enough to create discretion: an agent can choose a feature, pick a legal
+window, decide how a deferred condition joins an anchor, write a family-specific extractor, inspect a
+result, then rationalize the next variant. **The Hypothesis Foundry removes that loop.** It turns the
+repository's already-ratified microstructure statements into a checked-in declarative source registry,
+compiles every scientifically complete statement into a finite `CandidateSpec` universe without reading
+candidate outcomes, freezes that entire universe behind a Git-visible pre-outcome barrier, and then runs
+a deterministic checkpointed exhaust pass over the already-exposed diagnostic corpus. Every evaluable
+candidate is judged by the existing Scout statistical rail; every unresolved statement is visibly
+blocked; every kill is permanent for the epoch; every correctly signed Scout survivor is labelled only
+as a `DIAGNOSTIC_SURVIVOR_OOS_RULE_FROZEN`, never as proof of edge. The era stops before any fresh OOS
+resource or protected evidence is spent.
 
 ## Target Users
 
-- The project owner (a discretionary intraday trader) who reads the readiness truth, registers
-  recording universes, runs the recorder/Scout/fold computes as explicit acts, and reads the
-  candidate ledger, decay views, and vault states on `/desk` — knowing every number's evidence
-  class and every denominator.
-- The same owner through **Claude + MCP**: four new read-only tools beside the existing 22 make
-  the readiness, ledger, folds, and vault readable from a conversation.
-- AI dev-chain agents (the goal-mode chain) building and browser-verifying the era.
+- **Primary:** the Tapeology owner/operator, who wants to define the methodology once and let Goal Mode
+  perform the implementation, compilation, freezing, and finite diagnostic exhaustion unattended.
+- **Secondary:** a future scientific auditor, who must be able to reconstruct every source statement,
+  compiler decision, blocked reason, variant denominator, freeze hash, outcome-read boundary, Scout
+  decision, and survivor rule without trusting agent prose.
 
-## Foundation invariants (still law — eras 1–6, B, B2, and R-1…R-4)
+The operator should not be asked routine scientific questions during the run. If the constitution does
+not answer a question mechanically, the correct machine action is a typed block, not an owner prompt.
 
-The era-1–2 constitution ([`docs/goal-archive/goal-2026-07-03.md`](goal-archive/goal-2026-07-03.md))
-remains binding on all KEPT code — price-impact-over-aggression; honest uncertainty; **no
-fabricated data**; single source of truth; no magic numbers; provider-agnostic engine;
-deterministic & reproducible; no secrets in source; research read-only over the engine; record
-integrity; source/feed/`config_fingerprint` honesty. Ratifications R-1…R-4 carry forward
-unchanged (full text in the archived B2 and Referee goals). The surface inventory is the
-post-Referee one: `/`, `/structure`, and `/desk` (this era adds sections to `/desk`, no new
-route).
-
-1. The **tape engine** (`app/engine/`) emits byte-identical output under `default` on identical
-   inputs; `config_fingerprint` stays **`08e471b10130e1e2`** for this WHOLE era — **zero new
-   `Config` fields** (every rapid-microscope constant is a module constant embedded in
-   `micro_parameters()` and hashed into result identities); if one is genuinely unavoidable it
-   takes §0.4 Path A, and a pin movement is a defect, full stop. The observer attachment is the
-   engine's EXISTING `add_observer` seam — proven byte-equivalent by
-   `tests/test_observer_equivalence.py`, which stays green unmodified.
-2. The **frozen research vocabulary** now includes the whole Referee: the nine Playbook
-   detectors and all spec constants, `playbook-band-context-v3`, `playbook-cohort-v1`,
-   `levels.py`/`tradability.py`/`setups.py`/`edge_report*.py`/`backtests.py`/`profiles.py`/the
-   strategy registry/the champion pointer, **and every `referee_*` module, the referee spec, and
-   the `pnl_scan` promotion interlock — all behaviorally byte-identical.** This era READS them;
-   it never touches, re-implements, re-tunes, or feeds back into any of them. There is NO
-   deliberate exception this era.
-3. The **stores** — every EXISTING registered `BarStore`/`DatasetStore` artifact stays
-   byte-identical with its checksum verifying; no legacy file is ever rewritten or
-   reserialized; append-only immutability, frozen splits, parsing compatibility (absent
-   fields parse exactly as before), the accelerator DBs, the desk stores, the playbook store,
-   and the referee store family are untouched in discipline. **The one r2-sanctioned additive
-   seam:** NEWLY recorded datasets MAY carry the backward-compatible OPTIONAL event/manifest
-   fields of [`docs/rapid-validation-spec.md`](rapid-validation-spec.md) §7.1/§2.6
-   (conditions/venue preservation, `schema_basis`, `quote_size_unit`) — the frozen engine
-   ignores them entirely, and immutability is not weakened anywhere. The era ADDS the micro
-   store family (snapshots, scout ledger, fold ledger, vault + exposure ledger, recorder
-   runs, graduation ledger) under the same discipline, plus one additive default-`None`
-   `observer=` kwarg on `DatasetStore.replay` (counter-tested byte-identical when absent).
-4. The **PnL promotion ledger** stays append-only and intact; the champion pointer does not move
-   this era; `authorize_promotion` keeps its fail-closed contract untouched.
-5. The **kept surfaces as shipped**: the cockpit, `/structure`, and every shipped `/desk`
-   section (Playbook, band context, cohorts, Referee Registry/Adjudications/Runs) keep working
-   exactly as shipped. Rapid-Microscope sections land as NEW sections below the shipped ones;
-   no shipped section, column, or behavior changes.
-6. The **read-only MCP server** keeps its byte-identical GET-proxy contract; this era adds four
-   GET-proxy tools (**22 → 26**, contract v6) and never adds writes.
+---
 
 ## Success Criteria
 
-In priority order — and under scope pressure the order is law: **the scientific core (observer,
-recorder/vault, Scout, walk-forward, provenance, leakage traps) is never weakened to save the
-product surface; UI/MCP polish and up to two of the three pilot studies are the deferrable
-items, in that order.**
+The era succeeds when all of the following are true:
 
-1. **Nothing kept regresses.** Full backend suite green (2,691 pass / 8 skip at authoring —
-   iteration 0 records the era-open count; grows, never shrinks); engine equivalence and the
-   golden feature trace pass byte-unmodified; `Config().config_fingerprint()` prints
-   `08e471b10130e1e2` every iteration; every `referee_*` module byte-identical to `main` at
-   era open (SHA-256 listing recorded at iteration 0 and re-checked); every kept `/`,
-   `/structure`, `/desk` behavior browser-verified as shipped.
-2. **No leakage trap fails, ever.** The TR-1…TR-30 suite of
-   [`docs/rapid-validation-spec.md`](rapid-validation-spec.md) §9 is implemented and green:
-   prefix discipline, origin fencing, sealed-shard sweeps, cherry-pick refusal, class-mixing
-   refusal, purge exactness, screening calibration, pool invariance, ledger chain integrity,
-   single-shot sealed exposure, geometry freeze, rule identity, tick-corpus refusal, the
-   synthetic known-null / known-effect end-to-end oracles — the r2 traps: TR-17
-   future-event availability, TR-18 units gate, TR-19 Card-5.1 preservation prerequisite,
-   TR-20 root-family lineage, TR-21 process-label discipline, TR-22 exposure registry — and
-   the r6 traps: TR-23 sealed-verdict ownership, TR-24 lineage confirmation boundary,
-   TR-25 vault-ledger integrity, TR-26 depletion revealing-quote availability — and the r7
-   traps: TR-27 nonced rule commitment, TR-28 coarse pre-release volumes, and the r8
-   trap TR-29 halt-only vault recovery, and the r9 trap TR-30 evaluator-owned sealed sufficiency.
-3. **Every trial is on the record.** The scout ledger is hash-chained append-only; every
-   evaluated variant — every kill, with its closed-vocabulary reason — is a permanent row; the
-   union-N denominator is served beside every family; "statistically above null" and
-   "economically large enough to pursue" are separate served columns, the latter always with
-   the cost-proxy sentence.
-4. **Evidence classes never mix.** Every study/fold/screen payload carries
-   `historical_exposed_diagnostic` / `historical_oos` verbatim; diagnostic-class results award
-   zero graduation credit and satisfy zero gates (counter-tested); nothing this era emits
-   `live_confirmatory`.
-5. **The recorder and the vault are real.** The Card-5.2 recorder proves
-   restart/resume/idempotency/failure behavior against real Alpaca historical trades+quotes;
-   the starter tranche exists on disk meeting every §7.6 diversity minimum; genuine sealed
-   shards exist (sealed at ingest, before any exploratory read, under the HMAC committed-secret
-   assignment); the 12 legacy symbol-days are served as permanently exploratory; the
-   ~150-symbol-day research gate is reported honestly unmet.
-6. **The diagnostic walk-forward run is delivered — and worth zero credit.** The 155-session
-   playbook-corpus run completes under the predeclared geometry (40/5/20/20 → 5 folds), its
-   every output labeled `historical_exposed_diagnostic`, its fold ledger and temporal-stability
-   view rendered, and its results feeding no gate, no certificate, no promotion, no graduation.
-7. **The pilot studies run honestly.** The three predeclared studies (range-wall failed
-   aggression; delta divergence at level tests; capitulation exhaustion) execute through the
-   Scout on the joinable corpus with predeclared mechanism/outcome/comparator, every variant
-   ledgered; `no survivor`, `wrong direction`, and `insufficient_n` are all passing outcomes.
-8. **Graduation is provenance-complete.** The stage vocabulary and export bundle are
-   implemented and proven on fixtures end to end; `referee_handoff_ready` explicitly does not
-   claim current-Referee registrability for flow predicates (a future named referee-spec
-   revision owns that); the Era-15 evidence line (what would justify the Depth purchase) is
-   recorded in the roadmap.
+1. **The era boundary is explicit and auditable.** Rapid Microscope is archived as the previous goal;
+   its terminal session and research ledgers are unmodified; the Foundry has its own goal/session/branch
+   identity and a dated opening note in the research catalog.
+2. **Continuous improvement is disabled for this finite research era.** The old active
+   `project-extensions/proposer-guidance.md` no longer causes `run-goal.sh` to dispatch a post-achievement
+   proposer. The Foundry finishes through ordinary Goal Mode finalization, not goal self-extension.
+3. **One finite source registry exists.** Every source statement named by this goal is represented
+   exactly once as a canonical source record or explicit alias/exclusion, with source references,
+   supersession provenance, and a deterministic disposition rule.
+4. **Source compilation is outcome-blind at the command layer.** The real manifest generator cannot
+   import, call, open, or query Scout results, forward-return outputs, walk-forward results, graduation,
+   Vault outcomes, Referee results, PnL/champion scans, or protected datasets. Static and dynamic
+   tripwires enforce the boundary.
+5. **The source-authoring leakage surface is disclosed and constrained.** Checked-in source records may
+   be authored by agents that cannot un-know historical repository state, but every enumeration,
+   threshold provenance, direction implication, alias, supersession, and block decision is audited
+   against cited ratified text under the general rules frozen in this goal. No result-dependent
+   rationale is permitted.
+6. **Routine ambiguity is automated; new science is not.** Finite alternatives explicitly preserved by
+   ratified current sources are enumerated. Any alternative requiring a new numeric value, new semantic
+   interpretation, new primitive, fitted boundary, unsupported study statistic, or post-hoc selection is
+   typed `BLOCKED_*` and no candidate is invented to rescue it.
+7. **The real epoch is complete before its first outcome read.** All compiled families, variants,
+   directions, populations, coordinate rules, thresholds, comparators, horizons, Foundry-family
+   denominators, and hashes are generated as one immutable manifest before any Foundry candidate
+   outcome is read.
+8. **The freeze is Git-visible, not merely timestamped.** The real manifest and freeze record exist in a
+   committed ancestor before real evaluation. The freeze record pins all science-affecting source,
+   compiler, extractor/interpreter, Scout-screen, access-control, schema, and configuration hashes.
+9. **After the first Foundry outcome read, science code drift is impossible inside the epoch.** Every
+   resume verifies the freeze hashes. A changed science-affecting file, manifest, source registry,
+   CandidateSpec, compiler, extractor, screen contract, or fingerprint causes a typed integrity halt;
+   Goal Mode may not patch and continue after seeing results.
+10. **Candidate construction is generic.** Multi-coordinate / deferred candidate membership is produced
+    by the Foundry interpreter from `CandidateSpec`, then encoded as a precomputed boolean membership
+    for the existing `scout.screen_candidate` statistical core. The Foundry does not add a second null,
+    p-value, sample floor, direction gate, concentration gate, economic gate, fragility gate, or survivor
+    score.
+11. **Scalar equivalence is mechanically proven.** For every current one-scalar candidate shape the
+    Foundry adapter and the existing direct Scout path produce byte-identical decision/statistical
+    outputs on hermetic fixtures. Any additive Scout API seam required only for descriptive provenance
+    keeps current callers byte-identical and cannot affect verdict ordering.
+12. **Temporal legality is population-symmetric.** An anchor enters a candidate/comparator population
+    only when every conditioning component needed by that CandidateSpec has resolved. Both cells use
+    the same eligible population and the same per-anchor `outcome_start = max(component.available_at)`;
+    unresolved deferred anchors are excluded and counted, never backdated or placed only in the
+    comparator.
+13. **Direction is frozen before evidence.** Every evaluable Foundry candidate is registered in thesis
+    space with a predeclared `long|short` semantic direction. Existing Scout `killed_direction` is the
+    only direction gate. A result can never be flipped to the opposite direction after discovery.
+14. **Multiplicity is visible and conservative at the Foundry-family level.** The complete Foundry
+    family denominator is frozen before evaluation; a family with more than
+    `SCOUT_MAX_VARIANTS_PER_FAMILY` variants is blocked whole rather than truncated or split to evade
+    the cap; every result shows the Foundry denominator and the Scout best-of-N disclosure. No new alpha
+    correction is invented in this era.
+15. **Every ready candidate gets one deterministic diagnostic attempt recorded on one canonical trial rail.**
+    The exhaust runner visits the frozen manifest in canonical order, never ranking by effect, p-value,
+    n, sample density, or apparent promise. Every Foundry trial — scalar or composite — is recorded in
+    the Foundry's own hash-chained append-only trial ledger with the full Scout screen payload and frozen
+    identities. The era invokes `scout.screen_candidate` directly and does not register Foundry trials in
+    the Scout ledger. Exact resume/replay is idempotent at the Foundry layer; conflicting replay is refused.
+16. **All real Foundry evaluations remain `historical_exposed_diagnostic`.** They use only the already-
+    exposed legacy diagnostic corpus through the existing access/evidence controls. No withheld/sealed
+    member is read; no result is relabelled as OOS.
+17. **A Scout survivor becomes only `DIAGNOSTIC_SURVIVOR_OOS_RULE_FROZEN`.** The label means the exact
+    pre-outcome CandidateSpec already contains the membership rule, direction, comparator, horizon,
+    economic-floor rule, provenance, deterministic future `rule_id`, and prospective-root status needed
+    for a future OOS campaign. This era does NOT create a corpus-bound Walk Forward Mode B
+    predeclaration, because no new OOS corpus exists.
+18. **Fresh evidence remains unspent.** No corpus-era registration, retention probe, storage
+    provisioning, new recording/fetch, withheld release, Vault assignment/exposure, historical-OOS
+    evaluation, graduation, or Referee run occurs in this era.
+19. **The full scientific state is observable from one canonical backend read model.** `/desk` renders
+    source dispositions, freeze identity, family/variant state, blocked reasons, denominators,
+    unavailable counts, Scout decisions, diagnostic survivors, protected-read counts, and integrity
+    state verbatim. A read-only MCP proxy is optional, not goal-blocking.
+20. **The era can honestly finish with zero compiled candidates, zero survivors, or multiple diagnostic
+    survivors.** Success is defined by precommit integrity and exhaustive execution, never by positive
+    return, profitability, or finding an edge.
+21. **Foundation remains intact.** Existing Rapid Microscope / Referee leakage, evidence-class,
+    no-lookahead, no-execution, opacity, unit, and isolation guards stay green with no weakened tests.
+
+---
 
 ## Key Capabilities
 
-1. **The readiness truth (`micro_readiness.py`).** Served-from-disk corpus inventory: per-shard
-   symbol/date/feed/window/counts/coverage/`fallback_frac`/checksum/exposure state; honest
-   distinct-symbol-day and RTH-minute totals beside the referee's file-count gate; per-study
-   predeclared floors met/unmet; the legacy-corpus exposure statement.
-2. **The micro observer + snapshots (`micro_observer.py`, `micro_snapshots.py`).** The additive
-   `observer=` seam; prefix-disciplined streaming feature extraction in the ONE replay pass;
-   snapshot identity `(dataset_id, dataset_checksum, MICRO_ALGO_VERSION,
-   SNAPSHOT_FORMAT_VERSION, feature_source_hash, config_fingerprint, params_hash)` with
-   load-time verification; the granularity benchmark that CHOOSES the representation before it
-   is frozen.
-3. **Wave-1 primitives (`micro_features.py`).** F-FLOW / F-RESPONSE / F-LIQUIDITY per spec §3,
-   each with a hand-derived oracle fixture; engine values reused from the snapshot, never
-   recomputed; `refill_consistent` as the strongest permitted liquidity label; the closed
-   outcome set of spec §4 (mid-basis, session-truncated, spread-proxy column beside).
-4. **The structure × flow join (`micro_join.py`).** Frozen playbook signals and band-map wall
-   touches joined to snapshot rows at their trigger instants, as-of-clean (features from events
-   at or before the trigger only; band basis stays the prior-session discipline); zero diff to
-   any detector or context module.
-5. **The Scout + exploratory candidate ledger (`scout.py`, `scout_ledger.py`).** Frozen
-   candidate specs from bounded pre-registered grids; hash-chained append-only trials with the
-   union-N denominator; block-permutation screening (session-clustered, dependence-honest);
-   concentration/ToD/fallback-tercile disclosures; the pre-registered economic-relevance floor
-   served as its own column with the proxy sentence; the closed kill vocabulary.
-6. **The chronological walk-forward engine (`walkforward.py`, `micro_accessor.py`).** The
-   origin-fenced accessor as the only data door; Mode A rolling-origin discovery where the
-   frozen identity is the fitting RULE (realized fitted values are fold provenance); Mode B
-   fixed-hypothesis evaluation; exact purge by session-truncation, per-spec derived embargo
-   (E=0 legitimate when no dependency crosses); frozen fold geometry with voiding semantics;
-   fail-closed floors; the per-sequence temporal-stability/decay view; evidence-class labeling
-   throughout; the 155-session diagnostic acceptance run.
-7. **The recorder + Validation Vault (`tick_recorder.py`, `vault.py`).** The Card-5.2 chunked,
-   throttled, resumable, operator-gated recorder through the unchanged `DatasetStore.record`;
-   pre-registered recording universes with cherry-pick refusal; the published sha256 split
-   beside the NEW opaque HMAC seal assignment (committed secret outside the repo); one-way
-   `sealed → assigned → exposed` with a hash-chained exposure ledger, sealed-metadata
-   minimization, and single-shot family-level exposure; the starter tranche under the §7.6
-   minimums; paired bar backfill so band context joins.
-8. **Graduation (`micro_graduation.py`).** `exploratory → walkforward_survivor →
-   sealed_survivor → referee_handoff_ready` with class-2-only advancement, permanent failed
-   verdicts, and the provenance-complete export bundle.
-9. **The `/desk` Rapid-Microscope sections + MCP contract v6 (26 tools).** Microscope
-   Readiness, Scout Ledger, Walk-Forward, and Validation Vault sections rendered BELOW the
-   shipped Referee sections; `desk_micro_readiness` + `desk_scout` + `desk_walkforward` +
-   `desk_vault` as byte-identical GET proxies; page-load GETs never compute.
+1. **Foundry Methodology Spec** — a checked-in `docs/hypothesis-foundry-spec.md` that defines only
+   candidate-construction / freeze / exhaustion semantics; the existing Rapid Validation statistical
+   decision rail remains unchanged.
+2. **Declarative Source Registry** — one finite, auditable translation of the ratified source scope,
+   with formula-scoped supersession, alias, exclusion, and block provenance.
+3. **CandidateSpec Contract** — a canonical machine-readable schema that deterministically defines an
+   evaluable candidate or explains why the source cannot produce one.
+4. **Generic Candidate Interpreter** — supported population filters, side normalization, conjunction,
+   deferred availability composition, complement comparator, and boolean-membership projection into the
+   existing Scout screen. Unsupported ordered/statistical forms block rather than trigger bespoke code.
+5. **Foundry Family Registry** — pre-outcome family identity, full variant denominator, hard cap,
+   immutable order, and no-late-insertion enforcement owned by Foundry rather than misattributed to the
+   Scout ledger.
+6. **Git-visible Freeze Barrier** — deterministic manifest generation, idempotent generation replay,
+   committed freeze identity, outcome-access tripwires, and post-first-read science-hash lock.
+7. **Checkpointed Exhaust Runner** — canonical-order evaluation, crash-safe resume, at-most-once Foundry
+   attempt semantics, typed terminal states, and integrity refusal on drift/conflict.
+8. **Exact Scout Reuse** — `screen_candidate` remains the only statistical discovery judge; descriptive
+   continuous reports cannot alter verdicts.
+9. **Foundry Trial Ledger + Read Model** — one canonical hash-chained append-only trial record for all
+   Foundry scalar/composite evaluations, carrying the complete Scout screen payload plus frozen
+   identities, and one canonical REST/Desk truth; optional read-only MCP mirrors it if scope permits.
+10. **Hermetic Oracle Suite** — synthetic known-null, known-effect, direction, deferred-timing,
+    multiplicity, block, freeze, replay, and leakage fixtures that exercise the same production paths as
+    the real epoch.
+
+---
+
+# Foundry Constitution
+
+Everything in this section is binding methodology. Implementation may factor code differently, but it
+may not change scientific meaning. If the implementation proves that exact Scout statistical reuse is
+impossible without changing a frozen Rapid Validation decision contract, Goal Mode must halt before the
+real epoch freeze and report `METHODOLOGY_REVISION_REQUIRED`; it must not silently amend
+`docs/rapid-validation-spec.md`.
+
+## 1. Source scope — finite and ratified
+
+The first real Foundry epoch may consider **only** source statements already ratified in the repository
+before this goal opens.
+
+### 1.1 Required source objects
+
+The declarative registry MUST account for all of the following:
+
+**Rapid Microscope parked mechanisms**
+
+- Study 1 — `range_wall_failed_aggression`
+- Study 3 — `capitulation_exhaustion`
+
+**Era 9 Wave-1 concepts explicitly brought forward by the Rapid-Microscope opening note**
+
+- Card 9.3 — top-of-book imbalance
+- Card 9.4 — burst / climax detection
+- Card 9.5 — spread-dynamics regime
+- Card 9.6 — same-side flow-runs persistence
+- Card 9.7 — event-time feature windows
+
+**Frozen Rapid-Microscope pilot proxy declarations**
+
+- the existing Study 1 proxy candidate request
+- the existing Study 3 proxy candidate request
+
+These proxies are source objects for provenance, **not permission to launder a partial proxy as the
+full mechanism**. Unless the current ratified mechanism explicitly says otherwise, their disposition is
+`ALIASED_PROXY_ONLY` under the corresponding parked study and their existing `do_not` restriction is
+preserved.
+
+### 1.2 Explicit source exclusions
+
+- Card 9.1 / Study 2 → `EXCLUDED_PREVIOUSLY_KILLED`. It may not be recompiled, reversed, rethresholded,
+  or rerun in this epoch.
+- Card 9.2 → `EXCLUDED_PREREQUISITE_UNMET` while its required delta-by-price binning prerequisite is
+  absent.
+- Cards 9.8–9.11 → `EXCLUDED_GATE_CLOSED` while their catalog gate lacks the required prior OOS-class
+  evidence.
+- Era 10+ cards, web-sourced ideas, free-form feature combinations, LLM-generated strategies,
+  unratified new theory, and any mechanism outside this registry.
+
+### 1.3 Formula-scoped supersession law
+
+Supersession is **formula/meaning scoped, not card-number scoped**.
+
+When the Rapid Microscope opening note or a named Rapid Validation revision carried a concept forward
+while replacing an operational formula/window/threshold, the newer frozen rule wins for that specific
+field and the older value becomes provenance only. A source-record auditor must not copy an older card
+constant merely because the card itself was brought forward.
+
+Examples the registry must handle explicitly rather than by enthusiasm:
+
+- Card 9.7 is not itself a directional Scout hypothesis. Its event-time-window content may be
+  `ALIASED_VARIANT_VOCABULARY` where current frozen feature windows already embody it.
+- Card 9.6 may contain more than one study statement: a shuffled-side persistence statistic and a
+  run-length-at-touch conditional. They receive separate dispositions if their statistical forms differ.
+- Study 3 and Card 9.4 are adjacent exhaustion lineages; the registry must record whether each statement
+  is distinct, aliased, or blocked rather than letting two names silently duplicate one mechanism.
+
+### 1.4 Source-record decision audit
+
+Each checked-in source record must include:
+
+- canonical `source_id`
+- exact source path + stable section/card/study reference
+- exact quoted source span(s) + precise location for every load-bearing compile/audit decision
+- source hash
+- mechanism statement
+- current operative formula/feature references
+- superseded fields and their superseding refs
+- every finite alternative the compiler is allowed to enumerate
+- threshold provenance for every threshold-like boundary
+- direction derivation rule or `BLOCKED_DIRECTION`
+- comparator derivation or `BLOCKED_UNSUPPORTED_STUDY_FORM`
+- final source disposition
+- aliases/lineage ids
+- an audit note explaining why each compiler decision follows from the source rules **without citing any
+  candidate outcome, p-value, effect, observation count, Scout verdict, or PnL result**
+
+Mechanical registry lint verifies that every quoted span is an exact substring of the cited ratified
+source at the recorded location. It deliberately does **not** use keyword matching as a proxy for
+scientific meaning.
+
+A **fresh-context independent source-registry audit** must verify **decisions**, not just citations:
+enumeration vs block, threshold provenance, direction implication, formula supersession, proxy aliasing,
+and lineage dedup. The auditor receives the ratified source documents, the Foundry constitution/spec,
+and the proposed registry, but not session outcome/history artifacts. It must state whether the quoted
+text actually supports each decision under the general compile rules. The audit may not justify a
+choice by saying it is more likely to survive or has more observations.
+
+## 2. Owner meta-policy — block unresolved science
+
+This section is the owner ruling that replaces case-by-case interaction.
+
+### 2.1 Enumerate only genuinely frozen alternatives
+
+If the current ratified source/spec/code explicitly leaves a finite set of legal alternatives, enumerate
+all of them **within the same Foundry family** before any outcome read, subject to the family cap.
+
+Examples of eligible finite enumeration include only alternatives whose scientific meanings are already
+present and fixed, such as two already-defined feature windows or two already-supported legal outcome
+horizons.
+
+Do **not** treat the mere existence of two features in code as permission to enumerate them. Feature
+choice is only mechanical when the source statement or current frozen vocabulary identifies them as
+alternative representations of the same mechanism.
+
+### 2.2 New science blocks
+
+The source/variant is blocked if compilation would require any of the following:
+
+- a new numeric threshold or percentile
+- choosing between scientifically different features without a ratified equivalence/alternative rule
+- defining what words such as `high`, `extreme`, `collapse`, `strong`, `fast`, or `near` mean numerically
+- inventing an ordered-sequence lag/window
+- inventing a new null/statistical question
+- inventing a new population restriction or wall-quality filter
+- inventing a direction not mechanically implied by the ratified statement
+- inventing a fitted score, feature weight, z-score mixture, or learned transform
+- choosing the variant with more observations, better effect, lower p-value, or better apparent economics
+
+Typed states include at least:
+
+- `BLOCKED_SPEC_GAP`
+- `BLOCKED_MISSING_PRIMITIVE`
+- `BLOCKED_UNSUPPORTED_STUDY_FORM`
+- `BLOCKED_UNSUPPORTED_RELATION`
+- `BLOCKED_DIRECTION`
+- `BLOCKED_VARIANT_EXPLOSION`
+- `BLOCKED_UNIT_CONTRACT`
+
+A block is a legitimate scientific output, not an implementation failure.
+
+### 2.3 Natural-boundary law
+
+A threshold may compile only when its provenance is one of:
+
+1. a literal current ratified threshold tied to the operative formula;
+2. a threshold already frozen in the current Rapid Validation / feature contract and explicitly
+   applicable to this mechanism; or
+3. a genuine semantic boundary intrinsic to the variable's definition, such as boolean `true` or a
+   signed variable's zero boundary when the source itself says positive-vs-negative / bid-heavy-vs-
+   ask-heavy.
+
+A zero boundary may **not** be used to reinterpret `high`, `extreme`, `climax`, or equivalent magnitude
+language. That is a block.
+
+## 3. CandidateSpec — the frozen scientific object
+
+Every compiled variant is represented by a canonical `CandidateSpec`. Serialization order never changes
+its hash; every science-affecting field does.
+
+Required fields:
+
+- `foundry_spec_version`
+- `epoch_id`
+- `source_ids[]`
+- `lineage_id`
+- `foundry_family_id`
+- `variant_id`
+- `variant_ordinal`
+- `population`
+  - `structure_context_kind`
+  - any source-legal side filter (`support|resistance|...`)
+  - any source-legal setup id / context id
+- `coordinates[]`, each carrying:
+  - frozen feature/construct identifier
+  - semantic role
+  - transform/orientation
+  - threshold/corner predicate where applicable
+  - threshold provenance
+  - aggressor-derived flag
+  - unit/basis requirements
+  - `anchor_at` / `available_at` semantics
+  - `resolution_join_rule` for deferred constructs, bound to the observer's own provenance identity;
+    if a deferred completion cannot be uniquely joined back to this source anchor without inventing a
+    new key/order choice, compilation blocks
+- `relation`
+  - supported relation kind (initially conjunction / direct scalar membership; ordered forms may block)
+  - relation parameters only when source-frozen
+- `availability_rule = max_conditioning_available_at`
+- `unresolved_component_policy = exclude_and_count`
+- `membership_corner`
+- `comparator = complement_within_same_eligible_population`
+- `outcome`
+  - canonical `return_bps`
+  - `horizon_key`
+  - predeclared `sidedness: long|short`
+- `economic_floor_rule`
+  - existing Scout quoted-spread rule and multiple
+  - **formula frozen here; numeric floor value materializes later before outcome read**
+- `foundry_family_variant_count`
+- `manifest_hash`
+- `source_registry_hash`
+- `compiler_hash`
+- `candidate_spec_hash`
+
+### 3.1 Legal outcome horizons
+
+For the current Scout screen, Foundry candidates may use only horizon keys actually accepted by the
+existing block-length rail. The expected legal set is `trades_20|trades_100`; implementation must verify
+this from current code rather than infer it. A source that requires a clock/share horizon not supported
+by the Scout screen is blocked, not approximated.
+
+### 3.2 Direction is mandatory
+
+A Foundry candidate without a mechanically predeclared `long|short` direction is not evaluable and is
+`BLOCKED_DIRECTION`.
+
+For symmetric wall-rejection mechanisms, support-long and resistance-short may be split mechanically
+only when the source actually describes mirrored rejection and the existing band side is available.
+Aggression-toward-wall signing is mechanically buy→resistance / sell→support when that mapping is the
+source's stated mechanism; otherwise block.
+
+The Foundry deliberately uses a stricter rule than generic Rapid-Microscope discovery: no unsided
+Foundry candidate may survive first and choose its direction later.
+
+## 4. Generic candidate interpretation
+
+The Foundry compiler/interpreter is new candidate-construction machinery, **not a new statistical rail**.
+
+### 4.1 Same population for candidate and comparator
+
+For each source population anchor:
+
+1. resolve every conditioning component required by the CandidateSpec using only its frozen
+   `resolution_join_rule`; a deferred completion must join back to the same source anchor through the
+   observer's own emitted provenance identity, never nearest-time matching or an invented tie-break;
+   if that identity is not unique/defined for the mechanism, the source blocks before real evaluation;
+2. if any required component remains unavailable/unresolved, exclude the anchor from **both** cells and
+   increment the canonical unavailable counter;
+3. compute `candidate_available_at = max(component.available_at)`;
+4. set `outcome_start` using the existing timing helper so it is never before the same conditioning
+   set's availability;
+5. measure the same canonical outcome from that start for candidate and comparator;
+6. evaluate the frozen membership corner;
+7. encode membership only as a boolean for the Scout adapter.
+
+The comparator is the complement of candidate membership **inside that exact eligible/timing-resolved
+population**. It is never an earlier-timed population and never includes unresolved anchors that the
+candidate cell cannot use.
+
+The read model must serve:
+
+- total source anchors
+- eligible resolved anchors
+- unavailable/excluded anchors by typed reason
+- candidate count
+- comparator count
+- common usable sessions
+
+Conditioning on a deferred construct therefore changes the scientific population. That is legal only
+when disclosed; the Foundry never describes the result as applying to all wall touches if only
+resolution-eligible touches were tested.
+
+### 4.2 Boolean projection into Scout
+
+The generic interpreter produces anchors carrying the normal canonical fields plus a precomputed
+membership value:
+
+- `feature_value = 1.0` when the frozen CandidateSpec corner is true
+- `feature_value = 0.0` when false
+
+The adapter calls the existing `scout.screen_candidate` with the fixed mechanical membership transform:
+
+- transform `threshold`
+- predicate `feature_value >= 1.0`
+
+The `1.0` is **not a scientific threshold**; it is the encoding of boolean membership already decided by
+the CandidateSpec.
+
+The adapter must not pretend this synthetic membership is an existing scientific feature. Full
+coordinate provenance lives in CandidateSpec / Foundry trial ledger. Any Foundry-specific display name
+used at the Scout boundary is an orchestration label only.
+
+### 4.2.1 Canonical trial-record boundary
+
+The Foundry calls `scout.screen_candidate` directly on pre-extracted anchors. **Every real Foundry
+trial, scalar or composite, is canonically recorded only in the Foundry's own hash-chained append-only
+trial ledger.** The Foundry does not call the Scout registration/ledger path for these trials, and the
+Scout ledger receives no synthetic/non-§3 feature rows from this era. Each Foundry terminal row embeds
+(or content-hash-pins) the complete `screen_candidate` result plus CandidateSpec hash, manifest hash,
+family denominator, numeric economic floor + provenance, eligible-corpus manifest hash, and freeze-set
+identity. This satisfies the inherited "every trial on the record / denominator never shrinks" rail
+without extending the Rapid Validation Scout-ledger feature vocabulary or `family_root_id` formula.
+
+For scalar candidates whose underlying current Scout family identity is mechanically defined, the
+Foundry read model may additionally serve that existing Scout `family_id` / union-N as historical
+context. For composite candidates where it is undefined, serve `null`/`not_applicable`, never invent a
+synthetic Scout family/root solely for display.
+
+### 4.3 Existing Scout rail remains the judge
+
+The Foundry may not change:
+
+- `SCOUT_BLOCK_PERMUTATIONS`
+- `SCOUT_SCREEN_ALPHA`
+- minimum cell/session floors
+- concentration ceiling
+- economic-floor multiple
+- leave-one-session-out fragility rule
+- decision ordering
+- two-sided permutation p calculation
+- the closed decision vocabulary
+
+For sided Foundry candidates, existing `killed_direction` maps directly to Foundry's killed state. No
+Foundry-side sign overlay exists.
+
+### 4.4 Additive descriptive seam only
+
+If a composite candidate needs a disclosure that `screen_candidate` currently infers from one feature
+name (for example fallback-tercile reporting when **any** coordinate is aggressor-derived), implementation
+may add a narrowly-scoped optional descriptive input or compute a separate descriptive report **only if**:
+
+- all existing callers remain byte-identical by default;
+- no verdict field, gate input, ordering, effect, p-value, null draw, economic decision, or fragility
+  result changes;
+- hermetic equivalence tests prove decision invariance.
+
+If exact reuse would require changing Scout decision semantics, halt with
+`METHODOLOGY_REVISION_REQUIRED` before the real freeze.
+
+## 5. Foundry family denominator and multiplicity
+
+### 5.1 Foundry family is the pre-outcome scientific family
+
+A `foundry_family_id` groups every predeclared variant that is an alternative representation/corner of
+one mechanism lineage under this source registry. Its identity is frozen before outcomes and may not be
+repartitioned after seeing results.
+
+The Foundry does not claim the existing Scout ledger pre-registers families; it does not. The Foundry
+owns this denominator contract.
+
+### 5.2 Hard family cap
+
+The complete Foundry-family variant count must be `<= SCOUT_MAX_VARIANTS_PER_FAMILY` before evaluation.
+If the honest finite cross-product exceeds the cap:
+
+> `BLOCKED_VARIANT_EXPLOSION`
+
+The Foundry may not:
+
+- choose the most plausible 24;
+- choose the 24 with most observations;
+- split one scientific family into artificial subfamilies to evade the cap;
+- evaluate a subset and register the rest later.
+
+### 5.3 Denominator passed to the screen
+
+Every variant in one Foundry family is screened with the **complete frozen Foundry-family denominator**
+as the `n_variants_tried` disclosure input, even before sibling variants have physically executed.
+This is deliberate pre-registration, not a count of completed evaluations.
+
+### 5.4 Scout multiplicity remains descriptive
+
+This era does **not** add Bonferroni/FDR correction to Scout. The existing two-sided
+`p_screen < SCOUT_SCREEN_ALPHA` decision remains unchanged and the existing best-of-N line remains a
+disclosure, not a gate.
+
+Because a larger predeclared family creates more chances for a diagnostic false survivor, every Foundry
+survivor surface/report must show together:
+
+- `DIAGNOSTIC_SURVIVOR_OOS_RULE_FROZEN` token
+- `historical_exposed_diagnostic` evidence class
+- Foundry-family variant count
+- p-screen
+- existing best-of-N disclosure
+- explicit statement that clean OOS evidence is required before advancement
+
+No survivor is ranked by p-value/effect for later selection inside this era.
+
+### 5.5 Future sealed-root contention is provenance, not a choice here
+
+The existing Rapid/Vault `family_root_id` is a separate, coarser future OOS/sealed lineage concept. If
+multiple Foundry survivors map to the same current or future root, the Foundry records that shared
+lineage and preserves **all** survivors. It does not choose one winner after discovery. Every frozen
+variant carries a pre-outcome `prospective_root_status`: when the current root formula is mechanically
+valid for the underlying scalar feature, record the current prospective root; otherwise record the
+literal `root_deferred_composite` and the Foundry lineage id. No composite root is invented in this era.
+Any future OOS campaign must resolve root-level evaluation semantics in a named methodology revision,
+for the complete relevant survivor set, before protected evidence is consumed.
+
+The Foundry must not invent new root names merely to reset single-shot Vault protection.
+
+## 6. Economic-floor ordering
+
+The manifest freezes the existing economic-floor **rule**, not a result-dependent floor number.
+
+For each ready candidate during real evaluation:
+
+1. open only the legal already-exposed diagnostic population through the sanctioned accessor;
+2. compute the spread inputs required by the existing quoted-spread floor functional without reading the
+   candidate forward outcome;
+3. materialize the numeric `econ_floor` in canonical bps;
+4. append the Foundry evaluation-intent/pre-screen row containing CandidateSpec hash, manifest hash,
+   floor value + provenance, and timestamp;
+5. only then measure candidate outcomes and call the Scout screen.
+
+The numeric floor cannot be back-filled after the outcome is known. On resume, any existing
+`EVALUATION_INTENT_RECORDED` row's numeric floor and provenance must equal a deterministic re-derivation
+from the same pinned eligible corpus before evaluation continues. A floor-input/output ordering or
+resume-consistency violation halts evaluation.
+
+## 7. State machine
+
+### 7.1 Source dispositions
+
+Each required source object reaches exactly one of:
+
+- `COMPILED`
+- `ALIASED_PROXY_ONLY`
+- `ALIASED_VARIANT_VOCABULARY`
+- `ALIASED_LINEAGE`
+- `EXCLUDED_PREVIOUSLY_KILLED`
+- `EXCLUDED_PREREQUISITE_UNMET`
+- `EXCLUDED_GATE_CLOSED`
+- `BLOCKED_SPEC_GAP`
+- `BLOCKED_MISSING_PRIMITIVE`
+- `BLOCKED_UNSUPPORTED_STUDY_FORM`
+- `BLOCKED_UNSUPPORTED_RELATION`
+- `BLOCKED_DIRECTION`
+- `BLOCKED_VARIANT_EXPLOSION`
+- `BLOCKED_UNIT_CONTRACT`
+
+No required source silently disappears.
+
+### 7.2 Variant states
+
+A compiled variant moves through:
+
+`FROZEN_READY`
+→ `EVALUATION_INTENT_RECORDED`
+→ one of:
+
+- `EVALUATED_INSUFFICIENT`
+- `EVALUATED_KILLED`
+- `DIAGNOSTIC_SURVIVOR_OOS_RULE_FROZEN`
+
+Mapping is mechanical:
+
+- Scout `killed_insufficient_n` → `EVALUATED_INSUFFICIENT`
+- every other Scout kill, including `killed_direction`, → `EVALUATED_KILLED`
+- Scout `survive` → `DIAGNOSTIC_SURVIVOR_OOS_RULE_FROZEN`
+
+There is no second Foundry verdict.
+
+### 7.3 Integrity/refusal is not a scientific terminal result
+
+A corrupted ledger, protected-evidence access attempt, freeze hash drift, CandidateSpec mismatch,
+conflicting replay, accessor refusal that indicates a contract defect, or science-code change after
+first outcome read halts the epoch as `FOUNDRY_INTEGRITY_HALT` / equivalent typed error. Goal Mode may
+repair only before any real outcome has been read. After first read, it must not patch science code and
+continue the same epoch.
+
+## 8. Real generation epoch and freeze barrier
+
+### 8.1 One real epoch only
+
+This era creates at most one real `epoch_id`. Hermetic fixture epochs do not count.
+
+The real generation command is deterministic and consumes only:
+
+- checked-in source registry
+- current frozen feature/construct vocabulary
+- Foundry compiler rules
+- current configuration/fingerprint metadata
+- ratified source hashes
+
+It may not read real candidate observations, outcome counts, Scout rows, p-values, forward returns,
+walk-forward results, Vault state beyond non-identifying safety metadata, Referee results, or PnL scans.
+
+### 8.2 Manifest contents
+
+The tracked real-epoch artifacts live under the checked-in namespace:
+
+- `docs/hypothesis-foundry/source-registry.json`
+- `docs/hypothesis-foundry/epoch-manifest.json`
+- `docs/hypothesis-foundry/freeze-set.json`
+- `docs/hypothesis-foundry/freeze-record.json`
+- `reports/hypothesis-foundry/source-registry-audit.md`
+
+Runtime trial/epoch-opening rows live in the Foundry's resolved research-data ledger and are
+cross-pinned to the tracked artifacts by hash; the untracked runtime ledger is never used as the Git
+precommit artifact.
+
+The complete manifest contains, at minimum:
+
+- epoch id
+- canonical source-registry hash
+- Foundry spec/schema/compiler versions and hashes
+- config fingerprint
+- deterministic family order
+- every source disposition
+- every compiled Foundry family
+- every variant's full CandidateSpec + hash
+- deterministic future Mode-B `rule_id = "foundry:" + epoch_id + ":" + candidate_spec_hash`
+- prospective-root status/id (`root_deferred_composite` where current root semantics are undefined)
+- complete family denominators
+- aliases/lineage links
+- blocked/excluded reasons
+- manifest hash
+
+No real candidate effect, p-value, forward return, sample count, or sufficiency result exists in the
+manifest.
+
+### 8.3 Generation replay
+
+Re-running generation with byte-identical inputs returns/verifies the existing manifest and does not
+create a second epoch. Changed inputs after epoch creation are refused; they do not silently generate
+`epoch_2`.
+
+### 8.4 Pre-outcome commit barrier
+
+Real evaluation is illegal until the manifest and freeze record are present in Git history.
+
+The freeze record must identify:
+
+- `freeze_commit`
+- manifest hash
+- source-registry hash
+- `docs/hypothesis-foundry-spec.md` hash
+- CandidateSpec schema hash
+- compiler hash
+- generic interpreter/extractor hashes
+- Foundry runner hash
+- `scout.screen_candidate` owning source hash
+- config fingerprint
+- era-open evidence-class contract
+- `freeze_set_hash`, where `docs/hypothesis-foundry/freeze-set.json` is an **enumerated checked-in
+  path+sha256 manifest**, not an adjective chosen at runtime
+
+The freeze-set generator is deterministic. It includes at minimum the Foundry methodology/spec and
+tracked registry/manifest files; every Foundry scientific implementation module/CLI; `scout.py`;
+`micro_features.py`; `micro_observer.py`; `micro_join.py`; the sanctioned accessor/evidence-control
+modules used by the runner; snapshot identity/version/parameter sources including
+`MICRO_ALGO_VERSION`, `SNAPSHOT_FORMAT_VERSION`, feature-source identity and `params_hash` inputs; and
+all local transitive science dependencies imported by the Foundry compiler/interpreter/runner. If the
+import/source scan cannot prove a local science dependency is covered, freeze generation refuses.
+
+The real runner does **not** require the entire Goal Mode working tree to be clean, because session
+artifacts/handoffs are legitimately uncommitted mid-iteration. It requires that no freeze-set path has
+an uncommitted byte change relative to the recorded hash set, and it proves `freeze_commit` is an
+ancestor of `HEAD`. Recomputed freeze-set hashes are the enforceable primitive; commit ancestry is the
+audit anchor.
+
+### 8.5 First-read lock
+
+Immediately before the first candidate outcome read, the Foundry ledger appends an epoch-opening row
+that repeats all freeze hashes, records the resolved eligible diagnostic-corpus manifest hash over the
+actual `(dataset_id, checksum)` set after withheld/protected exclusion, and marks the first-read
+boundary.
+
+After that row exists, every run/resume verifies all science-affecting hashes. Any mismatch refuses the
+entire epoch. Non-scientific UI/report-only files may change only if they are explicitly outside the
+freeze-set and cannot affect extraction, membership, outcome measurement, screen inputs, evidence
+access, state mapping, or scientific text provenance.
+
+The lock guarantees repository/scientific-input identity, not total machine-image identity. Runtime
+library/compiler versions that can affect floating-point behavior but are outside the repository hash
+set are disclosed in the epoch-opening environment metadata; seeded determinism and hermetic
+equivalence tests remain the reproducibility control.
+
+## 9. Deterministic exhaust runner
+
+The exhaust runner replaces v1's proposer-driven per-family scheduling. It is implemented as a
+resumable manager/CLI operator act in the existing `app/research` pattern, protected by a single-flight
+lock. Goal Mode may invoke the CLI repeatedly across iterations; it must never depend on one long-held
+agent turn staying alive for the full epoch.
+
+### 9.1 Canonical order
+
+The runner evaluates every `FROZEN_READY` variant in manifest order:
+
+1. Foundry family order
+2. variant ordinal within family
+
+It cannot reorder based on:
+
+- effect size
+- p-value
+- n-candidate / n-comparator
+- number of usable sessions
+- family density
+- economic-interest result
+- previous sibling verdicts
+
+A family kill does not prevent later predeclared variants/families from running. A survivor does not
+skip later candidates.
+
+### 9.2 Checkpoint / resume
+
+The **Foundry trial ledger is source of truth; the checkpoint is only a derived acceleration/cache.**
+After each candidate terminal row, checkpoint the derived runner position/ordinal. Resume reconstructs
+position from the ledger before trusting a checkpoint.
+
+Resume semantics:
+
+- already-terminal candidate → verify and skip execution
+- intent row with no terminal result after a crash → verify freeze/eligible-corpus/floor identities,
+  deterministically re-execute the exact screen, and append the one terminal row
+- terminal row already exists → compare frozen identities/full screen payload hash and verify/skip
+- exact duplicate terminal write → return existing row
+- conflicting candidate/hash/corpus/floor/screen attempt → refuse
+- concurrent second runner → single-flight refusal
+
+Because all real Foundry evidence is already exposed and the screen is seeded/deterministic,
+re-executing an intent-without-terminal after a crash spends no new protected evidence; correctness is
+ledger hygiene and identity consistency. The Foundry ledger supplies the at-most-once orchestration
+guarantee; the existing Scout ledger is not misrepresented as content-deduplicating screens.
+
+### 9.3 No candidate rescue
+
+During exhaustion Goal Mode may not:
+
+- edit source records
+- alter manifest
+- change a CandidateSpec
+- add a variant
+- change direction
+- change threshold/window/horizon
+- patch extraction logic after seeing results
+- rerun a killed candidate under a new id
+- start a second epoch
+
+If a real scientific/implementation defect is discovered after first-read lock, halt and preserve the
+partial epoch record. A later owner may open a new named methodology era; this era does not silently
+repair-and-resume.
+
+## 10. Evidence boundary
+
+### 10.1 Diagnostic corpus only
+
+Every real Foundry candidate uses only the already-exposed legacy micro corpus that is legally
+`historical_exposed_diagnostic`. Dataset selection comes from the existing legal exposed-corpus
+contract, not a new hand-picked list.
+
+The runner must:
+
+- use the sanctioned micro accessor/data door;
+- call existing withheld exclusion machinery;
+- refuse sealed/unexposed event data;
+- record corpus manifest / dataset count / session count as provenance;
+- keep the permanently exploratory legacy evidence class unchanged.
+
+### 10.2 No clean evidence spend
+
+This era MUST NOT:
+
+- register a fresh corpus era or new universe for OOS research;
+- run a retention probe;
+- provision storage for a new campaign;
+- fetch/record new historical ticks;
+- release unresolved starter-pool members;
+- assign or expose a Vault shard;
+- run historical-OOS Walk Forward;
+- advance graduation;
+- invoke Referee;
+- emit `live_confirmatory`.
+
+### 10.3 What is irreversibly spent here
+
+A frozen candidate's one diagnostic attempt on this already-exposed corpus is permanent for the epoch.
+That is intentional. Protected evidence is not spent, but candidate flexibility is.
+
+## 11. OOS-rule-frozen survivor semantics
+
+`DIAGNOSTIC_SURVIVOR_OOS_RULE_FROZEN` means only:
+
+- the candidate passed the existing Scout diagnostic rail;
+- its direction was already frozen and passed the existing direction gate;
+- the exact CandidateSpec existed before the diagnostic outcome;
+- the manifest had already fixed the future Mode-B
+  `rule_id = "foundry:" + epoch_id + ":" + candidate_spec_hash`;
+- the manifest had already recorded `prospective_root_status` and either the current prospective root
+  where mechanically defined or `root_deferred_composite`;
+- the terminal row copies the CandidateSpec/manifest/family-denominator/economic-floor provenance and
+  those future-binding fields without making a new scientific choice;
+- the rule is therefore eligible to be **considered** for a future clean-OOS campaign without making a
+  new scientific choice.
+
+It does **not** mean:
+
+- walk-forward survivor
+- historical OOS evidence
+- Vault survivor
+- Referee ready
+- confirmed edge
+- profitable strategy
+
+This era writes no corpus-bound `mode_b_spec` row. The current Walk Forward predeclaration API requires a
+future `corpus_id`; binding this frozen rule to a real OOS corpus belongs to the future campaign and must
+occur before that corpus's first OOS outcome read.
+
+A future campaign may bind only the byte-identical Foundry CandidateSpec and the precommitted future
+`rule_id` (plus unavoidable corpus identity/econ-floor materialization required by that campaign).
+Composite-root semantics, where deferred, must be resolved in a named future methodology revision for
+the complete relevant survivor set **before** protected evidence is consumed. Any scientific change
+creates a new hypothesis and cannot inherit this survivor state.
+
+## 12. Source-specific expected dispositions are allowed to be sparse
+
+The goal does **not** pre-judge exact final counts, but the compiler must not "rescue" known gaps.
+Examples that should remain visible if the current repository facts still hold:
+
+- Study 1 may block because the full mechanism still lacks frozen choices needed to represent `high`
+  aggression / impact-collapse semantics / deferred refill conjunction without inventing science.
+- Study 3 may block because sell-specific extremity and an ordered THEN lag are not fully frozen.
+- Card 9.4 may block if the current brought-forward feature vocabulary does not preserve a legal climax
+  threshold/context.
+- Card 9.7 should normally appear as variant-vocabulary aliasing rather than a fake directional Scout
+  candidate.
+- Card 9.6's shuffled-side persistence study may block as an unsupported study form even if a separate
+  run-length-at-touch source statement can compile.
+
+These are examples for auditor attention, **not hard-coded verdicts**. Current source/code evidence at era
+open decides via the general laws above.
+
+---
 
 ## Non-Goals
 
-- **No L2/depth data, no depth purchase, no heatmap.** `BookLevelEvent` stays reserved; Era 15
-  remains gated on its own operator act; this era only RECORDS the survivor evidence that would
-  inform that decision.
-- **No detector, threshold, or context change of any kind.** The nine detectors, the 42+6 spec
-  constants, `playbook-band-context-v3`, and the cohort vocabulary are untouched; no recorded
-  playbook file is rewritten; microstructure features join READ-SIDE only.
-- **No engine change.** No new engine feature, no classifier change, no `FEATURE_NAMES`
-  movement; the observer consumes the existing seam; the golden trace and frozen-default
-  equivalence pass byte-unmodified.
-- **No Referee change.** Every `referee_*` module, the referee spec, and the promotion
-  interlock are byte-identical this era; a flow-context referee predicate is explicitly FUTURE
-  work (a named referee-spec revision), and `referee_handoff_ready` says so.
-- **No sequential-inference rewrite.** Anytime-valid live monitoring / futility stopping is
-  recorded as a candidate future era in the roadmap amendment, not built here.
-- **No annotation layer** (Era C remains separate). No manual-input write paths into research
-  records.
-- **No new vendor, no data purchases, no new runtime dependency.** Alpaca (already
-  credentialed) and Yahoo (keyless) only; scipy stays out; stdlib + existing numpy idioms.
-- **No universe widening beyond the Card-5.2 panel.** The recorder records the frozen panel
-  (Tier A/B/C as specified, with the Tier-B re-screen recorded); no survivorship-blind
-  "today's constituents" backfill masquerading as history.
-- **No trading, no advice, no sizing, no annualized anything** (guard-tested). Every number is
-  a statistical statement about recorded history under stated assumptions.
-- **No scheduling.** Every recording, snapshot build, screen, fold run, seal, exposure, and
-  graduation act is an explicit operator act; page-load GETs never compute.
-- **No fingerprint epoch movement.** Zero new Config fields expected; Path A if one is
-  unavoidable; the pin `08e471b10130e1e2` does not move.
+- Discovering a profitable strategy.
+- Maximizing the number of candidates that survive.
+- Completing Study 1 or Study 3 by inventing the owner's missing scientific rulings.
+- Free-form LLM strategy ideation or web-sourced hypothesis generation.
+- Fitted thresholds, ML, online tuning, optimizer-selected corners, or feature-weight learning.
+- Rewriting the Rapid Validation statistical rail merely to support composite membership.
+- Building a general-purpose arbitrary-expression research language beyond what this finite source scope
+  needs.
+- Forcing ordered-relation support if all in-scope ordered sources are scientifically blocked anyway.
+- Fresh historical data acquisition, storage provisioning, retention work, new universe/corpus campaign,
+  OOS release, Vault use, graduation, or Referee work.
+- Automatic selection among diagnostic survivors for future protected evidence.
+- Broker integration, order simulation/execution, paper/live trading, trading advice, targets, or
+  prediction promises.
+- A new post-goal proposer / infinite self-improvement loop.
+
+---
 
 ## Constraints
 
-- **Stack (carried):** Next.js 15 + TypeScript + Tailwind v3, dark-only; Python 3.12 + FastAPI;
-  backend `:8000`, frontend `:3000` (browser-QA rig `:8301`/`:3301` via the store-scope rig);
-  no new runtime dependency.
-- **The spec is canonical.** [`docs/rapid-validation-spec.md`](rapid-validation-spec.md) fixes
-  every constant, contract, fold rule, sealing rule, ledger schema, graduation gate, and trap
-  BEFORE the code that uses it. Ambiguous or unimplementable ⇒ DROP the procedure from the
-  iteration, record the drop, surface for an owner ruling — never improvise. A spec change is a
-  named revision that re-keys future results beside old ones.
-- **Parameters discipline (the desk pattern at birth):** `micro_parameters()` reads every
-  constant at call time; every persisted record embeds the relevant parameters verbatim and
-  keys on their hash; a monkeypatched constant must move the parameters AND the result identity
-  (counter-tested). Seed streams follow the spec §0 recipe — never `random.sample` on a global
-  RNG, never wall-clock.
-- **Store discipline:** frozen, checksummed, append-only records; record id = pure function of
-  the key; duplicate key raises; corrupt files surfaced, never overwritten; NO
-  update/delete/supersede path (source-scan guard-tested); storage dirs are
-  env-var-or-sibling defaults (`TAPEOLOGY_MICRO_*` family — deliberately NOT Config fields);
-  the vault secret lives OUTSIDE the repo at `TAPEOLOGY_VAULT_SECRET_FILE`, never committed,
-  logged, served, or printed — only its sha256 commitment is recorded.
-- **The accessor is the only door:** `micro_accessor.py` is the sole legal reader of snapshot
-  and vault event data (import-ban guard, the referee-guards precedent); origin fences and
-  sealed-shard refusals are typed errors, never empty results; every registered route is swept
-  against a sealed fixture shard.
-- **Evidence-class law:** every served research payload carries its class verbatim;
-  class-mixing in a pooled statistic is a refusal; diagnostic-class evidence advances no
-  gate — all counter-tested.
-- **Guard tests are extended, never edited:** `tests/test_mcp_server.py` `EXPECTED_TOOLS` grows
-  to the 26-tuple; `tests/test_desk_ui_guards.py` `_PRICE_ARITHMETIC_FIELDS` gains every served
-  micro numeric (+ seeded counter-tests); `test_meta_routes.py` (3 routes) passes
-  byte-unmodified; `test_no_execution_path.py`, `test_copy_discipline.py` (extended for micro
-  copy), the referee guards, the context byte-freeze, the fingerprint pins, and the golden
-  traces pass unweakened; new micro modules add their own guards (accessor import-ban,
-  threshold-sweep ban extended to `micro_*`/`scout*`/`walkforward*`).
-- **Hermetic tests:** keyless on committed fixtures (synthetic corpora with known truth; the
-  spec's oracle vectors; fixture shards); no test fetches the network; real recordings and
-  tranche acts are operator-run, reported run-or-not-run, never CI gates; heavy suites respect
-  the pinned time budgets.
-- **Browser evidence:** `rm -rf apps/frontend/.next` + rebuild before any browser pass (T-9);
-  every browser acceptance needs a screenshot — none ⇒ `unknown`, never `passing` (T-10);
-  element-capture for below-the-fold sections (the era-6 lesson); new sections render BELOW
-  shipped ones, reuse no shipped `data-testid` or heading string, and are statically swept
-  against the stored replay scripts (T-11).
-- **Compute-manager reuse:** snapshot builds, screens, fold runs, and recordings follow the
-  shipped desk manager pattern (single-flight, snapshot-pollable progress, cancel,
-  CLI-runnable, one shared writer, terminal-state-only ledger writes); page-load GETs never
-  compute.
-- **Scope-pressure priority (operator ruling, binding):** if the era must shrink, defer in this
-  order — UI/MCP polish first, then up to two of the three pilot studies — and NEVER weaken
-  the observer, recorder/vault, Scout, walk-forward, provenance, or leakage-trap rails.
-- **Iteration hygiene (the era-6 retro):** step timeouts tripped in 13 of 15 referee
-  iterations — keep per-iteration scope lean, browser acceptance narrow, and the fixture-scoped
-  backend the default for QA.
+- Current foundation is the completed Rapid Microscope / Referee stack on latest `main`.
+- Canonical outcome remains `return_bps = (mid_horizon - mid_start) / mid_start * 10_000`.
+- Candidate direction vocabulary is `long|short`; aggressor side remains a separate `buy|sell` concept.
+- The existing Scout kill ladder, constants, null, economic gate, and fragility gate are frozen.
+- `SCOUT_MAX_VARIANTS_PER_FAMILY` is the Foundry-family hard upper bound for this epoch.
+- Existing `config_fingerprint` remains pinned unless the project's existing immutable-foundation
+  procedure explicitly requires a named future era; this era may not move it for research convenience.
+- `referee_*` behavior remains untouched.
+- Goal Mode host-guard CPU/thread/memory confinement remains mandatory.
+- The real epoch may run only once; fixture epochs are unlimited and hermetic.
+- Use large hermetic synthetic fixtures to prove performance/checkpoint behavior before the real freeze;
+  do not profile candidate membership on real exposed data pre-freeze as a way to choose specs.
+- Goal Mode should be started with an explicit operational iteration cap high enough for the fixed
+  journeys (recommended `--max-iter 80`); hitting the cap is resumable and is not a scientific verdict.
+
+---
 
 ## Design Direction
 
-Unchanged house style: dark-only, dense, professional, terminal-grade. The Rapid Microscope
-reads like a lab bench log: corpus truth first, then trials with denominators, then folds with
-their classes, then the vault's one-way states. Honest empty/degraded states are first-class
-copy (`"No candidates ledgered."`, `"Fold construction refused: 11 sessions < 105 required."`,
-`"Sealed — metadata only until exposure."`). Class labels render verbatim; no color implies
-advice; every diagnostic-class number carries its label in the same visual unit.
+- Visual style: existing `/desk` research console conventions; compact, audit-first, no promotional
+  trading language.
+- Mood: laboratory instrument / build system, not signal dashboard.
+- Status colors/copy must not imply buy/sell urgency or confidence beyond evidence class.
+- Every effect-like value appears in the same visual unit as evidence class, sample counts, family
+  denominator, and decision.
+- Blocked states are first-class and visually comparable to evaluated states; do not hide them as errors.
+
+---
 
 ## Product Shape
 
-Nav unchanged: **Cockpit `/` · Structure `/structure` · Desk `/desk`** (`app/meta.py`
-`UI_ROUTES` untouched). The era adds four sections to `/desk`, rendered BELOW the shipped
-Referee sections: **Microscope Readiness · Scout Ledger · Walk-Forward · Validation Vault**.
+### Navigation / information architecture
 
-**Data Contract — new rows (each value computed once, one owner):**
+Existing product routes remain:
 
-| Value | Owner (module) | Serving endpoint |
-|---|---|---|
-| Corpus readiness truth (inventory, floors, exposure states) | new `app/research/micro_readiness.py` | `GET /research/desk/micro/readiness` |
-| Feature snapshot metadata + build progress/runs | new `app/research/micro_snapshots.py` (+ manager) | `GET /research/desk/micro/snapshots`, `POST/GET/POST-cancel /research/desk/micro/snapshots/compute`, `GET .../snapshots/runs` |
-| Scout trials, kills, denominators, screens | new `app/research/scout_ledger.py` + `scout.py` | `GET /research/desk/micro/scout`, `POST/GET/POST-cancel /research/desk/micro/scout/compute`, `GET .../scout/runs` |
-| Fold specs, folds, sequences, decay view | new `app/research/walkforward.py` + its ledger | `GET /research/desk/micro/walkforward`, `POST/GET/POST-cancel /research/desk/micro/walkforward/compute`, `GET .../walkforward/runs` |
-| Vault shards, universes, exposure ledger | new `app/research/vault.py` | `GET /research/desk/micro/vault` |
-| Recorder job + tranche progress/runs | new `app/research/tick_recorder.py` | `POST/GET/POST-cancel /research/desk/micro/recorder/compute`, `GET .../recorder/runs` |
-| Graduation states + export bundles | new `app/research/micro_graduation.py` | `GET /research/desk/micro/graduation` |
+- `/` Cockpit
+- `/structure`
+- `/desk`
+  - existing shipped research sections, unchanged
+  - **Hypothesis Foundry** — appended below shipped Rapid-Microscope sections using a new test-id family
 
-**Unchanged owners (this era reads them verbatim):** datasets/replay → `datasets.py` (one
-additive kwarg); engine features/side → the engine snapshot; playbook records →
-`desk_playbook.py`; band maps → `desk_playbook_context.BandMapResolver` over the recorded
-tradability cache; referee registry/adjudications → the `referee_*` family; everything else
-exactly as the archived Referee contract lists.
+No dedicated mutation page is introduced. The Foundry surface is read-only.
 
-**Canonical values (single source of truth):** a candidate's trial history (scout ledger); a
-fold/sequence result and its evidence class (walkforward ledger); a shard's exposure state
-(vault ledger); the corpus readiness floors (micro_readiness) — each computed once, served from
-its one endpoint, read verbatim by UI/MCP/reports.
+### Canonical REST owner
 
-## Build anchors & weak-model traps
+One backend read model owns Foundry truth:
 
-Anchors verified on `main` at authoring (2026-08-16) — **re-locate by symbol name (grep), never
-by line arithmetic**:
+`GET /research/desk/micro/foundry`
 
-- Observer seam: `app/engine/tape_engine.py` — `add_observer` :123, `_notify_event` :144 (fires
-  at END of `process_event` :361); equivalence proof `tests/test_observer_equivalence.py`.
-- Replay: `app/research/datasets.py` — `DatasetStore.replay` :376 (the ONE entry point; gains
-  the additive `observer=` kwarg), `load_events` :370, `_event_to_row` :151 (trade rows carry
-  vendor `side` = `unknown`; quote rows carry `bid_size`/`ask_size`), `record_from_source`
-  :498, `record` :391 (split validated :408, frozen at registration).
-- Aggressor: `app/engine/aggressor.py` — `classify_aggressor` :36 (quote rule :43, tick test
-  :52); measured fallback share 29–76% per dataset (readiness must serve it).
-- Engine features: `app/engine/features.py` — `FEATURE_NAMES` :24 (frozen), quote sizes dropped
-  at `add_quote` :558 (the observer reads them from the raw event instead); golden trace
-  `tests/test_dense_replay_gate.py` :256.
-- Vendor: `app/providers/adapters/alpaca.py` — `iter_historical_chunks` :309 (the recorder's
-  fetch), `_fetch_trades_quotes` :408 (builds `RawTrade(ts, price, size)` at :369/:475 —
-  the Card-5.1 preservation fields extend THESE construction sites plus
-  `providers/adapters/base.py` `RawTrade`/`RawQuote` :64-81 and `providers/base.py`
-  `TradeEvent`/`QuoteEvent`, all optional-default-None); NO tick throttle/recency clamp exists
-  (the recorder adds its own throttle); `historical_chunk_seconds = 900` (`config.py:366`).
-  Units fact: Alpaca CTA/UTP displayed quote sizes are SHARES from `2025-11-03`, round lots
-  before — per-dataset `quote_size_unit` stamping, never a universal assumption (spec §2.6).
-- Precedents to copy: `desk_deep_backfill.py` (credentialed chunked CLI job, resumable);
-  `desk_playbook_log.py` (hash-chained append-only ledger); the desk compute-manager pattern;
-  `referee_null.py` ToD buckets :132.
-- Corpus reality at authoring: tick = 18 datasets / 12 symbol-days / 11 sessions
-  (2026-05-27→07-13) / ~3.01 session-equivalents / 0.92 GB, all exposed, splits hand-assigned;
-  playbook = 156 sessions / 3,222 signals / 101 symbols (2025-06→2026-08); storage ≈ 76–516 MB
-  per full symbol-session (mean ~218 MB).
-- Guards: `test_mcp_server.py` `EXPECTED_TOOLS` :58 (22 names, ordered); `test_meta_routes.py`
-  :33 (3 routes); `test_desk_ui_guards.py` `_PRICE_ARITHMETIC_FIELDS`; `test_copy_discipline.py`;
-  `test_real_data_gate.py` (Alpaca confinement — the recorder passes the string `"alpaca"`
-  through the seam, never imports the SDK); referee guards `test_referee_guards.py` :53 (context
-  byte-freeze) and :180+ (import bans).
+It may expose named subviews only if all values still come from the same canonical owner/store and no
+second calculation path appears.
 
-Traps (read before EVERY iteration):
+### Canonical values (single source of truth)
 
-- **T-1 · The spec is law, vagueness is a drop.** Implement from
-  `docs/rapid-validation-spec.md` verbatim; an unspecified constant or rule is a drop + owner
-  ruling, never an invention.
-- **T-2 · The vocabulary minefield.** "survivor" alone belongs to `pnl_scan` — this era's
-  states are the full tokens `walkforward_survivor` / `sealed_survivor` /
-  `referee_handoff_ready`. "evidence" names the playbook fold and "observations" the referee's —
-  micro modules say "snapshot rows" and "trials". "studies" was DEMOLISHED in era 5D — the
-  `/studies` route must not return. "sealed" is a vault state, never a marketing word.
-  `register/record/set/append` stay banned in MCP tool names.
-- **T-3 · The prefix law.** No snapshot row may read the future: no end-of-session normalizer,
-  no whole-dataset calibration, no backward fill. TR-1 exists to catch exactly this.
-- **T-4 · Classes never mix.** A diagnostic fold in an OOS pool, a diagnostic screen feeding a
-  gate, a legacy symbol-day inside a sealed claim — each is the era's cardinal sin; the
-  refusals are counter-tested, not aspirational.
-- **T-5 · The accessor is the only door.** Any direct `open()`/`sqlite3.connect` on snapshot or
-  vault data outside `micro_accessor.py` is a guard-test failure, even in a test helper.
-- **T-6 · Bounded grids or nothing.** A loop over threshold candidates outside a registered
-  grid is the threshold-sweep ban firing; the union-N denominator includes every grid version
-  ever run on the corpus.
-- **T-7 · Insufficient is an answer.** Floors never loosen; a below-floor fold serves
-  `insufficient` with its arithmetic; the tick family's refusal at today's corpus is a
-  FEATURE and is pinned by TR-15.
-- **T-8 · Fail closed, never at GET time.** Screens, folds, seals, and exposures are operator
-  acts through managers; GETs serve recorded state or typed refusals.
-- **T-9 · Clean rebuild before browser evidence** (`rm -rf apps/frontend/.next`, rebuild,
-  restart).
-- **T-10 · Evidence honesty.** No screenshot ⇒ `unknown`, never `passing`; below-the-fold
-  sections need element captures; operator acts are reported run-or-not-run.
-- **T-11 · Replay-script collisions.** New sections render BELOW shipped ones, reuse no shipped
-  `data-testid` or heading string, and are statically swept against the stored scripts.
-- **T-12 · Host-guard caps are law** for every heavy path (snapshot builds, screens, folds,
-  recordings) exactly as for the desk's own computes.
+At minimum:
+
+- era/session identity
+- Foundry methodology/spec version
+- source-registry hash
+- source dispositions and lineage/alias refs
+- epoch id
+- manifest hash
+- freeze commit
+- freeze integrity verdict
+- first-outcome-read boundary status/time
+- source / family / variant counts
+- family order and variant ordinals
+- per-family frozen denominator
+- blocked/excluded/aliased counts by closed reason
+- per-variant CandidateSpec hash
+- population / coordinate / direction / horizon summary
+- unresolved deferred counts
+- eligible resolved anchors
+- candidate / comparator counts
+- usable sessions
+- evidence class
+- materialized econ floor + unit/provenance
+- Scout decision
+- p-screen / effect-bps / concentration / economic / fragility disclosures from the canonical result
+- best-of-N disclosure
+- `DIAGNOSTIC_SURVIVOR_OOS_RULE_FROZEN` state
+- protected/withheld/sealed ids read by the real Foundry runner (**must be zero; identity-safe aggregate
+  safety proof only, never sealed identities**)
+- current runner checkpoint / next manifest ordinal
+- ledger chain/integrity verification
+
+Frontend displays these verbatim. No client-side recomputation of candidate state, family denominator,
+evidence class, effect, p-value, or integrity verdict.
+
+### MCP
+
+A read-only `desk_micro_foundry` proxy is desirable but **deferrable**. If built, it must be a byte-
+identical GET proxy, join the existing MCP contract tests and sealed-pool inference guards, and never add
+a write method. Lack of this optional proxy does not block Goal achievement if the REST + `/desk`
+surfaces are complete.
+
+---
 
 ## Must-have user journeys
 
-Journeys **J-01 – J-10** form the era. **Frontend is present** (J-01 and J-08 are
-browser-verifiable; J-09's results render through J-08's sections; the rest are
-keyless/automated with browser reveals landing in J-08). Natural dependency order:
-J-01 → J-02 → J-03 → J-04 → J-05 → J-06 → J-07 → J-08 → J-09, with J-10 guarding continuously.
-J-09 is the era's honest measurement — `no survivor` is a passing state. J-06's tranche is an
-operator-attended act inside the era.
+These are the complete scientific/product journeys for the era. **There is intentionally no
+`AUTO:journeys` block and no proposer-driven candidate scheduling.** The finite real epoch is exhausted
+inside J-07.
 
-- **J-01: The era transition stands — the corpus truth on the record**
+- **J-01: The Foundry opens as a new finite era and the old self-extension loop is inactive**
   - Steps:
-    1. Verify the transition artifacts on `main`: `docs/goal-archive/goal-2026-08-16.md`
-       exists and equals the Referee constitution; `docs/rapid-validation-spec.md` exists;
-       `docs/research-directions.md` carries the Rapid-Microscope opening note, the Era-9/
-       Card-5.2/Era-15 dated amendments, and the appended era-6 status row;
-       `project-extensions/proposer-guidance.md` carries the §5.3 amendments.
-    2. Run `cd apps/backend && .venv/bin/pytest -q` and record the era-open count; run the
-       fingerprint check and the referee-module SHA-256 listing (the iteration-0 baseline).
-    3. Build `micro_readiness.py` + `GET /research/desk/micro/readiness` serving, from disk:
-       the per-shard inventory (symbol, session date, feed, window, trade/quote counts, bytes,
-       coverage gaps, `fallback_frac`, checksum, split provenance `hand_assigned` for the 18
-       legacy files, exposure state `exploratory`), the honest totals (distinct symbol-days,
-       RTH minutes, session-equivalents) beside the referee tick gate's file count, and the
-       per-study predeclared floors met/unmet.
-    4. Render the **Microscope Readiness** section on `/desk` (below the Referee sections)
-       showing the totals line, the per-shard table, and the floors table; screenshot via the
-       store-scoped rig.
-  - Acceptance: `GET /research/desk/micro/readiness` serves `distinct_symbol_days: 12`,
-    `session_equivalents` ≈ 3.0, every legacy shard tagged `exploratory` with
-    `split_provenance: "hand_assigned"`, and a floors table in which every pilot study reads
-    `floor_unmet`; the `/desk` Microscope Readiness section renders those same served values
-    verbatim (element screenshot), and the iteration-0 baseline records suite count,
-    fingerprint `08e471b10130e1e2`, and the referee SHA-256 listing.
+    1. Visit `/desk` and expand `Hypothesis Foundry`.
+    2. Confirm the panel identifies Rapid Microscope as closed foundation and identifies the Foundry
+       era/session separately.
+    3. Confirm the repository contains the archived Rapid Microscope goal and a dated Foundry opening
+       note, while `runs/goal-session-rapid-microscope/` remains untouched.
+    4. Confirm the active project configuration no longer satisfies the two-file condition that would
+       dispatch the old post-`GOAL_ACHIEVED` goal-proposer for this era; preserve/archive its prior
+       guidance for history rather than rewriting its old scientific meaning.
+    5. Confirm the era-open baseline records full-suite pass/skip count, config fingerprint, and
+       Referee-module SHA-256 identities.
+  - Acceptance: this Goal Mode session has a finite fixed journey set, no active continuous-improvement
+    science proposer, an auditable era transition, and no mutation of prior research records.
 
-- **J-02: The micro observer — one pass, prefix-honest, benchmarked**
+- **J-02: Ratified sources compile into auditable CandidateSpecs or typed blocks without outcome input**
   - Steps:
-    1. Add the additive `observer=` kwarg to `DatasetStore.replay` (default `None`
-       byte-identical, counter-tested) wiring `TapeEngine.add_observer`.
-    2. Implement `micro_observer.py`/`micro_snapshots.py` per spec §2: streaming-only rows,
-       flush-before-next-event, snapshot identity with `feature_source_hash` +
-       `config_fingerprint`, load-time verification.
-    3. Implement the Wave-1 primitives of spec §3 (r2 — every degree of freedom is a frozen §1
-       constant: refill M, response K, burst baseline, depletion window, the pinned
-       impact-flatness formula, the trailing divergence window + δ) in `micro_features.py`
-       with the availability triple `anchor_at`/`observed_through`/`available_at` on every
-       value (deferred constructs written at `observed_through`, `unavailable` counted),
-       per-row `side_source`, per-window `fallback_frac`/`unknown_frac`, the §2.6 size-unit
-       gating on cross-basis liquidity features, and the spec §4 mid-only primary outcome set
-       (last-trade basis only as the separately named sensitivity column); hand-derived oracle
-       fixtures for every family (TR-16 vectors committed).
-    4. Run the spec §2.4 granularity benchmark on ≥2 real datasets including NVDA `72ca8bc0`;
-       record bytes amplification, build time, and query latency per candidate representation;
-       pin the winner as `micro-snapshot-v1`.
-    5. Build snapshots for all 18 legacy datasets through the single-flight manager + CLI.
-  - Acceptance: the TR-1 prefix and tail-perturbation traps pass (3 cut points, byte-identical
-    prefixes); the TR-17 future-event availability trap and the TR-18 units gate pass (an
-    `unverified`-unit fixture refuses every cross-basis feature with a typed error); TR-7
-    stale-identity traps pass; every feature oracle fixture passes; the benchmark table is in
-    the iteration handoff with the pinned representation named; 18/18 legacy snapshots exist —
-    every one carrying `quote_size_unit: "unverified"` — and
-    `GET /research/desk/micro/snapshots` lists them with verified identities;
-    `tests/test_observer_equivalence.py` and the golden feature trace pass byte-unmodified.
+    1. Open the Foundry `Sources / Compiler` fixture view.
+    2. Inspect source fixtures covering: a compileable natural-boundary scalar; two explicitly-frozen
+       legal variants; an unresolved magnitude word; a proxy-only source; an unsupported statistic;
+       an alias/supersession case; and a directionless mechanism.
+    3. Confirm each record shows source refs, an exact quoted source span + precise location, operative
+       formula refs, superseded fields, alternatives, threshold provenance, direction derivation,
+       alias/lineage, and exactly one disposition; exact-quote lint proves each quoted span exists in
+       the cited source.
+    4. Inspect a compiled CandidateSpec and confirm every science-affecting field in §3 is rendered from
+       the canonical backend record and affects `candidate_spec_hash`.
+    5. Confirm changing effect/p-value/n fixture fields that are outside source inputs cannot change the
+       compiled CandidateSpec/disposition, and inspect the committed fresh-context registry-audit report
+       produced without session outcome/history artifacts.
+  - Acceptance: the source registry + compiler implement the owner meta-policy exactly: finite ratified
+    alternatives enumerate; missing science blocks; formula-scoped supersession/proxy aliasing are
+    explicit; no candidate outcome participates in compilation.
 
-- **J-03: Structure × flow — the join that never looks ahead**
+- **J-03: Generic interpretation preserves timing, population symmetry, direction, and exact Scout decisions**
   - Steps:
-    1. Implement `micro_join.py`: for a playbook signal (symbol, `trigger_ts`) or a band-map
-       wall touch, locate the covering snapshot and serve the feature row(s) at-or-before the
-       trigger plus the outcome rows after it; band basis through the recorded
-       `BandMapResolver` (compute=False) unchanged.
-    2. Enumerate the joinable corpus (signals and touches falling inside recorded tick
-       windows) and serve the count honestly.
-    3. Prove lookahead-cleanliness: a join at trigger T reads zero snapshot rows with
-       event epoch > T (asserted), and detector/context modules show zero diff.
-  - Acceptance: a committed fixture join reproduces hand-computed feature-at-trigger and
-    outcome-after-trigger values; the joinable-corpus count is served on the readiness
-    endpoint with its per-study breakdown; the lookahead assertion and the
-    detector/context-byte-freeze guards pass.
+    1. Open a hermetic immediate scalar fixture and confirm the Foundry adapter produces the same Scout
+       decision/statistical payload as the existing direct scalar path while using the same
+       `family_id`/permutation seed scope on both sides of the equivalence oracle.
+    2. Open a conjunction fixture and confirm the CandidateSpec corner becomes only boolean membership
+       at the Scout boundary while raw coordinates remain descriptive provenance.
+    3. Open a deferred `refill_consistent` fixture and confirm unresolved anchors are excluded from both
+       cells/counts; resolved candidate and comparator anchors share the same
+       `outcome_start=max(available_at)` timing law.
+    4. Inspect mirrored support-long / resistance-short fixtures and confirm the predeclared sidedness is
+       inside CandidateSpec before the outcome; an opposite result dies through existing
+       `killed_direction`.
+    5. Inspect an unsupported ordered-relation fixture with no frozen lag and confirm typed block rather
+       than bespoke extractor or guessed window.
+  - Acceptance: one generic Foundry interpreter feeds the unchanged Scout statistical rail; comparator
+    timing is symmetric; deferred knowledge is never backdated; existing scalar decisions remain
+    byte-equivalent; no second verdict rail exists.
 
-- **J-04: The Scout and the ledger — every trial on the record**
+- **J-04: Foundry owns the denominator, append-only state, freeze barrier, and integrity lock**
   - Steps:
-    1. Implement `scout_ledger.py` (hash-chained, append-only, closed kill vocabulary,
-       union-N denominators) and `scout.py` (spec §5 screening: session-clustered block
-       permutation, non-overlapping anchor subsampling, concentration/ToD/fallback-tercile
-       disclosures, the economic-floor column with registration-ordering).
-    2. Register a bounded fixture grid, run it end to end through the manager + CLI, kill and
-       advance per the recorded results.
-    3. Implement TR-8 (calibration on the autocorrelated null fixture, 200 seeds, incl. the
-       banned-shuffle counter-test), TR-9, TR-10, TR-11.
-  - Acceptance: TR-8/9/10/11 pass; the fixture family's ledger shows every variant with its
-    decision and reason, `variants_tried` equals the union over grid versions, and the served
-    screen carries `evidence_class`, the best-of-N line, and the economic column with the
-    proxy sentence verbatim.
+    1. Open fixture families with 1, multiple, exactly-cap, and over-cap variants; confirm the complete
+       Foundry denominator is visible before any result and over-cap blocks whole.
+    2. Attempt fixture late insertion after family freeze and confirm typed refusal with no denominator
+       change.
+    3. Run fixture generation twice with identical inputs and confirm verify-idempotence; change an input
+       and confirm second-epoch/drift refusal.
+    4. Inspect a fixture freeze record and confirm it pins `docs/hypothesis-foundry/freeze-set.json`, an
+       explicit checked-in path+sha256 manifest covering the minimum/transitive science dependencies in
+       §8.4, plus the manifest/source/spec/config identities.
+    5. Simulate first-read lock, then change a pinned freeze-set path and confirm exhaust refuses rather
+       than continuing; leave normal Goal Mode session/handoff files dirty and confirm they do not cause
+       a false refusal; change a non-scientific UI-only file outside the enumerated freeze set and
+       confirm the integrity rule distinguishes it correctly.
+    6. Confirm Foundry evaluation replay is at-most-once/idempotent, a conflicting replay refuses, and a
+       concurrent second exhaust runner is rejected by single-flight.
+  - Acceptance: family multiplicity, manifest identity, replay, pre-outcome commit, and post-first-read
+    science lock are enforced by deterministic code/tests, not agent promises.
 
-- **J-05: The walk-forward engine — chronology, fences, and the diagnostic run**
+- **J-05: The complete factory passes hermetic known-null, planted-effect, leakage, and honest-stop oracles**
   - Steps:
-    1. Implement `micro_accessor.py` (origin fence, sealed invisibility, sole-door import ban)
-       and `walkforward.py` per spec §6: fold specs, exact purge, derived embargo (E=0
-       legitimate, derivation recorded), frozen geometry + voiding, frozen session_date
-       clustering (no corpus-size switching), Mode A rule-identity freeze/reveal, Mode B,
-       constant-rule sequences, floors, the explicit `WF_SURVIVOR_RULE_V1`, the §6.7 exposure
-       registry (initialized with every playbook and legacy-tick window pre-marked exposed),
-       the §6.8 `rule_process`/`operator_process` labels, the decay view, class labels.
-    2. Prove the synthetic end-to-end oracles (TR-16 known-null and planted-effect corpora)
-       and TR-3/5/6/13/14/15.
-    3. Run the **diagnostic acceptance run**: the 155-session playbook corpus (2025-06 orphan
-       excluded, disclosed), geometry 40/5/20/20, a predeclared frozen set of playbook setup
-       definitions; produce the fold ledger and per-sequence decay view.
-  - Acceptance: TR-3/5/6/13/14/15/16/21/22 pass; the diagnostic run completes with 5 folds /
-    100 validation sessions, every served fold and sequence labeled
-    `historical_exposed_diagnostic`, the tick-family fold request returns the typed
-    floor-refusal naming `11 < 105`, and counter-tests prove diagnostic-class results and
-    `operator_process` sequences award zero graduation credit.
+    1. Run a hermetic epoch containing compiled, blocked, insufficient, null, wrong-direction,
+       concentration/economic/fragility-killed, and correctly-signed survivor fixtures.
+    2. Confirm the checkpointed exhaust runner visits all frozen ready variants in canonical order even
+       after kills/survivors.
+    3. Confirm Scout `killed_insufficient_n` maps only to `EVALUATED_INSUFFICIENT`, every other Scout kill
+       maps to `EVALUATED_KILLED`, and only Scout `survive` maps to
+       `DIAGNOSTIC_SURVIVOR_OOS_RULE_FROZEN`.
+    4. Confirm family denominator and best-of-N disclosure remain the frozen manifest values regardless
+       of execution progress.
+    5. Run protected-data trip fixtures and confirm withheld/sealed reads fail closed and no evidence
+       class can become `historical_oos`/`live_confirmatory`.
+    6. Confirm an all-blocked epoch and an all-killed epoch both reach valid exhaustive completion.
+  - Acceptance: the same production compiler/interpreter/exhaust/screen paths used for the real epoch
+    are proved on hermetic oracles before any real Foundry outcome read.
 
-- **J-06: The recorder and the Vault — new tape, sealed at birth**
+- **J-06: One complete real epoch is generated and committed with zero Foundry outcome reads**
   - Steps:
-    1. **The Card-5.1 preservation prerequisite lands FIRST (spec §7.1, r2)**: optional
-       `conditions`/`exchange` (and vendor quote-condition/venue equivalents) on
-       `RawTrade`/`RawQuote`/`TradeEvent`/`QuoteEvent` and the dataset rows — absent-key
-       backward compatible (every legacy dataset and committed fixture loads byte-identically,
-       checksums verify), engine-ignored (equivalence + golden trace byte-unmodified) — plus
-       the §2.6 `schema_basis` + `quote_size_unit` stamping from the dated vendor rule
-       (Alpaca CTA/UTP shares from `2025-11-03`, round lots before). The recorder structurally
-       refuses any universe recording until these ship (TR-19).
-    2. Implement `tick_recorder.py` (chunked `iter_historical_chunks` fetch, tick throttle,
-       per-chunk checkpoints, resume/idempotency, single-flight manager + CLI, per-chunk
-       `failed` outcomes) writing through `DatasetStore.record` under the unchanged store
-       discipline; pair with the existing deep-backfill CLI for the same symbol-days' bars.
-    3. Implement `vault.py`: universe registration (rule hash committed BEFORE any fetch),
-       the published sha256 split beside the HMAC seal assignment
-       (`TAPEOLOGY_VAULT_SECRET_FILE`, commitment recorded), one-way
-       `sealed → assigned → exposed` exposure ledger keyed on the computed `family_root_id`,
-       **opaque pre-exposure metadata (spec §7.5 r3–r5: surrogate shard id, salted commitment,
-       no symbol/date until assignment, sealed dataset ids refused on the dataset + MCP
-       surfaces, corpus enumerators excluding withheld shards with a disclosed
-       `withheld_excluded` count, and the r5 opaque-pool rule — aggregates only on readiness
-       for BOTH sides, no complete per-shard list of either while any member is unexposed;
-       aggregate-only recorder progress with no operator bypass)**, TR-2 join-resistance +
-       inference sweep, TR-4 cherry-pick refusal, TR-12 single-shot exposure, TR-20
-       root-lineage refusal.
-    4. Operator act, inside the era: resolve Tier-B by the spec §7.2 mandatory order (screen
-       by the frozen Card-5.2 criteria → record criteria hash, as-of, provenance, full output,
-       resolved list → freeze the list → `symbol_rule` → register the universe → commitment +
-       HMAC → only then fetch; no re-screen or substitution afterward — vendor failures are
-       disclosed, never swapped), then run the recorder against real Alpaca historical
-       trades+quotes to the spec §7.6 minimums (≥30 symbol-days, ≥8 panel symbols incl. PG +
-       ≥3 Tier-B + ≥1 ETF, ≥10 dates over ≥6 weeks, the concentration caps, ≥60%
-       full-session), with a restart mid-run proving resume.
-    5. Refresh readiness: the new tranche appears as ONE pool with aggregate completeness
-       reporting (including `quote_size_unit` and preservation-field presence); while any
-       member is unexposed, neither side is listed per-shard.
-  - Acceptance: TR-2/4/12/19/20 pass; every legacy dataset and committed fixture loads
-    byte-identically with checksums verifying and the engine equivalence/golden-trace tests
-    byte-unmodified; the tranche exists on disk meeting every §7.6 minimum (readiness serves
-    the arithmetic) with every new shard carrying `schema_basis`, preservation fields, and a
-    stamped `quote_size_unit`; at least the HMAC-assigned subset of tranche shards is `sealed`
-    with zero exploratory reads recorded before sealing and no symbol/date served
-    pre-exposure; the TR-2 inference trap passes against the tranche's own registered universe
-    (no unexposed shard identifiable with certainty from any served artifact, either side);
-    the recorder run ledger shows the mid-run restart resuming without duplicate
-    registration; the legacy 12 symbol-days remain `exploratory`; the readiness gate line
-    still reads the ~150-symbol-day research gate as unmet.
+    1. Run the fresh-context real source-registry audit and deterministic generation command exactly under
+       the source scope in §1; commit the audit at `reports/hypothesis-foundry/source-registry-audit.md`.
+    2. Open `/desk` → `Hypothesis Foundry` → `Epoch / Manifest` and confirm every required source object
+       appears exactly once as compiled/blocked/excluded/aliased.
+    3. Confirm Study 2/Card 9.1 is previous-kill excluded; Card 9.2 prerequisite-excluded; Cards 9.8–9.11
+       gate-excluded; the two pilot proxies have explicit non-laundering dispositions; Card 9.7 is not
+       fabricated into a directional study merely to increase yield.
+    4. Confirm the complete family/variant manifest, denominators, source hash, CandidateSpec hashes,
+       future rule_ids, prospective-root status, deterministic order, config fingerprint, and explicit
+       freeze-set path manifest are visible from the tracked `docs/hypothesis-foundry/` artifacts.
+    5. Confirm the generation command's outcome-access census is zero and no candidate count/effect/
+       p-value/sufficiency result appears in the manifest.
+    6. Confirm `source-registry.json`, `epoch-manifest.json`, `freeze-set.json`, and `freeze-record.json`
+       exist at the tracked paths named in §8.2/§8.4, are present in a Git commit, and real evaluation
+       remains unopened. J-07 real reads are forbidden until this J-06 freeze commit is an ancestor of
+       the execution `HEAD`; if Goal Mode decomposes J-06 and J-07 together, the runner must refuse
+       until the next committed iteration rather than bypass the barrier.
+  - Acceptance: exactly one real generation epoch is durably frozen behind a Git-visible barrier before
+    any Foundry candidate outcome is read; a sparse/empty compiled set is acceptable and is not rescued.
 
-- **J-07: Graduation — provenance in, nothing laundered out**
+- **J-07: Goal Mode deterministically exhausts the frozen real epoch without changing science**
   - Steps:
-    1. Implement `micro_graduation.py` per spec §8: the four states, class-2-only
-       advancement, single-shot sealed transitions, voiding semantics, and the export bundle
-       (spec hash, complete exposure history incl. kills and failures, proposed boundary,
-       family/multiplicity metadata).
-    2. Prove the pipeline on fixtures: a fixture candidate walks
-       `exploratory → walkforward_survivor → sealed_survivor → referee_handoff_ready` on
-       synthetic class-2 evidence; a diagnostic-only twin is refused at the first transition;
-       a failed-sealed twin carries its permanent verdict in the bundle.
-    3. Record the Era-15 evidence line in the roadmap amendment (what L1 liquidity-family
-       survivor evidence would raise/lower the Depth purchase prior).
-  - Acceptance: the fixture walk produces a validating `referee_handoff_ready` bundle whose
-    provenance lists every trial/fold/shard including the failures; the diagnostic-only and
-    failed-sealed refusals are counter-tested; the bundle's own copy states that current-
-    Referee registration of a flow predicate awaits a named referee-spec revision; every
-    `referee_*` module remains byte-identical.
+    1. Invoke the resumable single-flight Foundry CLI/manager against the committed epoch. J-07 may span
+       multiple Goal Mode iterations; each invocation records/serves the current checkpoint ordinal so
+       progress is observable without one long-held agent turn.
+    2. Confirm the epoch-opening first-read row pins the freeze hashes **and resolved eligible-corpus
+       `(dataset_id, checksum)` manifest hash** before the first outcome read.
+    3. Confirm every `FROZEN_READY` variant reaches one terminal state in manifest order and every
+       blocked/excluded/aliased source remains unchanged.
+    4. Confirm each evaluation uses only the legal already-exposed diagnostic corpus, reports corpus
+       provenance and unavailable counts, and carries `historical_exposed_diagnostic`.
+    5. Confirm the Foundry family denominator passed to every screen equals the pre-frozen manifest
+       denominator and the result serves the existing best-of-N disclosure.
+    6. Confirm all Scout kills/survivors map mechanically; no effect magnitude changes later scheduling;
+       no killed candidate is retried; no direction flips; no manifest/code drift; no second epoch.
+    7. Interrupt/resume a fixture-backed or safely checkpointed path and confirm runner position is
+       reconstructed from the Foundry trial ledger, already-terminal rows are verified/skipped,
+       intent-without-terminal rows deterministically re-execute under identical pins, and no duplicate
+       terminal row is appended.
+    8. Confirm protected evidence reads, fresh corpus-era registrations, retention probes, recordings,
+       releases, Vault acts, OOS folds, graduation, and Referee acts remain zero.
+  - Acceptance: the entire frozen real candidate universe is exhausted once, mechanically and
+    checkpoint-safely, with every source/variant resolved and no post-first-read scientific freedom.
 
-- **J-08: The surface and MCP v6 — the funnel is visible**
+- **J-08: The operator sees the final Foundry truth and all foundation rails still hold**
   - Steps:
-    1. Render the **Scout Ledger**, **Walk-Forward**, and **Validation Vault** sections on
-       `/desk` below Microscope Readiness: trials with denominators and kill reasons; fold
-       sequences with per-fold rows, class labels, and the decay line; shards with one-way
-       states and universe provenance; every compute behind its own operator button with
-       progress + cancel (the shipped manager pattern).
-    2. Add `desk_micro_readiness`, `desk_scout`, `desk_walkforward`, `desk_vault` as
-       byte-identical GET proxies; bump the MCP contract to v6 and update `EXPECTED_TOOLS`
-       to the 26-tuple in the same commit.
-    3. Clean rebuild, browser pass via the store-scoped rig, element screenshots per section.
-  - Acceptance: all four sections render served values verbatim (screenshots on record, one
-    per section, element-captured); the four tools return byte-identical bodies to their GET
-    routes; the 26-tool contract test and the replay-script static sweep pass; every
-    diagnostic-class number on the page carries its label in the same visual unit.
+    1. Visit `/desk` → `Hypothesis Foundry` and inspect final source, epoch, family, variant, integrity,
+       multiplicity, evidence, and runner summaries.
+    2. Open at least one blocked source and one evaluated variant (if any exist) and confirm the detail
+       view renders canonical provenance/status/statistics without client recomputation or advisory copy.
+    3. If a diagnostic survivor exists, confirm it is labelled
+       `DIAGNOSTIC_SURVIVOR_OOS_RULE_FROZEN` with its family denominator/best-of-N/evidence caveat and no
+       claim of OOS/Referee readiness. If none exists, confirm the honest zero-survivor state is explicit.
+    4. Confirm the canonical REST body matches the UI values; if optional MCP shipped, confirm it is a
+       byte-identical read-only proxy and enrolled in the existing inference/contract guards.
+    5. Run the full backend suite, TypeScript compile, existing Rapid Microscope leakage/unit/timing
+       traps, Referee isolation/equivalence checks, opaque-pool inference sweep over the new Foundry
+       surface, T-9 clean frontend rebuild, T-10 element screenshots (none ⇒ `unknown`), T-11
+       placement/testid/replay-script guards, copy-discipline guards over Foundry text, desk effect-
+       census protection, and numeric-field anti-recomputation guard extensions. If a named MCP tool
+       ships, grow the MCP contract/`EXPECTED_TOOLS` in the same commit and prove byte-identical GET
+       proxy behavior; otherwise `get_endpoint` remains sufficient and MCP is non-blocking.
+  - Acceptance: the final product exposes one auditable Foundry truth, every fixed journey passes,
+    foundation regressions are zero, and ordinary Goal Mode may declare `GOAL_ACHIEVED` regardless of
+    whether the frozen epoch yielded zero, one, or many diagnostic survivors.
 
-- **J-09: The pilot studies — three predeclared questions, honest answers**
-  - Steps:
-    1. Predeclare (as ledgered specs, before any outcome read) the three studies in priority
-       order: **(1) range-wall failed aggression** — at band-map wall touches, does high
-       aggression-into-the-wall with collapsing impact efficiency and opposite-side
-       `refill_consistent` replenishment precede rejection more than comparable touches
-       without that signature; **(2) delta divergence at level tests** — at consecutive tests
-       of the same zone, does price extending while session cumulative delta does not predict
-       rejection (Card 9.1's formula verbatim); **(3) capitulation exhaustion** — do
-       event-level exhaustion signatures (extreme sell aggression then collapsing negative
-       impact efficiency / replenishment) separate capitulation signals that snap back from
-       those that do not. Continuous mechanism-defined representations first; any threshold
-       variant from the bounded grid, all ledgered.
-    2. Run each through the Scout on the full joinable corpus (legacy exploratory symbol-days
-       + any EXPOSED tranche shards; sealed shards untouched), with every disclosure of spec
-       §5.4 served.
-    3. Where any study's fold floors are met on class-2 data, run walk-forward; where not,
-       serve the floor-refusal as the study's honest result.
-    4. Record each study's outcome in the ledger (survive / kill with reason) and render it
-       through the J-08 sections.
-  - Acceptance: three ledgered study families exist with predeclared specs whose
-    registration timestamps precede their first outcome read; each serves its screen with
-    evidence class, denominators, concentration/ToD/fallback disclosures, and the economic
-    column; each carries a recorded decision in the closed vocabulary — with `no survivor`,
-    wrong-direction, and `insufficient_n` all acceptable end states — and no study output
-    feeds any gate, certificate, or promotion.
-
-- **J-10: The kept product stands — traps armed, sentinel green**
-  - Steps:
-    1. Land the full TR-1…TR-30 suite (whichever traps did not ship inside J-02…J-07 land
-       here — the r2 traps TR-17 availability, TR-18 units, TR-19 preservation, TR-20 root
-       lineage, TR-21 process labels, TR-22 exposure registry, and the r6 traps TR-23
-       sealed-verdict ownership, TR-24 lineage boundary, TR-25 vault-ledger integrity,
-       TR-26 depletion revealing quote, and the r7 traps TR-27 nonced rule commitment,
-       TR-28 coarse pre-release volumes, and the r8 trap TR-29 halt-only vault
-       recovery, and the r9 trap TR-30 evaluator-owned sealed sufficiency, included) plus the extended
-       guard tests (accessor import-ban, micro threshold-sweep ban, copy discipline for micro
-       copy, `_PRICE_ARITHMETIC_FIELDS` additions).
-    2. Run the deterministic-rerun check (byte-identical snapshot/screen/fold outputs on a
-       re-run over unchanged stores).
-    3. Run the kept-product sentinel: cockpit `/` live-tape and chart, `/structure` load and
-       Tradable Map, every shipped `/desk` section including the three Referee sections,
-       browser-verified via the store-scoped rig; full backend suite; fingerprint check;
-       referee SHA-256 listing re-check against the iteration-0 baseline.
-  - Acceptance: the complete trap suite is green; the deterministic rerun is byte-identical;
-    the full suite passes at a count ≥ the era-open baseline with 0 regressions; the
-    fingerprint prints `08e471b10130e1e2`; the referee listing matches iteration 0 exactly;
-    and the sentinel screenshots show every kept surface as shipped.
-
-<!-- AUTO:journeys -->
-
-- **J-11: Graduation gets a surface — the funnel's last state stops being invisible**
-  - Steps:
-    1. Render a **Graduation** section on `/desk`, directly BELOW the shipped Validation Vault
-       section (T-11: below the shipped ones, reusing no shipped `data-testid` or heading
-       string), reading `GET /research/desk/micro/graduation` — the ONE canonical owner
-       (`micro_graduation.py`; Product Shape Data Contract row "Graduation states + export
-       bundles"), which today reaches no surface at all: zero UI readers, zero MCP tools. The
-       section renders the served payload verbatim — per family the `family_root_id`, its
-       current stage token (`exploratory` / `walkforward_survivor` / `sealed_survivor` /
-       `referee_handoff_ready`), its complete `transitions` history, its complete
-       `sealed_evaluations` history including permanent failed verdicts, and the ledger's own
-       `chain_verification` verdict beside the data — with no client-side aggregate, derived
-       count, re-ordering, or recomputation of any served value. On the empty real ledger it
-       renders the served `message` verbatim (`"No candidates ledgered."`), never a fabricated
-       row. Read-only: no compute button, no POST — the route is GET-only and graduation
-       transitions are not a UI act (T-8).
-    2. Add `desk_graduation` as a byte-identical GET proxy of that route, positioned
-       immediately after `desk_vault` (the dependency-order sibling rule), bumping the MCP
-       contract to **v7 (26 → 27 tools)** and growing `tests/test_mcp_server.py`'s
-       `EXPECTED_TOOLS` to the 27-tuple in the same commit (guard tests are EXTENDED, never
-       edited). Extend `tests/test_desk_ui_guards.py`'s `_PRICE_ARITHMETIC_FIELDS` with every
-       served graduation numeric plus its seeded counter-test, and run the existing TR-2
-       join-resistance/inference sweep over the new tool and the new section.
-    3. Clean rebuild (`rm -rf apps/frontend/.next`, rebuild, restart — T-9), browser pass via
-       the store-scoped rig, element-capture of the new section (T-10).
-    4. Record a stored golden replay script for **J-07**, now that its state has an on-page
-       surface, and drop `J-07` from `runs/goal-session-rapid-microscope/state/golden-gaps` —
-       the era's only disclosed golden gap, which exists precisely because J-07 had no
-       frontend surface a replay script could navigate to.
-  - Acceptance: `GET /research/desk/micro/graduation` remains the single owner of every
-    graduation value — no second computation path, no new endpoint, no Data Contract row added
-    — and the `/desk` Graduation section renders that payload verbatim: against the real store
-    it shows the served `message` `"No candidates ledgered."` beside the served
-    `chain_verification` verdict, with an element screenshot on record (no screenshot ⇒
-    `unknown`, never `passing`), and against a fixture-scoped rig carrying one family per
-    stage it renders all four stage tokens, a permanent failed sealed verdict, and the bundle
-    copy stating that current-Referee registration of a flow predicate awaits a named
-    referee-spec revision — each `evidence_class` label in the same visual unit as its number,
-    no color or copy implying advice. `desk_graduation` returns a body byte-identical to its
-    GET route; the 27-tuple contract test, the extended `_PRICE_ARITHMETIC_FIELDS`
-    counter-test, the TR-2 inference sweep, and the replay-script static sweep pass, and the
-    MCP surface stays read-only. **No PnL number moves and none is invented:** this journey
-    registers no strategy, profile, or candidate, so in place of a PnL-ledger append it proves
-    the ledger untouched — `GET /research/pnl/ledger` and `reports/pnl/pnl-history.md`
-    byte-identical before and after, the champion pointer still `v1`/`default`, both founding
-    rows keeping their `n = 1 < 5` insufficient-sample labels (fabricating a row for a surface
-    change would breach "no fabricated data" and this era's `pnl_scan` freeze). The `default`
-    profile stays byte-identical — engine equivalence and the golden feature trace pass
-    byte-unmodified, `config_fingerprint` prints `08e471b10130e1e2`, zero new `Config` fields,
-    every `referee_*` module still matches the iteration-0 SHA-256 listing — every shipped
-    `/`, `/structure`, and `/desk` section renders as shipped, and the full backend suite
-    passes at a count ≥ the era-open baseline with 0 regressions. A **`[NEW]`-flagged
-    demo-narrator walkthrough** navigates `/desk` to the new Graduation section and shows the
-    served state and empty-state copy on screen, with that step's own screenshot actually
-    containing what the narration claims. Finally J-07 has a stored golden replay script
-    asserting a Graduation-section string unique to it, and `state/golden-gaps` no longer
-    lists `J-07`.
-
-- **J-12: The observer's build truth gets a surface — and its enumerator stops excluding silently**
-  - Steps:
-    1. Render a **Feature Snapshots** section on `/desk`, directly BELOW the shipped Graduation
-       section (T-11: below the shipped ones, reusing no shipped `data-testid` or heading
-       string — a new `micro-snapshots-*` testid family), reading `GET
-       /research/desk/micro/snapshots` and `GET /research/desk/micro/snapshots/runs` — the ONE
-       canonical owner (`micro_snapshots.py`; Product Shape Data Contract row "Feature snapshot
-       metadata + build progress/runs"), which today reaches no surface at all: zero UI readers
-       and no named MCP tool (measured by grep over `apps/frontend/` and
-       `tests/test_mcp_server.py`'s `EXPECTED_TOOLS`), so the whole build truth of Vision
-       pillar 2 / capability 2 — 18 snapshot meta files on disk — is curl-only. The section
-       renders the served payload verbatim: per snapshot its `dataset_id`,
-       `snapshot_format_version`, `micro_algo_version`, `config_fingerprint`,
-       `feature_source_hash`, `params_hash`, `quote_size_unit`, `row_count`, `bytes_on_disk`
-       and `built_utc`, plus the build-run history newest-first — with no client-side
-       aggregate, derived count, re-ordering, or recomputation of any served value, and the
-       served empty-state copy rendered verbatim (never a fabricated row) when the list or the
-       run log is empty. Read-only: no build button, no POST — the `/snapshots/compute` triple
-       stays UI-unreachable (T-8; a snapshot build is a heavy operator act and stays
-       manager/CLI-driven, and page-load GETs never compute).
-    2. Close the enumerator's two SILENT exclusions at the owner — additively, existing keys
-       byte-identical, no second computation path and no new endpoint. `GET
-       /research/desk/micro/snapshots` gains, beside `snapshots`: (a) `withheld_excluded` — how
-       many unresolved-pool datasets this enumeration withheld, computed by the SAME
-       `micro_snapshots` choke point every other corpus-wide enumerator already shares
-       (`withheld_dataset_ids_for_store` / `exclude_withheld`), matching the disclosure
-       convention `GET /research/datasets` (`sealed_withheld`) and `GET
-       /research/desk/micro/snapshots/compute` (`withheld_excluded`) already keep, and NEVER a
-       number derived from which withheld shards happen to have a snapshot file (that would
-       leak sealed-pool build state); and (b) `stale_excluded` — how many stored snapshot metas
-       failed load-time identity re-verification and were therefore dropped, which today is
-       invisible: the listing can serve `[]` with 18 meta files on disk and no explanation,
-       so an operator cannot tell "never built" from "built, then invalidated by an algo /
-       format / feature-source / fingerprint move". Both counts are computed AFTER the withheld
-       filter; `stale_excluded` never carries a stale VALUE, only its count.
-    3. Add `desk_micro_snapshots` as a byte-identical GET proxy of that route, positioned
-       immediately after `desk_micro_readiness` (the dependency-order sibling rule: readiness →
-       snapshots → scout), bumping the MCP contract to **v8 (27 → 28 tools)** and growing
-       `tests/test_mcp_server.py`'s `EXPECTED_TOOLS` to the 28-tuple in the same commit (guard
-       tests are EXTENDED, never edited). Extend `tests/test_desk_ui_guards.py`'s
-       `_PRICE_ARITHMETIC_FIELDS` with every served snapshot numeric plus its seeded
-       counter-test, and run the existing TR-2 join-resistance/inference sweep over the new
-       tool, the two new counts, and the new section.
-    4. Clean rebuild (`rm -rf apps/frontend/.next`, rebuild, restart — T-9), browser pass via
-       the store-scoped rig, element-capture of the new section (T-10) against the real store
-       AND against a fixture-scoped rig carrying at least one valid snapshot, one stale meta,
-       and one withheld pool member.
-    5. Extend (never weaken) **J-02**'s stored golden replay script with an additional assertion
-       on a statically rendered Feature-Snapshots string unique to it — the era-5 lesson: assert
-       the SSR'd section shell, never async-loaded row or `<option>` text — and let that element
-       capture also serve as J-02's owed element close-up.
-  - Acceptance: `GET /research/desk/micro/snapshots` remains the single owner of every snapshot
-    value — no second computation path, no new endpoint, no Data Contract row added, existing
-    keys byte-identical with only `withheld_excluded` and `stale_excluded` added — and the
-    `/desk` Feature Snapshots section renders that payload verbatim: against the real store it
-    shows the served list (or the served empty state) beside both disclosure counts and the
-    build-run history, with an element screenshot on record (no screenshot ⇒ `unknown`, never
-    `passing`); against the fixture-scoped rig a valid snapshot renders every served identity
-    field, a stale meta appears ONLY inside `stale_excluded` (never as a row, never as a stale
-    value), and a withheld pool member appears ONLY inside `withheld_excluded` (never by id,
-    symbol, session date, checksum, row count, or bytes) — with a counter-test proving
-    `withheld_excluded` is pool-derived rather than snapshot-file-derived, so no sealed-pool
-    build state is derivable from any served number. `desk_micro_snapshots` returns a body
-    byte-identical to its GET route; the 28-tuple contract test, the extended
-    `_PRICE_ARITHMETIC_FIELDS` counter-test, the TR-2 inference sweep over the new tool, counts
-    and section, and the replay-script static sweep all pass; the MCP surface stays read-only
-    and `/snapshots/compute` stays UI-unreachable. **No PnL number moves and none is invented:**
-    this journey registers no strategy, profile, or candidate, so in place of a PnL-ledger
-    append it proves the ledger untouched — `GET /research/pnl/ledger` and
-    `reports/pnl/pnl-history.md` byte-identical before and after, the champion pointer still
-    `v1`/`default`, both founding rows keeping their `n = 1 < 5` insufficient-sample labels
-    (fabricating a row for a surface change would breach "no fabricated data" and this era's
-    `pnl_scan` freeze). The `default` profile stays byte-identical — engine equivalence and the
-    golden feature trace pass byte-unmodified, `config_fingerprint` prints `08e471b10130e1e2`,
-    zero new `Config` fields (the two disclosures are payload fields, never config), every
-    `referee_*` module still matches the iteration-0 SHA-256 listing — every shipped `/`,
-    `/structure`, and `/desk` section renders as shipped, and the full backend suite passes at
-    a count ≥ the era-open baseline with 0 regressions. A **`[NEW]`-flagged demo-narrator
-    walkthrough** navigates `/desk` to the new Feature Snapshots section and shows the served
-    inventory, both disclosure counts, and the honest empty-state copy on screen, with that
-    step's own screenshot actually containing what the narration claims. Finally J-02's stored
-    golden asserts a Feature-Snapshots string unique to it and the full stored replay set
-    re-runs green.
-
-<!-- /AUTO:journeys -->
+---
 
 ## Anti-goals
 
-**Immutable rails — the identity of the project (from
-[`docs/research-directions.md`](research-directions.md) §0.3; enforced by existing tests and
-audits; only ever grow more specific, never weaker):**
+### Immutable project rails — carried forward as binding law
 
-1. **No execution path, ever** — no brokerage/trading API, no order tickets, no live OR paper
-   trading, no "just to test" exceptions. (`apps/backend/tests/test_no_execution_path.py` is
-   the tier-1 guard; new research code adds matching guard tests, never weakens them.)
-   *(critical)*
-2. **No profit claims and no advice** — every $ figure is a simulated measurement carrying R,
-   n, fee/slippage assumptions, and its train/hold-out/forward basis. No prediction language,
-   no imperative trading cues. *(critical)*
-3. **Frozen foundations** — the `v1` strategy, the `default` profile, the tape engine's five
-   states and thresholds, the frozen structure computations, the JSON `BarStore`, and every
-   KEPT surface's behaviour stay byte-identical. New work is additive and versioned beside
-   them, never a mutation of them. *(critical)*
-4. **Hold-out-only promotion** — the champion pointer moves only on a genuine hold-out
-   survival through the sweep gate PLUS a valid Referee certificate. Train-only wins are
-   labeled overfit. Never lower a minimum sample size, widen a gate, or pool across
-   feeds/fingerprints to manufacture a survivor. *(critical)*
-5. **No lookahead** — every value computed as-of T uses only events/bars fully completed at T.
-   *(critical)*
-6. **Single source of truth** — each shared value is computed once, owned by one canonical
-   endpoint, and read verbatim by REST/WS/UI/MCP/reports. The coherence-auditor hard-fails
-   violations. *(critical)*
-7. **Deterministic and seeded** — every random draw uses a recorded named seed via per-row
-   streams; identical requests reproduce byte-identical results; no wall-clock, no unseeded
-   randomness in any research artifact. *(critical)*
-8. **Read-only MCP** — MCP tools remain byte-identical proxies of GET endpoints; nothing on
-   the MCP surface can change state. *(critical)*
-9. **Immutable data** — registered datasets and bar series are append-only, checksummed,
-   never re-tagged, never deleted, never content-perturbed. Splits are frozen at
-   registration. *(critical)*
-10. **Persistence stays scoped** — no ambient recording of live streams; recording/fetching
-    is an explicit, logged act. *(critical)*
+The ten immutable rails in `docs/research-directions.md` §0.3 govern **verbatim** on any divergence;
+the concise checklist below is an era-local restatement only and cannot weaken or reinterpret them.
 
-**Era-B/B2 anti-goals that remain binding:** membership is never a signal; snapshots and
-playbook records are append-only and pinned; every run is an explicit operator act; the
-briefing and the playbook describe, never advise; the demolition stays demolished; the ledger
-never holds orders; the suite stays keyless and hermetic; the fingerprint pin does not move;
-no threshold exists outside its spec and no code path sweeps one; the evidence pools one
-signature; no recorded playbook file is ever rewritten; no second implementation of the
-measurement rail. *(all critical)*
+1. **No execution path, ever.** No brokerage/trading API, order ticket, live or paper trading, or
+   simulated execution path is introduced by this era.
+2. **No profit claims and no advice.** Any return/economic measurement is research evidence with its
+   unit, n, assumptions, evidence class, and caveats; no imperative trading cue, price target, or
+   prediction promise.
+3. **Frozen foundations stay frozen.** The existing `v1` strategy, `default` profile, tape engine state
+   vocabulary/thresholds, frozen structure calculations, canonical stores, and archived-era behavior
+   remain additive/versioned, never silently mutated.
+4. **Hold-out / confirmatory promotion stays gated.** No diagnostic Foundry result moves a champion,
+   promotion, graduation, or confirmatory state; no minimum n, gate, or evidence requirement is lowered.
+5. **No lookahead.** Every value is computed only from information legally available at its declared
+   time; deferred constructs cannot be served before resolution.
+6. **Single source of truth.** Every shared scientific value has one canonical backend owner; REST/UI/MCP
+   never independently recompute it.
+7. **Deterministic and seeded.** Randomized statistical draws use existing named deterministic streams;
+   no wall-clock/unseeded randomness changes research results.
+8. **Read-only MCP.** Any Foundry MCP surface is GET/read-only and cannot mutate research state.
+9. **Immutable registered data.** Dataset content/checksums/splits/recorded evidence are append-only and
+   never retagged or content-perturbed to help a candidate.
+10. **Persistence stays scoped.** Fetching/recording/exposure is always an explicit operator act; page
+    loads and Foundry reads never record market data. `GET /research/desk/micro/foundry` and every page-
+    load GET are read-only and never compute/evaluate a candidate or trigger the exhaust runner.
 
-**Referee-era anti-goals that remain binding** (the archived Referee goal's full text governs;
-headline rails): no confirmatory claim outside the gauntlet; the historical atlas is
-exploratory forever; CI-inversion is never a p-value; never shrink the BH denominator; no gate
-loosens mid-era; the Referee never feeds back; promotion is certificate-locked with no bypass;
-no confirmatory output without a verified oracle attestation; no annualized metrics anywhere.
-*(all critical)*
+### Referee / Rapid-Microscope rails
 
-**Rapid-Microscope anti-goals (added, not weakening any rail above):**
+- No confirmatory claim outside the Referee gauntlet; Foundry never emits `live_confirmatory`.
+- The historical/exposed diagnostic atlas is exploratory forever; no label upgrade by prose.
+- No gate, alpha, denominator rule, formula, embargo, threshold, sample floor, concentration ceiling,
+  or economic multiple is loosened after evidence.
+- Referee never feeds back into Foundry candidate construction; `referee_*` scientific behavior remains
+  untouched.
+- No exploratory read of a sealed shard; no Vault secret in repo/log/payload/screenshot.
+- The opaque unresolved research pool remains inference-resistant. The new Foundry REST/UI/optional MCP
+  surface joins the existing TR-2-style inference sweep and may disclose only identity-safe aggregate
+  safety facts, never enough to identify a still-unexposed member.
+- Evidence classes never mix; `historical_exposed_diagnostic` rows never pool with
+  `historical_oos`/`live_confirmatory`.
+- The accessor/evidence-control seam remains the only legal market-data door for Foundry real
+  diagnostics.
+- No microstructure claim beyond L1 supports: `refill_consistent` remains the strongest replenishment
+  label; no iceberg/institutional-intent/spoofing/manipulation claims.
+- No sub-second outcome horizon or latency-sensitive mechanism.
+- No cross-unit liquidity arithmetic. A source requiring unverified trade-share ↔ displayed-size
+  arithmetic is `BLOCKED_UNIT_CONTRACT`, not silently normalized.
+- Every feature/construct carries honest `anchor_at` / `observed_through` / `available_at`; no outcome
+  starts before the conditioning set's max availability.
+- The pre-existing legacy tick symbol-days remain permanently exploratory and cannot be relabelled.
+- Existing readiness / OOS sample floors remain intact; the small diagnostic corpus never satisfies a
+  future OOS gate by declaration.
+- No annualized performance metric is introduced by this era.
 
-- **No exploratory read of a sealed shard.** Event data and outcome aggregates of a `sealed`
-  shard are refused everywhere (routes, MCP, accessor, readiness) until its recorded
-  exposure; the refusal is typed, tested, and fail-closed. *(critical)*
-- **Sealed exposure is family-level and single-shot — never a second draw.** No more than one
-  evaluation per (family, shard) exists, ever; a failed sealed verdict is permanent and
-  travels in every later export bundle; no perturbed re-submission resets it. *(critical)*
-- **A recorded tranche is one opaque research pool until its shards are exposed.** No served
-  surface — readiness, recorder progress, datasets, backtests, PnL ledger, Scout, walk-forward,
-  graduation, MCP, UI — may present a complete identity-labelled partition of "exploratory"
-  versus "sealed", nor a complete per-shard list of EITHER side while any pool member is
-  unexposed; the registered universe is public by construction, so a complete list of one side
-  identifies the other by subtraction. Unexposed pool members stay mutually indistinguishable;
-  identity becomes public only at real exposure or assignment. The governing test is the TR-2
-  inference trap: given the registered universe plus every public artifact, no still-unexposed
-  vault-eligible shard is identifiable with certainty. *(critical — spec r5)*
-- **Evidence classes never mix.** No `historical_exposed_diagnostic` output feeds a gate, a
-  graduation transition, a certificate, a promotion, or a pooled statistic with
-  `historical_oos` rows; nothing in this era emits `live_confirmatory`. *(critical)*
-- **No fold geometry change after fold 1** without a recorded voiding event that clears every
-  survivor state of that corpus-era. *(critical)*
-- **No threshold, grid, formula, embargo, or fold parameter is chosen or revised from
-  validation, sealed, or holdout outcomes.** Fitting rules are data functionals frozen before
-  reveal; per-origin refits under an unchanged rule are provenance, never a new choice.
-  *(critical)*
-- **The denominator never shrinks.** Every evaluated variant lands in the hash-chained ledger
-  with a closed-vocabulary decision; kills are never deleted; the union-N across grid
-  versions is served beside every family. *(critical)*
-- **The accessor is the only data door.** No module but `micro_accessor.py` opens snapshot or
-  vault event data; origin fences fail closed; import-ban and source-scan guards enforce it.
-  *(critical)*
-- **No microstructure claim beyond what L1 supports.** `refill_consistent` is the strongest
-  liquidity label; "iceberg", institutional-intent, and manipulation language are banned;
-  every aggressor-derived quantity is served beside its `fallback_frac` and `unknown_frac`.
-  *(critical)*
-- **No sub-second outcome horizon** and no latency-sensitive mechanism, per DO-NOT #1.
-  *(critical)*
-- **No cross-unit liquidity arithmetic.** No feature, screen, or study relates trade shares to
-  displayed quote sizes unless the dataset's `quote_size_unit` is verified (spec §2.6);
-  unverified or mixed units are a typed refusal; unit normalization exists only as a recorded
-  verification act, never silent arithmetic. *(critical)*
-- **No value is served before it exists.** Every feature carries
-  `anchor_at`/`observed_through`/`available_at`; a deferred construct is `unavailable` until
-  its observations exist; no outcome for a conditioned anchor begins before the conditioning
-  set's maximum `available_at` (TR-17). *(critical)*
-- **The 12 pre-existing tick symbol-days are permanently exploratory** — never sealed, never
-  `historical_oos`, never relabeled. *(critical)*
-- **The ~150-symbol-day research-readiness gate is never lowered or silently satisfied**; any
-  claim whose predeclared floor is unmet fails closed with the floor arithmetic served.
-  *(critical)*
-- **Referee modules are byte-untouched this era** — `referee_handoff_ready` never implies
-  current-Referee registrability of a flow predicate; that awaits a future named revision of
-  the referee spec. *(critical)*
-- **The vault secret never enters the repo, a log, a payload, or a screenshot** — only its
-  sha256 commitment is ever recorded. *(critical)*
-- **The enhancement loop stays inside its box.** The goal-proposer may append journeys ONLY
-  inside the `AUTO:journeys` marker block above — it MUST NOT edit human-authored journeys,
-  this Anti-goals section, or any other part of this file; proposed journeys MUST carry a
-  single-source-of-truth acceptance criterion, keep the `default` profile and `v1`
-  byte-identical, respect every rail above, and include a `[NEW]`-flagged walkthrough.
-  Manufacturing a low-value journey just to keep the loop alive is a failure. *(critical)*
+### Foundry-specific anti-goals
 
-**Host protection (carried verbatim — a physical constraint of the host, not product scope):**
+- No case-by-case scientific owner prompt during the run. Unresolved science blocks and execution
+  continues unless a core integrity defect requires a halt.
+- No runtime LLM interpretation in the **real manifest-generation command**.
+- No source record, threshold, direction, family partition, or CandidateSpec chosen because of effect,
+  p-value, sample density, or prior Scout outcome.
+- No candidate invented after the real manifest freezes.
+- No late variant insertion.
+- No family splitting to evade the 24-variant cap.
+- No family-specific post-freeze extractor/evaluator path for one real candidate. Real membership is
+  interpreted generically from CandidateSpec.
+- No second Foundry statistical decision rail.
+- No Foundry trial registered into the Scout ledger this era; the Foundry trial ledger is the canonical
+  record and must carry the complete Scout screen payload plus both denominator contexts where defined.
+- No unsided Foundry candidate that chooses direction from discovery.
+- No change to a killed candidate or re-run under a renamed id.
+- No second real generation epoch.
+- No science-affecting code/spec/manifest change after the first-read lock.
+- No automatic corpus-era registration, retention, storage, recording, release, Vault, graduation, or
+  Referee act.
+- No automatic ranking/selection among diagnostic survivors for future protected evidence.
+- No claim that `DIAGNOSTIC_SURVIVOR_OOS_RULE_FROZEN` is OOS evidence or proof of edge.
 
-- **Host-guard caps are law.** This host (GEEKOM A7 Max mini-PC) hard-reset five times between
-  2026-07-20 and 2026-07-28 under unconfined goal-mode load — instant power/VRM transient
-  trips with nothing in the journal; resets #3–#5 struck while tapeology's goal mode ran
-  UNGUARDED beside trendora's. When `project-extensions/host-guard/host-guard.env` declares
-  ceilings (CPU mask `4-7,12-15` — the complement of trendora's — plus BLAS thread caps and
-  memory/task bounds), every heavy path respects them: headless engine runs self-wrap under
-  the mask, and interactive pump sessions are auto-confined in place by the engine
-  (`host-guard-adopt.sh`; `scripts/automation/host-guard-exec.sh claude` is the optional
-  from-birth wrapper) — the engine pauses `AWAITING_HOST_GUARD` (resumable) only when
-  confinement cannot be established. Never disable, widen, or bypass these caps to make a run
-  faster or a pause go away; widening the mask follows the verification ladder in
-  `trendora/project-extensions/host-guard/README.md`. *(critical)*
+### Goal-Mode / automation anti-goals
+
+- No active post-`GOAL_ACHIEVED` science proposer for this finite era.
+- No `AUTO:journeys` scientific self-extension.
+- No Goal Mode workaround that edits/deletes/xfails a scientific guard merely to pass a journey.
+- No browser proof based on fabricated fixture state when a journey claims to show real final state;
+  fixture and real views must be visibly distinguished.
+- No weakening or bypass of `project-extensions/host-guard/host-guard.env`; Goal Mode pauses
+  `AWAITING_HOST_GUARD` if confinement cannot be established.
+- Anti-goal violations use the existing Goal Mode anti-goal violation state/disposition machinery; they
+  are not dismissed in prose.
+
+---
+
+# Binding Execution Order
+
+Goal Mode may decompose implementation work, but the scientific partial order is mandatory:
+
+1. **Era transition + foundation baseline.** Archive/verify previous goal, open Foundry goal/session,
+   disable the old continuous-improvement proposer, record baseline hashes/counts.
+2. **Foundry methodology + source registry + CandidateSpec.** No real manifest yet.
+3. **Generic interpreter / Scout adapter / Foundry family + ledger + freeze machinery.** Hermetic only.
+4. **Hermetic oracles and performance/checkpoint tests.** No real candidate outcomes.
+5. **Read surface.** Fixture states visible; real epoch still unopened.
+6. **Generate the ONE fresh-context source registry audit + candidate manifest.** Write the tracked
+   `docs/hypothesis-foundry/` artifacts and audit report; no candidate outcomes.
+7. **Commit the manifest + freeze record.** Verify Git-visible pre-outcome barrier.
+8. **Run the real deterministic exhaust pass.** First-read lock is written before first candidate
+   outcome. From here onward science-affecting hashes may not change.
+9. **Final read-surface / regression / Goal Mode evidence pass.** UI/report-only fixes are permitted only
+   outside the freeze set and must not affect scientific state.
+10. **Ordinary Goal Mode finalization.** No proposer wake-up; no self-extension.
+
+A real candidate outcome read before step 7 is a critical anti-goal violation. A science-affecting edit
+after step 8 begins is an integrity halt, not an iteration opportunity.
+
+---
+
+# Required Hermetic / Trap Coverage
+
+Before the real freeze, deterministic tests must cover at least:
+
+1. CandidateSpec canonical hash changes on every science field and not on serialization order.
+2. Required source inventory: every source object gets exactly one disposition.
+3. Formula-scoped supersession prevents stale card constants from re-entering through card aliases.
+4. Study 2 / Card 9.1 cannot compile.
+5. Pilot proxy records cannot masquerade as full Study 1/3 candidates.
+6. Card 9.7-style methodological vocabulary aliases rather than fabricates a directional candidate.
+7. Generator import/IO tripwire refuses Scout/result/walkforward/Vault/Referee/PnL candidate-outcome
+   reads.
+8. Finite source-frozen alternatives enumerate deterministically.
+9. Unratified numeric threshold → typed block.
+10. Natural-boundary threshold passes only when source semantics support that boundary.
+11. Missing direction → `BLOCKED_DIRECTION`.
+12. Support-long / resistance-short mirror compilation follows the general rule, not candidate-specific
+    prose.
+13. Unsupported null/statistic → `BLOCKED_UNSUPPORTED_STUDY_FORM`.
+14. Missing ordered lag/unsupported relation → typed block, no guessed lag.
+15. Cross-unit unverified mechanism → `BLOCKED_UNIT_CONTRACT`.
+16. Deferred unresolved anchors excluded from both cells and counted.
+17. Deferred completion→anchor joins use only frozen observer provenance identity; ambiguous/undefined
+    joins block rather than nearest-time/tie-break guessing.
+18. Candidate/comparator use the same resolved population and same per-anchor outcome-start rule.
+19. Boolean-membership adapter encodes CandidateSpec truth without changing raw coordinate report.
+20. Scalar direct-vs-Foundry Scout decision/statistics equivalence.
+21. Composite descriptive-report changes cannot change Scout verdict.
+22. Existing Scout `killed_insufficient_n` → `EVALUATED_INSUFFICIENT`.
+23. Existing Scout `killed_null|killed_direction|killed_concentration|killed_economic|killed_fragile`
+    → `EVALUATED_KILLED`.
+24. Scout `survive` → `DIAGNOSTIC_SURVIVOR_OOS_RULE_FROZEN` only.
+25. Foundry family full denominator frozen before any result.
+26. Over-cap family blocks whole; no subset selection/splitting.
+27. Late insertion refusal.
+28. Best-of-N receives the complete Foundry family denominator for every sibling variant.
+29. Econ-floor formula frozen pre-manifest; numeric floor materializes before outcome read and cannot be
+    back-filled.
+30. Generation identical rerun = verify/no-op; drifted rerun = refusal; no epoch 2.
+31. Freeze record pins all required science hashes and commit ancestry.
+32. Real runner refuses any uncommitted byte drift on an enumerated freeze-set path before first read;
+    unrelated Goal Mode session/handoff dirt does not falsely block.
+33. First-read row is written before first candidate outcome read.
+34. Post-first-read change to any pinned science hash halts.
+35. Non-science UI-only file outside the enumerated freeze-set path manifest does not falsely
+    invalidate scientific lock.
+36. Canonical exhaust order invariant to effect/p-value/n/sibling verdicts.
+37. Kill does not skip later predeclared variants; survivor does not skip later candidates.
+38. Checkpoint/resume verifies/skips terminal candidates without duplicate scientific rows.
+39. Exact Foundry replay idempotent; conflicting replay refuses.
+40. Protected/withheld/sealed access attempt fails closed.
+41. Foundry real evidence class cannot become `historical_oos` or `live_confirmatory`.
+42. No fresh corpus-era registration / retention / recording / release / Vault / graduation / Referee act.
+43. Zero-compiled-candidate fixture reaches honest completion.
+44. All-killed fixture reaches honest completion.
+45. Multi-survivor fixture preserves all survivors without ranking/selecting one.
+46. REST/UI values share one canonical owner; frontend cannot recompute scientific fields.
+47. New Foundry surface passes opaque-pool inference/join-resistance guards.
+48. Existing Rapid Microscope / Referee / unit / no-lookahead / no-execution regression suite remains
+    green.
+49. Freeze-set generator covers mandatory + transitive local science dependencies and refuses an
+    unresolved/omitted dependency.
+50. Source-registry quote lint proves every load-bearing quoted span is an exact substring at the cited
+    source location; fresh-context audit, not keyword matching, decides semantic support.
+51. Numeric economic floor on resume equals the pinned intent-row derivation before outcome work
+    continues.
+52. Exhaust runner is single-flight; a concurrent second runner refuses.
+53. Foundry terminal row is the canonical trial record and embeds/pins the complete Scout screen payload;
+    no Foundry trial row is appended to the Scout ledger.
+54. Future `rule_id` derivation is deterministic and pre-outcome; survivor terminal rows cannot rename it.
+55. Scalar candidate prospective root is recorded where current semantics define it; composites record
+    `root_deferred_composite` without inventing a Vault root.
+---
+
+# Real Epoch Opening Snapshot
+
+The preceding era's public durable record is already known to agents and cannot be erased: Study 2 was
+killed; Studies 1/3 were parked; the legacy corpus is exposed diagnostic evidence; no historical-OOS
+candidate exists; the Vault remains unspent. The Foundry does not pretend agents lack this historical
+knowledge.
+
+The scientific defense is structural:
+
+- source scope is ratified before this era;
+- unresolved scientific degrees of freedom block rather than invite selection;
+- real generation code cannot read candidate outcomes;
+- every compiled variant freezes before the new Foundry diagnostic pass;
+- exhaustion order is independent of results;
+- no second epoch exists.
+
+Real corpus counts, candidate membership density, and diagnostic results must not be used to decide what
+to compile. Sufficiency is learned only after the candidate is already frozen.
+
+---
+
+# Completion / Honest Stop
+
+Unlike v1, completion does **not** depend on the Goal Proposer lifecycle. There is no proposer-driven
+scientific work in this era.
+
+The Goal Mode evaluator may declare `GOAL_ACHIEVED` when the fixed journeys J-01…J-08 pass and:
+
+- one real epoch exists and is Git-frozen;
+- every required source has exactly one source disposition;
+- every compiled variant is terminal, or there were zero compiled variants;
+- no variant remains `FROZEN_READY` / partially evaluated;
+- every Scout survivor is labelled `DIAGNOSTIC_SURVIVOR_OOS_RULE_FROZEN` and no stronger state;
+- protected/withheld/sealed reads by Foundry real diagnostics are zero;
+- no fresh corpus/OOS/Vault/Referee resource was consumed;
+- freeze integrity is green;
+- append-only Foundry ledger chain verifies;
+- all anti-goals are clear;
+- backend/frontend/foundation regression gates pass.
+
+Valid successful research endings include:
+
+1. **zero compiled candidates** — every in-scope mechanism honestly blocked/excluded/aliased under the
+   current ratified vocabulary;
+2. **compiled but zero diagnostic survivors** — all candidates were insufficient/killed;
+3. **one or more diagnostic survivors** — exact pre-outcome rules remain frozen for a future OOS
+   decision.
+
+None of these endings is a profitability claim.
+
+---
+
+# Post-Era Owner Boundary
+
+The only planned scientific/resource owner act after a successful Foundry run is whether to open a new
+clean-OOS campaign for the complete set of `DIAGNOSTIC_SURVIVOR_OOS_RULE_FROZEN` rules.
+
+If there are **zero** diagnostic survivors, do not buy/provision storage or spend clean evidence for this
+frozen epoch.
+
+If there are **one or more**, a future goal may:
+
+1. decide whether the resource/evidence cost is justified;
+2. register a clean universe/corpus era;
+3. bind **all eligible byte-identical frozen survivor rules** to the future corpus before any OOS outcome
+   read, with explicit handling for shared sealed `family_root_id` contention;
+4. run the existing Walk Forward / Vault / graduation / Referee path under its own constitution.
+
+That future goal may not use this era's diagnostic magnitudes to rewrite, rank, thin, reverse, or
+rethreshold the frozen survivor rules before protected evidence. If a new scientific choice is desired,
+it is a new hypothesis-generation era, not a continuation of this epoch.

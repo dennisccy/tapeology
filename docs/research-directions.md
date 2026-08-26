@@ -1122,6 +1122,33 @@ a documented basis decision.
 >
 > The catalog-era-6 atlas concept (6.9) is superseded by the rapid-microscope Scout +
 > temporal-stability views; this note is the dated record required by §5.6.
+>
+> **HYPOTHESIS-FOUNDRY OPENING NOTE (2026-08-26, operator pivot, under §5.6 "goal.md wins").**
+> The Rapid Microscope is CLOSED — GOAL_ACHIEVED 2026-08-24 (session `rapid-microscope`,
+> two-key confirmed; zero survivors is the era's honest result; its terminal session and
+> research ledgers are immutable). The operator opened **"The Hypothesis Foundry"**
+> (constitution `docs/goal.md`; predecessor archived at
+> `docs/goal-archive/goal-2026-08-26.md`) — a FINITE, predeclared candidate-compilation and
+> exhaustion era over the already-ratified source scope (parked Studies 1/3 and the Wave-1
+> concepts the 2026-08-16 note above brought forward). Binding rules, from `docs/goal.md`:
+>
+> - Unresolved scientific ambiguity BLOCKS (typed `BLOCKED_*` dispositions); there is no
+>   mid-run case-by-case owner tuning.
+> - The complete real candidate manifest is generated once and committed to Git BEFORE the
+>   first new diagnostic outcome read (freeze-before-read barrier + first-read hash lock).
+> - Real trials are recorded on a dedicated Foundry hash-chained trial ledger and reuse the
+>   existing frozen Scout statistical decision rail (`scout.screen_candidate`) unchanged;
+>   the Scout ledger receives no Foundry rows this era.
+> - No fresh OOS acquisition, corpus-era registration, retention probe, withheld release,
+>   Vault consumption, graduation, or Referee work belongs to this era; a Scout survivor
+>   terminates as `DIAGNOSTIC_SURVIVOR_OOS_RULE_FROZEN` only.
+> - This era has NO post-achievement self-extension: the continuous-improvement proposer
+>   guidance is archived at `docs/goal-archive/proposer-guidance-2026-08-26.md`, so the
+>   framework's two-file opt-in (`project-extensions/hooks/post-goal.sh` +
+>   `project-extensions/proposer-guidance.md`) is deliberately unsatisfied for this era;
+>   Part 5.3's amendments remain historical record.
+>
+> This note is the dated record required by §5.6.
 
 ---
 
@@ -2015,6 +2042,7 @@ Columns: `date · era/workstream · session id · verdict (done | killed | split
 | 2026-08-11 | B2 (operator pivot, outside catalog) — "The Playbook" | `playbook` | done | Nine pre-registered Graifer/Schumacher intraday detectors on the desk's own 5m/1m bars; append-only playbook corpus + back-scan + descriptive evidence view with seeded same-session anchors; zero statistics gates (deliberately era-6's). | none |
 | 2026-08-13 | operator interlude (outside catalog) — band context | main `9e65bb0`…`83c24a8` | done | Read-side band-context lens v1→v2 (bracket frame)→v3 (basis-bounded cache) + the 9-key cohort vocabulary + refresh-chain steps 6–7 + `/desk` context columns/filters/drill-ins; ratified as R-4 in the era-6 goal. | `docs/playbook-detector-spec.md` §6 version string reconciled v2→v3 (2026-08-14). |
 | 2026-08-16 | 6 (The Referee) | `referee` | done | Fail-closed confirmatory layer shipped (evidence contract, seeded permutation/CI/BH core with oracle attestation, ToD/context-matched nulls, immutable pre-registration boundary, one permanent checkpoint per hypothesis, `pnl_scan` certificate interlock, 3 `/desk` sections, MCP v5 = 22 tools); 12 journeys, zero `corroborated` at close — the system working as designed. | Row appended 2026-08-16 at the rapid-microscope opening (the referee session's closing agent omitted it); §5.3 proposer amendment applied in the same commit. |
+| 2026-08-24 | operator pivot (outside catalog) — "The Rapid Microscope" | `rapid-microscope` | done | Rapid-validation funnel shipped (observer/snapshots, Scout + hash-chained trial ledger, walk-forward, sealed Vault, graduation, MCP → 28 tools): 13 real candidates, 0 survivors (killed_null 10 · killed_economic 6 · killed_insufficient_n 3), Study 2 killed on the merits (p 0.366), Studies 1/3 parked pending owner spec, zero `historical_oos`, Vault sealed/untouched — the funnel kills honestly. | Row appended 2026-08-26 at the hypothesis-foundry opening. |
 | _(next session appends here)_ | | | | | |
 
 Protocol: the row is written by the human operator or the session's closing agent AT session
