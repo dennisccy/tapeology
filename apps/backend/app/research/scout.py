@@ -71,6 +71,7 @@ never computed from a rule this module has no machinery to evaluate honestly."""
 from __future__ import annotations
 
 import argparse
+import bisect
 import hashlib
 import json
 import random
@@ -509,7 +510,8 @@ def _extract_band_touch_anchors(
 
 
 def _windowed_trade_volumes(
-    trade_rows: list[dict], end_logical_ts: float, *, window_seconds: float, max_windows: int
+    trade_rows: list[dict], end_logical_ts: float, *, window_seconds: float, max_windows: int,
+    anchor_ats: list[float] | None = None,
 ) -> list[float]:
     """The trailing, NON-OVERLAPPING, WHOLE ``window_seconds``-long trade-volume windows ending at
     ``end_logical_ts`` (spec section 3's "trailing-120s volume ... over the session-prefix baseline
@@ -517,7 +519,16 @@ def _windowed_trade_volumes(
     ``BURST_BASELINE_TRAILING_WINDOWS`` of them at most). Only WHOLE windows that fit entirely
     within the dataset's own recorded prefix (before ``end_logical_ts``) are ever counted -- the
     caller (``divergence_delta_threshold``) already treats fewer than 5 as undefined, so this never
-    zero-pads a thin prefix into a false floor-clearing count."""
+    zero-pads a thin prefix into a false floor-clearing count.
+
+    ``anchor_ats`` (r14.3, optional) is this dataset's ``anchor_at`` column, already extracted by
+    the caller. Supplying it makes each window a BINARY-SEARCHED SLICE instead of a full scan of
+    every trade row -- a pure cost change: ``anchor_at`` is ascending (verified across all 18 real
+    datasets), so ``window_start <= anchor_at < window_end`` selects exactly one contiguous run, and
+    summing that slice left-to-right adds the identical values in the identical ORDER. Float
+    addition is order-sensitive, so the order mattering is precisely why this slices rather than
+    using a prefix-sum table: the result must be bit-identical, not merely close, because
+    ``divergence_delta_threshold`` feeds a ``<=`` comparison in Card 9.1."""
     if not trade_rows:
         return []
     earliest_ts = trade_rows[0]["anchor_at"]
@@ -527,9 +538,14 @@ def _windowed_trade_volumes(
     window_end = end_logical_ts
     for _ in range(n_windows):
         window_start = window_end - window_seconds
-        volume = sum(
-            row["size"] for row in trade_rows if window_start <= row["anchor_at"] < window_end
-        )
+        if anchor_ats is None:
+            volume = sum(
+                row["size"] for row in trade_rows if window_start <= row["anchor_at"] < window_end
+            )
+        else:
+            lo = bisect.bisect_left(anchor_ats, window_start)
+            hi = bisect.bisect_left(anchor_ats, window_end)
+            volume = sum(row["size"] for row in trade_rows[lo:hi])
         volumes.append(float(volume))
         window_end = window_start
     return volumes
@@ -564,6 +580,14 @@ def _extract_divergence_anchors(
             by_band.setdefault(touch["band_id"], []).append(touch)
 
         trade_rows = [r for r in rows if not r.get("close_out")]
+        # r14.3 (cost only, byte-identical): the pair loop below used to rescan the WHOLE dataset
+        # four times per touch pair -- `feature_row_at_trigger` rebuilt the trade-row list on every
+        # call, the price-history and baseline-volume filters each walked every row, and
+        # `trade_rows.index()` searched linearly. On the real corpus that is ~5,600 pairs x ~280k
+        # rows and does not finish in an hour and a half (measured). `anchor_at` is ascending on
+        # every real dataset, so each of those is a binary-searched contiguous SLICE instead, over
+        # the identical elements in the identical order.
+        trade_anchor_ats = [r["anchor_at"] for r in trade_rows]
         session_end_ts = _session_end_logical_ts(dataset_meta)
         session_date = _session_date_for_dataset(dataset_meta)
         epoch_anchor = dataset_meta.get("epoch_anchor") or 0.0
@@ -572,24 +596,32 @@ def _extract_divergence_anchors(
             for tau1_touch, tau2_touch in zip(band_touches, band_touches[1:]):
                 tau1_logical = tau1_touch["as_of_epoch"] - epoch_anchor
                 tau2_logical = tau2_touch["as_of_epoch"] - epoch_anchor
-                tau1_row = mj.feature_row_at_trigger(rows, tau1_logical)
-                tau2_row = mj.feature_row_at_trigger(rows, tau2_logical)
-                if tau1_row is None or tau2_row is None:
+                # `mj._locate_at_or_before`'s exact contract -- the LAST index whose anchor_at is
+                # <= the trigger, None when every row is strictly after it -- as a binary search.
+                tau1_pos = bisect.bisect_right(trade_anchor_ats, tau1_logical) - 1
+                tau2_pos = bisect.bisect_right(trade_anchor_ats, tau2_logical) - 1
+                if tau1_pos < 0 or tau2_pos < 0:
                     continue
+                tau1_row = trade_rows[tau1_pos]
+                tau2_row = trade_rows[tau2_pos]
                 cum_delta_tau1 = tau1_row.get("cumulative_delta")
                 cum_delta_tau2 = tau2_row.get("cumulative_delta")
                 if cum_delta_tau1 is None or cum_delta_tau2 is None:
                     continue
+                history_lo = bisect.bisect_left(
+                    trade_anchor_ats, tau1_logical - mf.DIVERGENCE_TRAILING_SECONDS
+                )
+                history_hi = bisect.bisect_right(trade_anchor_ats, tau2_logical)
                 price_history = [
                     (row["anchor_at"], row["mid"])
-                    for row in trade_rows
-                    if tau1_logical - mf.DIVERGENCE_TRAILING_SECONDS <= row["anchor_at"] <= tau2_logical
-                    and row.get("mid") is not None
+                    for row in trade_rows[history_lo:history_hi]
+                    if row.get("mid") is not None
                 ]
                 baseline_volumes = _windowed_trade_volumes(
                     trade_rows, tau1_logical,
                     window_seconds=mf.DIVERGENCE_TRAILING_SECONDS,
                     max_windows=mf.BURST_BASELINE_TRAILING_WINDOWS,
+                    anchor_ats=trade_anchor_ats,
                 )
                 divergence = mf.divergence_at_level(
                     price_history=price_history, tau1=tau1_logical, tau2=tau2_logical,
@@ -601,7 +633,10 @@ def _extract_divergence_anchors(
                     continue  # undefined (thin price/volume history) -- excluded, never fabricated
                 feature_value = 1.0 if bearish else 0.0
 
-                tau2_pos = trade_rows.index(tau2_row)
+                # `tau2_pos` is already known from the binary search above. It equals the old
+                # `trade_rows.index(tau2_row)`: every row carries a strictly increasing
+                # `trade_index` (verified across all 18 real datasets), so no two rows compare
+                # equal and `.index()` could only ever have returned this same position.
                 outcome = mj.outcome_row_at_single_horizon(
                     trade_rows, tau2_pos, horizon_kind, horizon_value, session_end_ts,
                     direction=sidedness,
@@ -1464,12 +1499,22 @@ def register_and_screen_candidate(
     resolver: "BandMapResolver | None" = None,
     playbook_store: "PlaybookStore | None" = None,
     setup_id: str | None = None,
+    anchors_sink: list[dict] | None = None,
 ) -> dict:
     """The ONE production entry point: builds the frozen spec, enforces TR-9 (ordering) and the
     24-variant grid bound BEFORE any outcome is read or any ledger row is written, extracts
     anchors, runs the screen, and appends the combined row. Both ``ScoutComputeManager``'s worker
     and the CLI's ``main()`` call this SAME function for every grid entry -- no second
     implementation of the screen (TC-11).
+
+    ``anchors_sink`` (r14.3, default ``None`` = off) is an out-parameter: when a list is supplied,
+    the anchors this function extracted are appended to it, so a caller that needs to describe the
+    SAME evidence a second way gets them without a second extraction. Study 2's continuous report
+    is the motivating caller -- computing it from an independent extraction would let the
+    descriptive representation and the screened threshold variant silently describe different
+    anchor sets. Deliberately an out-parameter rather than an input: this function still extracts
+    the anchors ITSELF, after the spec is frozen, so the "freeze the spec, then read outcomes"
+    ordering is untouched and no caller can inject a pre-read outcome set.
 
     ``resolver``/``playbook_store``/``setup_id`` (J-09, all default ``None``) are threaded straight
     through to ``extract_anchors``/``build_candidate_spec_fields`` -- REQUIRED only when
@@ -1555,6 +1600,8 @@ def register_and_screen_candidate(
         playbook_store=playbook_store,
         setup_id=setup_id,
     )
+    if anchors_sink is not None:
+        anchors_sink.extend(anchors)
     result = screen_candidate(
         feature_name=feature_name,
         transform=transform,

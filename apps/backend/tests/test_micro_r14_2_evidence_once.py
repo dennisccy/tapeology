@@ -36,6 +36,7 @@ from app.research import micro_accessor as ma
 from app.research import micro_corpus as mc
 from app.research import micro_features as mf
 from app.research import micro_study2_diagnostic as s2
+from app.research import scout
 from app.research import vault
 from app.research import walkforward as wf
 from app.research.datasets import SOURCE_HISTORICAL, SPLIT_TRAIN, DatasetStore
@@ -662,46 +663,50 @@ def _anchor(session_date, symbol, ext, mult, outcome_bps):
     }
 
 
-def test_the_diagnostic_reports_insufficient_rather_than_estimating_on_a_thin_sample():
-    thin = [_anchor(f"2026-04-{d:02d}", "AAPL", 10.0, 2.0, -5.0) for d in range(1, 6)]
-    report = s2.study2_continuous_diagnostic(thin)
-    assert report["outcome"] == s2.OUTCOME_INSUFFICIENT
-    assert report["evidence_class"] == "historical_exposed_diagnostic"
-    assert "never" in report["graduation_credit"] or "none" in report["graduation_credit"]
+# ---------------------------------------------------------------------------------------------------
+# RETIRED BY r14.3. Four tests here pinned r14.2's home-made decision rail -- a 30-anchor floor
+# borrowed from the WALK-FORWARD fold floor, and a verdict read off the mechanism-fired cell's own
+# raw mean. Both were wrong, and the decision now delegates to `scout.screen_candidate`. Their
+# replacements live in `test_micro_r14_3_study2_scout_rail.py` (cases A-I).
+#
+# The one below is kept, re-targeted, because the fixture it used is itself the clearest statement
+# of what was broken.
+# ---------------------------------------------------------------------------------------------------
 
 
-def test_the_diagnostic_kills_a_wrong_signed_mechanism_cheaply():
-    """A bearish setup with a POSITIVE forward return is the mechanism working backwards."""
-    anchors = [
-        _anchor(f"2026-04-{(i % 12) + 1:02d}", ["AAPL", "MSFT", "SPY"][i % 3], 10.0, 2.0, +7.0)
-        for i in range(40)
-    ]
-    report = s2.study2_continuous_diagnostic(anchors)
-    assert report["outcome"] == s2.OUTCOME_KILLED
-    assert report["mechanism_fired"]["sign"] == "positive"
+def test_the_old_promising_fixture_had_no_comparator_at_all_and_is_now_insufficient():
+    """**r14.2's own "PROMISING" fixture, replayed against the Scout rail.**
 
-
-def test_the_diagnostic_kills_an_economically_negligible_effect():
-    anchors = [
-        _anchor(f"2026-04-{(i % 12) + 1:02d}", ["AAPL", "MSFT", "SPY"][i % 3], 10.0, 2.0, -0.2)
-        for i in range(40)
-    ]
-    report = s2.study2_continuous_diagnostic(anchors, econ_floor_bps=3.0)
-    assert report["outcome"] == s2.OUTCOME_KILLED
-    assert "economic floor" in report["reason"]
-
-
-def test_a_correctly_signed_effect_earns_only_permission_to_freeze_never_graduation():
+    Forty anchors, every one of them firing, no comparator cell in existence -- and the retired rail
+    scored it ``PROMISING_FOR_MODE_B_FREEZE`` because 40 >= its 30-anchor floor and the fired cell's
+    raw mean was -9 bps. There was nothing to compare -9 against. Scout refuses on its own cell
+    floor, which is what a sufficiency rule is for."""
     anchors = [
         _anchor(f"2026-04-{(i % 12) + 1:02d}", ["AAPL", "MSFT", "SPY"][i % 3], 10.0, 2.0, -9.0)
         for i in range(40)
     ]
-    report = s2.study2_continuous_diagnostic(anchors, econ_floor_bps=3.0)
-    assert report["outcome"] == s2.OUTCOME_PROMISING
-    assert report["evidence_class"] == "historical_exposed_diagnostic", (
-        "a promising diagnostic is still, permanently, diagnostic"
+    for a in anchors:                      # the Scout screen reads the thresholded feature value
+        a["feature_value"] = 1.0
+        a.setdefault("tod_bucket", "midday")      # disclosure slices the screen always reports
+        a.setdefault("fallback_frac", 0.0)
+    assert all(a["price_extension_bps"] > 0 and a["delta_weakening_multiple"] >= 1 for a in anchors)
+
+    screen = scout.screen_candidate(
+        feature_name="divergence_at_level_bearish", transform="threshold",
+        params={"op": "ge", "value": 1.0}, sidedness=None, horizon_key="trades_20",
+        econ_floor={
+            "multiple": scout.ECON_FLOOR_SPREAD_MULTIPLE, "family_median_spread_bps": 1.0,
+            "floor_bps": 1.0, "unit": mf.BPS_UNIT, "proxy_sentence": scout.ECON_PROXY_SENTENCE,
+        },
+        anchors=anchors, family_id="r142-retired-fixture", n_variants_tried=1,
     )
-    assert "never graduate" in report["reason"]
+    assert screen["screen_result"]["n_comparator"] == 0, "there was never anything to compare to"
+    result = s2.study2_diagnostic(anchors, screen=screen)
+    assert result["outcome"] == s2.OUTCOME_INSUFFICIENT
+    assert result["proposed_direction"] is None
+    # The continuous half is unchanged and still reports the cell honestly.
+    assert result["mechanism_raw_return_bps"] == pytest.approx(-9.0)
+    assert result["evidence_class"] == "historical_exposed_diagnostic"
 
 
 def test_the_quadrants_reproduce_the_boolean_exactly_over_the_defined_domain():
@@ -726,7 +731,7 @@ def test_an_undefined_coordinate_is_counted_and_excluded_never_imputed():
     assert dist["median"] == 2.0
 
 
-def test_the_conditional_outcome_is_a_session_cluster_mean_not_a_flat_pooled_mean():
+def test_the_conditional_raw_return_is_a_session_cluster_mean_not_a_flat_pooled_mean():
     """One busy session must not dominate -- the same aggregation §5.3 and the folds already use."""
     anchors = [
         _anchor("2026-04-01", "AAPL", 10.0, 2.0, -10.0),
@@ -734,15 +739,15 @@ def test_the_conditional_outcome_is_a_session_cluster_mean_not_a_flat_pooled_mea
         _anchor("2026-04-01", "AAPL", 10.0, 2.0, -10.0),
         _anchor("2026-04-02", "MSFT", 10.0, 2.0, -2.0),
     ]
-    out = s2.conditional_outcome(anchors, lambda a: True)
-    assert out["effect_bps"] == pytest.approx(-6.0), "mean of (-10, -2), not the pooled -8.0"
+    out = s2.conditional_raw_return(anchors, lambda a: True)
+    assert out["raw_return_bps"] == pytest.approx(-6.0), "mean of (-10, -2), not the pooled -8.0"
     assert out["n_sessions"] == 2 and out["n_symbols"] == 2
 
 
 def test_an_outcome_in_the_wrong_unit_refuses_before_it_is_averaged():
     bad = [{**_anchor("2026-04-01", "AAPL", 10.0, 2.0, -5.0), "outcome_unit": "percent"}]
     with pytest.raises(mf.UnitMismatchError):
-        s2.conditional_outcome(bad, lambda a: True)
+        s2.conditional_raw_return(bad, lambda a: True)
 
 
 # =====================================================================================================
