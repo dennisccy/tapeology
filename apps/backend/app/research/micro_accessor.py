@@ -85,6 +85,8 @@ __all__ = [
     "RECORD_KIND_EXPOSURE",
     "RECORD_KIND_CORPUS_ERA",
     "UnregisteredCorpusEraError",
+    "CORPUS_ERA_FROZEN_FIELDS",
+    "ConflictingCorpusEraError",
     "register_fresh_corpus_era",
     "fresh_corpus_era_record",
     "corpus_exposure_baseline_established",
@@ -263,39 +265,87 @@ def _is_exposure_row(row: dict) -> bool:
     return row.get("record_kind", RECORD_KIND_EXPOSURE) == RECORD_KIND_EXPOSURE
 
 
+#: r14.1: the frozen identity fields of a corpus-era registration. A re-registration is idempotent
+#: ONLY when every one of these is byte-identical; anything else is a conflicting claim about what
+#: the corpus IS and refuses. `provenance_note` is deliberately absent -- free text may accompany a
+#: registration but may never establish, or alter, what makes it fresh.
+CORPUS_ERA_FROZEN_FIELDS = (
+    "corpus_id",
+    "universe_id",
+    "universe_registered_at",
+    "rule_commitment",
+    "vault_secret_commitment",
+    "expected_pair_count",
+    "freshness_boundary",
+)
+
+
+class ConflictingCorpusEraError(Exception):
+    """r14.1: ``corpus_id`` is already registered under a DIFFERENT bound identity -- refused. A
+    corpus id names one specific body of evidence; re-registering it against another universe, rule
+    commitment or freshness boundary would silently redefine what every ledgered fold result means.
+    """
+
+
 def register_fresh_corpus_era(
     registry: "ExposureRegistry",
     *,
     corpus_id: str,
+    universe_id: str,
+    universe_registered_at: str,
+    rule_commitment: str,
+    vault_secret_commitment: str,
+    expected_pair_count: int,
+    freshness_boundary: str,
     registered_at: str,
-    provenance: str,
+    provenance_note: str = "",
 ) -> dict:
-    """Append ONE permanent corpus-era registration for ``corpus_id`` (r14).
+    """Append ONE permanent, STRUCTURED corpus-era registration for ``corpus_id`` (r14.1).
 
-    ``provenance`` is the operator's own stated basis for the freshness claim -- e.g. the fold spec
-    hash and the recording universe id the era's dates were registered under. It is recorded
-    verbatim and never parsed: the ledger's job is to make the claim permanent and attributable, not
-    to adjudicate it. What the CODE guarantees is narrower and mechanical: from this instant on, a
-    window of this corpus reads as exposed only if a genuine exposure row says so.
+    **What r14 got wrong.** The first version took a free-text ``provenance`` string and said, in
+    its own docstring, that it never parsed it. That made the registration a bare assertion: a
+    caller could point a brand-new ``corpus_id`` at already-exposed legacy datasets, declare it
+    fresh, and every downstream class check would agree -- because nothing bound the corpus to any
+    physical body of data. Freshness has to be a fact about DATA, not a sentence about intent.
 
-    Names NO window on purpose. ``is_exposed_before`` and ``has_any_exposure_entries`` both filter to
-    exposure rows, so this row can never make a window read exposed and can never suppress the r2
-    seeding guard for a legacy corpus.
+    **What this binds.** Every field above is an identity of the registered recording universe the
+    corpus is drawn from: which universe, when it was registered, its nonced ``rule_commitment``,
+    its ``vault_secret_commitment``, how many pairs its rule promised, and the ``freshness_boundary``
+    a genuine member's ``created_utc`` must reach. ``micro_corpus.register_bound_corpus_era`` is the
+    caller that proves those against the actual vault ledger before this row is ever written, and
+    ``micro_corpus.eligible_oos_members`` is what turns the binding into a member set.
 
-    Idempotent-in-spirit but not content-deduped (the ``HashChainedLedger`` primitive's own "no
-    dedup, ever" rule): a caller registers an era exactly ONCE, and
-    ``fresh_corpus_era_record`` returns the FIRST registration if one already exists."""
+    ``provenance_note`` is recorded verbatim and is inert: notes may say why, never what.
+
+    Still names NO window, so it remains incapable of making any window read as exposed.
+
+    Idempotent when every ``CORPUS_ERA_FROZEN_FIELDS`` value matches; ``ConflictingCorpusEraError``
+    otherwise -- the ``register_universe``/``record_screen_provenance`` discipline, mirrored."""
+    fields = {
+        "record_kind": RECORD_KIND_CORPUS_ERA,
+        "corpus_id": corpus_id,
+        "universe_id": universe_id,
+        "universe_registered_at": universe_registered_at,
+        "rule_commitment": rule_commitment,
+        "vault_secret_commitment": vault_secret_commitment,
+        "expected_pair_count": int(expected_pair_count),
+        "freshness_boundary": freshness_boundary,
+        "registered_at": registered_at,
+        "provenance_note": provenance_note,
+    }
     existing = fresh_corpus_era_record(registry, corpus_id)
     if existing is not None:
-        return existing
-    return registry._ledger.append_row(
-        {
-            "record_kind": RECORD_KIND_CORPUS_ERA,
-            "corpus_id": corpus_id,
-            "registered_at": registered_at,
-            "provenance": provenance,
-        }
-    )
+        frozen = {k: fields[k] for k in CORPUS_ERA_FROZEN_FIELDS}
+        recorded = {k: existing.get(k) for k in CORPUS_ERA_FROZEN_FIELDS}
+        if recorded == frozen:
+            return existing
+        differing = sorted(k for k in CORPUS_ERA_FROZEN_FIELDS if recorded[k] != frozen[k])
+        raise ConflictingCorpusEraError(
+            f"corpus_id {corpus_id!r} is already registered under a different bound identity "
+            f"(differs on: {', '.join(differing)}) -- refused (r14.1): a corpus id names one "
+            "specific body of evidence and can never be re-pointed at another"
+        )
+    return registry._ledger.append_row(fields)
 
 
 def fresh_corpus_era_record(registry: "ExposureRegistry", corpus_id: str) -> dict | None:

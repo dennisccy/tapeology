@@ -71,6 +71,7 @@ from .micro_accessor import (
     register_fresh_corpus_era,
     resolve_micro_exposure_registry_dir,
 )
+from . import micro_corpus as mc
 from . import micro_features as mf
 from .micro_readiness import WF_TEST_MIN_SESSIONS, WF_TRAIN_MIN_SESSIONS
 from .micro_snapshots import append_run_log, exclude_withheld
@@ -1326,6 +1327,8 @@ def run_tick_family_fold_request(
     *,
     corpus_id: str = TICK_LEGACY_CORPUS_ID,
     dataset_store: DatasetStore | None = None,
+    exposure_registry: ExposureRegistry | None = None,
+    vault_secret: bytes | None = None,
 ) -> dict:
     """The tick-family fold request (goal.md J-05, iter-7) — the genuine production entry point
     goal.md's own acceptance clause names: "the tick-family fold request returns the typed
@@ -1368,6 +1371,62 @@ def run_tick_family_fold_request(
     # index is only ever written from a value the full verifier itself produced, so an indexed hit
     # returns exactly what the un-indexed path would have.
     tick_dataset_store = dataset_store if dataset_store is not None else _indexed_dataset_store(config)
+
+    # --- r14.1 (C): a BOUND corpus resolves its own membership, never the visible store ---------
+    #
+    # Pre-r14.1 this function took a `corpus_id` and then inventoried every visible dataset,
+    # so `corpus_id` meant "all datasets whose dates happen to match" -- which pooled legacy
+    # same-date siblings and other universes' members into a supposedly fresh corpus. A corpus era
+    # with a structured binding now resolves through `micro_corpus`, whose member set is
+    # precommitted from the universe rule, the HMAC and the frozen release plan.
+    if exposure_registry is not None and mc.corpus_is_bound(exposure_registry, corpus_id):
+        if vault_secret is None:
+            raise ValueError(
+                f"corpus_id {corpus_id!r} is a BOUND corpus era; resolving its membership needs "
+                "the vault secret (the HMAC not-selected partition is part of the definition)"
+            )
+        # The vault is resolved from THIS STORE's own root, never from `CONFIG` --
+        # `micro_snapshots.withheld_dataset_ids_for_store` documents exactly why: "keyed on THIS
+        # store's own directory, never CONFIG's, so a tmp_path-scoped caller never reads the
+        # operator's real vault". A caller-supplied store pointing elsewhere must not be paired
+        # with the operator's real ledgers.
+        vault_root = str(tick_dataset_store.root)
+        membership = mc.eligible_oos_members(
+            exposure_registry,
+            tick_dataset_store,
+            vault.shard_ledger_for_dataset_dir(vault_root),
+            vault.universe_ledger_for_dataset_dir(vault_root),
+            vault.disclosure_incident_ledger_for_dataset_dir(vault_root),
+            vault.release_plan_ledger_for_dataset_dir(vault_root),
+            corpus_id=corpus_id,
+            vault_secret=vault_secret,
+        )
+        bound_session_dates = mc.corpus_session_dates(membership)
+        floors = {
+            "wf_fold_min_observations": WF_FOLD_MIN_OBSERVATIONS,
+            "wf_fold_min_signal_sessions": WF_FOLD_MIN_SIGNAL_SESSIONS,
+            "wf_fold_min_symbols": WF_FOLD_MIN_SYMBOLS,
+        }
+        require_sufficient_sessions_for_folds(bound_session_dates, DIAGNOSTIC_GEOMETRY)
+        # The corpus's SCIENTIFIC identity: its actual (dataset_id, checksum) membership, so a
+        # swapped member moves the hash even when the calendar does not.
+        register_fold_spec(
+            ledger, corpus_id=corpus_id,
+            corpus_manifest_hash=membership["manifest_hash"],
+            geometry=DIAGNOSTIC_GEOMETRY, floors=floors,
+        )
+        return {
+            "corpus_id": corpus_id,
+            "universe_id": membership["universe_id"],
+            "session_count": len(bound_session_dates),
+            "member_count": membership["member_count"],
+            "manifest_hash": membership["manifest_hash"],
+            "plan_hash": membership["plan_hash"],
+            "integrity_errors": [],
+            "excluded": membership["excluded"],
+            "bound": True,
+        }
+
     # Spec section 7.5 point 6 (r4) + iter-9 audit finding B4: this inventory is a corpus-wide
     # enumerator, so a withheld shard must not contribute its session date to this corpus's floor
     # count or to the `corpus_manifest_hash` registered in the fold ledger -- section 7.7 makes the
@@ -1417,6 +1476,7 @@ def run_tick_family_fold_request(
         "corpus_id": corpus_id,
         "session_count": len(session_dates),
         "integrity_errors": errors,
+        "bound": False,
         # Spec section 7.5 point 6 (r4): how many registered datasets this inventory excluded
         # because their vault shards are withheld -- a count, never an id. Deliberately NOT
         # stamped into `register_fold_spec`'s row: that row is idempotent on `geometry_hash`

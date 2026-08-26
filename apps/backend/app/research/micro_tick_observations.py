@@ -20,11 +20,15 @@ no re-signing, and no unit conversion: the anchor arrives in ``return_bps`` and 
    physically incapable of touching a future fold's window -- not merely filtered afterwards. The
    returned anchors are then re-asserted against the same set (``TickObservationWindowError``),
    because a filter that is only applied at one end is a filter that can silently drift.
-2. *Withheld/sealed refusal.* Every requested dataset is tested against
-   ``micro_snapshots.withheld_dataset_ids_for_store`` -- the ONE shared withheld predicate -- and a
-   withheld or sealed id raises rather than being quietly dropped. Dropping it would shrink the
-   corpus behind the caller's back, which is exactly the class of defect the era's denominator rail
-   forbids.
+2. *Membership, not exclusion (r14.1).* r14 refused the WHOLE requested window if any dataset on a
+   requested date was withheld -- which made the real HMAC architecture unusable, because seal
+   assignment is per ``(symbol, session_date)`` and a healthy 8-symbol date is normally MIXED. This
+   reader no longer decides what is withheld at all: it is handed a PRECOMMITTED member list, so a
+   sealed member is a NON-MEMBER rather than an exclusion. For the legacy corpus that list comes
+   from ``legacy_exposed_members`` (through ``exclude_withheld``, the era's one shared exclusion
+   primitive); for a bound OOS corpus it comes from ``micro_corpus.eligible_oos_members``, which
+   derives it from the universe rule, the HMAC and the frozen release plan. Either way the sealed
+   ids never reach this function, so it cannot read one even by accident.
 3. *Completeness.* A dataset inside the requested window whose snapshot is missing or stale REFUSES
    (``TickObservationIncompleteError``). This is the one place this module deliberately diverges
    from ``scout.extract_anchors``, whose own contract is that a dataset with no current snapshot is
@@ -66,10 +70,10 @@ __all__ = [
     "PURPOSE_TEST",
     "UnsidedCandidateError",
     "TickObservationWindowError",
-    "TickObservationWithheldError",
     "TickObservationIncompleteError",
     "TickObservationOrderingError",
-    "manifest_for_sessions",
+    "legacy_exposed_members",
+    "members_in_window",
     "log_window_exposure",
     "tick_observations_for_sessions",
 ]
@@ -84,12 +88,6 @@ _EXPOSURE_SURFACE = "walkforward_tick_observation_read"
 class TickObservationWindowError(Exception):
     """An observation was produced for a session date outside the explicitly requested window --
     refused. Purge is asserted at BOTH ends of this reader, never assumed from one filter."""
-
-
-class TickObservationWithheldError(Exception):
-    """A requested dataset is a withheld/sealed member of an unresolved registered-universe pool --
-    refused, never silently excluded. Carries the COUNT and the requested session dates, never the
-    withheld dataset ids (spec §7.5)."""
 
 
 class TickObservationIncompleteError(Exception):
@@ -122,58 +120,79 @@ def _session_date_of(meta: dict) -> str:
     return parsed.astimezone(scout._ET_ZONE).date().isoformat()
 
 
-def manifest_for_sessions(
+def legacy_exposed_members(
     dataset_store: DatasetStore,
     *,
-    session_dates: list[str] | set[str],
+    session_dates: list[str] | set[str] | None = None,
     records: list[dict] | None = None,
 ) -> list[dict]:
-    """The corpus manifest NARROWED to ``session_dates`` -- the confinement in refusal 1, applied
-    before any read. Raises ``TickObservationWithheldError`` if any dataset whose session date falls
-    inside the window is withheld, rather than dropping it.
+    """The member set of the LEGACY exploratory corpus -- every servable dataset, optionally
+    narrowed to ``session_dates`` (r14.1).
 
-    ``records`` lets a caller that already holds a verified ``DatasetStore.list()`` pass it in
-    rather than paying a second full inventory (the r14 performance rail); omitted, one is taken."""
-    wanted = set(session_dates)
+    The legacy corpus has no registered universe and no release plan: §7.7 makes it permanently
+    exploratory, so "what is in it" is simply "what is not withheld". ``exclude_withheld`` is the
+    ONE shared exclusion primitive every corpus enumerator uses, consumed here so this module never
+    grows a private copy of "is this withheld".
+
+    A BOUND corpus does NOT come through here -- its membership is precommitted by
+    ``micro_corpus.eligible_oos_members`` from the universe, the HMAC and the frozen release plan,
+    and is handed to the reader already resolved."""
     if records is None:
         records, _errors = dataset_store.list()
-    in_window = [meta for meta in records if _session_date_of(meta) in wanted]
-    # `exclude_withheld` is the ONE shared exclusion primitive every corpus enumerator uses (spec
-    # §7.5 point 6) -- consumed here rather than `withheld_dataset_ids_for_store` so this reader
-    # takes NO second inventory of its own, and so it can never drift into a private copy of "is
-    # this withheld". What differs is only what we do with the answer: every other enumerator
-    # EXCLUDES and discloses a count, and a fold REFUSES.
-    kept, withheld_count = exclude_withheld(in_window, dataset_store)
-    if withheld_count:
-        raise TickObservationWithheldError(
-            f"{withheld_count} dataset(s) inside the requested {len(wanted)}-session window are "
-            "withheld members of an unresolved registered-universe pool -- refused (spec §7.5 "
-            "point 6): a fold never silently evaluates a corpus a withheld shard was quietly "
-            "removed from. Release or exclude those session dates explicitly."
-        )
-    return [{"dataset_id": meta["id"], "checksum": meta["checksum"]} for meta in kept]
+    kept, _withheld_count = exclude_withheld(records, dataset_store)
+    members = [
+        {
+            "dataset_id": meta["id"],
+            "checksum": meta["checksum"],
+            "symbol": meta["symbol"],
+            "session_date": _session_date_of(meta),
+        }
+        for meta in kept
+    ]
+    if session_dates is not None:
+        wanted = set(session_dates)
+        members = [m for m in members if m["session_date"] in wanted]
+    return sorted(members, key=lambda m: (m["session_date"], m["symbol"], m["dataset_id"]))
+
+
+def members_in_window(members: list[dict], session_dates: list[str] | set[str]) -> list[dict]:
+    """The precommitted members whose own session date is inside the requested window.
+
+    Membership ∩ window, in that order: a dataset must be in the corpus AND in the fold, so the read
+    can reach outside neither. A date on which every member happens to be sealed simply contributes
+    nothing -- which is the mixed-date case working correctly, not a corpus quietly shrinking,
+    because the sealed members were never members of this corpus at all."""
+    wanted = set(session_dates)
+    return [m for m in members if m["session_date"] in wanted]
 
 
 def _require_complete_snapshots(
-    corpus_manifest: list[dict],
+    members: list[dict],
     *,
     dataset_store: DatasetStore,
     snapshots_dir: str,
     config: Config,
 ) -> None:
-    """Refusal 3. Every dataset in the (already window-narrowed) manifest must carry a CURRENT
-    snapshot -- ``load_snapshot_meta`` is the same TR-7 re-verification ``scout.extract_anchors``
-    consults, read here for a different decision: Scout skips, a fold refuses."""
+    """Every EXPECTED member of this fold's window must carry a CURRENT snapshot -- else refuse.
+
+    This is the one place this module deliberately diverges from ``scout.extract_anchors``, whose
+    own contract is that a dataset with no current snapshot is "an honest skip, not a fabricated
+    row". An honest skip is right for a discovery screen and wrong for a fold: a fold that silently
+    evaluated 17 of 20 expected members reports an effect for a corpus it did not measure.
+
+    "Expected" means the PRECOMMITTED member set, so a sealed sibling on the same date is not a
+    missing member -- it was never a member. That distinction is what makes a mixed date usable
+    without weakening the completeness guarantee."""
     missing = [
-        entry["dataset_id"]
-        for entry in corpus_manifest
-        if load_snapshot_meta(snapshots_dir, dataset_store, entry["dataset_id"], config) is None
+        member["dataset_id"]
+        for member in members
+        if load_snapshot_meta(snapshots_dir, dataset_store, member["dataset_id"], config) is None
     ]
     if missing:
         raise TickObservationIncompleteError(
-            f"{len(missing)} of {len(corpus_manifest)} dataset(s) in the requested window have no "
-            "CURRENT snapshot -- refused (r14 completeness): a fold that silently skipped them "
-            "would report an effect for sessions it never measured. Build the snapshots first."
+            f"{len(missing)} of {len(members)} EXPECTED corpus member(s) in the requested window "
+            "have no CURRENT snapshot -- refused (r14 completeness): a fold that silently skipped "
+            "them would report an effect for members it never measured. Build the snapshots first."
         )
 
 
@@ -231,6 +250,8 @@ def log_window_exposure(
 
 def tick_observations_for_sessions(
     *,
+    members: list[dict],
+    corpus_id: str,
     dataset_store: DatasetStore,
     snapshots_dir: str,
     config: Config,
@@ -240,25 +261,34 @@ def tick_observations_for_sessions(
     horizon_key: str,
     sidedness: str,
     exposure_registry: ExposureRegistry,
-    corpus_id: str,
     purpose: str,
     logged_at: str,
     spec_registered_at: str | None = None,
-    records: list[dict] | None = None,
     rows_cache: dict[str, list[dict]] | None = None,
     resolver=None,
     playbook_store=None,
     setup_id: str | None = None,
 ) -> dict:
-    """The production tick observation read for ONE explicitly named set of session dates.
+    """The production tick observation read for ONE explicitly named set of session dates, over a
+    PRECOMMITTED member set (r14.1).
 
-    Returns ``{"observations", "session_dates", "datasets_read", "exposure_windows_logged"}`` --
-    ``observations`` in walk-forward's canonical shape, everything else disclosure so a caller can
-    report WHAT was read rather than assert it.
+    ``members`` is the corpus's own eligible-member list -- from
+    ``micro_corpus.eligible_oos_members`` for a bound OOS corpus, or ``legacy_exposed_members`` for
+    the permanently-exploratory legacy corpus. This function never resolves membership itself and
+    never consults the visible store for "what else is on this date": a sealed member's id simply
+    never reaches it, which is why a mixed 6-released / 2-sealed date is read as exactly six.
 
-    ``sidedness`` is validated first and is a required ``long``/``short``: this reader feeds Mode B,
-    which evaluates an already-frozen, already-directed hypothesis. ``validate_candidate_direction``
-    admits ``None`` (a legal unsided Scout candidate); this boundary does not."""
+    **Exposure is committed BEFORE the first outcome row is read (r14.1, F).** r14 read the anchors
+    and then logged, so a crash in between left a window that had been read while the registry said
+    it had not -- and a later spec would then have classified it ``historical_oos``. The order is
+    now: validate · resolve the window's members · prove completeness · **append the exposure** ·
+    only then read. A read that fails after the precommit leaves the window burned, which is the
+    conservative direction: a window wrongly marked exposed costs evidence, a window wrongly marked
+    fresh costs the entire scientific claim.
+
+    Returns the observations plus the DISCLOSURE a fold needs to report honestly: which sessions
+    were requested, how many members were read, the realized symbol/session breadth of the
+    observations themselves, and which exposure windows this read newly burned."""
     mf.validate_candidate_direction(sidedness)
     if sidedness is None:
         raise UnsidedCandidateError(
@@ -268,21 +298,30 @@ def tick_observations_for_sessions(
         )
     if purpose not in _PURPOSES:
         raise ValueError(f"purpose {purpose!r} is outside the closed vocabulary {_PURPOSES!r}")
-    # r14: the corpus must be able to speak honestly about its own exposure history before this
-    # read contributes to it. A corpus that is neither r2-initialized nor registered-fresh refuses.
+    # The corpus must be able to speak honestly about its own exposure history before this read
+    # contributes to it.
     require_corpus_exposure_baseline(exposure_registry, corpus_id)
 
     requested = sorted(set(session_dates))
-    corpus_manifest = manifest_for_sessions(
-        dataset_store, session_dates=requested, records=records
-    )
+    in_window = members_in_window(members, requested)
     _require_complete_snapshots(
-        corpus_manifest,
-        dataset_store=dataset_store,
-        snapshots_dir=snapshots_dir,
-        config=config,
+        in_window, dataset_store=dataset_store, snapshots_dir=snapshots_dir, config=config
     )
 
+    # --- F: THE PRECOMMIT. Nothing below this line may run before the registry has recorded that
+    # this window is being revealed. ------------------------------------------------------------
+    newly_logged = log_window_exposure(
+        exposure_registry,
+        corpus_id=corpus_id,
+        session_dates=requested,
+        logged_at=logged_at,
+        purpose=purpose,
+        spec_registered_at=spec_registered_at,
+    )
+
+    corpus_manifest = [
+        {"dataset_id": m["dataset_id"], "checksum": m["checksum"]} for m in in_window
+    ]
     anchors = scout.extract_anchors(
         feature_name=feature_name,
         structure_context_kind=structure_context_kind,
@@ -302,14 +341,20 @@ def tick_observations_for_sessions(
     scout.require_canonical_anchor_units(anchors)
 
     allowed = set(requested)
+    member_ids = {m["dataset_id"] for m in in_window}
     observations: list[dict] = []
     for anchor in anchors:
         session_date = anchor.get("session_date")
         if session_date not in allowed:
             raise TickObservationWindowError(
                 f"anchor with session_date={session_date!r} is outside the requested window -- "
-                "refused (r14): the manifest was narrowed before the read, so this can only mean "
-                "the read reached past its own window"
+                "refused: the manifest was narrowed to this corpus's own members inside this "
+                "window before the read, so this can only mean the read reached past it"
+            )
+        if anchor.get("dataset_id") is not None and anchor["dataset_id"] not in member_ids:
+            raise TickObservationWindowError(
+                f"anchor from dataset {anchor['dataset_id']!r} is not a member of corpus "
+                f"{corpus_id!r} in this window -- refused: purge is asserted at BOTH ends"
             )
         if anchor.get("outcome_bps") is None:
             continue
@@ -323,17 +368,21 @@ def tick_observations_for_sessions(
         )
     wf.require_canonical_observation_units(observations)
 
-    newly_logged = log_window_exposure(
-        exposure_registry,
-        corpus_id=corpus_id,
-        session_dates=requested,
-        logged_at=logged_at,
-        purpose=purpose,
-        spec_registered_at=spec_registered_at,
-    )
     return {
         "observations": observations,
+        "corpus_id": corpus_id,
         "session_dates": requested,
+        "members_expected": len(in_window),
         "datasets_read": len(corpus_manifest),
         "exposure_windows_logged": newly_logged,
+        # r14.1 (A): the realized breadth, computed from the observations that actually exist --
+        # never assumed from the panel size. On a mixed date the symbol breadth is whatever the
+        # HMAC left not-selected, and the fold reports that rather than the panel's 8.
+        "realized_breadth": {
+            "n_observations": len(observations),
+            "n_sessions": len({o["session_date"] for o in observations}),
+            "n_symbols": len({o["symbol"] for o in observations}),
+            "symbols": sorted({o["symbol"] for o in observations}),
+            "sessions_with_observations": sorted({o["session_date"] for o in observations}),
+        },
     }

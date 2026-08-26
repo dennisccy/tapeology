@@ -405,6 +405,76 @@
 > exposed, which is what lifts the floor. `VAULT_SEAL_HEX_BELOW` is unchanged.
 >
 > Detail → §0, §1, §6.7, §7.4, §7.5. Traps → TR-37, TR-38, TR-39.
+>
+> **Revision r14.1 (2026-08-26, owner ruling — corpus identity is bound to physical data, partial
+> pools are usable, and the reserved decoy is precommitted).** A post-commit audit found r14's fixes
+> correct but the OOS architecture they enabled still unexecutable and still reachable by three
+> laundering routes. Nothing here re-keys a candidate; no constant is re-valued;
+> `config_fingerprint` stays `08e471b10130e1e2`. Six changes:
+>
+> **(1) A mixed released/sealed date is USABLE (§7.4, §6.2).** Seal assignment is per
+> `(symbol, session_date)`, so a healthy 8-symbol date normally holds ~6 not-selected and ~2 sealed
+> members. r14's tick reader refused the WHOLE date if any member was withheld, which made the real
+> HMAC design unusable. The fix is **not** "silently drop the withheld ones" — silence is how a
+> corpus shrinks without saying so. A fold now reads a **PRECOMMITTED eligible-member set**, so a
+> sealed member is a NON-MEMBER rather than an exclusion, and the fold reports its **realized**
+> symbol/session breadth computed from the observations that exist rather than assumed from the
+> panel size. `WF_FOLD_MIN_*` and `WF_MIN_SYMBOLS` are unchanged and applied to that realized
+> breadth.
+>
+> **(2) `corpus_id` is BOUND to physical data (§6.7).** r14's corpus-era registration took a
+> free-text provenance string it explicitly did not parse — so a caller could point a new
+> `corpus_id` at already-exposed datasets and declare them fresh. Registration is now STRUCTURED and
+> immutable: `{corpus_id, universe_id, universe_registered_at, rule_commitment,
+> vault_secret_commitment, expected_pair_count, freshness_boundary}`, and the registrar proves the
+> universe exists before the row is written. **Conflicting re-registration of the same `corpus_id`
+> refuses**; idempotency requires every frozen field byte-identical. Free-text notes may accompany a
+> registration and may never establish freshness.
+>
+> **(3) Membership scopes every inventory (§6.2, §7.5).** A `corpus_id` no longer means "every
+> visible dataset whose date happens to match". A dataset is a member only if the frozen release
+> plan marks its position releasable, its `schema_basis` is the recorder's own (a legacy dataset at
+> a registered pair is a §7.2.2 COLLISION, never a member), its `created_utc` reaches the
+> `freshness_boundary`, and the vault no longer withholds it. **`corpus_manifest_hash` now hashes
+> the actual `(dataset_id, checksum)` membership**, not the date list — so a swapped member moves
+> the hash even when the calendar does not.
+>
+> **(4) Release derives dataset identity from the store (§7.4).** r14's release accepted
+> `symbol`/`session_date`/`content_checksum`/`event_count` as parameters and proved only that the
+> *supplied pair* was unselected — so a caller holding dataset A could name unselected pair B. The
+> public boundary is now `release_unselected_dataset(dataset_store, dataset_id, …)`, which DERIVES
+> every one of those from `DatasetStore.get` and never asks. Disclosure-incident lookup is
+> case-normalized and universe-scoped.
+>
+> **(5) The release plan is PRECOMMITTED, and so is the decoy (§7.2.2).** r14 refused the release
+> that would pin the hidden partition, but "release until the transition refuses" let the operator
+> decide, one release at a time and with earlier releases visible, WHICH member became the withheld
+> decoy. That is a hidden selection freedom. Before any release, one immutable **release-plan
+> record** now partitions the whole pool deterministically into `sealed_path` · `barred` ·
+> `reserved_decoy` · `releasable`, from the registered rule, the HMAC and the incident ledger and
+> from nothing else. The decoy is the lowest **`RELEASE_PLAN_RULE_V1`** rank —
+> `HMAC-SHA256(vault_secret, "rapid-microscope-decoy-r14.1:{universe}:{symbol}:{date}")`,
+> **domain-separated from `compute_seal`** so a revealed decoy leaks nothing about any other
+> position's seal bit — and the rule name is hashed into the plan identity. A **hiding commitment**
+> (nonce ‖ canonical plan) is persisted pre-release in its own fifth hash chain; only class SIZES
+> are served while the pool is unresolved. Release order can no longer change which member stays
+> withheld. **The reserve lifts only when nothing is hidden** — otherwise whole-pool release (§7.2)
+> would be permanently unreachable, so the rule's own purpose is what releases it, never an
+> operator's judgment.
+>
+> **(6) Exposure is committed BEFORE the first outcome read (§6.7).** r14 read the outcomes and then
+> logged, so a crash between the two left a window that had been read while the registry said it had
+> not — and a later spec would have classified it `historical_oos`. The order is now: validate ·
+> resolve members · prove completeness · **append the exposure** · only then read. A read that fails
+> after the precommit leaves the window burned. That is the conservative direction: a window wrongly
+> marked exposed costs evidence, a window wrongly marked fresh costs the scientific claim.
+>
+> Operator support: the exact-80-pair assumption is lifted for a LATER era (the starter tranche's own
+> 80-pair invariants are unchanged and still enforced for it), a later era writes to its own
+> artifact directory, and four production stages exist for corpus-era registration, release-plan
+> commitment, release and sacrificial probe logging — all dry by default.
+>
+> Detail → §6.2, §6.7, §7.2.2, §7.4, §7.5. Traps → TR-40, TR-41, TR-42.
 
 ---
 
@@ -1533,6 +1603,9 @@ boundary by its `observed_through`.
 | TR-37 session-count semantics + executable readiness floors (r14 §0/§1/§6.6) | `distinct_session_dates` and `full_session_equivalents` are BOTH served, carry different values on a partial-window corpus, and neither is substituted for the other · `build_folds` at 60 session dates yields ZERO folds, at 65 yields exactly one (train 40 / embargo 5 / test 20), at 104 yields two and at 105 yields `WF_MIN_SUFFICIENT_FOLDS` · the readiness floor row serves `first_fold_min_session_dates=65`, `survivor_min_session_dates=105` and the ACTUAL `folds_constructible`, while the retained 60 carries the `train_plus_test_arithmetic_only` basis · no geometry constant moves and `config_fingerprint` is unchanged |
 | TR-38 corpus-era freshness + production exposure logging (r14 §6.7) | A legacy corpus with an empty registry fails closed and counts ZERO eligible windows · a corpus carrying an explicit era registration with zero exposure rows counts its unexposed windows honestly · an era registration can never make any window read as exposed, and never suppresses the r2 re-seed guard · a TEST read logs exposure strictly after the spec's `registered_at`, and refuses when it cannot prove that ordering · a window revealed once classifies `historical_exposed_diagnostic` for every later spec · a TRAIN read exposes its window identically, so no training read can later pass as a clean test read · re-reading one window five times appends ONE row, not five · a retention probe is logged as a real exposure and its date is barred from the clean-OOS set thereafter |
 | TR-39 exploratory release of NOT-selected pool members (r14 §7.4/§7.5 point 7/§7.2.2) | An HMAC-NOT-selected registered-pool member releases to `exploratory_released` and stops being withheld · an HMAC-SELECTED member is REFUSED that path · a dataset already carrying any shard row is refused, and a released row can afterwards be neither sealed nor assigned — no sealed/blind credit, no single shot consumed · a pair outside `expected_recording_pairs()` is refused · a secret not matching the universe's committed `vault_secret_commitment` is refused · releasing every unselected member is refused at the LAST one, leaving at least one decoy, so the hidden set is never determinable by subtraction · whole-pool release becomes reachable once every selected member is exposed, and the revealed rule recomputes exactly to the registered `rule_commitment` · `VAULT_SEAL_HEX_BELOW` is unchanged |
+| TR-40 partial-pool OOS on a mixed date (r14.1 §7.4/§6.2) | A date holding 6 HMAC-not-selected released members and 2 sealed ones is USABLE: the reader reads exactly the 6, the 2 sealed dataset ids receive ZERO read calls, and the fold's realized symbol breadth is reported as 6 rather than the panel's 8 · a bound corpus's members never include a legacy same-date sibling, a member of another registered universe, a dataset created before the freshness boundary, or a still-withheld one · every expected member missing a snapshot REFUSES rather than silently shrinking the corpus · a 105-date universe with a real HMAC partition produces `WF_MIN_SUFFICIENT_FOLDS` folds with no sealed id in any fold window |
+| TR-41 corpus identity binding + anti-laundering (r14.1 §6.7/§6.2) | An unbound `corpus_id` has no membership and refuses · a corpus era can only bind to a universe that exists · conflicting re-registration of the same `corpus_id` refuses while a byte-identical replay is idempotent · an already-exposed legacy dataset given a brand-new `corpus_id` can neither enter its membership nor be released into it · `corpus_manifest_hash` moves when a member id, a member checksum or the member count changes, and is order-independent |
+| TR-42 precommitted release plan + store-derived release (r14.1 §7.2.2/§7.4) | The release boundary takes NO caller-supplied `symbol`/`session_date`/`checksum`/`event_count` -- all are derived from the store · a dataset whose store identity is not a pool member, is not recorder output, or predates the universe REFUSES · release without a committed plan refuses · the reserved decoy refuses while anything is sealed and becomes releasable exactly when nothing is · the same universe + same secret yields the same decoy and the same final released set under ANY release order · a conflicting plan commitment refuses and the commitment serves class SIZES only · exposure is present in the registry before the first outcome row is read, and survives a crash mid-read |
 | TR-26 depletion revealing quote (r6 §3) | Price-change termination: `available_at` equals the first CHANGED-price quote, not the last same-price one · bound termination: `available_at` equals the bound-hitting quote · truncating immediately BEFORE the revealing quote makes the depletion value non-existent/unavailable, and including it makes the value appear deterministically |
 
 Plus the standing suite: engine golden trace + observer equivalence + frozen-default profile,

@@ -147,6 +147,30 @@ def _registry(tmp_path) -> ma.ExposureRegistry:
     return ma.ExposureRegistry(str(tmp_path / "exposure"))
 
 
+_FRESH_SECRET = b"r14-fresh-era-secret"
+
+
+def _register_fresh(registry, tmp_path, corpus_id: str, *, registered_at="2026-09-01T00:00:00.000000Z"):
+    """r14.1: a corpus era is BOUND to a real registered universe, so freshness is a fact about
+    data rather than a free-text claim. This helper mints the throwaway universe the binding needs.
+    """
+    from app.research import micro_corpus as mc
+
+    root = str(tmp_path / f"vault-{corpus_id}")
+    universe_ledger = vault.VaultUniverseLedger(root)
+    universe_id = f"universe-for-{corpus_id}"
+    vault.register_universe(
+        universe_ledger, universe_id=universe_id,
+        symbol_rule=["PG", "AAPL"], date_rule=[f"2026-07-{d:02d}" for d in range(1, 11)],
+        vault_secret_commitment=vault.commit_vault_secret(_FRESH_SECRET),
+        registered_at="2026-08-01T00:00:00.000000Z",
+    )
+    return mc.register_bound_corpus_era(
+        registry, universe_ledger, corpus_id=corpus_id, universe_id=universe_id,
+        registered_at=registered_at,
+    )
+
+
 def test_a_legacy_corpus_with_an_empty_registry_fails_closed(tmp_path):
     """Unknown exposure history is never "never exposed". A corpus nobody initialized has no
     baseline, so nothing may claim out-of-sample eligibility under it."""
@@ -174,12 +198,7 @@ def test_a_registered_fresh_corpus_with_zero_exposures_is_not_treated_as_legacy_
     saying so takes a provenance record -- never a sacrificed session."""
     registry = _registry(tmp_path)
     corpus_id = "rapid-microscope-tick-oos-v1"
-    row = ma.register_fresh_corpus_era(
-        registry,
-        corpus_id=corpus_id,
-        registered_at="2026-09-01T00:00:00.000000Z",
-        provenance="fold spec geometry_hash=abc123; universe=fixture-universe",
-    )
+    row = _register_fresh(registry, tmp_path, corpus_id, registered_at="2026-09-01T00:00:00.000000Z")
     assert row["record_kind"] == ma.RECORD_KIND_CORPUS_ERA
     assert ma.corpus_exposure_baseline_established(registry, corpus_id) is True
     ma.require_corpus_exposure_baseline(registry, corpus_id)  # does not raise
@@ -205,9 +224,7 @@ def test_a_corpus_era_registration_can_never_make_a_window_read_as_exposed(tmp_p
     provenance can neither fabricate an exposure nor suppress the legacy r2 seeding guard."""
     registry = _registry(tmp_path)
     corpus_id = "fresh-era"
-    ma.register_fresh_corpus_era(
-        registry, corpus_id=corpus_id, registered_at="2026-09-01T00:00:00.000000Z", provenance="x"
-    )
+    _register_fresh(registry, tmp_path, corpus_id, registered_at="2026-09-01T00:00:00.000000Z")
     assert (
         registry.is_exposed_before(
             corpus_id=corpus_id, window="2026-09-15", instant="2026-12-01T00:00:00.000000Z"
@@ -224,9 +241,7 @@ def test_empty_exposure_rows_alone_are_never_proof_of_freshness(tmp_path):
     """The acceptance invariant, stated directly: two corpora, both with zero exposure rows, and
     only the one carrying an explicit registration is eligible."""
     registry = _registry(tmp_path)
-    ma.register_fresh_corpus_era(
-        registry, corpus_id="declared-fresh", registered_at="2026-09-01T00:00:00.000000Z", provenance="x"
-    )
+    _register_fresh(registry, tmp_path, "declared-fresh", registered_at="2026-09-01T00:00:00.000000Z")
     assert ma.corpus_exposure_baseline_established(registry, "declared-fresh") is True
     assert ma.corpus_exposure_baseline_established(registry, "never-heard-of-it") is False
 
@@ -249,9 +264,7 @@ def test_a_legacy_r2_initialized_corpus_stays_eligible_without_any_era_registrat
 def test_a_test_window_read_logs_exposure_strictly_after_the_spec_froze(tmp_path):
     registry = _registry(tmp_path)
     corpus_id = "fresh-era"
-    ma.register_fresh_corpus_era(
-        registry, corpus_id=corpus_id, registered_at="2026-09-01T00:00:00.000000Z", provenance="x"
-    )
+    _register_fresh(registry, tmp_path, corpus_id, registered_at="2026-09-01T00:00:00.000000Z")
     registered_at = "2026-09-02T00:00:00.000000Z"
     revealed_at = "2026-09-02T00:00:01.000000Z"
     windows = ["2026-09-10", "2026-09-11"]
@@ -279,9 +292,7 @@ def test_a_later_spec_sees_the_same_window_as_diagnostic_not_oos(tmp_path):
     exactly once."""
     registry = _registry(tmp_path)
     corpus_id = "fresh-era"
-    ma.register_fresh_corpus_era(
-        registry, corpus_id=corpus_id, registered_at="2026-09-01T00:00:00.000000Z", provenance="x"
-    )
+    _register_fresh(registry, tmp_path, corpus_id, registered_at="2026-09-01T00:00:00.000000Z")
     windows = ["2026-09-10"]
     tobs.log_window_exposure(
         registry,
@@ -305,9 +316,7 @@ def test_a_later_spec_sees_the_same_window_as_diagnostic_not_oos(tmp_path):
 def test_a_training_read_exposes_its_window_so_it_can_never_later_pass_as_a_clean_test_read(tmp_path):
     registry = _registry(tmp_path)
     corpus_id = "fresh-era"
-    ma.register_fresh_corpus_era(
-        registry, corpus_id=corpus_id, registered_at="2026-09-01T00:00:00.000000Z", provenance="x"
-    )
+    _register_fresh(registry, tmp_path, corpus_id, registered_at="2026-09-01T00:00:00.000000Z")
     tobs.log_window_exposure(
         registry,
         corpus_id=corpus_id,
@@ -328,9 +337,7 @@ def test_a_training_read_exposes_its_window_so_it_can_never_later_pass_as_a_clea
 
 def test_a_test_read_that_cannot_prove_it_followed_the_freeze_is_refused(tmp_path):
     registry = _registry(tmp_path)
-    ma.register_fresh_corpus_era(
-        registry, corpus_id="c", registered_at="2026-09-01T00:00:00.000000Z", provenance="x"
-    )
+    _register_fresh(registry, tmp_path, "c", registered_at="2026-09-01T00:00:00.000000Z")
     with pytest.raises(tobs.TickObservationOrderingError, match="strictly after"):
         tobs.log_window_exposure(
             registry,
@@ -355,9 +362,7 @@ def test_repeated_reads_of_one_window_never_grow_the_exposure_ledger_without_bou
     """A Mode A sequence re-reads the same training window at every origin. Exposure is a boolean
     fact, so the second read adds no row."""
     registry = _registry(tmp_path)
-    ma.register_fresh_corpus_era(
-        registry, corpus_id="c", registered_at="2026-09-01T00:00:00.000000Z", provenance="x"
-    )
+    _register_fresh(registry, tmp_path, "c", registered_at="2026-09-01T00:00:00.000000Z")
     for i in range(1, 6):
         tobs.log_window_exposure(
             registry,
@@ -372,272 +377,21 @@ def test_repeated_reads_of_one_window_never_grow_the_exposure_ledger_without_bou
 
 
 # =====================================================================================================
-# 5. THE EXPLORATORY RELEASE LIFECYCLE
+# 5. THE EXPLORATORY RELEASE LIFECYCLE -- SUPERSEDED BY r14.1
 # =====================================================================================================
-
-
-def _partitioned_universe(n_symbols: int = 8, n_dates: int = 10):
-    """A synthetic universe plus its own HMAC partition under ``_SECRET`` -- computed, never
-    assumed, so these tests exercise the real ``compute_seal`` rather than a stand-in."""
-    symbols = [f"SYM{i}" for i in range(n_symbols)]
-    dates = [f"2026-03-{d:02d}" for d in range(1, n_dates + 1)]
-    pairs = [(s, d) for s in symbols for d in dates]
-    selected = [p for p in pairs if vault.compute_seal(_SECRET, p[0], p[1])]
-    unselected = [p for p in pairs if not vault.compute_seal(_SECRET, p[0], p[1])]
-    return symbols, dates, pairs, selected, unselected
-
-
-def _ledgers(tmp_path):
-    root = str(tmp_path / "vault")
-    return (
-        vault.VaultShardLedger(root),
-        vault.VaultUniverseLedger(root),
-        vault.VaultDisclosureIncidentLedger(root),
-    )
-
-
-def _register(universe_ledger, symbols, dates, universe_id="fixture-universe"):
-    return vault.register_universe(
-        universe_ledger,
-        universe_id=universe_id,
-        symbol_rule=symbols,
-        date_rule=dates,
-        vault_secret_commitment=vault.commit_vault_secret(_SECRET),
-        registered_at="2026-03-20T00:00:00.000000Z",
-    )
-
-
-def test_an_hmac_not_selected_pool_member_can_be_released_as_ordinary_evidence(tmp_path):
-    shard_ledger, universe_ledger, incident_ledger = _ledgers(tmp_path)
-    symbols, dates, _pairs, _selected, unselected = _partitioned_universe()
-    _register(universe_ledger, symbols, dates)
-    symbol, session_date = unselected[0]
-
-    row = vault.release_unselected_shard(
-        shard_ledger, universe_ledger, incident_ledger,
-        dataset_id="ds-release-1", universe_id="fixture-universe",
-        symbol=symbol, session_date=session_date,
-        content_checksum="c" * 64, event_count=100_000, vault_secret=_SECRET,
-        released_at="2026-03-21T00:00:00.000000Z",
-    )
-    assert row["exposure_state"] == vault.STATE_EXPLORATORY_RELEASED
-    # Never sealed, never bound, no single shot consumed.
-    assert row["sealed_at"] is None
-    assert row["family_root_id"] is None
-    assert row["assigned_at"] is None
-    # And it is no longer withheld by the one shared predicate every enumerator uses.
-    assert "ds-release-1" not in vault.withheld_dataset_ids(shard_ledger)
-
-
-def test_an_hmac_selected_member_cannot_use_the_exploratory_release_shortcut(tmp_path):
-    shard_ledger, universe_ledger, incident_ledger = _ledgers(tmp_path)
-    symbols, dates, _pairs, selected, _unselected = _partitioned_universe()
-    _register(universe_ledger, symbols, dates)
-    symbol, session_date = selected[0]
-    with pytest.raises(vault.SelectedShardReleaseRefusedError, match="HMAC-SELECTED"):
-        vault.release_unselected_shard(
-            shard_ledger, universe_ledger, incident_ledger,
-            dataset_id="ds-selected", universe_id="fixture-universe",
-            symbol=symbol, session_date=session_date,
-            content_checksum="d" * 64, event_count=100_000, vault_secret=_SECRET,
-        )
-    assert vault.withheld_dataset_ids(shard_ledger) == frozenset()
-
-
-def test_an_already_sealed_member_cannot_be_re_routed_through_the_release_path(tmp_path):
-    """The lifecycle guard runs in BOTH directions: a sealed row blocks release, and a released row
-    blocks sealing and assignment."""
-    shard_ledger, universe_ledger, incident_ledger = _ledgers(tmp_path)
-    symbols, dates, _pairs, selected, unselected = _partitioned_universe()
-    _register(universe_ledger, symbols, dates)
-
-    # Direction 1: a dataset that already carries ANY shard row cannot be released. Proven at an
-    # UNSELECTED pair on purpose -- at a selected one the HMAC refusal fires first (its own test
-    # below), which would leave this guard untested.
-    guard_symbol, guard_date = unselected[-1]
-    vault.seal_shard(
-        shard_ledger, dataset_id="ds-has-a-row", universe_id="fixture-universe",
-        content_checksum="e" * 64, event_count=100_000, vault_secret=_SECRET,
-        sealed_at="2026-03-21T00:00:00.000000Z",
-    )
-    with pytest.raises(vault.ShardLifecycleOrderError):
-        vault.release_unselected_shard(
-            shard_ledger, universe_ledger, incident_ledger,
-            dataset_id="ds-has-a-row", universe_id="fixture-universe",
-            symbol=guard_symbol, session_date=guard_date,
-            content_checksum="e" * 64, event_count=100_000, vault_secret=_SECRET,
-        )
-
-    unsel_symbol, unsel_date = unselected[0]
-    vault.release_unselected_shard(
-        shard_ledger, universe_ledger, incident_ledger,
-        dataset_id="ds-released", universe_id="fixture-universe",
-        symbol=unsel_symbol, session_date=unsel_date,
-        content_checksum="f" * 64, event_count=100_000, vault_secret=_SECRET,
-        released_at="2026-03-21T00:00:00.000000Z",
-    )
-    # It can never be sealed afterwards, and it can never be assigned: no sealed/blind credit.
-    with pytest.raises(vault.ShardLifecycleOrderError):
-        vault.seal_shard(
-            shard_ledger, dataset_id="ds-released", universe_id="fixture-universe",
-            content_checksum="f" * 64, event_count=100_000, vault_secret=_SECRET,
-        )
-    with pytest.raises(vault.ShardLifecycleOrderError):
-        vault.assign_shard(
-            shard_ledger, dataset_id="ds-released", family_root_id="root-1",
-            symbol=unsel_symbol, session_date=unsel_date,
-        )
-
-
-def test_a_release_is_refused_for_a_pair_outside_the_registered_pool(tmp_path):
-    shard_ledger, universe_ledger, incident_ledger = _ledgers(tmp_path)
-    symbols, dates, _pairs, _selected, _unselected = _partitioned_universe()
-    _register(universe_ledger, symbols, dates)
-    with pytest.raises(vault.NotAPoolMemberError, match="registered pool"):
-        vault.release_unselected_shard(
-            shard_ledger, universe_ledger, incident_ledger,
-            dataset_id="ds-outsider", universe_id="fixture-universe",
-            symbol="NOT-IN-RULE", session_date="2026-03-01",
-            content_checksum="a" * 64, event_count=1, vault_secret=_SECRET,
-        )
-
-
-def test_a_release_under_the_wrong_vault_secret_is_refused(tmp_path):
-    """The non-selection proof is only a proof under the key the universe committed to."""
-    shard_ledger, universe_ledger, incident_ledger = _ledgers(tmp_path)
-    symbols, dates, _pairs, _selected, unselected = _partitioned_universe()
-    _register(universe_ledger, symbols, dates)
-    symbol, session_date = unselected[0]
-    with pytest.raises(vault.VaultSecretUnavailable, match="vault_secret_commitment"):
-        vault.release_unselected_shard(
-            shard_ledger, universe_ledger, incident_ledger,
-            dataset_id="ds-wrong-key", universe_id="fixture-universe",
-            symbol=symbol, session_date=session_date,
-            content_checksum="a" * 64, event_count=1, vault_secret=b"a-different-secret",
-        )
-
-
-def test_partial_releases_never_pin_a_still_sealed_member(tmp_path):
-    """§7.2.2's floor, enforced at the transition. Releasing every unselected member would leave the
-    unknown positions exactly equal to the hidden selected set -- pinning all of them by
-    subtraction. The last release is refused, so at least one decoy always remains."""
-    shard_ledger, universe_ledger, incident_ledger = _ledgers(tmp_path)
-    symbols, dates, pairs, selected, unselected = _partitioned_universe()
-    _register(universe_ledger, symbols, dates)
-    assert len(selected) >= 2 and len(unselected) >= 2
-
-    released = 0
-    refused_at = None
-    for i, (symbol, session_date) in enumerate(unselected):
-        try:
-            vault.release_unselected_shard(
-                shard_ledger, universe_ledger, incident_ledger,
-                dataset_id=f"ds-{i}", universe_id="fixture-universe",
-                symbol=symbol, session_date=session_date,
-                content_checksum=f"{i:064d}", event_count=1000, vault_secret=_SECRET,
-                released_at="2026-03-21T00:00:00.000000Z",
-            )
-            released += 1
-        except vault.ResidualPoolUncertaintyError:
-            refused_at = i
-            break
-
-    assert refused_at is not None, "releasing every unselected member must eventually be refused"
-    assert released == len(unselected) - 1, "exactly one unselected member stays withheld as a decoy"
-    state = vault.pool_partition_disclosure_state(
-        shard_ledger, universe_ledger, incident_ledger,
-        universe_id="fixture-universe", vault_secret=_SECRET,
-    )
-    assert state["hidden_set_fully_determined"] is False
-    assert state["any_identity_certain"] is False
-    assert state["unknown_positions"] > state["still_hidden_selected_shards"]
-
-
-def test_releasable_capacity_is_reported_before_the_wall_not_at_it(tmp_path):
-    shard_ledger, universe_ledger, incident_ledger = _ledgers(tmp_path)
-    symbols, dates, pairs, selected, unselected = _partitioned_universe()
-    _register(universe_ledger, symbols, dates)
-    state = vault.pool_partition_disclosure_state(
-        shard_ledger, universe_ledger, incident_ledger,
-        universe_id="fixture-universe", vault_secret=_SECRET,
-    )
-    capacity = vault.releasable_unselected_capacity(state)
-    assert capacity == len(pairs) - (len(selected) + 1)
-    assert capacity == len(unselected) - 1
-
-
-def test_whole_pool_release_becomes_reachable_under_the_lawful_lifecycle(tmp_path):
-    """Before r14 this was UNREACHABLE for any ~25 %-sealed universe: unselected members could never
-    reach a released state, so the nonced rule could never be revealed and audited. It is reachable
-    now -- but only once every selected member has itself been exposed, which is what lifts the
-    residual-uncertainty floor."""
-    shard_ledger, universe_ledger, incident_ledger = _ledgers(tmp_path)
-    symbols, dates, pairs, selected, unselected = _partitioned_universe(n_symbols=3, n_dates=3)
-    _register(universe_ledger, symbols, dates)
-    assert selected and unselected
-
-    # 1. Take every SELECTED member all the way through the sealed path.
-    for i, (symbol, session_date) in enumerate(selected):
-        dataset_id = f"sel-{i}"
-        vault.seal_shard(
-            shard_ledger, dataset_id=dataset_id, universe_id="fixture-universe",
-            content_checksum=f"{i:064d}", event_count=1000, vault_secret=_SECRET,
-            sealed_at="2026-03-21T00:00:00.000000Z",
-        )
-        vault.assign_shard(
-            shard_ledger, dataset_id=dataset_id, family_root_id=f"root-{i}",
-            symbol=symbol, session_date=session_date, assigned_at="2026-03-22T00:00:00.000000Z",
-        )
-        vault.expose_shard(
-            shard_ledger, dataset_id=dataset_id, family_root_id=f"root-{i}",
-            exposed_at="2026-03-23T00:00:00.000000Z",
-        )
-    # 2. Then release every UNSELECTED member -- now lawful, because nothing is hidden any more.
-    for i, (symbol, session_date) in enumerate(unselected):
-        vault.release_unselected_shard(
-            shard_ledger, universe_ledger, incident_ledger,
-            dataset_id=f"unsel-{i}", universe_id="fixture-universe",
-            symbol=symbol, session_date=session_date,
-            content_checksum=f"{i+500:064d}", event_count=1000, vault_secret=_SECRET,
-            released_at="2026-03-24T00:00:00.000000Z",
-        )
-
-    state = vault.build_vault_state(shard_ledger, universe_ledger)
-    universe = state["universes"][0]
-    assert universe["rule_disclosure"] == vault.RULE_DISCLOSURE_REVEALED
-    # The auditor's proof: the revealed rule recomputes to the commitment made at registration.
-    assert (
-        vault.compute_rule_commitment(
-            universe["commitment_nonce"], universe["symbol_rule"], universe["date_rule"]
-        )
-        == universe["rule_commitment"]
-    )
-    assert vault.withheld_dataset_ids(shard_ledger) == frozenset()
-
-
-def test_a_released_row_is_served_as_evidence_that_earned_no_sealed_credit(tmp_path):
-    shard_ledger, universe_ledger, incident_ledger = _ledgers(tmp_path)
-    symbols, dates, _pairs, _selected, unselected = _partitioned_universe()
-    _register(universe_ledger, symbols, dates)
-    symbol, session_date = unselected[0]
-    vault.release_unselected_shard(
-        shard_ledger, universe_ledger, incident_ledger,
-        dataset_id="ds-served", universe_id="fixture-universe",
-        symbol=symbol, session_date=session_date,
-        content_checksum="b" * 64, event_count=100_000, vault_secret=_SECRET,
-        released_at="2026-03-21T00:00:00.000000Z",
-    )
-    served = vault.build_vault_state(shard_ledger, universe_ledger)["shards"][0]
-    assert served["exposure_state"] == vault.STATE_EXPLORATORY_RELEASED
-    assert served["release_basis"] == vault.RELEASE_BASIS_HMAC_NOT_SELECTED
-    assert served["sealed_credit"] is False
-    assert served["family_root_id"] is None
-    assert served["sealed_at"] is None
-    # The salted commitment still verifies against the now-revealed raw checksum.
-    assert (
-        vault.commit_content_checksum(_SECRET, served["content_checksum"])
-        == served["checksum_commitment"]
-    )
+#
+# r14's release boundary took the symbol, session date, checksum and event count as PARAMETERS and
+# verified only that the supplied pair was an unselected pool member -- so a caller holding dataset
+# A could name unselected pair B and every check would pass. r14.1 replaced it with
+# `vault.release_unselected_dataset`, which derives all of that from the store and gates it on a
+# frozen release plan.
+#
+# The properties this section asserted are all re-asserted against the CORRECTED boundary in
+# `tests/test_micro_r14_1_partial_pool_oos.py`: selected members refused · incident-barred members
+# refused · wrong-secret refused · non-pool pairs refused · already-rowed datasets refused · the
+# reserved decoy refused · partial releases never pin a sealed member · whole-pool release
+# reachable · the served projection earns no sealed credit. Keeping a second copy here against the
+# retired signature would only let the two drift.
 
 
 # =====================================================================================================
@@ -648,9 +402,7 @@ def test_a_released_row_is_served_as_evidence_that_earned_no_sealed_credit(tmp_p
 def test_a_retention_probe_date_is_barred_from_the_clean_oos_set_thereafter(tmp_path):
     registry = _registry(tmp_path)
     corpus_id = "rapid-microscope-tick-oos-v1"
-    ma.register_fresh_corpus_era(
-        registry, corpus_id=corpus_id, registered_at="2026-09-01T00:00:00.000000Z", provenance="x"
-    )
+    _register_fresh(registry, tmp_path, corpus_id, registered_at="2026-09-01T00:00:00.000000Z")
     candidates = ["2025-11-03", "2025-11-04", "2025-11-05"]
     before = wf.clean_oos_candidate_dates(
         registry, corpus_id=corpus_id, candidate_dates=candidates,
@@ -684,9 +436,7 @@ def test_the_five_screening_exposed_sessions_are_barred_by_the_same_predicate(tm
     from app.research import micro_tier_b_screen as tb
 
     registry = _registry(tmp_path)
-    ma.register_fresh_corpus_era(
-        registry, corpus_id="c", registered_at="2026-09-01T00:00:00.000000Z", provenance="x"
-    )
+    _register_fresh(registry, tmp_path, "c", registered_at="2026-09-01T00:00:00.000000Z")
     result = wf.clean_oos_candidate_dates(
         registry,
         corpus_id="c",
@@ -757,23 +507,27 @@ def _reader_rig(tmp_path):
     store = _fixture_store(tmp_path)
     snapshots_dir = str(tmp_path / "snapshots")
     registry = ma.ExposureRegistry(str(tmp_path / "exposure"))
-    ma.register_fresh_corpus_era(
-        registry, corpus_id="fixture-corpus",
-        registered_at="2026-09-01T00:00:00.000000Z", provenance="fixture",
-    )
+    _register_fresh(registry, tmp_path, "fixture-corpus", registered_at="2026-09-01T00:00:00.000000Z")
     return store, snapshots_dir, registry
+def _legacy_members(store, snapshots_dir=None):
+    """The LEGACY corpus's member list. r14.1: the reader is handed a precommitted member set and
+    never decides membership itself, so the legacy corpus supplies its own through the era's shared
+    exclusion primitive. (A BOUND corpus's members come from ``micro_corpus.eligible_oos_members``
+    instead -- covered end to end in ``test_micro_r14_1_partial_pool_oos.py``.)"""
+    return tobs.legacy_exposed_members(store)
 
 
 def test_the_tick_reader_produces_canonical_return_bps_observations(tmp_path):
     store, snapshots_dir, registry = _reader_rig(tmp_path)
     run_snapshot_build_and_record(store, CONFIG, snapshots_dir)
     result = tobs.tick_observations_for_sessions(
+        members=_legacy_members(store), corpus_id="fixture-corpus",
         dataset_store=store, snapshots_dir=snapshots_dir, config=CONFIG,
         session_dates=[_FIXTURE_SESSION_DATE],
         feature_name="quote_imbalance", structure_context_kind="none",
         horizon_key="trades_20", sidedness="long",
-        exposure_registry=registry, corpus_id="fixture-corpus",
-        purpose=tobs.PURPOSE_TEST, logged_at="2026-09-02T00:00:01.000000Z",
+        exposure_registry=registry, purpose=tobs.PURPOSE_TEST,
+        logged_at="2026-09-02T00:00:01.000000Z",
         spec_registered_at="2026-09-02T00:00:00.000000Z",
     )
     assert result["observations"], "the fixtures must yield at least one anchor"
@@ -781,84 +535,79 @@ def test_the_tick_reader_produces_canonical_return_bps_observations(tmp_path):
         assert observation["session_date"] == _FIXTURE_SESSION_DATE
         assert observation["value_unit"] == "return_bps"
         assert isinstance(observation["value"], float)
-    # Unit proof is not decorative: the walk-forward gate accepts these as-is.
     wf.require_canonical_observation_units(result["observations"])
     assert result["exposure_windows_logged"] == [_FIXTURE_SESSION_DATE]
+    # r14.1: realized breadth is computed from the observations, never assumed.
+    assert result["realized_breadth"]["n_sessions"] == 1
+    assert result["realized_breadth"]["symbols"] == ["PG"]
 
 
 def test_the_tick_reader_cannot_read_outside_the_requested_fold_sessions(tmp_path):
-    """Confinement is structural, not a post-filter: the manifest is narrowed BEFORE the read, so a
-    window with no datasets reads nothing at all rather than quietly reading everything."""
+    """Confinement is structural: membership ∩ window, applied BEFORE the read."""
     store, snapshots_dir, registry = _reader_rig(tmp_path)
     run_snapshot_build_and_record(store, CONFIG, snapshots_dir)
+    members = _legacy_members(store)
     result = tobs.tick_observations_for_sessions(
+        members=members, corpus_id="fixture-corpus",
         dataset_store=store, snapshots_dir=snapshots_dir, config=CONFIG,
         session_dates=["2026-07-01", "2026-07-02"],  # no fixture falls on either
         feature_name="quote_imbalance", structure_context_kind="none",
         horizon_key="trades_20", sidedness="long",
-        exposure_registry=registry, corpus_id="fixture-corpus",
-        purpose=tobs.PURPOSE_TRAIN, logged_at="2026-09-02T00:00:01.000000Z",
+        exposure_registry=registry, purpose=tobs.PURPOSE_TRAIN,
+        logged_at="2026-09-02T00:00:01.000000Z",
     )
     assert result["datasets_read"] == 0
     assert result["observations"] == []
-    # The narrowing itself, proven directly.
-    assert tobs.manifest_for_sessions(store, session_dates=["2026-07-01"]) == []
-    assert len(tobs.manifest_for_sessions(store, session_dates=[_FIXTURE_SESSION_DATE])) == 3
+    assert tobs.members_in_window(members, ["2026-07-01"]) == []
+    assert len(tobs.members_in_window(members, [_FIXTURE_SESSION_DATE])) == 3
 
 
-def test_the_tick_reader_refuses_a_withheld_or_sealed_dataset_rather_than_dropping_it(tmp_path):
-    """A withheld shard inside the requested window is a REFUSAL, never a silent shrink -- a fold
-    that quietly evaluated the survivors of its own corpus would report a number for a window it
-    did not measure."""
+def test_a_withheld_dataset_never_enters_the_legacy_member_list(tmp_path):
+    """§7.5 point 6: the legacy corpus's members come through ``exclude_withheld``, so a registered
+    universe's pool member is simply not one of them -- it belongs to a different corpus."""
     store, snapshots_dir, registry = _reader_rig(tmp_path)
     run_snapshot_build_and_record(store, CONFIG, snapshots_dir)
-    root = str(Path(store.root).parent / "micro_vault")
-    universe_ledger = vault.VaultUniverseLedger(root)
+    before = {m["dataset_id"] for m in _legacy_members(store)}
+    assert before, "the fixture corpus must start non-empty"
+    root = vault.resolve_vault_dir(str(store.root))
     vault.register_universe(
-        universe_ledger, universe_id="withholding-universe",
+        vault.VaultUniverseLedger(root), universe_id="withholding-universe",
         symbol_rule=["PG"], date_rule=[_FIXTURE_SESSION_DATE],
-        vault_secret_commitment=vault.commit_vault_secret(_SECRET),
+        vault_secret_commitment=vault.commit_vault_secret(b"fixture-secret"),
         registered_at="2000-01-01T00:00:00.000000Z",  # before the fixtures' own created_utc
     )
-    with pytest.raises(tobs.TickObservationWithheldError, match="withheld"):
-        tobs.manifest_for_sessions(store, session_dates=[_FIXTURE_SESSION_DATE])
-    with pytest.raises(tobs.TickObservationWithheldError):
-        tobs.tick_observations_for_sessions(
-            dataset_store=store, snapshots_dir=snapshots_dir, config=CONFIG,
-            session_dates=[_FIXTURE_SESSION_DATE],
-            feature_name="quote_imbalance", structure_context_kind="none",
-            horizon_key="trades_20", sidedness="long",
-            exposure_registry=registry, corpus_id="fixture-corpus",
-            purpose=tobs.PURPOSE_TRAIN, logged_at="2026-09-02T00:00:01.000000Z",
-        )
+    after = {m["dataset_id"] for m in _legacy_members(store)}
+    assert after == set(), "every fixture is now an unresolved pool member of that universe"
 
 
 def test_a_missing_snapshot_refuses_rather_than_silently_shrinking_the_corpus(tmp_path):
     """``scout.extract_anchors`` treats a dataset with no current snapshot as an honest SKIP. That
     is right for a discovery screen and wrong for a fold, so this reader refuses instead."""
     store, snapshots_dir, registry = _reader_rig(tmp_path)
-    # Deliberately do NOT build snapshots.
-    with pytest.raises(tobs.TickObservationIncompleteError, match="no CURRENT snapshot"):
+    members = _legacy_members(store)
+    with pytest.raises(tobs.TickObservationIncompleteError, match="EXPECTED corpus member"):
         tobs.tick_observations_for_sessions(
+            members=members, corpus_id="fixture-corpus",
             dataset_store=store, snapshots_dir=snapshots_dir, config=CONFIG,
             session_dates=[_FIXTURE_SESSION_DATE],
             feature_name="quote_imbalance", structure_context_kind="none",
             horizon_key="trades_20", sidedness="long",
-            exposure_registry=registry, corpus_id="fixture-corpus",
-            purpose=tobs.PURPOSE_TRAIN, logged_at="2026-09-02T00:00:01.000000Z",
+            exposure_registry=registry, purpose=tobs.PURPOSE_TRAIN,
+            logged_at="2026-09-02T00:00:01.000000Z",
         )
-    # And a PARTIALLY-built corpus refuses too -- the dangerous case, because it would otherwise
+    # A PARTIALLY-built corpus refuses too -- the dangerous case, because it would otherwise
     # produce a plausible-looking but incomplete number.
     records, _errors = store.list()
     run_snapshot_build_and_record(store, CONFIG, snapshots_dir, [records[0]["id"]])
     with pytest.raises(tobs.TickObservationIncompleteError, match=r"\d of 3"):
         tobs.tick_observations_for_sessions(
+            members=members, corpus_id="fixture-corpus",
             dataset_store=store, snapshots_dir=snapshots_dir, config=CONFIG,
             session_dates=[_FIXTURE_SESSION_DATE],
             feature_name="quote_imbalance", structure_context_kind="none",
             horizon_key="trades_20", sidedness="long",
-            exposure_registry=registry, corpus_id="fixture-corpus",
-            purpose=tobs.PURPOSE_TRAIN, logged_at="2026-09-02T00:00:01.000000Z",
+            exposure_registry=registry, purpose=tobs.PURPOSE_TRAIN,
+            logged_at="2026-09-02T00:00:01.000000Z",
         )
 
 
@@ -868,29 +617,31 @@ def test_the_tick_reader_refuses_an_unregistered_corpus_era(tmp_path):
     bare = ma.ExposureRegistry(str(tmp_path / "bare-exposure"))
     with pytest.raises(ma.UnregisteredCorpusEraError):
         tobs.tick_observations_for_sessions(
+            members=_legacy_members(store), corpus_id="never-registered",
             dataset_store=store, snapshots_dir=snapshots_dir, config=CONFIG,
             session_dates=[_FIXTURE_SESSION_DATE],
             feature_name="quote_imbalance", structure_context_kind="none",
             horizon_key="trades_20", sidedness="long",
-            exposure_registry=bare, corpus_id="never-registered",
-            purpose=tobs.PURPOSE_TRAIN, logged_at="2026-09-02T00:00:01.000000Z",
+            exposure_registry=bare, purpose=tobs.PURPOSE_TRAIN,
+            logged_at="2026-09-02T00:00:01.000000Z",
         )
 
 
 def test_the_tick_reader_refuses_an_unsided_candidate(tmp_path):
-    """Mode B evaluates an already-directed hypothesis; an unsided one has no meaning here, and the
-    r13 vocabulary gate fires before any corpus read."""
+    """Mode B evaluates an already-directed hypothesis; ``validate_candidate_direction`` admits
+    ``None`` (a legal unsided Scout candidate) but this boundary does not."""
     store, snapshots_dir, registry = _reader_rig(tmp_path)
     run_snapshot_build_and_record(store, CONFIG, snapshots_dir)
     for bad in (None, "buy", "LONG", "", "sell"):
         with pytest.raises(Exception) as excinfo:
             tobs.tick_observations_for_sessions(
+                members=_legacy_members(store), corpus_id="fixture-corpus",
                 dataset_store=store, snapshots_dir=snapshots_dir, config=CONFIG,
                 session_dates=[_FIXTURE_SESSION_DATE],
                 feature_name="quote_imbalance", structure_context_kind="none",
                 horizon_key="trades_20", sidedness=bad,
-                exposure_registry=registry, corpus_id="fixture-corpus",
-                purpose=tobs.PURPOSE_TRAIN, logged_at="2026-09-02T00:00:01.000000Z",
+                exposure_registry=registry, purpose=tobs.PURPOSE_TRAIN,
+                logged_at="2026-09-02T00:00:01.000000Z",
             )
         assert excinfo.type.__name__ in {
             "UnsidedCandidateError",       # None -- legal for Scout, meaningless for Mode B
@@ -958,46 +709,6 @@ def test_the_tick_fold_request_corpus_id_is_explicit_and_legacy_stays_the_defaul
     signature = inspect.signature(wf.run_tick_family_fold_request)
     assert signature.parameters["corpus_id"].default == wf.TICK_LEGACY_CORPUS_ID
     assert wf.TICK_LEGACY_CORPUS_ID == "tick_legacy_symbol_days_v1"
-
-
-def test_a_disclosed_pool_position_can_never_be_released_for_oos_credit(tmp_path):
-    """§7.2.2: a position disclosed as NOT selected "may never receive sealed, blind or
-    historical_oos credit". ``assign_shard`` already refused it; so must the release path, because
-    releasing makes the tape servable and a fold reading it would classify ``historical_oos`` from
-    an exposure registry that has never heard of the incident."""
-    shard_ledger, universe_ledger, incident_ledger = _ledgers(tmp_path)
-    symbols, dates, _pairs, _selected, unselected = _partitioned_universe()
-    _register(universe_ledger, symbols, dates)
-    symbol, session_date = unselected[0]
-    vault.record_disclosure_incident(
-        incident_ledger,
-        incident_id="fixture-incident",
-        universe_id="fixture-universe",
-        pairs=[(symbol, session_date)],
-        disclosure_type="non_sealed_pool_position",
-        source="fixture",
-        provenance={"channel": "fixture"},
-        occurred_at="2026-03-20T00:00:00.000000Z",
-        sealed_member_identity_disclosed=False,
-        evidence_consequence="PERMANENT: no sealed, blind or historical_oos credit.",
-    )
-    with pytest.raises(vault.DisclosedPoolPositionError):
-        vault.release_unselected_shard(
-            shard_ledger, universe_ledger, incident_ledger,
-            dataset_id="ds-disclosed", universe_id="fixture-universe",
-            symbol=symbol, session_date=session_date,
-            content_checksum="a" * 64, event_count=1000, vault_secret=_SECRET,
-        )
-    # A DIFFERENT unselected position is unaffected.
-    other_symbol, other_date = unselected[1]
-    vault.release_unselected_shard(
-        shard_ledger, universe_ledger, incident_ledger,
-        dataset_id="ds-other", universe_id="fixture-universe",
-        symbol=other_symbol, session_date=other_date,
-        content_checksum="b" * 64, event_count=1000, vault_secret=_SECRET,
-        released_at="2026-03-21T00:00:00.000000Z",
-    )
-    assert "ds-other" not in vault.withheld_dataset_ids(shard_ledger)
 
 
 def test_the_real_tranche_shape_yields_a_releasable_capacity_of_fifty_seven():
@@ -1081,101 +792,3 @@ def test_a_second_era_needs_both_flags_and_can_never_reuse_the_starter_id(tmp_pa
         op.DATE_RULE = list(op.STARTER_DATE_RULE)
 
 
-def test_partial_releases_never_leak_a_still_sealed_members_identity_on_a_served_surface(tmp_path):
-    """TR-2, re-run with partial exploratory releases treated as attacker-known. Releasing shrinks
-    the anonymity set, so the served projection has to stay opaque for the sealed side even as the
-    unselected side becomes fully identified."""
-    shard_ledger, universe_ledger, incident_ledger = _ledgers(tmp_path)
-    symbols, dates, _pairs, selected, unselected = _partitioned_universe(n_symbols=4, n_dates=5)
-    _register(universe_ledger, symbols, dates)
-    assert selected and len(unselected) >= 2
-
-    # Seal every selected member, then release as many unselected ones as the floor allows.
-    sealed_pairs = []
-    for i, (symbol, session_date) in enumerate(selected):
-        vault.seal_shard(
-            shard_ledger, dataset_id=f"sealed-{i}", universe_id="fixture-universe",
-            content_checksum=f"{i:064d}", event_count=1000, vault_secret=_SECRET,
-            sealed_at="2026-03-21T00:00:00.000000Z",
-        )
-        sealed_pairs.append((symbol, session_date))
-    released = 0
-    for i, (symbol, session_date) in enumerate(unselected):
-        try:
-            vault.release_unselected_shard(
-                shard_ledger, universe_ledger, incident_ledger,
-                dataset_id=f"rel-{i}", universe_id="fixture-universe",
-                symbol=symbol, session_date=session_date,
-                content_checksum=f"{i+900:064d}", event_count=1000, vault_secret=_SECRET,
-                released_at="2026-03-22T00:00:00.000000Z",
-            )
-            released += 1
-        except vault.ResidualPoolUncertaintyError:
-            break
-    assert released > 0, "the fixture must exercise at least one lawful release"
-
-    state = vault.build_vault_state(shard_ledger, universe_ledger)
-    served_blob = json.dumps(state, sort_keys=True)
-    for symbol, session_date in sealed_pairs:
-        # A sealed shard's own (symbol, session_date) pair must not be reconstructible from the
-        # served state. The symbol string alone appears (released siblings share symbols) -- the
-        # PAIRING is what must not.
-        served_pairs = {
-            (s.get("symbol"), s.get("session_date"))
-            for s in state["shards"]
-            if s.get("symbol") is not None
-        }
-        assert (symbol, session_date) not in served_pairs
-    for row in state["shards"]:
-        if row["exposure_state"] == vault.STATE_SEALED:
-            assert row.get("symbol") is None and row.get("session_date") is None
-            assert "dataset_id" not in row and "content_checksum" not in row
-    # The rule itself stays committed while any member is unresolved.
-    assert state["universes"][0]["rule_disclosure"] == vault.RULE_DISCLOSURE_COMMITTED
-    assert "symbol_rule" not in state["universes"][0]
-    assert "commitment_nonce" not in served_blob
-
-    final = vault.pool_partition_disclosure_state(
-        shard_ledger, universe_ledger, incident_ledger,
-        universe_id="fixture-universe", vault_secret=_SECRET,
-    )
-    assert final["any_identity_certain"] is False
-    assert final["unknown_positions"] > final["still_hidden_selected_shards"]
-
-
-def test_without_the_release_path_an_unselected_member_has_no_route_to_a_terminal_state(tmp_path):
-    """The gap r14 closes, proven directly rather than asserted in prose.
-
-    The sealed path is `seal → assign → expose`. For a pool member that was never sealed,
-    ``assign_shard`` refuses (it requires a currently-`sealed` row) and ``expose_shard`` refuses (it
-    requires `assigned`) -- so before ``release_unselected_shard`` existed there was NO transition
-    an HMAC-not-selected member could make, and it stayed withheld forever. Sealing one to unlock
-    the path would be a lie about the HMAC and would hand it single-shot blind credit."""
-    shard_ledger, universe_ledger, incident_ledger = _ledgers(tmp_path)
-    symbols, dates, _pairs, _selected, unselected = _partitioned_universe()
-    _register(universe_ledger, symbols, dates)
-    symbol, session_date = unselected[0]
-
-    with pytest.raises(vault.ShardLifecycleOrderError):
-        vault.assign_shard(
-            shard_ledger, dataset_id="never-sealed", family_root_id="root-1",
-            symbol=symbol, session_date=session_date,
-        )
-    with pytest.raises(vault.ShardLifecycleOrderError):
-        vault.expose_shard(shard_ledger, dataset_id="never-sealed", family_root_id="root-1")
-
-    # r14's route is the only one that works, and it lands on a state that is NOT `exposed`.
-    row = vault.release_unselected_shard(
-        shard_ledger, universe_ledger, incident_ledger,
-        dataset_id="never-sealed", universe_id="fixture-universe",
-        symbol=symbol, session_date=session_date,
-        content_checksum="a" * 64, event_count=1000, vault_secret=_SECRET,
-        released_at="2026-03-21T00:00:00.000000Z",
-    )
-    assert row["exposure_state"] == vault.STATE_EXPLORATORY_RELEASED
-    assert row["exposure_state"] != vault.STATE_EXPOSED
-    # Both terminal states stop the withholding predicate; only one of them is the sealed path.
-    assert vault.STATE_EXPLORATORY_RELEASED in vault._RELEASED_STATES
-    assert vault.STATE_EXPOSED in vault._RELEASED_STATES
-    assert vault.STATE_SEALED not in vault._RELEASED_STATES
-    assert vault.STATE_ASSIGNED not in vault._RELEASED_STATES

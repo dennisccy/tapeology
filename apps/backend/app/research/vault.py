@@ -255,6 +255,7 @@ import json
 import math
 import os
 import secrets
+from zoneinfo import ZoneInfo
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -280,7 +281,19 @@ __all__ = [
     "NotAPoolMemberError",
     "SelectedShardReleaseRefusedError",
     "ResidualPoolUncertaintyError",
-    "release_unselected_shard",
+    "release_unselected_dataset",
+    "build_release_plan",
+    "commit_release_plan",
+    "find_release_plan_commitment",
+    "release_plan_ledger_for_dataset_dir",
+    "VaultReleasePlanLedger",
+    "RELEASE_PLAN_RULE_V1",
+    "DECOY_RANK_DOMAIN",
+    "decoy_rank",
+    "required_reserved_decoys",
+    "ReleasePlanNotCommittedError",
+    "NotInReleasePlanError",
+    "DatasetIdentityMismatchError",
     "pool_partition_disclosure_state",
     "require_residual_pool_uncertainty",
     "releasable_unselected_capacity",
@@ -415,6 +428,7 @@ _SHARD_LEDGER_FILENAME = "vault_shard_ledger.jsonl"
 _RECOVERY_LEDGER_FILENAME = "vault_recovery_ledger.jsonl"
 _SCREEN_PROVENANCE_LEDGER_FILENAME = "vault_screen_provenance_ledger.jsonl"
 _DISCLOSURE_LEDGER_FILENAME = "vault_disclosure_incident_ledger.jsonl"
+_RELEASE_PLAN_LEDGER_FILENAME = "vault_release_plan_ledger.jsonl"
 
 # Ledger-machinery keys ``HashChainedLedger.append_row`` itself manages -- stripped before a row's
 # OWN content is carried forward into a later row (``assign_shard``/``expose_shard`` below), so a
@@ -576,6 +590,238 @@ class VaultLedgerCorruptionError(Exception):
             "no sealed evaluation) until a lawful, evidence-backed recovery completes (spec "
             "section 7.8); unknown exposure history may NEVER be read as 'never exposed'"
         )
+
+
+# === r14.1 -- store-derived release identity: the two facts this module needs about a dataset ======
+#
+# `tick_recorder.py` OWNS `RECORDER_SCHEMA_BASIS`; this is a transcription, not a second value --
+# `test_micro_r14_corpus_lifecycle` asserts the two are equal, so a recorder-side change breaks the
+# guard rather than silently letting a legacy dataset pass as a genuine one here. Transcribed rather
+# than imported because this module deliberately depends on neither the recorder nor `DatasetStore`
+# (module docstring): every dataset fact reaches it through an injected store.
+RECORDER_SCHEMA_BASIS = "tick_recorder_v1_card_5_1_preservation_present"
+
+#: This module's own private ET zone -- the `micro_readiness.py`/`referee_null.py` per-module idiom.
+_VAULT_ET_ZONE = ZoneInfo("America/New_York")
+
+
+def _et_session_date_of(window_start_utc: str) -> str:
+    """A dataset's own ET session date (spec §0: a session is an ET RTH trading date), from its
+    already-verified ``window_start_utc``. The identical conversion every other module makes."""
+    parsed = datetime.fromisoformat(window_start_utc.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(_VAULT_ET_ZONE).date().isoformat()
+
+
+# === r14.1 -- the frozen release plan (E) =========================================================
+#
+# **The degree of freedom r14 left open.** r14 correctly refuses the release that would pin the
+# hidden partition, so at least one unselected member always stays withheld. But "release until the
+# transition refuses" lets the OPERATOR decide, one release at a time, WHICH member ends up being
+# that decoy -- a selection made with the earlier releases already visible. That is a hidden choice
+# in exactly the place this era spends its discipline eliminating.
+#
+# r14.1 removes it: before any release, the whole partition is derived ONCE, deterministically, from
+# data that exists before a single outcome is read.
+
+#: The frozen rule name, hashed into every plan's identity so a future revision is distinguishable
+#: rather than a silent redefinition (the `WF_SURVIVOR_RULE_V1` naming discipline).
+RELEASE_PLAN_RULE_V1 = "RELEASE_PLAN_RULE_V1"
+
+#: The decoy ranking's HMAC domain separator. DIFFERENT from `compute_seal`'s own message
+#: (`f"{symbol}:{session_date}"`) on purpose: the two must be independent draws from the same key,
+#: so a published decoy identity leaks nothing about any other position's seal bit. §7.2.1(h)'s own
+#: `sha256("rapid-microscope-tier-b-r10:" + ticker)` ranking is the precedent for a domain-separated
+#: deterministic rank; this is that shape, keyed on the vault secret because the plan must not be
+#: predictable to a third party before release.
+DECOY_RANK_DOMAIN = "rapid-microscope-decoy-r14.1"
+
+
+def decoy_rank(vault_secret: bytes, universe_id: str, symbol: str, session_date: str) -> str:
+    """The deterministic decoy-selection rank of ONE pool position (r14.1).
+
+    A pure function of the vault secret and the position -- never of market data, never of a
+    realized outcome, and never of the order in which an operator happens to release. The lowest
+    rank among the eligible not-selected positions is reserved as the decoy."""
+    message = f"{DECOY_RANK_DOMAIN}:{universe_id}:{_normalize_symbol(symbol)}:{session_date}"
+    return hmac.new(vault_secret, message.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def required_reserved_decoys(*, universe_pairs: int, selected_count: int, barred_count: int) -> int:
+    """How many not-selected positions must stay withheld so §7.2.2's floor still holds once every
+    releasable member has been released.
+
+    Derived, not chosen. With ``P`` pool pairs, ``S`` selected, ``I`` incident-barred (all of which
+    are already publicly non-selected) and ``R`` released, the floor is ``P - I - R > S``, so
+    ``R <= P - I - S - 1`` and the reserve is exactly ONE -- for any universe with at least one
+    sealed member. A universe with nothing sealed has no hidden partition to protect and reserves
+    none."""
+    if selected_count <= 0:
+        return 0
+    releasable_total = universe_pairs - selected_count - barred_count
+    permitted = universe_pairs - barred_count - selected_count - 1
+    return max(0, releasable_total - max(0, permitted))
+
+
+def build_release_plan(
+    universe: dict,
+    incident_ledger: "VaultDisclosureIncidentLedger",
+    vault_secret: bytes,
+) -> dict:
+    """The WHOLE partition of a registered universe's pool, derived deterministically (r14.1).
+
+    Four disjoint classes, computed from the registered rule, the HMAC and the incident ledger --
+    and from nothing else:
+
+      * ``sealed_path``   -- HMAC-SELECTED. Never releasable; reaches the public only through
+        ``seal -> assign -> expose``.
+      * ``barred``        -- a position an incident already disclosed. §7.2.2 makes that permanent:
+        no sealed, blind or historical-OOS credit, ever.
+      * ``reserved_decoy`` -- the lowest ``decoy_rank`` among the remaining not-selected positions.
+        Withheld for as long as anything is sealed, so the hidden set is never pinned by
+        subtraction.
+      * ``releasable``    -- everything left. THE bound OOS corpus's own member set.
+
+    Returns the plan plus its ``plan_hash`` (a pure content hash over the four sorted class lists,
+    the rule name and the universe identity). Called with the same universe, secret and incident
+    ledger it is byte-reproducible -- which is what makes "the operator could not have chosen
+    differently" checkable rather than merely asserted."""
+    universe_id = universe["universe_id"]
+    expected = sorted(
+        (_normalize_symbol(sym), date) for sym, date in expected_recording_pairs(universe)
+    )
+    barred = {
+        (_normalize_symbol(sym), date)
+        for sym, date in disclosed_pool_positions(incident_ledger)
+    }
+    sealed_path = [p for p in expected if compute_seal(vault_secret, p[0], p[1])]
+    not_selected = [p for p in expected if p not in set(sealed_path)]
+    barred_members = [p for p in not_selected if p in barred]
+    candidates = [p for p in not_selected if p not in barred]
+
+    reserve_n = required_reserved_decoys(
+        universe_pairs=len(expected),
+        selected_count=len(sealed_path),
+        barred_count=len(barred_members),
+    )
+    # Lowest rank first, with the position itself as the tie-break so the order is total.
+    ranked = sorted(candidates, key=lambda p: (decoy_rank(vault_secret, universe_id, p[0], p[1]), p))
+    reserved_decoy = sorted(ranked[:reserve_n])
+    releasable = sorted(ranked[reserve_n:])
+
+    plan = {
+        "rule": RELEASE_PLAN_RULE_V1,
+        "decoy_rank_domain": DECOY_RANK_DOMAIN,
+        "universe_id": universe_id,
+        "universe_registered_at": universe["registered_at"],
+        "rule_commitment": universe["rule_commitment"],
+        "universe_pairs": len(expected),
+        "sealed_path": [list(p) for p in sorted(sealed_path)],
+        "barred": [list(p) for p in sorted(barred_members)],
+        "reserved_decoy": [list(p) for p in reserved_decoy],
+        "releasable": [list(p) for p in releasable],
+    }
+    plan["plan_hash"] = _sha256_hex(_canonical(plan))
+    return plan
+
+
+class VaultReleasePlanLedger:
+    """The FIFTH hash chain: one immutable release-plan commitment per universe (r14.1).
+
+    Its own chain for the same structural reason the screen-provenance and incident chains are
+    separate -- a plan commitment must never resolve as a universe registration or as a shard
+    lifecycle transition."""
+
+    def __init__(self, root_dir: str) -> None:
+        self._chain = HashChainedLedger(root_dir, _RELEASE_PLAN_LEDGER_FILENAME)
+
+    @property
+    def path(self) -> Path:
+        return self._chain.path
+
+    def verify_chain(self) -> dict:
+        return self._chain.verify_chain()
+
+    def all_rows(self) -> list[dict]:
+        return self._chain.all_rows()
+
+    def verified_rows(self) -> list[dict]:
+        result = self._chain.verify_chain()
+        if not result["ok"]:
+            raise VaultLedgerCorruptionError("release_plan", result)
+        return self._chain.all_rows()
+
+    def append_row(self, fields: dict) -> dict:
+        return self._chain.append_row(fields)
+
+
+def release_plan_ledger_for_dataset_dir(dataset_dir_resolved: str) -> "VaultReleasePlanLedger":
+    """The release-plan ledger for a dataset dir -- the ``*_ledger_for_dataset_dir`` idiom."""
+    return VaultReleasePlanLedger(resolve_vault_dir(dataset_dir_resolved))
+
+
+def commit_release_plan(
+    ledger: VaultReleasePlanLedger,
+    plan: dict,
+    *,
+    committed_at: str | None = None,
+) -> dict:
+    """Persist a HIDING commitment to ``plan``, before any release (r14.1).
+
+    Serves the class SIZES and the ``plan_hash``, never the member lists: publishing which position
+    is the decoy would itself disclose a non-selected identity, which is the leak §7.2.2 records as
+    a permanent incident. The nonced ``plan_commitment`` lets an auditor verify after whole-pool
+    release that the plan was frozen BEFORE the first release and never edited -- the same
+    nonce-plus-canonical-content shape ``compute_rule_commitment`` already uses for the rule.
+
+    Idempotent on ``universe_id`` when ``plan_hash`` matches; a conflicting re-commit refuses."""
+    universe_id = plan["universe_id"]
+    for row in ledger.verified_rows():
+        if row.get("universe_id") == universe_id:
+            if row.get("plan_hash") == plan["plan_hash"]:
+                return row
+            raise VaultUniverseAlreadyRegisteredError(
+                universe_id, row.get("plan_hash"), plan["plan_hash"]
+            )
+    nonce = secrets.token_hex(32)
+    fields = {
+        "record_kind": "release_plan_commitment",
+        "universe_id": universe_id,
+        "rule": plan["rule"],
+        "decoy_rank_domain": plan["decoy_rank_domain"],
+        "plan_hash": plan["plan_hash"],
+        "plan_commitment": _sha256_hex(_canonical({"nonce": nonce, "plan": plan})),
+        "commitment_nonce": nonce,
+        # SIZES only -- never the member lists (see docstring).
+        "universe_pairs": plan["universe_pairs"],
+        "sealed_path_size": len(plan["sealed_path"]),
+        "barred_size": len(plan["barred"]),
+        "reserved_decoy_size": len(plan["reserved_decoy"]),
+        "releasable_size": len(plan["releasable"]),
+        "committed_at": committed_at if committed_at is not None else _iso_utc_now(),
+    }
+    return ledger.append_row(fields)
+
+
+def find_release_plan_commitment(ledger: VaultReleasePlanLedger, universe_id: str) -> dict | None:
+    """The committed plan row for ``universe_id``, or ``None``."""
+    for row in ledger.verified_rows():
+        if row.get("universe_id") == universe_id:
+            return row
+    return None
+
+
+class ReleasePlanNotCommittedError(Exception):
+    """r14.1: a release was attempted before the universe's release plan was frozen -- refused. The
+    plan is what makes the decoy independent of operator choice, so releasing without one
+    reintroduces exactly the degree of freedom it exists to remove."""
+
+
+class NotInReleasePlanError(Exception):
+    """r14.1: a release was attempted for a position the frozen plan does not mark releasable --
+    refused. Covers the reserved decoy, the barred positions and the sealed path alike, and does so
+    from the PRE-COMMITTED plan rather than from an after-the-fact arithmetic check."""
 
 
 def _canonical(obj: object) -> bytes:
@@ -1480,48 +1726,101 @@ def releasable_unselected_capacity(state: dict) -> int:
     return max(0, state["unknown_positions"] - max(hidden + 1, 2))
 
 
-def release_unselected_shard(
+class DatasetIdentityMismatchError(Exception):
+    """r14.1: the dataset the caller named does not carry the identity the release was asserted
+    for -- refused. The store owns ``symbol``/``session_date``/``checksum``/``schema_basis``/
+    ``created_utc``; a release must DERIVE them, never accept them."""
+
+
+def _release_identity_from_store(dataset_store, dataset_id: str, universe: dict) -> dict:
+    """Everything a release needs to know about a dataset, read from the STORE (r14.1).
+
+    r14's release took the symbol, session date, checksum and event count as parameters and
+    verified only that the *supplied pair* was an unselected pool member. That left the actual
+    binding unproven: a caller holding dataset A could name unselected pair B, and every check
+    would pass while the row recorded A as B. This function closes that by never asking.
+
+    Proves, in order:
+      * the dataset exists in this store (``DatasetNotFound`` propagates verbatim);
+      * it is a GENUINE RECORDER output -- ``schema_basis`` equals the recorder's own
+        ``RECORDER_SCHEMA_BASIS``, which is what distinguishes a J-06 shard from a legacy dataset
+        that merely occupies the same ``(symbol, session_date)`` (§7.2.2's collision class);
+      * it was created at or after the universe's own ``registered_at`` -- a dataset that already
+        existed when the universe was registered cannot be one of that universe's recordings;
+      * its own derived ``(symbol, ET session_date)`` is a member of the registered pool.
+
+    ``dataset_store`` is injected rather than imported so this module keeps its "never imports
+    DatasetStore" discipline (module docstring)."""
+    meta = dataset_store.get(dataset_id)
+    symbol = meta["symbol"]
+    session_date = _et_session_date_of(meta["window_start_utc"])
+    schema_basis = meta.get("schema_basis")
+    if schema_basis != RECORDER_SCHEMA_BASIS:
+        raise DatasetIdentityMismatchError(
+            f"dataset {dataset_id!r} carries schema_basis {schema_basis!r}, not the recorder's own "
+            f"{RECORDER_SCHEMA_BASIS!r} -- refused (r14.1): only a genuine recorder output is a "
+            "pool member. A legacy dataset occupying a registered pair is a §7.2.2 COLLISION, and "
+            "releasing it would launder exposed legacy tape into a fresh corpus."
+        )
+    created_utc = meta.get("created_utc", "")
+    if not created_utc or created_utc < universe["registered_at"]:
+        raise DatasetIdentityMismatchError(
+            f"dataset {dataset_id!r} was created {created_utc!r}, before universe "
+            f"{universe['universe_id']!r} was registered at {universe['registered_at']!r} -- "
+            "refused (r14.1): it cannot be one of that universe's own recordings"
+        )
+    expected = {(_normalize_symbol(sym), date) for sym, date in expected_recording_pairs(universe)}
+    if (_normalize_symbol(symbol), session_date) not in expected:
+        raise NotAPoolMemberError(
+            f"dataset {dataset_id!r} resolves to ({symbol!r}, {session_date!r}), which is not a "
+            f"member of universe {universe['universe_id']!r}'s registered pool -- refused"
+        )
+    counts = meta.get("event_counts") or {}
+    return {
+        "dataset_id": dataset_id,
+        "symbol": symbol,
+        "session_date": session_date,
+        "content_checksum": meta["checksum"],
+        "event_count": counts.get("total", 0),
+        "schema_basis": schema_basis,
+        "created_utc": created_utc,
+    }
+
+
+def release_unselected_dataset(
+    dataset_store,
     shard_ledger: VaultShardLedger,
     universe_ledger: VaultUniverseLedger,
     incident_ledger: "VaultDisclosureIncidentLedger",
+    plan_ledger: VaultReleasePlanLedger,
     *,
     dataset_id: str,
     universe_id: str,
-    symbol: str,
-    session_date: str,
-    content_checksum: str,
-    event_count: int,
     vault_secret: bytes,
     released_at: str | None = None,
 ) -> dict:
-    """r14: release ONE HMAC-**not-selected** registered-pool member as ordinary historical
-    evidence -- spec §7.5 point 7's "exposed for exploratory use" disjunct, implemented.
+    """**The public/operator release boundary (r14.1).** Releases ONE HMAC-not-selected member of a
+    registered universe as ordinary historical evidence.
 
-    Six refusals, every one BEFORE the append, every one recomputed here rather than taken from the
-    caller:
+    Everything the store owns is DERIVED from the store (``_release_identity_from_store``); nothing
+    about the dataset's identity is accepted from the caller. Everything the vault owns is checked
+    against the FROZEN release plan, so which member ends up withheld cannot depend on the order an
+    operator happens to release in.
 
-    1. the universe must be registered (``VaultUniverseNotRegisteredError``);
-    2. the vault secret must match that universe's own recorded ``vault_secret_commitment``
-       (``VaultSecretUnavailable``) -- otherwise step 4's HMAC recomputation proves nothing, since
-       any secret at all would produce *some* answer;
-    3. ``(symbol, session_date)`` must be a member of the universe's own
-       ``expected_recording_pairs()`` (``NotAPoolMemberError``);
-    4. the HMAC must independently recompute to NOT SELECTED (``SelectedShardReleaseRefusedError``)
-       -- this is the load-bearing check, and it is deliberately not a parameter: a caller cannot
-       assert non-selection, only the secret can;
-    5. the dataset must carry NO shard-ledger row at all (``ShardLifecycleOrderError``), which is
-       what stops a SEALED member from taking this shortcut and what stops a double release;
-    6. the release must not pin the hidden partition (``ResidualPoolUncertaintyError``, §7.2.2).
-
-    The appended row is a terminal ``exploratory_released`` state carrying the symbol, session date
-    and raw ``content_checksum`` -- this member is now ordinary evidence and its manifest is
-    servable. It carries ``family_root_id: None`` and ``assigned_at: None`` forever: no family
-    binding was made, no single shot was consumed, and no sealed or blind credit is conferred.
-    ``shard_id`` is still the surrogate and ``checksum_commitment`` still the salted one, so an
-    auditor can verify this row against the same commitments every other row uses."""
+    Refusals, all before the append:
+      1. empty secret / secret not matching the universe's committed ``vault_secret_commitment``;
+      2. unregistered universe;
+      3. dataset identity (genuine recorder output, post-registration, real pool member);
+      4. no committed release plan (``ReleasePlanNotCommittedError``);
+      5. the plan does not mark this position releasable (``NotInReleasePlanError``) -- which
+         covers the sealed path, the barred positions AND the reserved decoy in one check;
+      6. the dataset already carries a shard row (``ShardLifecycleOrderError``);
+      7. §7.2.2's residual-uncertainty floor, re-checked against the state this release would
+         produce (belt and braces: the plan already guarantees it, and the arithmetic still runs).
+    """
     if not vault_secret.strip():
         raise VaultSecretUnavailable(
-            "release_unselected_shard was handed an empty vault secret -- refused: the HMAC "
+            "release_unselected_dataset was handed an empty vault secret -- refused: the HMAC "
             "non-selection proof is the entire basis of this act"
         )
     universe = find_universe(universe_ledger, universe_id)
@@ -1536,54 +1835,115 @@ def release_unselected_shard(
             "vault_secret_commitment -- refused: a non-selection proof computed under the wrong "
             "key is not a proof"
         )
-    normalized = (_normalize_symbol(symbol), session_date)
-    expected = {(_normalize_symbol(sym), date) for sym, date in expected_recording_pairs(universe)}
-    if normalized not in expected:
-        raise NotAPoolMemberError(
-            f"({symbol!r}, {session_date!r}) is not a member of universe {universe_id!r}'s "
-            "registered pool -- refused: a release is an assertion about a registered pool "
-            "position, never about an arbitrary dataset"
+    identity = _release_identity_from_store(dataset_store, dataset_id, universe)
+
+    commitment = find_release_plan_commitment(plan_ledger, universe_id)
+    if commitment is None:
+        raise ReleasePlanNotCommittedError(
+            f"universe {universe_id!r} has no committed release plan -- refused (r14.1): the plan "
+            "is what makes the reserved decoy independent of operator choice, so releasing without "
+            "one reintroduces the selection freedom it exists to remove"
         )
-    if compute_seal(vault_secret, symbol, session_date):
-        raise SelectedShardReleaseRefusedError(
-            f"({symbol!r}, {session_date!r}) is HMAC-SELECTED -- refused: a selected member becomes "
-            "public only through seal -> assign -> expose, so its single-shot root-family binding "
-            "is recorded. The exploratory release path is for NOT-selected members only."
+    plan = build_release_plan(universe, incident_ledger, vault_secret)
+    if plan["plan_hash"] != commitment["plan_hash"]:
+        raise NotInReleasePlanError(
+            f"the release plan recomputes to {plan['plan_hash']!r} but universe {universe_id!r} "
+            f"committed {commitment['plan_hash']!r} -- refused: the partition moved after it was "
+            "frozen (a new incident, a changed rule, or a different secret)"
         )
+    position = [_normalize_symbol(identity["symbol"]), identity["session_date"]]
+    if position not in plan["releasable"]:
+        if position in plan["sealed_path"]:
+            raise SelectedShardReleaseRefusedError(
+                f"({identity['symbol']!r}, {identity['session_date']!r}) is HMAC-SELECTED -- "
+                "refused: a selected member becomes public only through seal -> assign -> expose, "
+                "so its single-shot root-family binding is recorded"
+            )
+        if position in plan["barred"]:
+            incident = disclosed_pool_positions(incident_ledger).get(
+                (identity["symbol"], identity["session_date"])
+            )
+            raise DisclosedPoolPositionError(
+                identity["symbol"], identity["session_date"], incident or {}
+            )
+        # The reserved decoy exists to protect a HIDDEN partition. Once every selected member has
+        # itself been exposed there is no hidden partition left, §7.2.2's floor no longer applies,
+        # and holding the decoy back would make whole-pool release (§7.2) permanently unreachable
+        # -- so the rule's own purpose is what lifts it, never an operator's judgment. The plan
+        # itself stays frozen and immutable; what changes is only whether anything is still hidden.
+        state = pool_partition_disclosure_state(
+            shard_ledger, universe_ledger, incident_ledger,
+            universe_id=universe_id, vault_secret=vault_secret,
+        )
+        if state["still_hidden_selected_shards"] > 0:
+            raise NotInReleasePlanError(
+                f"({identity['symbol']!r}, {identity['session_date']!r}) is the universe's "
+                "RESERVED DECOY under the frozen release plan -- refused (§7.2.2): it stays "
+                f"withheld while {state['still_hidden_selected_shards']} selected member(s) are "
+                "still sealed, so the hidden set can never be pinned by subtraction. The plan "
+                "chose it deterministically before any release happened."
+            )
+
     existing = _latest_shard_row(shard_ledger, dataset_id)
     if existing is not None:
         raise ShardLifecycleOrderError(dataset_id, None, existing["exposure_state"])
-    # §7.2.2's permanent consequence, applied to THIS transition as well as to `assign_shard`.
-    # A disclosed pool position "may never receive sealed, blind or historical_oos credit" -- and
-    # releasing it makes its tape servable, at which point a fold reading it would classify
-    # `historical_oos` from an exposure registry that has never heard of the incident. Counting the
-    # dataset toward corpus size and coverage is all the incident record leaves it entitled to, so
-    # the release is refused rather than the credit being clawed back downstream.
-    disclosed = disclosed_pool_positions(incident_ledger)
-    incident = disclosed.get((symbol, session_date))
-    if incident is not None:
-        raise DisclosedPoolPositionError(symbol, session_date, incident)
 
+    return _append_exploratory_release(
+        shard_ledger, universe_ledger, incident_ledger,
+        identity=identity, universe_id=universe_id, vault_secret=vault_secret,
+        released_at=released_at,
+    )
+
+
+def _append_exploratory_release(
+    shard_ledger: VaultShardLedger,
+    universe_ledger: VaultUniverseLedger,
+    incident_ledger: "VaultDisclosureIncidentLedger",
+    *,
+    identity: dict,
+    universe_id: str,
+    vault_secret: bytes,
+    released_at: str | None = None,
+) -> dict:
+    """The APPEND half of an exploratory release (spec §7.5 point 7's "exposed for exploratory
+    use" disjunct). Private on purpose: every scientific refusal lives in
+    ``release_unselected_dataset`` above, which is the only lawful caller, so there is no boundary
+    here a caller could reach with unchecked assertions.
+
+    ``identity`` is ``_release_identity_from_store``'s output -- symbol, session date, checksum and
+    event count DERIVED from the store, never supplied.
+
+    The appended row is a terminal ``exploratory_released`` state carrying the symbol, session date
+    and raw ``content_checksum``: this member is now ordinary evidence and its manifest is
+    servable. It carries ``family_root_id: None``, ``assigned_at: None`` and ``sealed_at: None``
+    forever -- no family binding was made, no single shot was consumed, and no sealed or blind
+    credit is conferred. ``shard_id`` is still the surrogate and ``checksum_commitment`` still the
+    salted one, so an auditor verifies this row against the same commitments every other row uses.
+    """
+    dataset_id = identity["dataset_id"]
+    content_checksum = identity["content_checksum"]
     fields = {
         "dataset_id": dataset_id,
         "content_checksum": content_checksum,
         "shard_id": compute_surrogate_shard_id(vault_secret, dataset_id),
         "universe_id": universe_id,
         "checksum_commitment": commit_content_checksum(vault_secret, content_checksum),
-        "size_bucket": _coarse_size_bucket(event_count),
+        "size_bucket": _coarse_size_bucket(identity["event_count"]),
         # Never sealed: this row's own honest history is that it went straight from "unresolved
         # pool member" to "ordinary evidence". `sealed_at` is None so no reader, and no
         # `_coarsen_sealed_at_to_date` consumer, can mistake it for a sealed-path row.
         "sealed_at": None,
         "exposure_state": STATE_EXPLORATORY_RELEASED,
         "family_root_id": None,
-        "symbol": symbol,
-        "session_date": session_date,
+        "symbol": identity["symbol"],
+        "session_date": identity["session_date"],
         "assigned_at": None,
         "exposed_at": released_at if released_at is not None else _iso_utc_now(),
     }
-    # Refusal 6 is evaluated against the state this release WOULD produce, so the floor is checked
-    # before the append rather than reported after it.
+    # §7.2.2's floor, re-checked against the state this release WOULD produce. The frozen plan
+    # already guarantees it (the reserved decoy exists precisely so this can never fire), so this
+    # is the belt-and-braces half: if the two ever disagreed, the release stops rather than the
+    # disagreement being discovered later in an audit.
     prospective = pool_partition_disclosure_state(
         shard_ledger, universe_ledger, incident_ledger,
         universe_id=universe_id, vault_secret=vault_secret,

@@ -46,7 +46,13 @@ from app.research.datasets import DatasetStore  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[3]
 SCREEN_DIR = REPO / "reports" / "tier-b-screen-r10"
-STATE_DIR = REPO / "reports" / "j06-tranche"
+#: The STARTER tranche's own artifact directory. Immutable: every file the 2026-08 campaign wrote
+#: lives here and must never be overwritten by a later era.
+STARTER_STATE_DIR = REPO / "reports" / "j06-tranche"
+#: The per-invocation artifact directory. Rebound by `_select_universe` for a later era so a second
+#: campaign cannot clobber the first's acceptance.json, recording-runs.json or TR-2 analysis
+#: (r14.1, G) -- pre-r14.1 every stage wrote to the one shared path regardless of universe.
+STATE_DIR = STARTER_STATE_DIR
 
 #: The ORIGINAL starter tranche's frozen identity. Immutable: `vault.register_universe` refuses a
 #: second registration of this id under any different rule, and nothing below may re-derive it.
@@ -76,6 +82,15 @@ STARTER_DATE_RULE = ["2026-06-10", "2026-06-17", "2026-06-24", "2026-07-01", "20
 UNIVERSE_ID = STARTER_UNIVERSE_ID
 DATE_RULE = list(STARTER_DATE_RULE)
 
+#: The starter tranche's frozen pair arithmetic (§7.2.1(i): 8 symbols x 10 dates). Enforced ONLY for
+#: the starter universe -- a later era's own arithmetic is its date-rule size times the same panel.
+STARTER_EXPECTED_PAIRS = 80
+
+
+def _is_starter() -> bool:
+    """Whether this invocation is operating on the ORIGINAL starter tranche."""
+    return UNIVERSE_ID == STARTER_UNIVERSE_ID
+
 
 def _select_universe(universe_id: str | None, dates_file: str | None) -> dict:
     """r14: point this script at a DIFFERENT registered universe for a later corpus era.
@@ -84,7 +99,7 @@ def _select_universe(universe_id: str | None, dates_file: str | None) -> dict:
     the starter's id, are each a way to corrupt a frozen registration, so neither is allowed alone.
     `SYMBOL_RULE` is deliberately NOT parameterized: §7.2.1(i) fixes the panel at those eight slots
     and §7.2.1(j) forbids re-screening Tier-B, so a second era reuses it unchanged."""
-    global UNIVERSE_ID, DATE_RULE
+    global UNIVERSE_ID, DATE_RULE, STATE_DIR
     if universe_id is None and dates_file is None:
         return {"universe_id": UNIVERSE_ID, "date_rule_size": len(DATE_RULE), "source": "starter"}
     if universe_id is None or dates_file is None:
@@ -102,7 +117,16 @@ def _select_universe(universe_id: str | None, dates_file: str | None) -> dict:
         raise SystemExit("STOP: duplicate date in --dates-file")
     UNIVERSE_ID = universe_id
     DATE_RULE = sorted(dates)
-    return {"universe_id": UNIVERSE_ID, "date_rule_size": len(DATE_RULE), "source": dates_file}
+    # r14.1 (G): a later era writes to its OWN artifact directory. Without this, `verify` on the
+    # second era would overwrite the starter's committed acceptance.json.
+    STATE_DIR = REPO / "reports" / f"universe-{universe_id}"
+    return {
+        "universe_id": UNIVERSE_ID,
+        "date_rule_size": len(DATE_RULE),
+        "source": dates_file,
+        "state_dir": str(STATE_DIR),
+        "starter_state_dir_untouched": str(STARTER_STATE_DIR),
+    }
 
 
 def _utc() -> str:
@@ -178,8 +202,18 @@ def _validate_panel_and_dates(sessions: set[str] | None = None) -> dict:
     pairs = len(SYMBOL_RULE) * len(DATE_RULE)
     date_conc = len(SYMBOL_RULE) / pairs
     sym_conc = len(DATE_RULE) / pairs
-    if pairs != 80 or date_conc > 0.20 or sym_conc > 0.25:
-        raise SystemExit(f"STOP: arithmetic {pairs=} {date_conc=} {sym_conc=}")
+    # r14.1 (G): the §7.6 CONCENTRATION floors bind every era; the exact-80 identity binds only the
+    # STARTER tranche. Pre-r14.1 the `pairs != 80` check was unconditional, which made a 105-date
+    # era (8 x 105 = 840 pairs) structurally impossible to register at all.
+    if date_conc > 0.20 or sym_conc > 0.25:
+        raise SystemExit(f"STOP: concentration {date_conc=} {sym_conc=}")
+    if len(DATE_RULE) < 10:
+        raise SystemExit(f"STOP: {len(DATE_RULE)} dates < the §7.6 minimum of 10")
+    if _is_starter() and pairs != STARTER_EXPECTED_PAIRS:
+        raise SystemExit(
+            f"STOP: the starter tranche's own arithmetic is frozen at {STARTER_EXPECTED_PAIRS} "
+            f"pairs; this computes {pairs}"
+        )
     return {"planned_pairs": pairs, "span_days": span_days,
             "max_date_concentration": date_conc, "max_symbol_concentration": sym_conc}
 
@@ -277,8 +311,11 @@ def stage_preflight() -> dict:
         raise SystemExit(f"STOP: TR-19 preservation capability missing: {exc}")
     pairs = sorted(vault.expected_recording_pairs(universe))
     checks["expected_pairs"] = len(pairs)
-    if len(pairs) != 80:
-        raise SystemExit(f"STOP: expected 80 pairs, universe computes {len(pairs)}")
+    expected_pairs = len(SYMBOL_RULE) * len(DATE_RULE)
+    if len(pairs) != expected_pairs:
+        raise SystemExit(f"STOP: expected {expected_pairs} pairs, universe computes {len(pairs)}")
+    if _is_starter() and len(pairs) != STARTER_EXPECTED_PAIRS:
+        raise SystemExit(f"STOP: the starter tranche is frozen at {STARTER_EXPECTED_PAIRS} pairs")
     tb.assert_no_exposed_session(universe["date_rule"])
     checks["no_exposed_session_collision"] = True
 
@@ -956,19 +993,202 @@ def stage_tr2() -> dict:
     return out
 
 
+# === r14.1 (H) -- the four operator acts r14 built primitives for but never exposed ================
+#
+# Every one is DRY BY DEFAULT and requires an explicit `--commit` to write. A real campaign should
+# never need Python-console ceremony to perform a ledgered act, and a dry run must be able to show
+# exactly what a commit would do without doing it.
+
+#: Extra per-invocation arguments the r14.1 stages read (set by `main`).
+CORPUS_ID: str | None = None
+PROBE_DATE: str | None = None
+PROBE_NOTE: str = ""
+COMMIT: bool = False
+
+
+def _exposure_registry():
+    from app.research.micro_accessor import (
+        ExposureRegistry,
+        resolve_micro_exposure_registry_dir,
+    )
+
+    return ExposureRegistry(resolve_micro_exposure_registry_dir(CONFIG.dataset_dir_resolved()))
+
+
+def _require_commit(act: str, payload: dict) -> dict:
+    """Dry-run gate. A stage computes everything, reports what it WOULD do, and writes only when
+    the operator passed `--commit` -- so a preflight is always available and never a side effect."""
+    if not COMMIT:
+        return {**payload, "committed": False, "note": f"DRY RUN -- pass --commit to {act}"}
+    return {**payload, "committed": True}
+
+
+def stage_corpus_era() -> dict:
+    """r14.1: bind a fresh corpus era to this universe (structured provenance, §6.7)."""
+    from app.research import micro_corpus as mc
+
+    if not CORPUS_ID:
+        raise SystemExit("STOP: --corpus-id is required for the corpus-era stage")
+    uled, _sled, _pled, _store, _d = _ledgers()
+    universe = vault.find_universe(uled, UNIVERSE_ID)
+    if universe is None:
+        raise SystemExit(f"STOP: universe {UNIVERSE_ID!r} is not registered")
+    payload = {
+        "stage": "corpus_era",
+        "at": _utc(),
+        "corpus_id": CORPUS_ID,
+        "universe_id": UNIVERSE_ID,
+        "universe_registered_at": universe["registered_at"],
+        "rule_commitment": universe["rule_commitment"],
+        "expected_pair_count": len(vault.expected_recording_pairs(universe)),
+        "freshness_boundary": universe["registered_at"],
+    }
+    out = _require_commit("register the corpus era", payload)
+    if out["committed"]:
+        row = mc.register_bound_corpus_era(
+            _exposure_registry(), uled,
+            corpus_id=CORPUS_ID, universe_id=UNIVERSE_ID, registered_at=_utc(),
+            provenance_note="registered by scripts.j06_operator corpus-era",
+        )
+        out["row_index"] = row["row_index"]
+    _write("corpus-era.json", out)
+    return out
+
+
+def stage_release_plan() -> dict:
+    """r14.1: derive and COMMIT the universe's frozen release plan, before any release."""
+    uled, sled, _pled, _store, d = _ledgers()
+    universe = vault.find_universe(uled, UNIVERSE_ID)
+    if universe is None:
+        raise SystemExit(f"STOP: universe {UNIVERSE_ID!r} is not registered")
+    secret = vault.load_vault_secret()
+    incidents = vault.disclosure_incident_ledger_for_dataset_dir(d)
+    plan_ledger = vault.release_plan_ledger_for_dataset_dir(d)
+    plan = vault.build_release_plan(universe, incidents, secret)
+    # SIZES only -- publishing which position is the decoy would itself be a §7.2.2 disclosure.
+    payload = {
+        "stage": "release_plan",
+        "at": _utc(),
+        "universe_id": UNIVERSE_ID,
+        "rule": plan["rule"],
+        "plan_hash": plan["plan_hash"],
+        "universe_pairs": plan["universe_pairs"],
+        "sealed_path_size": len(plan["sealed_path"]),
+        "barred_size": len(plan["barred"]),
+        "reserved_decoy_size": len(plan["reserved_decoy"]),
+        "releasable_size": len(plan["releasable"]),
+        "already_committed": vault.find_release_plan_commitment(plan_ledger, UNIVERSE_ID) is not None,
+    }
+    out = _require_commit("commit the release plan", payload)
+    if out["committed"]:
+        row = vault.commit_release_plan(plan_ledger, plan, committed_at=_utc())
+        out["plan_commitment"] = row["plan_commitment"]
+    _write("release-plan.json", out)
+    return out
+
+
+def stage_release() -> dict:
+    """r14.1: release every plan-releasable member that has a genuine dataset in this store."""
+    from app.research import micro_corpus as mc  # noqa: F401 -- symmetry with the other stages
+
+    uled, sled, _pled, store, d = _ledgers()
+    universe = vault.find_universe(uled, UNIVERSE_ID)
+    if universe is None:
+        raise SystemExit(f"STOP: universe {UNIVERSE_ID!r} is not registered")
+    secret = vault.load_vault_secret()
+    incidents = vault.disclosure_incident_ledger_for_dataset_dir(d)
+    plan_ledger = vault.release_plan_ledger_for_dataset_dir(d)
+    if vault.find_release_plan_commitment(plan_ledger, UNIVERSE_ID) is None:
+        raise SystemExit("STOP: commit the release plan first (stage release-plan --commit)")
+    plan = vault.build_release_plan(universe, incidents, secret)
+    releasable = {tuple(p) for p in plan["releasable"]}
+
+    records, _errors = store.list()
+    candidates = []
+    for meta in records:
+        session_date = vault._et_session_date_of(meta["window_start_utc"])
+        if (vault._normalize_symbol(meta["symbol"]), session_date) not in releasable:
+            continue
+        if meta.get("schema_basis") != vault.RECORDER_SCHEMA_BASIS:
+            continue
+        if meta.get("created_utc", "") < universe["registered_at"]:
+            continue
+        candidates.append(meta["id"])
+
+    payload = {
+        "stage": "release",
+        "at": _utc(),
+        "universe_id": UNIVERSE_ID,
+        "plan_hash": plan["plan_hash"],
+        "releasable_positions": len(releasable),
+        "datasets_eligible_now": len(candidates),
+        "reserved_decoy_size": len(plan["reserved_decoy"]),
+    }
+    out = _require_commit("release the eligible members", payload)
+    if out["committed"]:
+        released, refused = 0, []
+        for dataset_id in sorted(candidates):
+            try:
+                vault.release_unselected_dataset(
+                    store, sled, uled, incidents, plan_ledger,
+                    dataset_id=dataset_id, universe_id=UNIVERSE_ID,
+                    vault_secret=secret, released_at=_utc(),
+                )
+                released += 1
+            except Exception as exc:  # disclosed, already-rowed, decoy: reported, never silent
+                refused.append({"dataset_id": dataset_id, "refusal": type(exc).__name__})
+        out["released"] = released
+        out["refused"] = refused
+    _write("release.json", out)
+    return out
+
+
+def stage_probe() -> dict:
+    """r14.1: log a retention/availability probe as the SACRIFICIAL exposure it actually is."""
+    from app.research import walkforward as wf
+
+    if not CORPUS_ID or not PROBE_DATE:
+        raise SystemExit("STOP: --corpus-id and --probe-date are both required for the probe stage")
+    payload = {
+        "stage": "retention_probe_exposure",
+        "at": _utc(),
+        "corpus_id": CORPUS_ID,
+        "session_date": PROBE_DATE,
+        "note": PROBE_NOTE,
+        "consequence": (
+            "PERMANENT: a tick fetch READS this date's tape, so the date is exposed from this "
+            "instant and can never afterwards carry historical_oos evidence for this corpus."
+        ),
+    }
+    out = _require_commit("burn this date as a sacrificial probe", payload)
+    if out["committed"]:
+        row = wf.record_sacrificial_probe_exposure(
+            _exposure_registry(), corpus_id=CORPUS_ID, session_date=PROBE_DATE,
+            logged_at=_utc(), note=PROBE_NOTE,
+        )
+        out["row_index"] = row["row_index"]
+    _write("retention-probe.json", out)
+    return out
+
+
 _STAGES = {"provenance": stage_provenance, "register": stage_register,
            "preflight": stage_preflight, "record": stage_record,
            "bars": stage_bars, "verify": stage_verify,
-           "disclosure": stage_disclosure, "tr2": stage_tr2}
+           "disclosure": stage_disclosure, "tr2": stage_tr2,
+           # r14.1 (H): the four acts r14 left as library-only primitives.
+           "corpus-era": stage_corpus_era, "release-plan": stage_release_plan,
+           "release": stage_release, "probe": stage_probe}
 
 
 def main() -> int:
     if len(sys.argv) < 2 or sys.argv[1] not in _STAGES:
         print(
             f"usage: python -m scripts.j06_operator {{{'|'.join(_STAGES)}}} "
-            "[--universe-id ID --dates-file PATH]"
+            "[--universe-id ID --dates-file PATH] [--corpus-id ID] "
+            "[--probe-date YYYY-MM-DD] [--probe-note TEXT] [--commit]"
         )
         return 2
+    global CORPUS_ID, PROBE_DATE, PROBE_NOTE, COMMIT
     stage = sys.argv[1]
     rest = sys.argv[2:]
     universe_id = dates_file = None
@@ -978,6 +1198,14 @@ def main() -> int:
             universe_id = rest.pop(0)
         elif flag == "--dates-file" and rest:
             dates_file = rest.pop(0)
+        elif flag == "--corpus-id" and rest:
+            CORPUS_ID = rest.pop(0)
+        elif flag == "--probe-date" and rest:
+            PROBE_DATE = rest.pop(0)
+        elif flag == "--probe-note" and rest:
+            PROBE_NOTE = rest.pop(0)
+        elif flag == "--commit":
+            COMMIT = True
         else:
             print(f"unknown argument {flag!r}")
             return 2
