@@ -62,3 +62,30 @@ the data simply is not visible to the scoped QA rig.
 and closing the gap needs a rig launch/provisioning change by a developer rather than a re-capture,
 so an `evidence` depth iteration could not fix it.
 **Reversible:** yes
+
+## iter-2 — goal-decomposer
+
+**Ambiguity:** the "No browser proof based on fabricated fixture state when a journey claims to show
+real final state; fixture and real views must be visibly distinguished" anti-goal does not say
+whether pointing the scoped `:8301` QA rig's `resolve_foundry_dir()` at the real
+`apps/backend/.data/foundry/` directory (read-only, era-open baseline only) counts as blurring
+fixture vs. real, since the rig otherwise runs entirely against throwaway fixture data.
+**We chose:** this is not fabrication and not a blur — the served value is the genuine recorded
+artifact (the evaluator already recomputed all six Referee hashes against it in iter-1 and they
+matched), the access is read-only with no write to any protected path, and `lessons.md` iter-1
+itself names this exact fix ("give the rig the REAL artifact... or set `TAPEOLOGY_FOUNDRY_DIR`").
+Inventing a substitute value for the rig, not reading the real one, would have been the violation.
+**Reversible:** yes
+
+**Ambiguity:** Binding Execution Order step 3 ("Foundry family + ledger + freeze machinery") and
+step 4 ("Hermetic oracles and performance/checkpoint tests") do not draw an exact line for where the
+exhaust runner's own mechanics (§9: canonical order, checkpoint/resume, single-flight, replay
+refusal) belong — J-04's own acceptance steps already require simulating first-read lock, replay
+idempotence, and single-flight, which need a working runner skeleton.
+**We chose:** iter-2 (step 3) builds and hermetically proves the runner's mechanics — canonical
+order within one family, checkpoint/resume, single-flight, replay idempotence/refusal — since J-04
+step 5-6 name them directly. The full multi-family, multi-verdict-type "complete factory" epoch
+(compiled + blocked + insufficient + null + wrong-direction + concentration/economic/fragility-
+killed + survivor all together) and the protected-data trip fixtures stay reserved for J-05 / step 4
+next iteration, matching the goal's own explicit journey split.
+**Reversible:** yes

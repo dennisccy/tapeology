@@ -23,6 +23,11 @@ config fingerprint `08e471b10130e1e2`. Confirmed live on the current tree at bas
 
 Updated at iter-1: rows 1-3 of the Data Contract table below are now partially SHIPPED (module
 names finalized, "(planned)" removed where real) — see the iteration note under the table.
+
+Updated at iter-2: rows 3-8's computing modules move from "(planned)" to real, hermetically proven
+implementations (`foundry_interpreter.py`, `foundry_family.py`, `foundry_freeze.py`,
+`foundry_ledger.py`, `foundry_runner.py`) — see the iteration note under the table. No row added, no
+IA/nav change; no `blueprint.reapproval-requested` needed.
 -->
 
 ## Information Architecture
@@ -79,13 +84,13 @@ iteration that first ships each row (see iteration note below the table).
 |---|---|---|---|
 | Era/session identity, methodology/spec version, source-registry hash | `app/research/foundry_source_registry.py` | `GET /research/desk/micro/foundry` | era-open baseline (full-suite pass/skip, config fingerprint, Referee-module SHA-256) is part of this bundle; `source_registry_hash` stays `null`/`not_yet_generated` until the real registry exists (Binding Order step 6 / J-06) |
 | Source dispositions + lineage/alias refs (one of the closed §7.1 vocabulary per required source object) | `app/research/foundry_source_registry.py` | `GET /research/desk/micro/foundry` | no required source may be silently absent; iter-1 proves the compile RULES on 7 hermetic fixture source types only — the REAL 11 required-source-object registry content ships at J-06 |
-| Per-variant `CandidateSpec` + `candidate_spec_hash` + population/coordinate/direction/horizon summary | `app/research/foundry_compiler.py` (fixture-compilable candidates) + `app/research/foundry_interpreter.py` (planned; owns deferred/population resolution for J-03) | `GET /research/desk/micro/foundry` | every §3 science-affecting field must move the hash |
-| Epoch id, manifest hash, freeze commit, freeze integrity verdict, first-outcome-read boundary status/time | `app/research/foundry_freeze.py` (planned) | `GET /research/desk/micro/foundry` | freeze-set = enumerated checked-in path+sha256 manifest, not an adjective |
-| Family/variant counts, family order, variant ordinals, per-family frozen denominator, blocked/excluded/aliased counts by reason | `app/research/foundry_family.py` (planned) | `GET /research/desk/micro/foundry` | denominator frozen pre-outcome; over-cap blocks whole |
-| Unresolved-deferred counts, eligible resolved anchors, candidate/comparator counts, usable sessions, evidence class | `app/research/foundry_interpreter.py` (planned) | `GET /research/desk/micro/foundry` | population symmetry per §4.1 |
-| Materialized econ floor + unit/provenance, Scout decision, p-screen/effect-bps/concentration/economic/fragility disclosures, best-of-N disclosure, `DIAGNOSTIC_SURVIVOR_OOS_RULE_FROZEN` state | `app/research/foundry_runner.py` calling the unchanged `scout.screen_candidate` (planned) | `GET /research/desk/micro/foundry` | Foundry never adds a second statistical rail; values are the verbatim Scout screen payload |
-| Protected/withheld/sealed ids read by the real Foundry runner (must be zero; identity-safe aggregate only) | `app/research/foundry_runner.py` (planned) | `GET /research/desk/micro/foundry` | never sealed identities, joins the existing TR-2-style inference sweep |
-| Current runner checkpoint / next manifest ordinal, ledger chain/integrity verification | `app/research/foundry_ledger.py` (planned) | `GET /research/desk/micro/foundry` | Foundry's own hash-chained append-only trial ledger; never registered into the Scout ledger |
+| Per-variant `CandidateSpec` + `candidate_spec_hash` + population/coordinate/direction/horizon summary | `app/research/foundry_compiler.py` (fixture-compilable candidates) + `app/research/foundry_interpreter.py` (owns deferred/population resolution; ships hermetically at iter-2 for J-03 fixtures) | `GET /research/desk/micro/foundry` | every §3 science-affecting field must move the hash |
+| Epoch id, manifest hash, freeze commit, freeze integrity verdict, first-outcome-read boundary status/time | `app/research/foundry_freeze.py` (ships hermetically at iter-2; real epoch/commit values still await J-06/J-07) | `GET /research/desk/micro/foundry` | freeze-set = enumerated checked-in path+sha256 manifest, not an adjective |
+| Family/variant counts, family order, variant ordinals, per-family frozen denominator, blocked/excluded/aliased counts by reason | `app/research/foundry_family.py` (ships hermetically at iter-2) | `GET /research/desk/micro/foundry` | denominator frozen pre-outcome; over-cap blocks whole |
+| Unresolved-deferred counts, eligible resolved anchors, candidate/comparator counts, usable sessions, evidence class | `app/research/foundry_interpreter.py` (ships hermetically at iter-2) | `GET /research/desk/micro/foundry` | population symmetry per §4.1 |
+| Materialized econ floor + unit/provenance, Scout decision, p-screen/effect-bps/concentration/economic/fragility disclosures, best-of-N disclosure, `DIAGNOSTIC_SURVIVOR_OOS_RULE_FROZEN` state | `app/research/foundry_runner.py` calling the unchanged `scout.screen_candidate` (ships hermetically at iter-2 for fixture candidates; real corpus/econ-floor materialization still awaits J-07) | `GET /research/desk/micro/foundry` | Foundry never adds a second statistical rail; values are the verbatim Scout screen payload |
+| Protected/withheld/sealed ids read by the real Foundry runner (must be zero; identity-safe aggregate only) | `app/research/foundry_runner.py` (module ships hermetically at iter-2; real protected-access census still awaits J-07) | `GET /research/desk/micro/foundry` | never sealed identities, joins the existing TR-2-style inference sweep |
+| Current runner checkpoint / next manifest ordinal, ledger chain/integrity verification | `app/research/foundry_ledger.py` (ships hermetically at iter-2) | `GET /research/desk/micro/foundry` | Foundry's own hash-chained append-only trial ledger; never registered into the Scout ledger |
 
 **Iteration note (iter-1):** shipped for real — the `GET /research/desk/micro/foundry` route itself
 (new, mounted on the existing `micro_routes.py` router, GET-only / never-computes); row 1's era
@@ -96,6 +101,21 @@ subset of fixtures that compile directly (no deferred/population resolution — 
 not-yet-built `foundry_interpreter.py`). No UI subsection beyond the panel header ships this
 iteration; the Sources/Compiler fixture view (and all other subviews) ship together in a later
 consolidated read-surface iteration per `docs/goal.md` Binding Execution Order step 5.
+
+**Iteration note (iter-2):** shipped for real, hermetically — `foundry_interpreter.py` (generic
+population resolution + boolean-membership projection + Scout-boundary adapter calling
+`scout.screen_candidate` directly, proven byte-identical to the existing direct scalar path on
+fixtures); `foundry_family.py` (pre-outcome family denominator, hard-cap block, late-insertion
+refusal); `foundry_freeze.py` (deterministic manifest generation/replay, freeze-set + freeze-record
+construction, first-read-lock hash-drift simulation); `foundry_ledger.py` (hash-chained append-only
+trial ledger, checkpoint/resume, single-flight, replay idempotence, deterministic `rule_id` +
+`prospective_root_status`); `foundry_runner.py` (canonical-order orchestration, mechanical Scout-
+verdict mapping). All of this operates on hermetic fixture epoch ids only — no real epoch, no real
+candidate outcome read, no UI. Rows 4/7/8's real-epoch/real-corpus values (freeze commit,
+materialized econ floor, protected-access census) still await J-06/J-07. J-01's era-open baseline
+(row 1) also became visible to the scoped QA rig this iteration via a read-only
+`TAPEOLOGY_FOUNDRY_DIR`-style visibility fix — the computing module and endpoint are unchanged, so
+this is not a new Data Contract row.
 
 An optional read-only MCP proxy (`desk_micro_foundry`) is deferrable per the goal; if built later it
 must be a byte-identical GET proxy of this same endpoint and joins the existing MCP contract tests —
