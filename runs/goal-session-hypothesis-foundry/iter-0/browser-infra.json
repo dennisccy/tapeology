@@ -1,0 +1,15 @@
+{
+ "journeys": [
+  "J-01",
+  "J-02",
+  "J-03",
+  "J-04",
+  "J-05",
+  "J-06",
+  "J-07",
+  "J-08"
+ ],
+ "reason": "store-scope guard refused the browser lanes: the backend under test is not the project's scoped QA backend",
+ "attempts": 1,
+ "detected_by": "store-scope"
+}
