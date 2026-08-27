@@ -3109,8 +3109,11 @@ export interface FoundryFreezeIntegrity {
 }
 
 // goal-hypothesis-foundry-iter-4 (J-05): the hermetic oracle-suite summary.
+// goal-hypothesis-foundry-iter-5 adds `kill_type_mapping`/`best_of_n_disclosure` (J-05 repairs).
 export interface FoundryHermeticOracles {
   outcome_types_present: string[];
+  kill_type_mapping: { outcome_label: string; foundry_state: string }[];
+  best_of_n_disclosure: { n_variants_tried: number; threshold_bps: number | null };
   denominator_consistent_across_rows: boolean;
   canonical_order_preserved: boolean;
   all_blocked_epoch_completed: boolean;
@@ -3120,6 +3123,46 @@ export interface FoundryHermeticOracles {
   protected_data_trip_fails_closed: boolean;
   evidence_class_immutable: boolean;
   suite_source: string;
+}
+
+// goal-hypothesis-foundry-iter-5 (J-06): the ONE real, Git-frozen epoch -- distinct from every
+// hermetic-fixture subview above. `status` degrades honestly to "not_yet_generated" when the
+// tracked `docs/hypothesis-foundry/` artifacts are absent; `families`/`source_dispositions` are
+// served verbatim from the canonical backend read, never recomputed client-side.
+export interface FoundrySourceDisposition {
+  source_id: string;
+  disposition: string;
+  lineage_refs: string[];
+  alias_refs: string[];
+}
+
+export interface FoundryVariant {
+  variant_id: string;
+  variant_ordinal: number;
+  candidate_spec_hash: string;
+  future_rule_id: string;
+  prospective_root_status: string;
+}
+
+export interface FoundryFamily {
+  foundry_family_id: string;
+  family_order: number;
+  variant_count: number;
+  variants: FoundryVariant[];
+}
+
+export interface FoundryEpochManifest {
+  status: "not_yet_generated" | "generated_uncommitted" | "committed";
+  epoch_id: string | null;
+  source_registry_hash: string | null;
+  manifest_hash: string | null;
+  freeze_set_hash: string | null;
+  freeze_commit: string | null;
+  config_fingerprint: string | null;
+  outcome_access_census: number;
+  source_dispositions: FoundrySourceDisposition[];
+  families: FoundryFamily[];
+  source_registry_audit: { path: string; committed: boolean };
 }
 
 export interface DeskFoundryResponse {
@@ -3136,4 +3179,6 @@ export interface DeskFoundryResponse {
   interpreter_fixtures: FoundryInterpreterFixtures;
   freeze_integrity: FoundryFreezeIntegrity;
   hermetic_oracles: FoundryHermeticOracles;
+  // goal-hypothesis-foundry-iter-5 (J-06): the real epoch -- see `FoundryEpochManifest`'s own doc.
+  epoch_manifest: FoundryEpochManifest;
 }

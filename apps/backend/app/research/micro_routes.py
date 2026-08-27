@@ -35,6 +35,10 @@ over."""
 
 from __future__ import annotations
 
+import json
+import subprocess
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
@@ -47,7 +51,7 @@ from .desk_playbook_context import BandMapResolver
 from .desk_routes import get_playbook_store, get_universe_store
 from .desk_universe import UniverseStore
 from .foundry_compiler import sources_compiler_hermetic_fixture_view
-from .foundry_freeze import freeze_integrity_hermetic_fixture_view
+from .foundry_freeze import freeze_integrity_hermetic_fixture_view, verify_commit_is_ancestor
 from .foundry_hermetic_summary import build_hermetic_oracles_summary
 from .foundry_interpreter import interpreter_hermetic_fixture_view
 from .foundry_source_registry import (
@@ -761,6 +765,120 @@ def get_foundry_dir() -> str:
     return resolve_foundry_dir(CONFIG.dataset_dir_resolved())
 
 
+# goal-hypothesis-foundry-iter-5 (J-06): the real committed epoch. Read from the literal
+# Git-TRACKED repo-relative `docs/hypothesis-foundry/`/`reports/hypothesis-foundry/` paths --
+# deliberately NEVER through `get_foundry_dir()`/`resolve_foundry_dir()` above, which is
+# `TAPEOLOGY_FOUNDRY_DIR`/dataset-directory-SCOPED RUNTIME storage for the era-open baseline only
+# (goal.md carried lesson: reading the real epoch through that resolver would reproduce the exact
+# iter-0/iter-1 QA-invisibility failure for this whole evidence base, since a real artifact under
+# the runtime-scoped directory is invisible to the scoped `:8301` QA rig). The tracked artifacts
+# are a Git-committed repo path, checked out identically by every rig at the same commit.
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+_FOUNDRY_TRACKED_DIR = _REPO_ROOT / "docs" / "hypothesis-foundry"
+_FOUNDRY_AUDIT_REPORT_REL_PATH = "reports/hypothesis-foundry/source-registry-audit.md"
+
+
+def _git_rev_parse_head(repo_root: Path) -> str | None:
+    """``None`` (never raises, never fabricates) if this is not a real git checkout or the command
+    fails for any reason -- an honest degrade, matching this module's own never-404 convention."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=str(repo_root), capture_output=True, text=True
+        )
+    except OSError:
+        return None
+    return result.stdout.strip() if result.returncode == 0 else None
+
+
+def _git_path_committed_at_head(repo_root: Path, rel_path: str) -> bool:
+    """``True`` only if ``rel_path`` exists in HEAD's own committed tree -- ``git cat-file -e``,
+    never a plain filesystem existence check (which would also be true for an uncommitted file)."""
+    try:
+        result = subprocess.run(
+            ["git", "cat-file", "-e", f"HEAD:{rel_path}"], cwd=str(repo_root), capture_output=True
+        )
+    except OSError:
+        return False
+    return result.returncode == 0
+
+
+def read_epoch_manifest_view(*, tracked_dir: Path | None = None, repo_root: Path | None = None) -> dict:
+    """Reads the real, Git-tracked ``docs/hypothesis-foundry/`` artifacts VERBATIM -- the literal
+    repo-relative paths (see the module comment above). Computed ONCE at module import time
+    (T-8 / goal.md anti-goal 10), never per request, consistent with the four hermetic views above.
+    Missing/absent tracked artifacts degrade honestly to ``status: "not_yet_generated"`` -- never a
+    fabricated placeholder value (this iteration's own error-case requirement).
+
+    ``tracked_dir``/``repo_root`` default to the real repo-relative paths; a test may override
+    either to exercise the missing-artifact degrade path against a synthetic empty directory
+    without needing to relocate/hide the actual committed repo files."""
+    tracked_dir = tracked_dir if tracked_dir is not None else _FOUNDRY_TRACKED_DIR
+    repo_root = repo_root if repo_root is not None else _REPO_ROOT
+    not_yet_generated = {
+        "status": "not_yet_generated",
+        "epoch_id": None,
+        "source_registry_hash": None,
+        "manifest_hash": None,
+        "freeze_set_hash": None,
+        "freeze_commit": None,
+        "config_fingerprint": None,
+        "outcome_access_census": 0,
+        "source_dispositions": [],
+        "families": [],
+        "source_registry_audit": {"path": _FOUNDRY_AUDIT_REPORT_REL_PATH, "committed": False},
+    }
+
+    manifest_path = tracked_dir / "epoch-manifest.json"
+    freeze_record_path = tracked_dir / "freeze-record.json"
+    source_registry_path = tracked_dir / "source-registry.json"
+    if not (manifest_path.is_file() and freeze_record_path.is_file() and source_registry_path.is_file()):
+        return not_yet_generated
+
+    try:
+        manifest_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+        freeze_record_payload = json.loads(freeze_record_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return not_yet_generated
+
+    freeze_commit = freeze_record_payload.get("freeze_commit")
+    head = _git_rev_parse_head(repo_root)
+    # "committed" means the TRACKED ARTIFACTS THEMSELVES are present in HEAD's own committed tree
+    # (TC-9's "all five files appear together in one commit") -- NOT merely that `freeze_commit`
+    # (which is pinned to whatever HEAD already was BEFORE generation, per this iteration's own
+    # freeze_commit-ordering rule) is an ancestor of the current HEAD, which would be trivially
+    # true even while the four JSON files still sit as uncommitted working-tree changes (a real
+    # bug caught while building this route: `freeze_commit == head` before the first commit ever
+    # happens, since nothing has advanced HEAD yet). Both checks are still verified together:
+    # ancestry as the freeze-barrier identity proof, tracked-file presence as the actual
+    # "did the operator commit it" fact.
+    tracked_rel_paths = (
+        "docs/hypothesis-foundry/source-registry.json",
+        "docs/hypothesis-foundry/epoch-manifest.json",
+        "docs/hypothesis-foundry/freeze-set.json",
+        "docs/hypothesis-foundry/freeze-record.json",
+    )
+    audit_committed = _git_path_committed_at_head(repo_root, _FOUNDRY_AUDIT_REPORT_REL_PATH)
+    tracked_files_committed = all(_git_path_committed_at_head(repo_root, p) for p in tracked_rel_paths)
+    ancestry_proven = bool(freeze_commit) and head is not None and verify_commit_is_ancestor(
+        freeze_commit, head, cwd=repo_root
+    )
+    is_committed = tracked_files_committed and audit_committed and ancestry_proven
+
+    return {
+        "status": "committed" if is_committed else "generated_uncommitted",
+        "epoch_id": manifest_payload.get("epoch_id"),
+        "source_registry_hash": manifest_payload.get("source_registry_hash"),
+        "manifest_hash": manifest_payload.get("manifest_hash"),
+        "freeze_set_hash": freeze_record_payload.get("freeze_set_hash"),
+        "freeze_commit": freeze_commit,
+        "config_fingerprint": manifest_payload.get("config_fingerprint"),
+        "outcome_access_census": manifest_payload.get("outcome_access_census", 0),
+        "source_dispositions": manifest_payload.get("source_dispositions", []),
+        "families": manifest_payload.get("families", []),
+        "source_registry_audit": {"path": _FOUNDRY_AUDIT_REPORT_REL_PATH, "committed": audit_committed},
+    }
+
+
 # goal-hypothesis-foundry-iter-4 (J-02/J-03/J-04/J-05): the four consolidated Foundry read-surface
 # subviews -- computed EXACTLY ONCE, here, at module import time, from purely hermetic literals
 # (never real dataset/session state), and served verbatim on every request thereafter. This is
@@ -772,6 +890,9 @@ _SOURCES_COMPILER_VIEW = sources_compiler_hermetic_fixture_view()
 _INTERPRETER_FIXTURES_VIEW = interpreter_hermetic_fixture_view()
 _FREEZE_INTEGRITY_VIEW = freeze_integrity_hermetic_fixture_view()
 _HERMETIC_ORACLES_VIEW = build_hermetic_oracles_summary()
+# goal-hypothesis-foundry-iter-5 (J-06): computed once, same convention, but reads real committed
+# files rather than hermetic literals -- see `read_epoch_manifest_view`'s own docstring.
+_EPOCH_MANIFEST_VIEW = read_epoch_manifest_view()
 
 
 @router.get("/foundry")
@@ -779,20 +900,28 @@ def get_foundry(foundry_dir: str = Depends(get_foundry_dir)) -> dict:
     """Serves era/session identity (``foundry_source_registry.foundry_era_identity`` -- a static
     dict, never derived per-request), the persisted era-open baseline snapshot VERBATIM
     (``read_era_open_baseline`` -- ``None`` until the operator's one-time recording act has run,
-    never fabricated), and the explicit not-yet-generated `source_registry_hash` state. Never
-    404/500 before that recording act runs -- the desk router's own never-404-on-absence
-    convention: an honest ``era_open_baseline: null`` on a fresh install, exactly like ``GET
-    /vault``'s honest empty ``shards``/``universes`` before the first registration.
+    never fabricated), and the real ``epoch_manifest`` view (``source_registry_hash``/
+    ``source_registry_status`` below are sourced from that SAME read -- no second calculation path
+    for the same value). Never 404/500 before that recording act runs -- the desk router's own
+    never-404-on-absence convention: an honest ``era_open_baseline: null`` on a fresh install,
+    exactly like ``GET /vault``'s honest empty ``shards``/``universes`` before the first
+    registration.
 
     goal-hypothesis-foundry-iter-4: four ADDITIVE top-level keys -- ``sources_compiler``,
     ``interpreter_fixtures``, ``freeze_integrity``, ``hermetic_oracles`` -- each served VERBATIM
     from the module-level frozen views built once above; this handler never calls any compiler/
-    interpreter/family/freeze/runner function itself."""
+    interpreter/family/freeze/runner function itself.
+
+    goal-hypothesis-foundry-iter-5: one more additive top-level key, ``epoch_manifest`` -- the
+    real, Git-tracked epoch (see ``read_epoch_manifest_view``'s own docstring for why it reads
+    literal repo-relative paths rather than the dataset-scoped `foundry_dir` this handler still
+    receives for the (unrelated) era-open baseline)."""
     return {
         "era": foundry_era_identity(),
         "era_open_baseline": read_era_open_baseline(foundry_dir),
-        "source_registry_hash": None,
-        "source_registry_status": "not_yet_generated",
+        "source_registry_hash": _EPOCH_MANIFEST_VIEW["source_registry_hash"],
+        "source_registry_status": _EPOCH_MANIFEST_VIEW["status"],
+        "epoch_manifest": _EPOCH_MANIFEST_VIEW,
         "sources_compiler": _SOURCES_COMPILER_VIEW,
         "interpreter_fixtures": _INTERPRETER_FIXTURES_VIEW,
         "freeze_integrity": _FREEZE_INTEGRITY_VIEW,

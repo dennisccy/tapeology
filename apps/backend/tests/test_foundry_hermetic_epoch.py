@@ -30,6 +30,7 @@ already known-good production behavior, not a hand-tuned coincidence of this fil
 from __future__ import annotations
 
 import random
+from pathlib import Path
 
 import pytest
 
@@ -165,6 +166,43 @@ def _fragile_anchors() -> list[fi.PopulationAnchor]:
     for i in range(8):
         anchors.append(_anchor("C", 2 * i, "PG", True, -0.2))
         anchors.append(_anchor("C", 2 * i + 1, "PG", False, 0.0))
+    return anchors
+
+
+def _fragile_killed_anchors_natural() -> list[fi.PopulationAnchor]:
+    """goal-hypothesis-foundry-iter-5's replacement for the serving-process ``scout._two_sided_p``
+    reassignment `foundry_hermetic_summary.py` used to need to reach `killed_fragile` (an open
+    MINOR anti-goal finding this iteration closes -- see that module's own docstring). A re-tuned,
+    genuinely random (real gaussian noise, no monkeypatch) three-session fixture: one large
+    dominant session with a strong PLANTED POSITIVE effect and two smaller sessions each with a
+    moderate planted NEGATIVE effect. The equally-session-weighted overall effect is positive and
+    genuinely significant under the REAL two-sided block-permutation null (empirically verified:
+    p_screen ~= 0.011-0.017 across five independent seed choices and both real family_ids this
+    fixture is used under) -- but dropping the single session holding the most candidate-cell
+    anchors (the dominant one, per ``scout._fragile_leave_one_session_out``'s own rule) flips the
+    sign of the remaining two sessions' mean delta, reaching ``killed_fragile`` honestly.
+
+    The dominant session's anchor count (8000) is deliberately far larger than each minor
+    session's (2000) so the "biggest candidate-count session" is deterministic across every random
+    seed, never a coin flip on the ~50/50 per-anchor membership draw -- a real failure mode found
+    while tuning this fixture: at equal per-session sizes, the "biggest" session was randomly
+    whichever session's own binomial noise happened to land highest, occasionally making the WRONG
+    session the one dropped and turning the outcome into `survive` instead of `killed_fragile`."""
+    import random as _random
+
+    def _session(session_date: str, n: int, effect_bps: float, seed_tag: str) -> list[fi.PopulationAnchor]:
+        rng = _random.Random(seed_tag)
+        out = []
+        for i in range(n):
+            member = rng.random() < 0.5
+            outcome = rng.gauss(effect_bps if member else 0.0, 1.0)
+            out.append(_anchor(session_date, i, "AAPL", member, outcome))
+        return out
+
+    anchors: list[fi.PopulationAnchor] = []
+    anchors += _session("2027-03-01", 8000, 60.0, "hermetic-fragile-natural-dom")
+    anchors += _session("2027-04-01", 2000, -20.0, "hermetic-fragile-natural-minor-0")
+    anchors += _session("2027-04-02", 2000, -20.0, "hermetic-fragile-natural-minor-1")
     return anchors
 
 
@@ -677,3 +715,57 @@ def test_tc8_every_screen_result_evidence_class_across_the_suite_is_historical_e
         evidence_class = row["screen_result"]["screen_result"]["evidence_class"]
         assert evidence_class == scout.EVIDENCE_CLASS_HISTORICAL_EXPOSED_DIAGNOSTIC == "historical_exposed_diagnostic"
         assert evidence_class not in ("historical_oos", "live_confirmatory")
+
+
+# === goal-hypothesis-foundry-iter-5: `killed_fragile` reached WITHOUT any `scout._two_sided_p` =====
+# reassignment -- closes the open MINOR anti-goal finding against `foundry_hermetic_summary.py`. ====
+
+
+def test_iter5_fragile_killed_anchors_natural_reaches_fragile_without_any_two_sided_p_override(tmp_path):
+    """The re-tuned `_fragile_killed_anchors_natural()` fixture reaches `killed_fragile` under the
+    REAL, unmodified `scout._two_sided_p` -- no `monkeypatch` fixture is even a parameter of this
+    test. Verified through the full production path (compiler-shaped `CandidateSpec` ->
+    `foundry_runner.run_one_candidate` -> the real `scout.screen_candidate`), under BOTH real
+    family_ids `foundry_hermetic_summary.py` actually uses this fixture under -- the null draws are
+    a deterministic function of `family_id`, so both call sites are verified independently."""
+    original_two_sided_p = scout._two_sided_p
+    for family_id, family_count in (
+        ("family:hermetic-summary-composite", 7),
+        ("family:hermetic-summary-all-killed", 6),
+    ):
+        family = ff.build_family_registry({family_id: [f"{family_id}:{i}" for i in range(family_count)]})[
+            family_id
+        ]
+        spec = _spec(5, family_id=family_id, family_count=family_count)
+        ledger = fl.FoundryLedger(tmp_path / family_id.replace(":", "-"))
+        row = fr.run_one_candidate(
+            spec, _fragile_killed_anchors_natural(), ledger=ledger, econ_floor=_ECON_FLOOR_TINY,
+            manifest_hash=f"manifest:iter5-fragile-natural:{family_id}", family=family,
+        )
+        assert row["foundry_state"] == "EVALUATED_KILLED", family_id
+        assert row["screen_result"]["reason"] == "killed_fragile", family_id
+        assert row["screen_result"]["screen_result"]["p_screen"] < 0.05, family_id
+        assert row["screen_result"]["screen_result"]["effect_bps"] > 0, family_id
+    # the real module attribute was never touched by this test.
+    assert scout._two_sided_p is original_two_sided_p
+
+
+def test_iter5_no_production_reassignment_of_scout_two_sided_p_outside_tests():
+    """Grep-based anti-goal regression guard (this iteration's own DoD item): zero matches for a
+    raw `scout._two_sided_p = ...` assignment anywhere in `apps/backend` outside `tests/`. A
+    legitimate `monkeypatch.setattr(scout, "_two_sided_p", ...)` call INSIDE a test (this file's
+    own TC-1/TC-4/TC-8 fragile branches) is a different statement shape and does not match."""
+    import re
+
+    backend_dir = Path(__file__).resolve().parents[1]
+    pattern = re.compile(r"scout\._two_sided_p\s*=")
+    offending: list[str] = []
+    for py_file in backend_dir.rglob("*.py"):
+        if "tests" in py_file.relative_to(backend_dir).parts:
+            continue
+        if ".venv" in py_file.parts:
+            continue
+        text = py_file.read_text(encoding="utf-8", errors="ignore")
+        if pattern.search(text):
+            offending.append(str(py_file))
+    assert offending == [], f"production reassignment of scout._two_sided_p found outside tests/: {offending}"

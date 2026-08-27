@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-hypothesis-foundry-iter-5",
+  "base_url": "http://localhost:3301",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Desk page loads with Hypothesis Foundry panel",
+      "narration": "The Desk page is the operations center for research data. The Hypothesis Foundry panel contains research subsections ready to explore.",
+      "point_out": "The Hypothesis Foundry section is visible and ready to expand.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/desk" },
+      "expect": { "text": "Hypothesis Foundry" }
+    },
+    {
+      "n": 2,
+      "title": "Hypothesis Foundry panel expands with five subsections",
+      "narration": "The panel header shows the Source registry hash—now displaying a real, committed epoch identifier instead of a placeholder value.",
+      "point_out": "The Source registry hash field is populated with a real committed value, and five subsection headers are ready to explore.",
+      "journey": "",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Hypothesis Foundry" } },
+      "expect": { "text": "Source registry hash" }
+    },
+    {
+      "n": 3,
+      "title": "Sources/Compiler shows complete fixture metadata",
+      "narration": "The Sources subsection now displays three new fields on every fixture record. Both variants of the alias-family example appear as separate entries, each with full metadata.",
+      "point_out": "Each fixture shows Operative formula refs, Superseded fields, and Aliases/lineage ids. Notice both fixture-variant-a and fixture-variant-b are now visible as distinct rows.",
+      "journey": "",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Sources / Compiler" } },
+      "expect": { "text": "Operative formula refs" }
+    },
+    {
+      "n": 4,
+      "title": "Hermetic Oracles displays kill-type mapping and sampling metrics",
+      "narration": "Hermetic Oracles now shows how outcome labels map to their internal foundry states. A Best-of-N disclosure line reports sampling details.",
+      "point_out": "The kill-type mapping pairs each outcome (fragile, survive, insufficient, etc.) with its real diagnostic state. The best-of-N line shows n_variants_tried and the decision threshold_bps.",
+      "journey": "",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Hermetic Oracles" } },
+      "expect": { "text": "Best-of-N disclosure" }
+    },
+    {
+      "n": 5,
+      "title": "Epoch/Manifest subsection shows the real committed epoch",
+      "narration": "This new subsection is the iteration's main achievement: the era's first real, Git-frozen research epoch with an emerald banner marking it as production data.",
+      "point_out": "The 'Real Epoch — not a fixture' banner uses emerald/green color, visually distinct from the amber banners on fixture sections. The status confirms 'Committed — Git-visible pre-outcome barrier crossed.'",
+      "journey": "",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Epoch / Manifest" } },
+      "expect": { "text": "Real Epoch — not a fixture" }
+    },
+    {
+      "n": 6,
+      "title": "Interpreter Fixtures subsection still renders correctly",
+      "narration": "Prior-iteration subsections remain stable. Interpreter Fixtures shows the expected hermetic fixture banner and scenario rows—confirming earlier work still passes.",
+      "point_out": "The amber 'Hermetic Fixture — not the real epoch' banner and the fixture scenario rows are intact, showing no regression in earlier iterations.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Interpreter Fixtures" } },
+      "expect": { "text": "Hermetic Fixture — not the real epoch" }
+    },
+    {
+      "n": 7,
+      "title": "Cockpit page loads normally",
+      "narration": "The Foundry changes are isolated to /desk. The Cockpit page loads with all controls and charts responsive, confirming no cross-page regressions.",
+      "point_out": "The navigation, ticker watch form, and example content all render correctly. The Hypothesis Foundry work didn't affect the main trading interface.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/" },
+      "expect": { "text": "SIM-BUYER" }
+    },
+    {
+      "n": 8,
+      "title": "Structure page loads normally",
+      "narration": "The Structure analysis page also works without issue, showing all panels are responsive. This confirms the iteration introduced no regressions.",
+      "point_out": "The Tradable Map, Case Studies, and Edge Report sections all load as expected, with no errors or broken functionality.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/structure" },
+      "expect": { "text": "Tradable Map" }
+    }
+  ]
+}

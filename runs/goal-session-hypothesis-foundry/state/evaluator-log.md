@@ -186,3 +186,48 @@ the frozen scoring function out of the running backend; and optionally add the p
 the freeze-record view. Run it at full depth. Two operator decisions remain: every iteration has
 overrun the one-hour budget (this one took over two hours), which is what keeps forcing the lighter
 pipeline, and the session cap may still want raising from 60 to 80.
+
+## Iteration 5 — goal-hypothesis-foundry-iter-5
+
+**Date:** 2026-08-27T07:10:00Z
+**Verdict:** ESCALATE
+**Depth dispatched:** full (iter-4's ESCALATE forced it; the engine did not demote it)
+**Journey deltas:**
+- Newly passing: J-06 "One complete real epoch is generated and committed" (was failing),
+  J-02 "Sources compile into auditable CandidateSpecs" (was partly done),
+  J-05 "The complete factory passes hermetic oracles" (was partly done)
+- Newly failing: none
+- Regressed: none — J-01, J-03 and J-04 all replayed and passed
+- Still failing: J-07 "Goal Mode exhausts the frozen real epoch" (not targeted; now unblocked),
+  J-08 "The operator sees the final Foundry truth" (depends on J-07)
+- Anti-goal violations: the iter-4 MINOR ("frozen foundations stay frozen") is RESOLVED, verified by
+  the evaluator's own grep and screenshot read. ONE new MINOR, unresolved and blocking:
+  "No second real generation epoch" — a first real epoch was minted and discarded before any commit
+  (source-registry-audit.md:9-40; auditor B5). Counts: total=2 / resolved=1 / blocking=1 /
+  non-blocking=0 / critical=0. scan-report CLEAN; coherence COHERENCE-PASS; closure CLOSURE-PASS.
+
+**Reasoning:** The one irreversible act of this era happened, and I checked the artefacts myself
+instead of trusting any report. The five frozen files are in exactly one commit that is an ancestor
+of the current code, the operator's real data folder still holds only the era-opening record so no
+candidate result was ever read, no runner that could read one even exists, and the count of
+result-reading calls during generation is genuinely zero because the generator watches actual
+function calls rather than imports. The honest outcome is that all eleven ratified ideas were
+blocked, excluded or renamed and the epoch compiled zero candidates — which the goal itself lists as
+a valid ending. I re-read two of the quoted sources against the real documents and they are faithful.
+Two long-standing screens also finished: the sources screen now shows every field its own checklist
+names and both records of the two-variant pair, and the oracles screen now shows the kill-type
+mapping and the best-of-N line it previously only claimed. The strict review pipeline again earned
+its cost: it found that this era's one irreplaceable file had no automated protection at all and
+added fourteen checks, and it found three real problems with the lock that guards the frozen code.
+
+**Next-step recommendation:** Build and run the exhaust pass over the frozen epoch (J-07) at full
+depth. Because the epoch is empty there is no result to read, so the work is the restartable runner,
+the epoch-opening record, the empty-list completion proof, and the all-zero protected-resource count.
+Carry four repairs in the same iteration, because after the lock is written no science file may
+change: store the frozen file list with project-relative paths, commit the code the freeze record
+points at, add the four files and the one record field the rules require by name, and make the
+generation command refuse when its saved state file has merely been deleted. Two operator decisions
+should be made first: whether the discarded first epoch is accepted, and whether the already-frozen
+files may be corrected. Escalated rather than continued because a plain continue would have been
+demoted to the lighter pipeline (sixth consecutive budget overrun) right before the era's one-way
+lock is written.

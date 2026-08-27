@@ -88,6 +88,7 @@ import type {
   DeskForwardTouch,
   DeskFoundryResponse,
   DeskGraduationResponse,
+  FoundryEpochManifest,
   FoundryFreezeIntegrity,
   FoundryHermeticOracles,
   FoundryInterpreterFixtures,
@@ -7383,7 +7384,7 @@ function HermeticFixtureBanner({ testid }: { testid: string }) {
   );
 }
 
-// goal-hypothesis-foundry-iter-4 (J-02): Sources/Compiler -- the 7 hermetic source-fixture
+// goal-hypothesis-foundry-iter-4 (J-02): Sources/Compiler -- the hermetic source-fixture
 // archetypes plus the immutability proof, rendered VERBATIM from `sources_compiler` (no
 // client-side recomputation).
 function SourcesCompilerSubsection({ data }: { data: FoundrySourcesCompiler }) {
@@ -7394,6 +7395,11 @@ function SourcesCompilerSubsection({ data }: { data: FoundrySourcesCompiler }) {
         {data.fixtures.length} hermetic source fixtures compiled through the real{" "}
         <span className="font-mono text-slate-400">foundry_compiler.compile_sources</span> — no
         candidate outcome ever participates in compilation.
+      </p>
+      <p data-testid="foundry-source-registry-audit-reference" className="mb-3 text-[11px] text-slate-500">
+        Real registry audit report:{" "}
+        <span className="font-mono text-slate-400">reports/hypothesis-foundry/source-registry-audit.md</span>{" "}
+        (committed alongside the real epoch — see Epoch / Manifest below).
       </p>
 
       <div
@@ -7457,6 +7463,28 @@ function SourcesCompilerSubsection({ data }: { data: FoundrySourcesCompiler }) {
                 Alternatives: <span className="font-mono text-slate-400">{fixture.alternatives.join(", ")}</span>
               </p>
             )}
+            <p data-testid="foundry-source-operative-formula-refs" className="mb-1 text-[10px] text-slate-500">
+              Operative formula refs:{" "}
+              <span className="font-mono text-slate-400">
+                {fixture.operative_formula_refs.length > 0 ? fixture.operative_formula_refs.join(", ") : "(none)"}
+              </span>
+            </p>
+            <p data-testid="foundry-source-superseded-fields" className="mb-1 text-[10px] text-slate-500">
+              Superseded fields:{" "}
+              <span className="font-mono text-slate-400">
+                {Object.keys(fixture.superseded_fields).length > 0
+                  ? Object.entries(fixture.superseded_fields)
+                      .map(([field, ref]) => `${field} → ${ref}`)
+                      .join("; ")
+                  : "{}"}
+              </span>
+            </p>
+            <p data-testid="foundry-source-aliases-lineage-ids" className="mb-1 text-[10px] text-slate-500">
+              Aliases/lineage ids:{" "}
+              <span className="font-mono text-slate-400">
+                {fixture.aliases_lineage_ids.length > 0 ? fixture.aliases_lineage_ids.join(", ") : "[]"}
+              </span>
+            </p>
             {fixture.block_reason && (
               <p className="mb-1 text-[10px] text-amber-500">
                 Block reason: <span className="font-mono">{fixture.block_reason}</span>
@@ -7645,6 +7673,153 @@ function FreezeIntegritySubsection({ data }: { data: FoundryFreezeIntegrity }) {
   );
 }
 
+// goal-hypothesis-foundry-iter-5 (J-06): the REAL-epoch banner -- visually distinct from
+// `HermeticFixtureBanner` (amber "not the real epoch") so an operator can never mistake the one
+// real, Git-frozen epoch for a hermetic demonstration. Emerald/cyan accent, not amber.
+function RealEpochBanner({ testid, label }: { testid: string; label: string }) {
+  return (
+    <p
+      data-testid={testid}
+      className="mb-3 inline-block rounded border border-emerald-700/60 bg-emerald-950/40 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-400"
+    >
+      {label}
+    </p>
+  );
+}
+
+// goal-hypothesis-foundry-iter-5 (J-06): Epoch / Manifest -- the era's ONE real, Git-frozen epoch.
+// Rendered VERBATIM from `epoch_manifest` (no client-side recomputation) -- distinct from the four
+// hermetic-fixture subsections above/below it.
+function EpochManifestSubsection({ data }: { data: FoundryEpochManifest }) {
+  const statusLabel: Record<FoundryEpochManifest["status"], string> = {
+    not_yet_generated: "Not yet generated",
+    generated_uncommitted: "Generated, not yet committed",
+    committed: "Committed — Git-visible pre-outcome barrier crossed",
+  };
+  return (
+    <div data-testid="foundry-epoch-manifest">
+      <RealEpochBanner testid="foundry-epoch-manifest-real-banner" label="Real Epoch — not a fixture" />
+      {data.status === "not_yet_generated" ? (
+        <EmptyState
+          testid="foundry-epoch-manifest-empty"
+          title="The real epoch has not been generated yet."
+        />
+      ) : (
+        <>
+          <p data-testid="foundry-epoch-status" className="mb-2 text-[11px] text-slate-500">
+            Status:{" "}
+            <span
+              className={`font-mono ${data.status === "committed" ? "text-emerald-400" : "text-amber-400"}`}
+            >
+              {statusLabel[data.status]}
+            </span>
+          </p>
+          <div data-testid="foundry-epoch-identities" className="mb-3 space-y-0.5 text-[11px] text-slate-500">
+            <p>
+              epoch_id: <span className="font-mono text-slate-300">{data.epoch_id}</span>
+            </p>
+            <p>
+              source_registry_hash:{" "}
+              <span className="break-all font-mono text-[10px] text-slate-400">{data.source_registry_hash}</span>
+            </p>
+            <p>
+              manifest_hash:{" "}
+              <span className="break-all font-mono text-[10px] text-slate-400">{data.manifest_hash}</span>
+            </p>
+            <p>
+              freeze_set_hash:{" "}
+              <span className="break-all font-mono text-[10px] text-slate-400">{data.freeze_set_hash}</span>
+            </p>
+            <p>
+              freeze_commit:{" "}
+              <span className="break-all font-mono text-[10px] text-slate-400">{data.freeze_commit}</span>
+            </p>
+            <p>
+              config_fingerprint:{" "}
+              <span className="font-mono text-[10px] text-slate-400">{data.config_fingerprint}</span>
+            </p>
+            <p data-testid="foundry-epoch-outcome-access-census">
+              outcome_access_census:{" "}
+              <span
+                className={`font-mono ${data.outcome_access_census === 0 ? "text-emerald-400" : "text-rose-400"}`}
+              >
+                {data.outcome_access_census}
+              </span>
+            </p>
+          </div>
+
+          <p className="mb-1 text-[11px] font-semibold text-slate-400">
+            Source dispositions ({data.source_dispositions.length} of 11 required objects)
+          </p>
+          <ul data-testid="foundry-epoch-source-disposition-rows" className="mb-3 space-y-1">
+            {data.source_dispositions.map((row) => (
+              <li key={row.source_id} className="text-[11px] text-slate-500">
+                <span className="font-mono text-slate-300">{row.source_id}</span>
+                {" — "}
+                <span className="font-mono text-slate-400">{row.disposition}</span>
+                {(row.lineage_refs.length > 0 || row.alias_refs.length > 0) && (
+                  <span className="text-[10px] text-slate-600">
+                    {" "}
+                    (lineage: {row.lineage_refs.join(", ") || "—"}; aliases:{" "}
+                    {row.alias_refs.join(", ") || "—"})
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+
+          <p className="mb-1 text-[11px] font-semibold text-slate-400">
+            Compiled families ({data.families.length})
+          </p>
+          {data.families.length === 0 ? (
+            <EmptyState
+              testid="foundry-epoch-families-empty"
+              title="Zero compiled candidates this epoch — every required source disposed non-COMPILED."
+            />
+          ) : (
+            <ul data-testid="foundry-epoch-family-rows" className="mb-3 space-y-2">
+              {data.families.map((family) => (
+                <li key={family.foundry_family_id} className="rounded border border-slate-800 p-2">
+                  <p className="mb-1 text-[11px] text-slate-400">
+                    <span className="font-mono text-slate-300">{family.foundry_family_id}</span>
+                    {" · family_order="}
+                    <span className="font-mono">{family.family_order}</span>
+                    {" · variant_count="}
+                    <span className="font-mono">{family.variant_count}</span>
+                  </p>
+                  <ul className="space-y-0.5">
+                    {family.variants.map((variant) => (
+                      <li key={variant.variant_id} className="text-[10px] text-slate-500">
+                        <span className="font-mono text-slate-400">{variant.variant_id}</span>
+                        {" · ordinal="}
+                        <span className="font-mono">{variant.variant_ordinal}</span>
+                        {" · candidate_spec_hash="}
+                        <span className="break-all font-mono">{variant.candidate_spec_hash}</span>
+                        {" · future_rule_id="}
+                        <span className="break-all font-mono">{variant.future_rule_id}</span>
+                        {" · prospective_root_status="}
+                        <span className="font-mono">{variant.prospective_root_status}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <p data-testid="foundry-epoch-source-registry-audit" className="text-[11px] text-slate-500">
+            Source-registry audit report:{" "}
+            <span className="font-mono text-slate-400">{data.source_registry_audit.path}</span>{" "}
+            <span className={data.source_registry_audit.committed ? "text-emerald-400" : "text-amber-400"}>
+              ({data.source_registry_audit.committed ? "committed" : "not yet committed"})
+            </span>
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
 // goal-hypothesis-foundry-iter-4 (J-05): Hermetic Oracles -- the outcome-type coverage, denominator
 // -consistency/canonical-order flags, and the five named oracle pass/fail results, rendered
 // VERBATIM from `hermetic_oracles`.
@@ -7670,6 +7845,22 @@ function HermeticOraclesSubsection({ data }: { data: FoundryHermeticOracles }) {
       <p data-testid="foundry-outcome-types-present" className="mb-2 text-[11px] text-slate-500">
         Outcome types present:{" "}
         <span className="font-mono text-slate-300">{data.outcome_types_present.join(", ")}</span>
+      </p>
+      <ul data-testid="foundry-kill-type-mapping-rows" className="mb-2 space-y-0.5">
+        {data.kill_type_mapping.map((row, i) => (
+          <li key={i} className="text-[11px] text-slate-500">
+            <span className="font-mono text-slate-400">{row.outcome_label}</span> →{" "}
+            <span className="font-mono text-slate-300">{row.foundry_state}</span>
+          </li>
+        ))}
+      </ul>
+      <p data-testid="foundry-best-of-n-disclosure" className="mb-2 text-[11px] text-slate-500">
+        Best-of-N disclosure: n_variants_tried=
+        <span className="font-mono text-slate-300">{data.best_of_n_disclosure.n_variants_tried}</span>
+        {" · "}threshold_bps=
+        <span className="font-mono text-slate-300">
+          {data.best_of_n_disclosure.threshold_bps ?? "—"}
+        </span>
       </p>
       <p data-testid="foundry-hermetic-oracle-flags" className="mb-3 text-[11px] text-slate-500">
         Denominator consistent across rows:{" "}
@@ -7863,6 +8054,17 @@ function HypothesisFoundrySection({
           onToggle={() => toggleSubsection("hermetic-oracles")}
         >
           <HermeticOraclesSubsection data={foundry.hermetic_oracles} />
+        </CollapsibleSection>
+
+        {/* goal-hypothesis-foundry-iter-5 (J-06): the era's one real, Git-frozen epoch -- distinct
+            from the four hermetic-fixture demonstrations above. */}
+        <CollapsibleSection
+          id="foundry-epoch-manifest-section"
+          title="Epoch / Manifest"
+          open={openSubsections.has("epoch-manifest")}
+          onToggle={() => toggleSubsection("epoch-manifest")}
+        >
+          <EpochManifestSubsection data={foundry.epoch_manifest} />
         </CollapsibleSection>
       </div>
     </div>

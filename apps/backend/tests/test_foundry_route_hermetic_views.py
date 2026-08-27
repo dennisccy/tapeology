@@ -26,13 +26,18 @@ def _foundry_body() -> dict:
 # === sources_compiler (J-02): TC-1, TC-2, TC-3 ======================================================
 
 
-def test_tc1_sources_compiler_has_exactly_seven_entries_matching_the_registry_dispositions():
+def test_tc1_sources_compiler_has_exactly_eight_entries_matching_the_registry_dispositions():
+    """goal-hypothesis-foundry-iter-5: the count changed from 7 to 8 -- both alias-family sibling
+    records (`fixture-variant-a`/`fixture-variant-b`) now each surface as their own entry, per two
+    consecutive evaluator verdicts asking to show both records of the two-variant family (J-02
+    step 2's own plain text: "two explicitly-frozen legal variants", plural)."""
     body = _foundry_body()
     fixtures = body["sources_compiler"]["fixtures"]
-    assert len(fixtures) == 7
+    assert len(fixtures) == 8
     expected = {
         "fixture-natural-boundary": fsr.DISPOSITION_COMPILED,
         "fixture-variant-a": fsr.DISPOSITION_COMPILED,
+        "fixture-variant-b": fsr.DISPOSITION_COMPILED,
         "fixture-magnitude-word": fsr.DISPOSITION_BLOCKED_SPEC_GAP,
         "fixture-proxy": fsr.DISPOSITION_ALIASED_PROXY_ONLY,
         "fixture-unsupported-stat": fsr.DISPOSITION_BLOCKED_UNSUPPORTED_STUDY_FORM,
@@ -52,6 +57,37 @@ def test_tc1_sources_compiler_has_exactly_seven_entries_matching_the_registry_di
             "candidate_spec", "block_reason",
         ):
             assert field in entry
+
+
+def test_iter5_both_alias_family_siblings_visible_with_full_field_set():
+    """TC-11: both `fixture-variant-a` and `fixture-variant-b` appear as their own visible record
+    rows, each showing its `operative_formula_refs`, `superseded_fields`, and
+    `aliases_lineage_ids` values, and each other's id in `alternatives`."""
+    body = _foundry_body()
+    by_id = {f["source_id"]: f for f in body["sources_compiler"]["fixtures"]}
+    variant_a = by_id["fixture-variant-a"]
+    variant_b = by_id["fixture-variant-b"]
+    assert variant_a["operative_formula_refs"] == ["cumulative_delta"]
+    assert variant_b["operative_formula_refs"] == ["cumulative_delta"]
+    assert variant_a["alternatives"] == ["fixture-variant-b"]
+    assert variant_b["alternatives"] == ["fixture-variant-a"]
+    assert variant_a["candidate_spec"] is not None and variant_b["candidate_spec"] is not None
+    assert variant_a["candidate_spec"]["foundry_family_variant_count"] == 2
+    assert variant_b["candidate_spec"]["foundry_family_variant_count"] == 2
+    for field in ("superseded_fields", "aliases_lineage_ids"):
+        assert field in variant_a and field in variant_b
+
+
+def test_iter5_every_sources_compiler_fixture_shows_the_three_additive_fields_with_explicit_empty_states():
+    """TC-12: every fixture record shows `operative_formula_refs`/`superseded_fields`/
+    `aliases_lineage_ids`, with an empty array/object rendered as an explicit empty state rather
+    than omitted -- verified at the API layer (an empty list/dict is present as `[]`/`{}`, not a
+    missing key) since the frontend renders whatever this response serves verbatim."""
+    body = _foundry_body()
+    for fixture in body["sources_compiler"]["fixtures"]:
+        for field in ("operative_formula_refs", "superseded_fields", "aliases_lineage_ids"):
+            assert field in fixture, f"{fixture['source_id']} missing {field}"
+            assert fixture[field] is not None, f"{fixture['source_id']}.{field} is None, not an explicit empty value"
 
 
 def test_tc2_natural_boundary_candidate_spec_every_science_field_populated_and_hash_reproducible():
@@ -202,6 +238,80 @@ def test_tc15_five_named_oracle_fixtures_all_pass():
         assert oracles[field] is True, field
 
 
+# === goal-hypothesis-foundry-iter-5 (J-05 repairs): kill_type_mapping, best_of_n_disclosure, ========
+# and outcome_types_present row-derivation. =============================================================
+
+
+def test_iter5_kill_type_mapping_has_seven_rows_each_with_its_own_real_foundry_state():
+    body = _foundry_body()
+    mapping = body["hermetic_oracles"]["kill_type_mapping"]
+    assert len(mapping) == 7
+    expected_states = {
+        "insufficient": "EVALUATED_INSUFFICIENT",
+        "null": "EVALUATED_KILLED",
+        "direction": "EVALUATED_KILLED",
+        "concentration": "EVALUATED_KILLED",
+        "economic": "EVALUATED_KILLED",
+        "fragile": "EVALUATED_KILLED",
+        "survive": "DIAGNOSTIC_SURVIVOR_OOS_RULE_FROZEN",
+    }
+    by_label = {row["outcome_label"]: row["foundry_state"] for row in mapping}
+    assert by_label == expected_states
+
+
+def test_iter5_best_of_n_disclosure_present_and_n_variants_tried_identical_across_all_seven_rows():
+    """``n_variants_tried`` (the frozen family denominator) is genuinely identical across every
+    composite row -- verified directly against the raw per-row disclosures, not assumed.
+    ``threshold_bps`` is a real, non-fabricated value off one of those same rows, but is NOT
+    asserted identical across all seven: `scout._best_of_n_disclosure`'s own `corrected_threshold_
+    bps` is a function of each candidate's OWN null-permutation draws (confirmed empirically to
+    differ row to row even within one shared family, and `None` for the `killed_insufficient_n`
+    row, whose null draws are never computed) -- only `n` is a true family-level constant."""
+    body = _foundry_body()
+    oracles = body["hermetic_oracles"]
+    disclosure = oracles["best_of_n_disclosure"]
+    assert disclosure["n_variants_tried"] == 7
+    assert isinstance(disclosure["threshold_bps"], float)
+
+    import tempfile
+    from pathlib import Path as _Path
+
+    import tests.test_foundry_hermetic_epoch as the_suite
+    from app.research import foundry_hermetic_summary as fhs
+
+    with tempfile.TemporaryDirectory() as d:
+        composite = fhs._composite_epoch(the_suite, _Path(d))
+    raw_disclosures = [
+        row["screen_result"]["screen_result"]["best_of_n_disclosure"] for _, _, row in composite["results"]
+    ]
+    assert len(raw_disclosures) == 7
+    assert {raw["n"] for raw in raw_disclosures} == {7}
+    non_none_thresholds = {raw["corrected_threshold_bps"] for raw in raw_disclosures if raw["corrected_threshold_bps"] is not None}
+    assert disclosure["threshold_bps"] in non_none_thresholds
+
+
+def test_iter5_outcome_types_present_is_row_derived_not_hardcoded():
+    """TC-14: mutating one composite-epoch row's terminal outcome changes the returned
+    `outcome_types_present` set -- proving it is derived by reading each row's actual state, not
+    returned from a hard-coded dict keyed on anything else."""
+    from app.research.foundry_hermetic_summary import _derive_outcome_types_present
+
+    rows = [
+        ("insufficient", None, {"screen_result": {"decision": "killed_insufficient_n"}}),
+        ("null", None, {"screen_result": {"decision": "killed_null"}}),
+        ("survive", None, {"screen_result": {"decision": "survive"}}),
+    ]
+    before = _derive_outcome_types_present("compiled", {}, rows)
+    assert before == ["compiled", "insufficient", "null_killed", "survivor"]
+
+    # mutate ONE row's real terminal outcome (the "null" row now genuinely survives instead).
+    mutated_rows = list(rows)
+    mutated_rows[1] = ("null", None, {"screen_result": {"decision": "survive"}})
+    after = _derive_outcome_types_present("compiled", {}, mutated_rows)
+    assert after == ["compiled", "insufficient", "survivor"]
+    assert after != before
+
+
 # === TC-19: the GET route never recomputes; served payloads are byte-identical across calls ========
 
 
@@ -232,7 +342,7 @@ def test_tc19_get_route_never_invokes_the_fixture_builders_per_request(monkeypat
         response = client.get("/research/desk/micro/foundry")
     assert response.status_code == 200
     body = response.json()
-    assert len(body["sources_compiler"]["fixtures"]) == 7
+    assert len(body["sources_compiler"]["fixtures"]) == 8
     assert len(body["interpreter_fixtures"]["scenarios"]) == 5
 
 

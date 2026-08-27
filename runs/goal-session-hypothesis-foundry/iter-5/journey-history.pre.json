@@ -1,0 +1,109 @@
+{
+  "journeys": {
+    "J-01": {
+      "id": "J-01",
+      "name": "The Foundry opens as a new finite era and the old self-extension loop is inactive",
+      "status": "passing",
+      "last_verified_iter": "goal-hypothesis-foundry-iter-4",
+      "last_passing_iter": "goal-hypothesis-foundry-iter-4",
+      "first_seen_iter": "goal-hypothesis-foundry-iter-0",
+      "last_evidence_path": "reports/qa/goal-hypothesis-foundry-iter-4-evidence/J-01-verify.png",
+      "spec_hash": "59e3ae49662b4b867a8df72a472b4ad02a5fbf79ce36d95bd34fc1f20dd3acd5"
+    },
+    "J-02": {
+      "id": "J-02",
+      "name": "Ratified sources compile into auditable CandidateSpecs or typed blocks without outcome input",
+      "status": "partial",
+      "last_verified_iter": "goal-hypothesis-foundry-iter-4",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-hypothesis-foundry-iter-0",
+      "last_evidence_path": "reports/qa/goal-hypothesis-foundry-iter-4-evidence/UT-J-02-result.png",
+      "spec_hash": "1f5990f0ef773d9740a427d44bb5d593ac40ca6d4b65e704ae64270226c273db",
+      "gap": "step 3 unmet on screen: the source-fixture card renders source refs, quoted span+location, direction derivation, threshold provenance, alternatives and disposition, but NOT operative_formula_refs, superseded_fields or aliases_lineage_ids (page.tsx SourcesCompilerSubsection). Step 2's 'two explicitly-frozen legal variants' archetype surfaces only one of its two SourceRecords (sibling named via alternatives only). Step 5b (inspect the committed fresh-context registry-audit report at reports/hypothesis-foundry/source-registry-audit.md) is impossible until J-06 commits it."
+    },
+    "J-03": {
+      "id": "J-03",
+      "name": "Generic interpretation preserves timing, population symmetry, direction, and exact Scout decisions",
+      "status": "passing",
+      "last_verified_iter": "goal-hypothesis-foundry-iter-4",
+      "last_passing_iter": "goal-hypothesis-foundry-iter-4",
+      "first_seen_iter": "goal-hypothesis-foundry-iter-0",
+      "last_evidence_path": "reports/qa/goal-hypothesis-foundry-iter-4-evidence/UT-J-03-result.png",
+      "spec_hash": "2df19ba402256be32c1e1bef5ab444f53932d7a6e1910ef1550475f69efc0d05",
+      "gap": "residual sub-clause only: step 2's 'raw coordinates remain descriptive provenance' half has no dedicated on-screen rendering (the interpreter payload carries the screen, not the CandidateSpec coordinates). All 5 numbered steps are demonstrated; evaluator independently re-ran interpreter_hermetic_fixture_view and reproduced n_candidate=16/n_comparator=32 with feature_name/transform/params=None at the Scout boundary, support_long decision=killed_direction (effect -79.905625 bps) and resistance_short decision=survive."
+    },
+    "J-04": {
+      "id": "J-04",
+      "name": "Foundry owns the denominator, append-only state, freeze barrier, and integrity lock",
+      "status": "passing",
+      "last_verified_iter": "goal-hypothesis-foundry-iter-4",
+      "last_passing_iter": "goal-hypothesis-foundry-iter-4",
+      "first_seen_iter": "goal-hypothesis-foundry-iter-0",
+      "last_evidence_path": "reports/qa/goal-hypothesis-foundry-iter-4-evidence/UT-J-04-result.png",
+      "spec_hash": "046f4d7aa4cd1a09254c0645b97cce49ff848582688dd49a4911cc2f1fa4a71b",
+      "gap": "residual sub-clause only: step 4's 'plus the manifest/source/spec/config identities' is not surfaced by the freeze_record subview (the iteration's own data contract listed only freeze_set_target_path/freeze_set_hash/pinned_hashes/transitive_dependency_coverage_complete); build_freeze_record does pin them (foundry_freeze.py:229-244). All 6 numbered steps are rendered and were read off the screenshot by the evaluator."
+    },
+    "J-05": {
+      "id": "J-05",
+      "name": "The complete factory passes hermetic known-null, planted-effect, leakage, and honest-stop oracles",
+      "status": "partial",
+      "last_verified_iter": "goal-hypothesis-foundry-iter-4",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-hypothesis-foundry-iter-0",
+      "last_evidence_path": "reports/qa/goal-hypothesis-foundry-iter-4-evidence/UT-J-05-result.png",
+      "spec_hash": "5b0b7ba56f92f1618b478620a75b4e3e0061935ce90ed66d5ad623f278b06de6",
+      "gap": "step 3 has NO on-screen rendering at all: the Scout-decision -> foundry_state mapping (killed_insufficient_n -> EVALUATED_INSUFFICIENT, every other kill -> EVALUATED_KILLED, only survive -> DIAGNOSTIC_SURVIVOR_OOS_RULE_FROZEN) is enforced in code and was reproduced by the evaluator from a live composite epoch, but the hermetic_oracles payload carries no per-row state/decision field. Step 4's 'best-of-N disclosure' half is also unrendered (only the denominator half is). Additionally outcome_types_present is built from a hard-coded plan-label -> display-string dict rather than read back off each row (foundry_hermetic_summary.py:303-318; reviewer MINOR + coherence advisory) -- currently truthful (evaluator verified all 7 labels match the real returned foundry_state) but the panel visually claims to prove a mapping it does not read."
+    },
+    "J-06": {
+      "id": "J-06",
+      "name": "One complete real epoch is generated and committed with zero Foundry outcome reads",
+      "status": "failing",
+      "last_verified_iter": "goal-hypothesis-foundry-iter-3",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-hypothesis-foundry-iter-0",
+      "last_evidence_path": "runs/goal-session-hypothesis-foundry/iter-3/eval.md",
+      "spec_hash": "92dd2d434a1cfa8ce4683e1df6b094d67ab5ec88a92febdc1b56a3ec4e4e8aac",
+      "gap": "not targeted this iteration; Binding Execution Order forbids attempting it until the step-5 read surface is complete"
+    },
+    "J-07": {
+      "id": "J-07",
+      "name": "Goal Mode deterministically exhausts the frozen real epoch without changing science",
+      "status": "failing",
+      "last_verified_iter": "goal-hypothesis-foundry-iter-3",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-hypothesis-foundry-iter-0",
+      "last_evidence_path": "runs/goal-session-hypothesis-foundry/iter-3/eval.md",
+      "spec_hash": "f3a5ff9577806a161eb3a7cf7d9b695e9e06e581943c436920f5f7868ed37803",
+      "gap": "not targeted this iteration; Binding Execution Order forbids attempting it until the step-5 read surface is complete"
+    },
+    "J-08": {
+      "id": "J-08",
+      "name": "The operator sees the final Foundry truth and all foundation rails still hold",
+      "status": "failing",
+      "last_verified_iter": "goal-hypothesis-foundry-iter-3",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-hypothesis-foundry-iter-0",
+      "last_evidence_path": "reports/qa/goal-hypothesis-foundry-iter-3-evidence/J-01-verify.png",
+      "spec_hash": "61cc1f15a3805d73e63bac6d4d109a9fda53ead5e6c75d1618e0eb253f9c0ed8",
+      "gap": "not targeted this iteration; Binding Execution Order forbids attempting it until the step-5 read surface is complete"
+    }
+  },
+  "anti_goal_violations": [
+    {
+      "iter": "goal-hypothesis-foundry-iter-4",
+      "anti_goal": "Frozen foundations stay frozen. The existing `v1` strategy, `default` profile, tape engine state vocabulary/thresholds, frozen structure calculations, canonical stores, and archived-era behavior remain additive/versioned, never silently mutated.",
+      "severity": "minor",
+      "evidence": "apps/backend/app/research/foundry_hermetic_summary.py:75-82 and :183-188 \u2014 production (non-test) code reassigns the frozen Scout internal `scout._two_sided_p = lambda observed, null: 0.0001` and restores it in a `finally`. These are the only two raw reassignments of a `scout` internal anywhere under `apps/backend/app/research/`. The patch executes inside the backend server process at module-import time, because `micro_routes.py:774` builds `_HERMETIC_ORACLES_VIEW` at import. The equivalent test code uses `monkeypatch.setattr` (tests/test_foundry_hermetic_epoch.py:255,465,669), which auto-restores; the production copy does not have that protection. Nothing persists past the `finally` and no research result changed (evaluator re-ran the composite epoch: all 7 plan labels match the real returned foundry_state, denominator/canonical-order/evidence-class flags all true), so this is scored MINOR, not critical. Recorded rather than dismissed in prose per goal.md's own anti-goal 'Anti-goal violations use the existing Goal Mode anti-goal violation state/disposition machinery; they are not dismissed in prose.' Fix: build the fragility fixture from data that genuinely yields a low p-value, or compute the hermetic-oracles summary in an isolated process/lazily instead of patching a frozen module inside the serving process.",
+      "resolved": false
+    }
+  ],
+  "notes": {
+    "browser_lane_iter_3": "Browser lane healthy: no browser-infra.json for iter-3, no journeys-changed.md, no DEFERRED-BUDGET row, not maintenance isolation. Merged ui-test-results.md = PASS, 1/1 (UT-J-01) with 0 skipped; the raw deterministic replay lane agrees and carries no reconciliation footer. J-02/J-03/J-04/J-05 have NO row at all - by design, the iteration spec's Testing Requirements say 'Browser: J-01 replay only'. The walkthrough recording (reports/phase-goal-hypothesis-foundry-iter-3-demo-results.md) is NOT_YET with zero captured steps because no new UI shipped; this is not a capture defect on a working feature, so no evidence_makeup flag was set on any journey.",
+    "pipeline_health_iter_3": "Full depth ran as the iter-2 ESCALATE required, and the escalation paid for itself. Review PASS (reviewer independently ran the full backend suite, exit 0, plus a targeted -v run of the four touched Foundry files: 57/57). QA PASS (3842/8/0 in 422.49s; UI Evolution Audit correctly SKIPPED for Frontend Present: no). Hard audit PASS_WITH_GAPS - found and FIXED two IMPORTANT completeness holes the lighter lanes both missed (see J-05 gap: B1 compiler->runner seam untested repo-wide, B2 TC-3's runner clause unexercised). Closure gate CLOSURE-PASS, no blocking issues. Coherence COHERENCE-PASS. Store-scope guard manifest present and cited (reports/qa-scoped-backend-store-manifest.md; rig bound to a throwaway root under the isolated TMPDIR, port 8301).",
+    "process_defect_iter_3": "Auditor T5 (process, not product; UNFIXED and worth correcting next iteration): reports/qa/goal-hypothesis-foundry-iter-3-qa.md Steps 3.5/4 assert the J-01 golden replay 'is a pure backend verification already covered by the full test suite execution'. That is FALSE - journey-scripts/J-01.json is a two-step browser script (goto /desk -> click 'Hypothesis Foundry' -> expect 08e471b10130e1e2) and status.json records browser_checks_run: false for the QA lane. TC-13 is genuinely satisfied, but by the deterministic replay lane, not by pytest. Cite reports/phase-goal-hypothesis-foundry-iter-3-regression-replay-results.md + the J-01-verify.png evidence, never the QA report's reasoning.",
+    "open_non_anti_goal_defects_iter_3": "(1) auditor B4 - the intent-without-terminal crash path still verifies econ_floor_bps only, never manifest_hash (foundry_runner.py:112-119). (2) auditor B7 - SourceRecord.alternatives has no fail-closed validation of the sibling ids it names; add a batch lint before J-06 authors the real 11 records. (3) auditor B3 - foundry_freeze.py is not exercised by the composite oracle suite (the runner deliberately does not call verify_freeze_set_unchanged until J-06/J-07). (4) auditor T1 - no checkpoint file exists in foundry_runner.py, so 'never trusts a stale checkpoint' is currently unfalsifiable; goal.md \u00a79.2's derived checkpoint cache is not built. (5) auditor B5 - the large-N PERFORMANCE fixture was not delivered; measured O(n^2) ledger growth, harmless at this era's 24-variant cap. (6) auditor B6 - the fast path's econ-floor check is conditional on the intent row existing (unreachable through the production path today). (7) carried: freeze-set transitive scanner follows only same-directory (level==1) relative imports. (8) carried: BLOCKED_UNIT_CONTRACT still not reachable from declared fields. (9) carried: no CLI entry point for foundry_runner.py. NONE is an anti-goal violation; all are developer- or auditor-disclosed and evaluator-confirmed.",
+    "resolved_this_iteration": "Two blockers carried in state/iteration-state.md are CLOSED and must not be re-attempted: the foundry_runner.py already-terminal resume-identity hole (TC-9) and SourceRecord's missing \u00a71.4 alternatives/source_hash fields (TC-10/TC-11). Both evaluator-verified by reading the code and re-running the tests.",
+    "baseline_reference": "era-open baseline recorded once via apps/backend/scripts/record_foundry_era_open_baseline.py into apps/backend/.data/foundry/era_open_baseline.json (gitignored): 3787 passed / 8 skipped / 0 failed, tsc_error_count 0, config_fingerprint 08e471b10130e1e2, six referee_*.py SHA-256 hashes - all six recomputed and matched by the evaluator in iter-1 and iter-2. Evaluator re-confirmed in iter-3 that the file is untouched (mtime 21:13 = iter-1, predating this run's 22:07 start)."
+  },
+  "updated_at": "2026-08-27T03:05:00Z"
+}

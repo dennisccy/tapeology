@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "journey": "J-06",
+  "name": "The real epoch: source registry, manifest, and Git-visible freeze",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "journey": "J-06",
+      "action": {"type": "goto", "url": "/desk"},
+      "expect": {"text": "Hypothesis Foundry"}
+    },
+    {
+      "n": 2,
+      "journey": "J-06",
+      "action": {"type": "click", "target": {"testid": "desk-section-expand-hypothesisFoundry"}},
+      "expect": {"text": "Era-Open Baseline"}
+    },
+    {
+      "n": 3,
+      "journey": "J-06",
+      "action": {"type": "click", "target": {"testid": "desk-section-expand-foundry-epoch-manifest-section"}},
+      "expect": {"text": "epoch:afd19e9c11a6534f"}
+    }
+  ]
+}

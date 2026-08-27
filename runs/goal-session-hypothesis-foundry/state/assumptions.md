@@ -287,3 +287,62 @@ is preserved and in fact strengthened, and J-02 step 2's plain text ("two explic
 variants," plural) supports showing both. This is disclosed here rather than silently reinterpreting
 the existing test's intent.
 **Reversible:** yes
+
+## iter-5 — goal-evaluator
+
+**Ambiguity:** the decision tree's ESCALATE rung is worded for a LEAN iteration ("this lean
+iteration surfaced cross-cutting ambiguity/complexity"), and iter-5 ran FULL. Yet a CONTINUE verdict
+here would be demoted to lean by the engine's deterministic depth arbiter on two independent rungs
+(the sixth consecutive budget breach, and `goal_full_ran_in_window` seeing iter-5's own full run) —
+and iter-6 writes the §8.5 first-read lock, the era's second irreversible act, with three open
+IMPORTANT freeze-integrity findings (B1 absolute-path freeze set, B2 freeze_commit missing the
+science bytes, B7 + the missing era-open evidence-class contract) bearing directly on that lock.
+**We chose:** ESCALATE, extending the rung to a full iteration that surfaced cross-cutting
+integrity complexity, rather than CONTINUE + a depth recommendation the arbiter would override. This
+session has documented the same override twice (iter-2, iter-4), and goal.md's own rule that "a
+science-affecting edit after step 8 begins is an integrity halt, not an iteration opportunity" makes
+iter-6 the LAST iteration in which those findings can be repaired at all. Disclosed here rather than
+presented as a routine tree match.
+**Reversible:** yes
+
+**Ambiguity:** the "No second real generation epoch" anti-goal is worded absolutely, but §7.3 says
+Goal Mode "may repair only before any real outcome has been read" — and that is exactly what
+happened: a first real `epoch_id` was minted, an independent audit proved one `direction_derivation`
+value unsupported, and the registry was regenerated before any commit or any outcome read. Critical
+or minor is a real fork: critical would force REGRESSION and halt the session.
+**We chose:** MINOR and unresolved (therefore blocking), not critical. Grounds I verified myself:
+`git log` shows the five tracked artefacts were added in exactly ONE commit (`dff64eaa`), so nothing
+was ever published under the discarded hash; `apps/backend/.data/foundry/` holds only
+`era_open_baseline.json`, so no trial ledger and no candidate outcome ever existed; and the whole
+sequence is disclosed in the committed audit report rather than hidden. It is not in the methodology's
+critical class (no secret, paid dependency, license breach, backdoor, or fabricated data) and it is
+not the goal's own named critical violation ("a real candidate outcome read before step 7"). It stays
+blocking until the owner rules — I may not write an owner disposition myself.
+**Reversible:** yes
+
+**Ambiguity:** J-06 step 4 asks to confirm "the complete family/variant manifest, denominators,
+CandidateSpec hashes, future rule_ids, prospective-root status" are visible — but the real epoch
+compiled ZERO candidates, so `families[]` is empty and that whole rendering block has never displayed
+a row (auditor F1). The status vocabulary does not say whether a vacuously-empty step counts as
+demonstrated.
+**We chose:** score J-06 `passing`, treating the honest empty state as satisfying step 4. goal.md's
+own Completion section lists "zero compiled candidates" as valid successful ending 1, J-06's own
+acceptance sentence says "a sparse/empty compiled set is acceptable and is not rescued", and the
+screen renders an explicit "Compiled families (0) — Zero compiled candidates this epoch" rather than
+a blank. Scoring it `partial` would penalise the honest scientific outcome the goal explicitly
+blesses and would create pressure to rescue the epoch.
+**Reversible:** yes
+
+**Ambiguity:** §1.1/§1.2 enumerate the required source objects as nine + three bullets, but the
+committed registry reaches 11 by collapsing each parked study with its pilot proxy into one record
+and all four Wave-2 cards into one, then splitting Card 9.6 in two (that split is mandated by §1.3).
+So `card-9.8`…`card-9.11` do not exist as `source_id`s, though the iteration spec's TC-4 asks that
+"each of Card 9.8, 9.9, 9.10, and 9.11 has disposition exactly `EXCLUDED_GATE_CLOSED`" (auditor B6).
+**We chose:** accept the partition and score J-06 step 2 ("every required source object appears
+exactly once") as met, recording B6 as a gap. §7.1's operative rule is "No required source silently
+disappears", every collapsed constituent id is carried in `alias_refs` (I verified all four Wave-2
+card ids and both study lineage ids are present), the independent fresh-context auditor reviewed and
+confirmed the reading, and the hard auditor's added TC-4 test asserts reachability of all four card
+ids through the alias list. The alternative reading would require regenerating the epoch — which
+§8.1 forbids — to fix a partition choice the goal never numbers.
+**Reversible:** no (the epoch is frozen; changing the partition would need a second epoch)

@@ -111,3 +111,31 @@ pins the manifest/source/spec/config identities in `build_freeze_record` but the
 When a journey step enumerates fields to "confirm each record shows", diff that list against the JSX,
 not against the payload schema.
 **Applies to:** any iteration building a read surface whose acceptance steps enumerate fields.
+
+## iter-5 — 2026-08-27T07:10:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** The era's single irreplaceable artefact (`docs/hypothesis-foundry/*.json`, one commit,
+no second epoch permitted) shipped with ZERO automated coverage — nothing in 3,879 tests would have
+noticed a hand-edited disposition, a dropped `audit_note`, or the five files leaving `HEAD`. Only the
+hard auditor caught it (B4) and wrote `tests/test_foundry_real_epoch_artifacts.py`. Related trap in
+the same file: `lint_quoted_spans` verifies a span against its OWN record's `source_excerpt`, and
+`source_hash` is `sha256(source_excerpt)` — both sides authored by the same agent, so a "citation
+lint" proved nothing about the cited file until a cross-file test was added.
+**Applies to:** any iteration that writes a one-time, non-regenerable artefact (freeze sets,
+manifests, registries, epoch records) — require a read-only guard test over the committed bytes IN
+THE SAME iteration, and check that any self-consistency lint actually reaches the external source it
+claims to verify.
+
+## iter-5 — 2026-08-27T07:10:00Z (second)
+
+**Verdict:** ESCALATE
+**Lesson:** A "one and only one X" rule enforced by *the presence of a state file* is not enforced at
+all: `_load_existing_manifest_store` returns `{}` when `epoch-manifest.json` is absent, so deleting
+that file silently bypasses `ManifestDriftRefused` and mints a fresh `epoch_id`. That is exactly how a
+first real epoch was minted and discarded this iteration (auditor B5) — honestly disclosed, but the
+uniqueness guarantee was mechanical in name only.
+**Applies to:** any uniqueness/idempotency guard in this codebase (`generate_or_verify_manifest`,
+freeze-set verification, first-read locks) — the guard must key on something that cannot be removed
+by deleting a file, and the evaluator should test the delete-then-regenerate path, not just the
+drifted-input path.
