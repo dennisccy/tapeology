@@ -919,7 +919,25 @@ def _load_existing_manifest_store(path: Path) -> dict:
     return {"epoch": record}
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--advance-freeze-commit", action="store_true",
+        help=(
+            "goal-hypothesis-foundry-iter-6 (closes audit finding B2): recompute `freeze_commit` "
+            "from the CURRENT `git rev-parse HEAD` instead of reusing the existing pinned value. "
+            "An explicit, disclosed operator act -- default OFF, so an ordinary replay/verify run "
+            "still treats `freeze_commit` as pinned once and never silently advanced. Pass this "
+            "flag ONLY for a deliberate freeze-bookkeeping repair, run strictly inside spec §7.3's "
+            "'before any real outcome has been read' window, immediately after the repairing code "
+            "changes have themselves been committed (so the new HEAD genuinely contains their "
+            "bytes) and strictly BEFORE the real exhaust CLI's first invocation."
+        ),
+    )
+    args = parser.parse_args(argv)
+
     records = build_real_source_records()
 
     # --- §1.4 mechanical lints + §2 dispositions + §8.1 outcome-access tripwire, all traced ------
@@ -1018,11 +1036,16 @@ def main() -> int:
     # the very first generation, and never recomputed on a later replay/verify run -- a freeze whose
     # own commit identity silently advanced on every re-run would not be a freeze.
     # `_existing_freeze_commit` is `None` only before the first generation this repository has ever
-    # produced. goal-hypothesis-foundry-iter-6 (closes B2): this iteration's own regeneration is
-    # explicitly run AFTER this iteration's code changes are committed (see NOTES in this module's
-    # own docstring), so a freshly-resolved `freeze_commit` here is a real ancestor commit that
-    # already contains every pinned science file's bytes -- never a stale, pre-code-commit hash.
-    freeze_commit = _existing_freeze_commit(FREEZE_RECORD_PATH) or _git("rev-parse", "HEAD")
+    # produced. goal-hypothesis-foundry-iter-6 (closes B2): `--advance-freeze-commit` forces a
+    # fresh `git rev-parse HEAD` even when a prior pinned value exists -- this iteration's own
+    # regeneration passes it explicitly, run AFTER this iteration's code changes are committed (see
+    # NOTES in this module's own docstring), so the freshly-resolved `freeze_commit` is a real
+    # ancestor commit that already contains every pinned science file's bytes -- never a stale,
+    # pre-code-commit hash.
+    freeze_commit = (
+        _git("rev-parse", "HEAD") if args.advance_freeze_commit
+        else _existing_freeze_commit(FREEZE_RECORD_PATH) or _git("rev-parse", "HEAD")
+    )
     freeze_record = fz.build_freeze_record(
         freeze_commit=freeze_commit,
         manifest_hash=manifest_record.manifest_hash,
