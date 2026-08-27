@@ -346,3 +346,30 @@ confirmed the reading, and the hard auditor's added TC-4 test asserts reachabili
 ids through the alias list. The alternative reading would require regenerating the epoch — which
 §8.1 forbids — to fix a partition choice the goal never numbers.
 **Reversible:** no (the epoch is frozen; changing the partition would need a second epoch)
+
+## iter-6 — goal-decomposer
+
+**Ambiguity:** `state/iteration-state.md`'s Active-blockers digest labels B1 (absolute freeze-set
+paths), B2 (`freeze_commit` missing `foundry_compiler.py`'s bytes), and B7 (freeze-set/record
+omissions) as requiring owner sign-off ("owner-owned: approving any amendment to the
+already-committed frozen artefacts"). But `docs/goal.md` §7.3 explicitly authorizes Goal Mode itself
+to repair "freeze hash drift" and equivalent integrity gaps unilaterally, with no owner step named,
+provided the repair happens "before any real outcome has been read" — and the real epoch compiled
+**zero** candidates, so no outcome will ever be read in this era; the entire remaining window is the
+§7.3 repair window. The Binding Execution Order's own step 7/8 boundary implies the freeze bookkeeping
+should have been complete and correct BEFORE the first-read lock (step 8) is written, which is
+precisely what B1/B2/B7 show did not happen at the end of iter-5.
+**We chose:** read the OWNER tag narrowly — it covers only the disclosed MINOR anti-goal (ratify/
+reject the discarded first epoch, a scientific/policy judgment), not routine freeze-bookkeeping
+repair, which §7.3 delegates to Goal Mode. This iteration therefore DOES repair B1/B2/B7 by committing
+this iteration's code first, then regenerating `freeze-set.json`/`freeze-record.json` (relative paths,
+`freeze_commit` pointing at a commit that truly contains every pinned file, the three omitted tracked
+JSONs + generation CLI, the missing era-open evidence-class-contract field) via the SAME already-proven
+deterministic `generate_freeze_set`/`build_freeze_record` functions — never touching `epoch_id`,
+`source-registry.json`, or `epoch-manifest.json` content, so §8.1's one-epoch rule is untouched. Full
+depth (already mandatory from the prior ESCALATE) supplies the independent-auditor scrutiny this
+irreversible, freeze-adjacent repair needs instead of a human pause. Disclosed here, and in the
+iteration spec's BACKGROUND, precisely so a human watching the run can intervene before dispatch if
+this reading of §7.3 is judged too permissive.
+**Reversible:** no (the first-read lock this iteration writes, and any freeze-set/freeze-record
+regeneration preceding it, are both one-way per §8.5/§9.3 once committed)

@@ -43,6 +43,14 @@ counterpart to rows 2-5, targeting J-06) and extends the already-registered `her
 with two new fields (`kill_type_mapping`, `best_of_n_disclosure`, targeting J-05's remaining gap).
 Both are additive — same reused modules, same single endpoint — no IA/nav change, no
 `blueprint.reapproval-requested` needed. See the iteration note under the table.
+
+
+Updated at iter-6 (planned): adds one new Data Contract row (`exhaust_progress`, real J-07
+runner/first-read-lock/checkpoint state over the already-committed real epoch) and one new
+`/desk` → Hypothesis Foundry subsection ("Runner / Checkpoint", home already registered at
+baseline). Additive only — reuses `foundry_runner.py`/`foundry_ledger.py`, same single endpoint,
+no IA/nav change, no `blueprint.reapproval-requested` needed. See the iteration note under the
+table.
 -->
 
 ## Information Architecture
@@ -76,10 +84,11 @@ Tapeology
                                 (J-06) is PLANNED for iter-5 (real, non-fixture source registry +
                                 family/variant manifest + freeze identity, read from the Git-tracked
                                 `docs/hypothesis-foundry/` artifacts — see Data Contract below);
-                                Runner/Checkpoint (J-07) remains [PLANNED, not yet built] and is
-                                explicitly barred from iter-5 by the goal's own Binding Execution
-                                Order (J-06's freeze commit must be an ancestor of `HEAD` before any
-                                J-07 real read).
+                                Runner/Checkpoint (J-07) is PLANNED for iter-6 (real, non-fixture
+                                first-read-lock + checkpoint/exhaustion state over the already-
+                                committed real epoch, including a freeze-set/freeze-record
+                                bookkeeping repair pass that must precede the lock — see Data
+                                Contract below).
 ```
 
 **Feature / journey homes** (each reachable in ≤2 clicks from the nav):
@@ -122,6 +131,7 @@ iteration that first ships each row (see iteration note below the table).
 | `freeze_integrity` (family denominator fixtures, late-insertion refusal, generation replay verify/drift-refusal, fixture freeze record/freeze-set schema, first-read-lock + hash-drift + non-science-file exemption, replay idempotence/conflict/single-flight) | `app/research/foundry_family.py` + `app/research/foundry_freeze.py` + `app/research/foundry_ledger.py` (reused, no new module) | `GET /research/desk/micro/foundry` (`freeze_integrity` key) | ships iter-4; fixture-scope only — `freeze_record.freeze_set_target_path` NAMES the real `docs/hypothesis-foundry/freeze-set.json` path without that file existing yet (see `state/assumptions.md` iter-4); iter-5 (planned) is when that path is expected to start existing for real, via the separate `epoch_manifest` key, not this one |
 | `hermetic_oracles` (composite multi-outcome-type epoch coverage + all-blocked/all-killed/multi-survivor/crash-resume-at-scale/protected-data-trip/evidence-class-immutability pass/fail summary; **+ `kill_type_mapping` / `best_of_n_disclosure`, planned iter-5**) | `app/research/foundry_hermetic_summary.py` — a thin summary builder over `apps/backend/tests/test_foundry_hermetic_epoch.py`'s existing hermetic suite; introduces no second oracle implementation (reused, no new module for the iter-5 fields) | `GET /research/desk/micro/foundry` (`hermetic_oracles` key) | shipped iter-4; precomputed once (module-level cache or checked-in snapshot), never recomputed per request, per the router's established GET-never-computes convention. iter-5 (planned) adds `kill_type_mapping: list[{outcome_label, foundry_state}]` (real per-row read, closing the "outcome_types_present is a hard-coded label dict" gap) and `best_of_n_disclosure: {n_variants_tried, threshold_bps}` (sourced from the existing per-row `screen_result.best_of_n_disclosure`); also removes the two open-anti-goal `scout._two_sided_p` reassignments from this module's serving-process code path |
 | `epoch_manifest` (**NEW row, planned iter-5, targets J-06**) — real, non-fixture per-source disposition list for all 11 required source objects; real family/variant manifest with denominators/`candidate_spec_hash`/future `rule_id`/`prospective_root_status`; freeze identity `epoch_id`/`source_registry_hash`/`manifest_hash`/`freeze_set_hash`/`freeze_commit`; `outcome_access_census`; `source_registry_audit` report reference | `app/research/foundry_source_registry.py` + `app/research/foundry_compiler.py` + `app/research/foundry_family.py` + `app/research/foundry_freeze.py` (ALL reused, no new module) — reads the literal Git-tracked `docs/hypothesis-foundry/*.json` / `reports/hypothesis-foundry/source-registry-audit.md` paths directly, never through `get_foundry_dir()`/`resolve_foundry_dir()` (that resolver is reserved for the runtime-scoped era-open baseline / trial ledger per §8.2's tracked-vs-runtime split) | `GET /research/desk/micro/foundry` (`epoch_manifest` key) | the REAL non-fixture counterpart to the rows above; at most one real `epoch_id` may ever exist for this era (§8.1); visibly labelled distinct from the four fixture-scope subsections; also becomes the real source for the top-level `source_registry_hash`/`source_registry_status` fields `get_foundry()` already stubs today (no second calculation path for those two fields once real) |
+| `exhaust_progress` (**NEW row, planned iter-6, targets J-07**) — real first-read-lock status/timestamp; resolved eligible-corpus `(dataset_id, checksum)` manifest hash; total/terminal `FROZEN_READY` variant counts (0/0 for this epoch); current checkpoint ordinal; protected/withheld/sealed read census (must be zero); single-flight status; freeze-integrity verdict; honest exhaust-complete flag | `app/research/foundry_runner.py` + `app/research/foundry_ledger.py` (reused; `foundry_ledger.py` gains one additive epoch-opening row-kind method alongside its existing `record_intent`/`record_terminal`, no new module, no second ledger) | `GET /research/desk/micro/foundry` (`exhaust_progress` key) | reads the REAL trial ledger under the already-committed real `epoch_id`; zero compiled candidates makes exhaustion vacuous but the first-read-lock row is still written once, per §8.5, before this key can report anything but `not_yet_run` |
 
 **Iteration note (iter-1):** shipped for real — the `GET /research/desk/micro/foundry` route itself
 (new, mounted on the existing `micro_routes.py` router, GET-only / never-computes); row 1's era
@@ -192,6 +202,8 @@ remaining on-screen gap; these three fields were already computed, this is a ren
 a new value). No IA/nav change (Epoch/Manifest's home was already registered at baseline); no
 `blueprint.reapproval-requested` needed. This note will be confirmed or corrected by the next
 iteration's decomposer once execution results are known.
+
+**Iteration note (iter-6, planned):** targets J-07 — the real deterministic exhaust pass over the already-frozen, zero-candidate epoch. Because two committed freeze-bookkeeping gaps (absolute freeze-set paths; a `freeze_commit` that predates `foundry_compiler.py`) and one completeness gap (freeze-set/record omissions) must be closed BEFORE the one-way first-read lock is written — `docs/goal.md` §7.3 delegates exactly this class of pre-outcome-read repair to Goal Mode — this iteration first regenerates `docs/hypothesis-foundry/freeze-set.json` and `freeze-record.json` via the already-proven deterministic `generate_freeze_set`/`build_freeze_record` functions (never touching `epoch_id`, `source-registry.json`, or `epoch-manifest.json` content, so §8.1's one-epoch rule is untouched), then runs the new real exhaust CLI, which appends the `exhaust_progress` row above. Adds the `exhaust_progress` key (new row above) and its `/desk` → Hypothesis Foundry → Runner / Checkpoint subsection (blueprint home already registered above, previously `[PLANNED, not yet built]`), reusing only already-registered Foundry modules — no new computing module for any row. No IA/nav change; no `blueprint.reapproval-requested` needed. This note will be confirmed or corrected by the next iteration's decomposer once execution results are known.
 
 An optional read-only MCP proxy (`desk_micro_foundry`) is deferrable per the goal; if built later it
 must be a byte-identical GET proxy of this same endpoint and joins the existing MCP contract tests —
