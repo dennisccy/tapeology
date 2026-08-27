@@ -1,32 +1,32 @@
 # Goal Session Summary — hypothesis-foundry
 
-**Final verdict:** STALLED
-**Total iterations:** 9
-**Wall time (seconds):** 77719
+**Final verdict:** GOAL_ACHIEVED
+**Total iterations:** 10
+**Wall time (seconds):** 4865
 **Quota pauses:** 0
 **Started:** 2026-08-26T18:30:29.535955Z
-**Finished:** 2026-08-27T16:12:55.160098Z
+**Finished:** 2026-08-27T21:06:46.215092Z
 
 ## Branch
 
 This session pushed iteration commits to `goal/hypothesis-foundry`. Open a PR with:
 
     gh pr create --base main --head goal/hypothesis-foundry \
-      --title "feat: hypothesis-foundry — STALLED" \
+      --title "feat: hypothesis-foundry — GOAL_ACHIEVED" \
       --body-file runs/goal-session-hypothesis-foundry/summary.md
 
 ## Final journey state
 
 | Journey | Status | Last passing iter |
 |---|---|---|
-| J-01 | passing | goal-hypothesis-foundry-iter-8 |
-| J-02 | passing | goal-hypothesis-foundry-iter-8 |
-| J-03 | passing | goal-hypothesis-foundry-iter-8 |
-| J-04 | passing | goal-hypothesis-foundry-iter-8 |
-| J-05 | passing | goal-hypothesis-foundry-iter-8 |
-| J-06 | passing | goal-hypothesis-foundry-iter-8 |
-| J-07 | passing | goal-hypothesis-foundry-iter-8 |
-| J-08 | passing | goal-hypothesis-foundry-iter-8 |
+| J-01 | passing | goal-hypothesis-foundry-iter-9 |
+| J-02 | passing | goal-hypothesis-foundry-iter-9 |
+| J-03 | passing | goal-hypothesis-foundry-iter-9 |
+| J-04 | passing | goal-hypothesis-foundry-iter-9 |
+| J-05 | passing | goal-hypothesis-foundry-iter-9 |
+| J-06 | passing | goal-hypothesis-foundry-iter-9 |
+| J-07 | passing | goal-hypothesis-foundry-iter-9 |
+| J-08 | passing | goal-hypothesis-foundry-iter-9 |
 
 ## Anti-goal violations
 
@@ -198,20 +198,36 @@ See `runs/goal-session-hypothesis-foundry/telemetry.jsonl` for the structured ev
       pump-wait                 34.7m
       OVER BUDGET at post-dev-fanout: 5283s > 3600s (mode=trim)
       overlap saved             38.0m  (parallel steps)
-  session: 9 completed iteration(s), mean wall 143.8m
-      total developer                  497.5m
+  goal-hypothesis-foundry-iter-9  depth=lean  verdict=GOAL_ACHIEVED  wall=79.4m
+      goal-evaluator              31.1m  calls=1
+      developer                   27.4m  calls=1
+      browser-qa-agent             5.3m  calls=1
+      goal-evaluator-confirm       5.0m  calls=1
+      iteration-summarizer         4.8m  calls=1
+      goal-decomposer              4.6m  calls=1
+      reviewer                     1.0m  calls=1
+      browser-qa-replay            0.8m  calls=1
+      [engine] lean-pipeline      33.9m  (contains agent time above)
+      [engine] showcase-join       0.0m  (contains agent time above)
+      (resume-skipped: coherence-auditor)
+      pump-wait                  0.5m
+      OVER BUDGET at showcase-tail: 4478s > 3600s (mode=trim)
+      overlap saved              0.7m  (parallel steps)
+  session: 10 completed iteration(s), mean wall 137.4m
+      total developer                  525.0m
       total auditor                    168.3m
-      total browser-qa-agent           156.4m
-      total reviewer                   141.2m
-      total goal-evaluator             127.6m
-      total goal-decomposer            108.8m
+      total browser-qa-agent           161.8m
+      total goal-evaluator             158.7m
+      total reviewer                   142.2m
+      total goal-decomposer            113.4m
       total qa                         102.3m
-      total iteration-summarizer        37.9m
+      total iteration-summarizer        42.6m
       total coherence-auditor           32.0m
       total demo-narrator               24.1m
       total orchestrator                23.1m
       total ui-impact-analyst           18.1m
-      total browser-qa-replay            5.9m
+      total browser-qa-replay            6.7m
+      total goal-evaluator-confirm       5.0m
       total ui-test-designer             1.1m
       total AWAITING_PUMP paused gaps: 0.6m
       halts: AWAITING_HOST_GUARD, AWAITING_HOST_GUARD, AWAITING_PUMP, STALLED

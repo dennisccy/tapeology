@@ -6,10 +6,10 @@ scripts/automation/lib/retro_collect.sh — no model wrote this. Counters marked
 
 ## Outcome
 
-- **Terminal status:** STALLED
-- **Final verdict:** STALLED
-- **Iterations used:** 9
-- **Halted at (UTC):** 2026-08-27T16:12:55.160098Z
+- **Terminal status:** GOAL_ACHIEVED
+- **Final verdict:** GOAL_ACHIEVED
+- **Iterations used:** 10
+- **Halted at (UTC):** 2026-08-27T21:06:46.215092Z
 
 ## Verdict sequence
 
@@ -25,6 +25,7 @@ iter 5: ESCALATE
 iter 6: CONTINUE
 iter 7: ESCALATE
 iter 8: STALLED
+iter 9: GOAL_ACHIEVED
 ```
 
 ## Agent economics
@@ -192,20 +193,36 @@ Per-step wall breakdown (analyze_telemetry.py --wall):
       pump-wait                 34.7m
       OVER BUDGET at post-dev-fanout: 5283s > 3600s (mode=trim)
       overlap saved             38.0m  (parallel steps)
-  session: 9 completed iteration(s), mean wall 143.8m
-      total developer                  497.5m
+  goal-hypothesis-foundry-iter-9  depth=lean  verdict=GOAL_ACHIEVED  wall=79.4m
+      goal-evaluator              31.1m  calls=1
+      developer                   27.4m  calls=1
+      browser-qa-agent             5.3m  calls=1
+      goal-evaluator-confirm       5.0m  calls=1
+      iteration-summarizer         4.8m  calls=1
+      goal-decomposer              4.6m  calls=1
+      reviewer                     1.0m  calls=1
+      browser-qa-replay            0.8m  calls=1
+      [engine] lean-pipeline      33.9m  (contains agent time above)
+      [engine] showcase-join       0.0m  (contains agent time above)
+      (resume-skipped: coherence-auditor)
+      pump-wait                  0.5m
+      OVER BUDGET at showcase-tail: 4478s > 3600s (mode=trim)
+      overlap saved              0.7m  (parallel steps)
+  session: 10 completed iteration(s), mean wall 137.4m
+      total developer                  525.0m
       total auditor                    168.3m
-      total browser-qa-agent           156.4m
-      total reviewer                   141.2m
-      total goal-evaluator             127.6m
-      total goal-decomposer            108.8m
+      total browser-qa-agent           161.8m
+      total goal-evaluator             158.7m
+      total reviewer                   142.2m
+      total goal-decomposer            113.4m
       total qa                         102.3m
-      total iteration-summarizer        37.9m
+      total iteration-summarizer        42.6m
       total coherence-auditor           32.0m
       total demo-narrator               24.1m
       total orchestrator                23.1m
       total ui-impact-analyst           18.1m
-      total browser-qa-replay            5.9m
+      total browser-qa-replay            6.7m
+      total goal-evaluator-confirm       5.0m
       total ui-test-designer             1.1m
       total AWAITING_PUMP paused gaps: 0.6m
       halts: AWAITING_HOST_GUARD, AWAITING_HOST_GUARD, AWAITING_PUMP, STALLED
@@ -222,26 +239,26 @@ Per-step wall breakdown (analyze_telemetry.py --wall):
 Last 20 lines of state/lessons.md:
 
 ```
-**Lesson:** When the hard auditor APPLIES a product fix during its own pass, every screenshot the
-browser-QA lane already captured is stale by one change — here `apps/frontend/app/desk/page.tsx` moved
-at 16:25 while all evidence PNGs were taken at 16:08, so the shipped Final Summary carried an honesty
-caveat that no filed screenshot showed. Re-run `demo_runner --mode verify` yourself after any
-audit-applied fix and file your own capture; do not certify a journey on a picture that predates the
-last product edit.
-**Applies to:** any full-depth iteration whose audit report has a non-empty "Fixes Applied During This
-Audit" section touching frontend or route code.
-
-## iter-8 — 2026-08-27T17:06:00Z
-
-**Verdict:** STALLED
-**Lesson:** A walkthrough recording can report `RECORDED_WITH_NOTES` and look complete while showing
-entirely the wrong page: this iteration's demo script clicked `desk-section-expand-*` testids that do
-not exist anywhere in `apps/frontend/app/desk/page.tsx`, all 7 clicks silently failed, and every step
-screenshot captured the top of `/desk` instead of the Foundry panel. The golden journey scripts use
-different, real selectors and replayed 8/8 green — so check the demo script's selectors against the
-golden scripts, not against the spec text, before trusting a recording as showcase evidence.
 **Applies to:** any iteration whose demo-results file carries "couldn't perform click (unresolvable
 target ...)" soft notes.
+
+## iter-9 — 2026-08-27T21:55:00Z
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** Two capture-script traps surfaced together and neither is what the prose said it was.
+(1) `reports/phase-goal-hypothesis-foundry-iter-8-demo-results.md` blamed missing
+`desk-section-expand-*` testids; the real cause is a wrong target-key SHAPE in the walkthrough
+script — `{"data-testid": ...}` instead of the `{"testid": ...}` `demo_runner.py` resolves
+(`lib/demo_runner.py:117`). The testids exist and are generated dynamically at
+`apps/frontend/components/CollapsibleSection.tsx:45`, so grepping `app/desk/page.tsx` for them
+always returns 0 and always misleads. (2) `tests/test_tick_recorder.py::test_tr31_format_cli_
+progress_line_serves_only_the_whitelisted_aggregates` asserts forbidden digit substrings against a
+string that embeds real wall-clock elapsed seconds measured from a fixed 2026-06-01 literal — a
+calendar-dependent time-bomb that will flake harder every month.
+**Applies to:** any iteration writing or debugging a `demo_runner.py` script (golden replay or
+walkthrough) — verify the target key against `resolve_spec`, and never conclude a testid is
+missing from a grep of the page file alone; and any iteration triaging a "flaky, unrelated" test
+claim in a dev handoff — reproduce the mechanism live before accepting or rejecting it.
 ```
 
 ## Halt context
@@ -250,8 +267,8 @@ session.json halt-relevant fields:
 
 ```json
 {
-  "status": "STALLED",
-  "last_verdict": "STALLED",
+  "status": "GOAL_ACHIEVED",
+  "last_verdict": "GOAL_ACHIEVED",
   "parked_wip_sha": "f9da97c3"
 }
 ```
