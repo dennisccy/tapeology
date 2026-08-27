@@ -427,3 +427,23 @@ row, the independently recomputed real-corpus hash, the freeze bookkeeping, and 
 I re-ran. The one genuinely un-rendered sub-clause (step 4's `withheld_excluded = 80` count) is
 recorded as a gap for J-08 rather than used to cap the journey at `partial`.
 **Reversible:** yes
+
+## iter-7 — goal-decomposer
+
+**Ambiguity:** iter-6's evaluator recommendation explicitly asked for TWO things in the SAME next
+iteration — settle the duplicated `frozen_ready_total` computation first, then build J-08 "the last
+remaining journey," calling J-08 work "the only work that can turn [the era] done" — but iter-6's own
+`coherence.md` returned `COHERENCE-FAIL`, and my own agent instructions state unconditionally: "If the
+last `coherence.md` was `COHERENCE-FAIL`, this iteration fixes the cited violations; no new scope."
+J-08 is a full new UI journey (final-truth surface, drill-ins, T-9/T-10/T-11 guard battery) — squarely
+"new scope" under any reading.
+**We chose:** follow the binding priority-rubric rule over the evaluator's bundling suggestion — iter-7
+is consolidation-only (the `frozen_ready_total` fix), and J-08 is deferred to iter-8. Grounds: the
+rubric names this rule ahead of "unblockers next," gives no carve-out for an evaluator recommendation
+to override it, and the actual repair here is delicate (a freeze-boxed, sealed-file-adjacent fix) —
+bundling it with a full new journey's worth of UI/guard work in one iteration would violate "never
+bundle two risky journeys" (rubric rule 5) even if rule 2 did not already bar it outright. The fix
+itself does not touch J-08's surface, so nothing about deferring it makes the eventual J-08 iteration
+harder; it only delays the era's final iteration by one cycle.
+**Reversible:** yes (J-08 is simply built next iteration instead of this one; no code or record is
+foreclosed by this ordering choice)
