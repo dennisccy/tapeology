@@ -37,6 +37,12 @@ immutability) plus two schema fields (`SourceRecord.source_hash`,
 `SourceRecord.alternatives`) and a resume-identity integrity fix — see the iteration note
 under the table. No row added, no IA/nav change; no `blueprint.reapproval-requested`
 needed.
+
+Updated at iter-5 (planned): adds one new Data Contract row (`epoch_manifest`, the real non-fixture
+counterpart to rows 2-5, targeting J-06) and extends the already-registered `hermetic_oracles` row
+with two new fields (`kill_type_mapping`, `best_of_n_disclosure`, targeting J-05's remaining gap).
+Both are additive — same reused modules, same single endpoint — no IA/nav change, no
+`blueprint.reapproval-requested` needed. See the iteration note under the table.
 -->
 
 ## Information Architecture
@@ -66,8 +72,14 @@ Tapeology
                                 Integrity, Hermetic Oracles — each a HERMETIC/FIXTURE demonstration
                                 of the already-built compiler/interpreter/family/freeze/ledger
                                 machinery, visibly labelled as fixture-scope and distinct from the
-                                header's real era-open baseline. The real Epoch/Manifest and Runner/
-                                Checkpoint subsections (J-06/J-07) remain [PLANNED, not yet built].
+                                header's real era-open baseline. The real Epoch/Manifest subsection
+                                (J-06) is PLANNED for iter-5 (real, non-fixture source registry +
+                                family/variant manifest + freeze identity, read from the Git-tracked
+                                `docs/hypothesis-foundry/` artifacts — see Data Contract below);
+                                Runner/Checkpoint (J-07) remains [PLANNED, not yet built] and is
+                                explicitly barred from iter-5 by the goal's own Binding Execution
+                                Order (J-06's freeze commit must be an ancestor of `HEAD` before any
+                                J-07 real read).
 ```
 
 **Feature / journey homes** (each reachable in ≤2 clicks from the nav):
@@ -96,19 +108,20 @@ iteration that first ships each row (see iteration note below the table).
 
 | Value / entity | Computed by (single module/function) | Served by (single endpoint) | Notes |
 |---|---|---|---|
-| Era/session identity, methodology/spec version, source-registry hash | `app/research/foundry_source_registry.py` | `GET /research/desk/micro/foundry` | era-open baseline (full-suite pass/skip, config fingerprint, Referee-module SHA-256) is part of this bundle; `source_registry_hash` stays `null`/`not_yet_generated` until the real registry exists (Binding Order step 6 / J-06) |
-| Source dispositions + lineage/alias refs (one of the closed §7.1 vocabulary per required source object) | `app/research/foundry_source_registry.py` | `GET /research/desk/micro/foundry` | no required source may be silently absent; iter-1 proves the compile RULES on 7 hermetic fixture source types only — the REAL 11 required-source-object registry content ships at J-06 |
+| Era/session identity, methodology/spec version, source-registry hash | `app/research/foundry_source_registry.py` | `GET /research/desk/micro/foundry` | era-open baseline (full-suite pass/skip, config fingerprint, Referee-module SHA-256) is part of this bundle; `source_registry_hash` stays `null`/`not_yet_generated` until the real registry exists (Binding Order step 6 / J-06, planned iter-5) |
+| Source dispositions + lineage/alias refs (one of the closed §7.1 vocabulary per required source object) | `app/research/foundry_source_registry.py` | `GET /research/desk/micro/foundry` | no required source may be silently absent; iter-1 proves the compile RULES on 7 hermetic fixture source types only — the REAL 11 required-source-object registry content is planned to ship at iter-5 (J-06), served under the new `epoch_manifest` key below |
 | Per-variant `CandidateSpec` + `candidate_spec_hash` + population/coordinate/direction/horizon summary | `app/research/foundry_compiler.py` (fixture-compilable candidates) + `app/research/foundry_interpreter.py` (owns deferred/population resolution; ships hermetically at iter-2 for J-03 fixtures) | `GET /research/desk/micro/foundry` | every §3 science-affecting field must move the hash |
-| Epoch id, manifest hash, freeze commit, freeze integrity verdict, first-outcome-read boundary status/time | `app/research/foundry_freeze.py` (ships hermetically at iter-2; real epoch/commit values still await J-06/J-07) | `GET /research/desk/micro/foundry` | freeze-set = enumerated checked-in path+sha256 manifest, not an adjective |
-| Family/variant counts, family order, variant ordinals, per-family frozen denominator, blocked/excluded/aliased counts by reason | `app/research/foundry_family.py` (ships hermetically at iter-2) | `GET /research/desk/micro/foundry` | denominator frozen pre-outcome; over-cap blocks whole |
+| Epoch id, manifest hash, freeze commit, freeze integrity verdict, first-outcome-read boundary status/time | `app/research/foundry_freeze.py` (ships hermetically at iter-2; real epoch/commit values planned at iter-5 under `epoch_manifest`, J-06) | `GET /research/desk/micro/foundry` | freeze-set = enumerated checked-in path+sha256 manifest, not an adjective |
+| Family/variant counts, family order, variant ordinals, per-family frozen denominator, blocked/excluded/aliased counts by reason | `app/research/foundry_family.py` (ships hermetically at iter-2) | `GET /research/desk/micro/foundry` | denominator frozen pre-outcome; over-cap blocks whole; real values planned at iter-5 under `epoch_manifest` |
 | Unresolved-deferred counts, eligible resolved anchors, candidate/comparator counts, usable sessions, evidence class | `app/research/foundry_interpreter.py` (ships hermetically at iter-2) | `GET /research/desk/micro/foundry` | population symmetry per §4.1 |
 | Materialized econ floor + unit/provenance, Scout decision, p-screen/effect-bps/concentration/economic/fragility disclosures, best-of-N disclosure, `DIAGNOSTIC_SURVIVOR_OOS_RULE_FROZEN` state | `app/research/foundry_runner.py` calling the unchanged `scout.screen_candidate` (ships hermetically at iter-2 for fixture candidates; real corpus/econ-floor materialization still awaits J-07) | `GET /research/desk/micro/foundry` | Foundry never adds a second statistical rail; values are the verbatim Scout screen payload |
 | Protected/withheld/sealed ids read by the real Foundry runner (must be zero; identity-safe aggregate only) | `app/research/foundry_runner.py` (module ships hermetically at iter-2; real protected-access census still awaits J-07) | `GET /research/desk/micro/foundry` | never sealed identities, joins the existing TR-2-style inference sweep |
 | Current runner checkpoint / next manifest ordinal, ledger chain/integrity verification | `app/research/foundry_ledger.py` (ships hermetically at iter-2) | `GET /research/desk/micro/foundry` | Foundry's own hash-chained append-only trial ledger; never registered into the Scout ledger |
-| `sources_compiler` (7 hermetic J-02 source fixtures + compiled `CandidateSpec`/block reason + outcome-noise immutability proof) | `app/research/foundry_source_registry.py` + `app/research/foundry_compiler.py` (reused, no new module) | `GET /research/desk/micro/foundry` (`sources_compiler` key) | ships iter-4; fixture-scope only, visibly labelled distinct from any future real registry (J-06) |
+| `sources_compiler` (7→8 hermetic J-02 source fixtures + compiled `CandidateSpec`/block reason + outcome-noise immutability proof) | `app/research/foundry_source_registry.py` + `app/research/foundry_compiler.py` (reused, no new module) | `GET /research/desk/micro/foundry` (`sources_compiler` key) | shipped iter-4; fixture-scope only, visibly labelled distinct from any future real registry (J-06); iter-5 (planned) surfaces both sibling records of the two-variant alias family (was 7 entries with 1 sibling implicit via `alternatives`, becomes 8 with both explicit) plus renders `operative_formula_refs`/`superseded_fields`/`aliases_lineage_ids` (already-computed fields, frontend-only fix) |
 | `interpreter_fixtures` (5 hermetic J-03 interpreter scenarios: immediate-scalar equivalence, conjunction, deferred `refill_consistent`, mirrored direction, unsupported-relation block) | `app/research/foundry_interpreter.py` (reused, no new module) | `GET /research/desk/micro/foundry` (`interpreter_fixtures` key) | ships iter-4; fixture-scope only |
-| `freeze_integrity` (family denominator fixtures, late-insertion refusal, generation replay verify/drift-refusal, fixture freeze record/freeze-set schema, first-read-lock + hash-drift + non-science-file exemption, replay idempotence/conflict/single-flight) | `app/research/foundry_family.py` + `app/research/foundry_freeze.py` + `app/research/foundry_ledger.py` (reused, no new module) | `GET /research/desk/micro/foundry` (`freeze_integrity` key) | ships iter-4; fixture-scope only — `freeze_record.freeze_set_target_path` NAMES the real `docs/hypothesis-foundry/freeze-set.json` path without that file existing yet (see `state/assumptions.md` iter-4) |
-| `hermetic_oracles` (composite multi-outcome-type epoch coverage + all-blocked/all-killed/multi-survivor/crash-resume-at-scale/protected-data-trip/evidence-class-immutability pass/fail summary) | NEW: `app/research/foundry_hermetic_summary.py` — a thin summary builder over `apps/backend/tests/test_foundry_hermetic_epoch.py`'s existing hermetic suite; introduces no second oracle implementation | `GET /research/desk/micro/foundry` (`hermetic_oracles` key) | ships iter-4; precomputed once (module-level cache or checked-in snapshot), never recomputed per request, per the router's established GET-never-computes convention |
+| `freeze_integrity` (family denominator fixtures, late-insertion refusal, generation replay verify/drift-refusal, fixture freeze record/freeze-set schema, first-read-lock + hash-drift + non-science-file exemption, replay idempotence/conflict/single-flight) | `app/research/foundry_family.py` + `app/research/foundry_freeze.py` + `app/research/foundry_ledger.py` (reused, no new module) | `GET /research/desk/micro/foundry` (`freeze_integrity` key) | ships iter-4; fixture-scope only — `freeze_record.freeze_set_target_path` NAMES the real `docs/hypothesis-foundry/freeze-set.json` path without that file existing yet (see `state/assumptions.md` iter-4); iter-5 (planned) is when that path is expected to start existing for real, via the separate `epoch_manifest` key, not this one |
+| `hermetic_oracles` (composite multi-outcome-type epoch coverage + all-blocked/all-killed/multi-survivor/crash-resume-at-scale/protected-data-trip/evidence-class-immutability pass/fail summary; **+ `kill_type_mapping` / `best_of_n_disclosure`, planned iter-5**) | `app/research/foundry_hermetic_summary.py` — a thin summary builder over `apps/backend/tests/test_foundry_hermetic_epoch.py`'s existing hermetic suite; introduces no second oracle implementation (reused, no new module for the iter-5 fields) | `GET /research/desk/micro/foundry` (`hermetic_oracles` key) | shipped iter-4; precomputed once (module-level cache or checked-in snapshot), never recomputed per request, per the router's established GET-never-computes convention. iter-5 (planned) adds `kill_type_mapping: list[{outcome_label, foundry_state}]` (real per-row read, closing the "outcome_types_present is a hard-coded label dict" gap) and `best_of_n_disclosure: {n_variants_tried, threshold_bps}` (sourced from the existing per-row `screen_result.best_of_n_disclosure`); also removes the two open-anti-goal `scout._two_sided_p` reassignments from this module's serving-process code path |
+| `epoch_manifest` (**NEW row, planned iter-5, targets J-06**) — real, non-fixture per-source disposition list for all 11 required source objects; real family/variant manifest with denominators/`candidate_spec_hash`/future `rule_id`/`prospective_root_status`; freeze identity `epoch_id`/`source_registry_hash`/`manifest_hash`/`freeze_set_hash`/`freeze_commit`; `outcome_access_census`; `source_registry_audit` report reference | `app/research/foundry_source_registry.py` + `app/research/foundry_compiler.py` + `app/research/foundry_family.py` + `app/research/foundry_freeze.py` (ALL reused, no new module) — reads the literal Git-tracked `docs/hypothesis-foundry/*.json` / `reports/hypothesis-foundry/source-registry-audit.md` paths directly, never through `get_foundry_dir()`/`resolve_foundry_dir()` (that resolver is reserved for the runtime-scoped era-open baseline / trial ledger per §8.2's tracked-vs-runtime split) | `GET /research/desk/micro/foundry` (`epoch_manifest` key) | the REAL non-fixture counterpart to the rows above; at most one real `epoch_id` may ever exist for this era (§8.1); visibly labelled distinct from the four fixture-scope subsections; also becomes the real source for the top-level `source_registry_hash`/`source_registry_status` fields `get_foundry()` already stubs today (no second calculation path for those two fields once real) |
 
 **Iteration note (iter-1):** shipped for real — the `GET /research/desk/micro/foundry` route itself
 (new, mounted on the existing `micro_routes.py` router, GET-only / never-computes); row 1's era
@@ -166,6 +179,19 @@ nav change (all four subsections live under the already-registered blueprint hom
 `blueprint.reapproval-requested` needed. Real epoch/manifest (J-06), the real committed
 `reports/hypothesis-foundry/source-registry-audit.md` J-02 depends on, and the Runner/Checkpoint
 subview (J-07) remain unbuilt.
+
+**Iteration note (iter-5, planned):** targets J-06 — the ONE real epoch generation this era permits
+(§8.1). Plans to add the `epoch_manifest` key (new row above) to `GET /research/desk/micro/foundry`
+and its `/desk` → Hypothesis Foundry → Epoch / Manifest subsection (blueprint home already
+registered above, previously `[PLANNED, not yet built]`), reusing only already-registered Foundry
+modules — no new computing module for any row. Also plans two small extensions to already-shipped
+fixture rows: `hermetic_oracles` gains `kill_type_mapping`/`best_of_n_disclosure` (closing J-05's
+remaining on-screen gap) and `sources_compiler` gains a second alias-family sibling entry plus
+on-screen `operative_formula_refs`/`superseded_fields`/`aliases_lineage_ids` (closing J-02's
+remaining on-screen gap; these three fields were already computed, this is a rendering-only fix, not
+a new value). No IA/nav change (Epoch/Manifest's home was already registered at baseline); no
+`blueprint.reapproval-requested` needed. This note will be confirmed or corrected by the next
+iteration's decomposer once execution results are known.
 
 An optional read-only MCP proxy (`desk_micro_foundry`) is deferrable per the goal; if built later it
 must be a byte-identical GET proxy of this same endpoint and joins the existing MCP contract tests —

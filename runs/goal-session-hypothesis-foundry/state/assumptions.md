@@ -241,3 +241,49 @@ is still correct, nothing persists past the `finally`, and no market data or rea
 involved. It does not change this iteration's verdict; it must be fixed or owner-dispositioned before
 the era can close.
 **Reversible:** yes
+
+## iter-5 — goal-decomposer
+
+**Ambiguity:** J-06's real `epoch_manifest` values must be visible to the scoped `:8301` QA rig
+(iter-1's own carried lesson: a real artifact under the `TAPEOLOGY_DATASET_DIR`-scoped runtime
+foundry directory is invisible there), but §8.2 explicitly places the real tracked artifacts under
+the Git-committed `docs/hypothesis-foundry/` / `reports/hypothesis-foundry/` namespace, not under
+`apps/backend/.data/foundry/` — the goal text does not say whether `get_foundry()`'s new key should
+read through the existing `get_foundry_dir()`/`resolve_foundry_dir()` resolver (consistent with how
+the era-open baseline is served) or read the literal repo-relative tracked paths directly.
+**We chose:** read the literal Git-tracked `docs/hypothesis-foundry/`/`reports/hypothesis-foundry/`
+paths directly, never through `get_foundry_dir()`/`resolve_foundry_dir()` — confirmed by reading
+`foundry_source_registry.resolve_foundry_dir()`'s own docstring, which scopes it to
+`TAPEOLOGY_FOUNDRY_DIR`/dataset-directory-derived storage for the runtime baseline/ledger only, and
+by §8.2's own text distinguishing "the tracked real-epoch artifacts" from "runtime trial/epoch-
+opening rows [that] live in the Foundry's resolved research-data ledger." Reading through the
+resolver would silently reproduce iter-0/iter-1's exact QA-invisibility failure for J-06's entire
+evidence base.
+**Reversible:** yes
+
+**Ambiguity:** J-06 step 4 requires confirming the "explicit freeze-set path manifest" is "visible
+from the tracked `docs/hypothesis-foundry/` artifacts," which could mean the UI must itemize every
+enumerated path+sha256 pair from `freeze-set.json` on screen (potentially hundreds of entries for
+all transitive science dependencies per §8.4), or that the requirement is satisfied by the manifest
+being visible IN the tracked committed file itself, with the UI showing only its hash/count.
+**We chose:** the UI shows `freeze_set_hash` plus a reference to the committed file, not an itemized
+per-path listing — the step's own wording ("visible from the tracked ... artifacts," not "visible on
+the Foundry screen") is satisfied by the artifact's presence in the Git-tracked repo, which any
+auditor (human or the evaluator) can open directly; forcing an on-screen dump of a potentially large
+transitive-dependency path list would add UI complexity the goal does not actually ask for and risks
+becoming unreadable rather than auditable.
+**Reversible:** yes
+
+**Ambiguity:** `foundry_compiler.sources_compiler_hermetic_fixture_view`'s own docstring documents a
+deliberate design choice — keep `fixtures[]` at exactly 7 entries by surfacing only one sibling
+(`fixture-variant-a`) of the two-variant alias family, with the other named only via its
+`alternatives` field — backed by an existing test asserting exactly 7 entries. Two consecutive
+evaluator verdicts (iter-4's active blocker, this session's own carried recommendation) now ask to
+"show both records of the two-variant family," which changes that assertion's expected count.
+**We chose:** treat this as a legitimate fixture-completeness correction directed by the evaluator,
+not a forbidden guard-weakening — the assertion's *value* (7) changes to reflect a more complete
+fixture set, but its *meaning* (every documented archetype has its own inspectable on-screen record)
+is preserved and in fact strengthened, and J-02 step 2's plain text ("two explicitly-frozen legal
+variants," plural) supports showing both. This is disclosed here rather than silently reinterpreting
+the existing test's intent.
+**Reversible:** yes
