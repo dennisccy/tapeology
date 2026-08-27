@@ -139,3 +139,30 @@ uniqueness guarantee was mechanical in name only.
 freeze-set verification, first-read locks) — the guard must key on something that cannot be removed
 by deleting a file, and the evaluator should test the delete-then-regenerate path, not just the
 drifted-input path.
+
+## iter-6 — 2026-08-27T11:40:00Z
+
+**Verdict:** CONTINUE
+**Lesson:** Writing a one-way freeze lock turns ordinary code-quality findings into permanent
+scars: the moment `record_epoch_open` pinned `runner_hash`/`freeze_set_hash` (2026-08-27T06:55:51Z),
+every one of the 59 files in `docs/hypothesis-foundry/freeze-set.json` became uneditable — including
+`apps/backend/scripts/run_hypothesis_foundry_real_exhaust.py`, which the SAME iteration's coherence
+audit then told us to edit to fix a duplicate-computation FAIL. The iteration created the defect and
+sealed away its own fix in one run. The ordering rule to carry forward: run coherence + a duplicate-
+computation sweep over the candidate freeze set BEFORE the lock is written, never in the same
+iteration as the lock, and prefer keeping new CLIs OUT of the freeze set unless the spec truly
+requires them.
+**Applies to:** any iteration that writes a one-way lock, freeze set, or immutable manifest — and
+specifically iter-7's attempt to resolve this coherence FAIL.
+
+## iter-6 — 2026-08-27T11:40:00Z (second)
+
+**Verdict:** CONTINUE
+**Lesson:** The QA report's own four cited "proof" screenshots
+(`reports/qa/goal-hypothesis-foundry-iter-6-*.png`) were one byte-identical 9,344-byte blank image
+reused four times, while the browser-QA lane's `-evidence/UT-*.png` captures were genuine — the hard
+auditor caught it (T1) because it compared md5s rather than reading the filenames. A QA report citing
+N distinct views should never resolve to one file; check sizes/hashes before treating a QA citation
+as evidence, and read journey proof off the `-evidence/` lane.
+**Applies to:** any iteration where the QA report and the browser-QA lane both claim to cover the
+same new surface.

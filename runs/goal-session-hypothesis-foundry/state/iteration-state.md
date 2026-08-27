@@ -1,30 +1,40 @@
 # Iteration State — hypothesis-foundry
 
-**After iteration:** 5 · **Date:** 2026-08-27 · **Verdict:** ESCALATE
+**After iteration:** 6 · **Date:** 2026-08-27 · **Verdict:** CONTINUE
 
 ## Journeys
 
-6 passing (J-01..J-06) · 2 failing (J-07 J-08) — 8 total. Execution-Order step 7 CROSSED: the real epoch is frozen in commit `dff64eaa` (ancestor of HEAD), so J-07 is the next legal target. The epoch compiled ZERO candidates (all 11 sources blocked/excluded/aliased) — goal.md's own valid ending 1.
+7 passing (J-01..J-07) · 1 failing (J-08) — 8 total
 
 ## Active blockers
 
-- **OWNER** — ratify or reject the discarded first real epoch (`ded18b8b…`→`ed40dbc2…`; disclosed in `reports/hypothesis-foundry/source-registry-audit.md:9-40`, auditor B5). Recorded as a MINOR unresolved anti-goal: total=2 / resolved=1 / blocking=1 / non-blocking=0 / critical=0. Also owner-owned: approving any amendment to the already-committed frozen artefacts below.
-- **DEV (B1)** — `docs/hypothesis-foundry/freeze-set.json` keys all 55 entries by absolute machine-local path, so the §8.5 lock is only verifiable in this one checkout.
-- **DEV (B2)** — `freeze_commit` `55c42ee3` lacks the science bytes the freeze set pins (`foundry_compiler.py` was still uncommitted at generation time).
-- **DEV (B7 + evaluator)** — freeze set omits the 3 tracked Foundry JSONs + the generation CLI §8.4 names; `freeze-record.json` omits §8.4's "era-open evidence-class contract" field.
-- **DEV** — `_load_existing_manifest_store` (`generate_hypothesis_foundry_real_epoch.py:858-875`) returns `{}` when the manifest file is absent, so deleting it bypasses §8.3's refusal silently.
-- **PROCESS** — sixth consecutive budget breach (iter-5 ≈ 3h07m on 1h); `--max-iter` 60→80 pending.
+- **COHERENCE-FAIL (dev, freeze-boxed):** `frozen_ready_total` has two owners — `micro_routes.py:901`
+  (`variant_count`) vs `scripts/run_hypothesis_foundry_real_exhaust.py:225` (`len(variants)`). The CLI
+  is SEALED so the auditor's fix is illegal. Legal route: one owner in a NON-sealed module called by
+  `micro_routes.py` + a test pinning the sealed CLI's line to it; else stop and ask the owner.
+- **FREEZE BOUNDARY (binding):** the 59 files in `docs/hypothesis-foundry/freeze-set.json` are
+  sealed since the first-read lock (06:55:51Z); sha256s pinned in the immutable `epoch_open` row.
+  NOT sealed: `micro_routes.py`, `apps/backend/tests/`, `qa_playbook_*.sh`, all frontend.
+- **J-08 (dev):** era's last journey — final-truth surface, drill-ins, zero-survivor state, the
+  `withheld_excluded = 80` count J-07 omits, T-9/T-10/T-11 guards. Touches no sealed file.
+- **OWNER (3 rulings; era cannot close without them):** ratify/reject the discarded first real epoch;
+  accept the duplicated count or sanction breaking the seal; accept the page-load lock-file write.
+  Ledger: total=4 / resolved=1 / blocking=3 / non-blocking=0 / critical=0.
+- **PERMANENT, unfixable (record in closure):** B2 — no §8.5 runtime-environment metadata on the
+  epoch-opening row; B3 — nothing re-verifies the ledger chain (chain clean, 1 row).
 
 ## Last 2 verdicts
 
-- iter 5: ESCALATE — epoch frozen, 3 journeys green; iter-6 writes the §8.5 one-way lock with three open freeze-integrity findings, and a CONTINUE would have been demoted to lean.
-- iter 4: ESCALATE — read surface landed (J-03/J-04 green) but the lean pass missed three "claims a proof it does not show" gaps plus a frozen-function mutation in the serving process.
+- iter 6: CONTINUE — J-07 done and evaluator-verified end to end (one `epoch_open` row, real-corpus
+  hash `da7488f8…` independently recomputed = MATCH, seal repairs B1/B2/B7 closed), but coherence
+  FAILED on a duplicate computation whose fix site is now sealed.
+- iter 5: ESCALATE — the one real epoch was frozen (zero candidates, an honest valid ending).
 
 ## Do not redo
 
-- Real epoch generated, fresh-context audited, committed (`dff64eaa`; 5 tracked files). **Never regenerate** — §8.1 permits no second epoch; repairs must not re-mint an `epoch_id`.
-- Zero compiled candidates is settled and independently audited — never rescue/re-threshold/re-partition to raise yield.
-- J-02 fixed: Sources/Compiler shows all 3 additive fields, both alias siblings (8 rows), audit ref.
-- J-05 fixed: `kill_type_mapping` + `best_of_n_disclosure` render; `outcome_types_present` row-derived (`foundry_hermetic_summary.py:301-317`).
-- `scout._two_sided_p` anti-goal CLOSED — never re-patch a frozen module for a `killed_fragile` row.
-- `tests/test_foundry_real_epoch_artifacts.py` (14 read-only guards) exists — extend, don't rewrite.
+- Real epoch frozen/one-way: `epoch:afd19e9c11a6534f`, registry+manifest byte-identical since
+  `dff64eaa`. Never regenerate; never write a second first-read lock.
+- Seal bookkeeping B1/B2/B7 closed: 59 relative-path entries, all bytes at `freeze_commit 5b41d9ef`
+  (ancestor of HEAD), `era_open_evidence_class_contract` present. Manifest-store deletion bypass
+  closed too (`ManifestStoreMissingError`, TC-7 + positive control).
+- J-01..J-07 replay green. J-07's proof = `.../iter-6-evidence/UT-02-result.png`, NOT the QA report's own citations (one blank image reused 4x — audit T1).

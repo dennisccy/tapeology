@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-hypothesis-foundry-iter-6",
+  "base_url": "http://localhost:3301",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the Desk page",
+      "narration": "The Desk page is where operators monitor the Hypothesis Foundry state. We'll start by navigating there.",
+      "point_out": "The page loads with several sections, including the Hypothesis Foundry panel at the bottom.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "goto", "url": "/desk"},
+      "expect": {"text": "Hypothesis Foundry"}
+    },
+    {
+      "n": 2,
+      "title": "Expand the Hypothesis Foundry section",
+      "narration": "The Hypothesis Foundry panel starts collapsed. We click the section header to expand it and see all subsections.",
+      "point_out": "The panel expands to reveal six subsections: Sources / Compiler, Interpreter Fixtures, Freeze / Integrity, Hermetic Oracles, Epoch / Manifest, and the new Runner / Checkpoint.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "click", "target": {"role": "button", "name": "▸Hypothesis Foundry"}},
+      "expect": {"text": "Era-Open Baseline"}
+    },
+    {
+      "n": 3,
+      "title": "Expand the Epoch / Manifest subsection",
+      "narration": "We click Epoch / Manifest to confirm the sibling subsection still works as before—this regression check proves nothing broke.",
+      "point_out": "The Epoch / Manifest subsection shows the frozen epoch ID and the 'Real Epoch — not a fixture' green banner.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "click", "target": {"role": "button", "name": "Epoch / Manifest"}},
+      "expect": {"text": "epoch:afd19e9c11a6534f"}
+    },
+    {
+      "n": 4,
+      "title": "Expand the new Runner / Checkpoint subsection",
+      "narration": "This is the new subsection for this iteration. It shows the real exhaust pass state after running the Foundry CLI.",
+      "point_out": "The subsection expands to show the checkpoint details, including the first-read lock timestamp, the manifest hash, and the exhaust completion status.",
+      "journey": "",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "click", "target": {"role": "button", "name": "Runner / Checkpoint"}},
+      "expect": {"text": "Real Epoch — not a fixture"}
+    },
+    {
+      "n": 5,
+      "title": "Verify the first-read lock timestamp",
+      "narration": "The first-read lock marks the moment when the exhaust pass definitively evaluated the frozen epoch. This timestamp proves the lock was recorded.",
+      "point_out": "The 'First-read lock recorded at:' line shows the exact UTC timestamp (2026-08-27T06:55:51.071173Z), confirming the exhaust run completed.",
+      "journey": "",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "click", "target": {"text": "First-read lock recorded at:"}},
+      "expect": {"text": "2026-08-27T06:55:51.071173Z"}
+    },
+    {
+      "n": 6,
+      "title": "Check the checkpoint count and protected-read census",
+      "narration": "The checkpoint line shows how many candidates reached a final state. The protected-read count, displayed in green, proves no off-limits data was touched.",
+      "point_out": "The 'Checkpoint: 0 of 0' and 'Protected/withheld/sealed reads: 0' lines confirm the honest, zero-candidate result for this frozen epoch.",
+      "journey": "",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "click", "target": {"text": "Protected/withheld/sealed reads:"}},
+      "expect": {"text": "Protected/withheld/sealed reads: 0"}
+    },
+    {
+      "n": 7,
+      "title": "View the completion message and freeze integrity status",
+      "narration": "The bottom of the subsection shows the exhaust-complete verdict and the freeze integrity verdict. For this epoch, completion is honest and vacuous—zero candidates ever existed.",
+      "point_out": "The 'Exhaust complete' message plainly states the result: 'zero FROZEN_READY variants this epoch — an honest, vacuous completion.' The 'Freeze integrity: green' line confirms all integrity checks passed.",
+      "journey": "",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "click", "target": {"text": "Exhaust complete"}},
+      "expect": {"text": "zero FROZEN_READY variants this epoch"}
+    },
+    {
+      "n": 8,
+      "title": "Verify sibling subsections remain unchanged",
+      "narration": "We check the Sources / Compiler subsection to confirm no other subsections were accidentally modified. This regression test ensures the change was purely additive.",
+      "point_out": "The Sources / Compiler subsection still displays 'Hashes match — outcome-blind compilation proven.' exactly as before.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {"type": "click", "target": {"role": "button", "name": "Sources / Compiler"}},
+      "expect": {"text": "Hashes match — outcome-blind compilation proven."}
+    }
+  ]
+}

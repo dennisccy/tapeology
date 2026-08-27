@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "journey": "J-07",
+  "name": "Goal Mode deterministically exhausts the frozen real epoch without changing science",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "journey": "J-07",
+      "action": {"type": "goto", "url": "/desk"},
+      "expect": {"text": "Hypothesis Foundry"}
+    },
+    {
+      "n": 2,
+      "journey": "J-07",
+      "action": {"type": "click", "target": {"testid": "desk-section-expand-hypothesisFoundry"}},
+      "expect": {"text": "Era-Open Baseline"}
+    },
+    {
+      "n": 3,
+      "journey": "J-07",
+      "action": {"type": "click", "target": {"testid": "desk-section-expand-foundry-epoch-manifest-section"}},
+      "expect": {"text": "epoch:afd19e9c11a6534f"}
+    },
+    {
+      "n": 4,
+      "journey": "J-07",
+      "action": {"type": "click", "target": {"testid": "desk-section-expand-foundry-runner-checkpoint-section"}},
+      "expect": {"text": "Runner lock: Idle — lock free"}
+    }
+  ]
+}

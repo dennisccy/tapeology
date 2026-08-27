@@ -143,6 +143,32 @@ if [[ -f "$REAL_FOUNDRY_BASELINE" ]]; then
   cp "$REAL_FOUNDRY_BASELINE" "$FOUNDRY_DIR/"
 fi
 
+# goal-hypothesis-foundry-iter-6 (J-07 / TC-9): the SAME visibility gap, one artifact later. The new
+# `exhaust_progress` key of `GET /research/desk/micro/foundry` is read per-request by
+# `foundry_runner.read_exhaust_progress(foundry_dir, ...)` through the identical
+# `get_foundry_dir()`-scoped resolver the era-open baseline above uses — so the real Foundry trial
+# ledger the real exhaust CLI wrote (`apps/backend/.data/foundry/foundry_trial_ledger.jsonl` + its
+# `.chain_head.json` tail-anchor sidecar) is INVISIBLE to this rig unless it is copied in, and the
+# rig would otherwise render the honest-but-wrong pre-first-read-lock EmptyState instead of the real
+# completed-exhaust state. Fix: the identical plain-file-copy-of-a-real-recorded-artifact pattern.
+# Both files are copied together and only together — the sidecar anchors the hash chain of the exact
+# ledger bytes beside it, so copying one without the other would hand this rig a mismatched chain.
+# The transient single-flight lock file (`foundry_exhaust_runner.lock`) is deliberately NOT copied:
+# it is live OS-advisory-lock state belonging to the machine that ran the CLI, not recorded
+# evidence, and this rig's own live probe re-creates it. Honest-absence fallback: if the operator
+# has never run `scripts/run_hypothesis_foundry_real_exhaust.py`, there is nothing genuine to copy —
+# the rig then correctly falls back to the honest pre-lock `first_read_lock_recorded: false` state,
+# exactly like a fresh install (never fabricated).
+REAL_FOUNDRY_LEDGER="$BACKEND_DIR/.data/foundry/foundry_trial_ledger.jsonl"
+REAL_FOUNDRY_LEDGER_HEAD="$REAL_FOUNDRY_LEDGER.chain_head.json"
+if [[ -f "$REAL_FOUNDRY_LEDGER" ]]; then
+  mkdir -p "$FOUNDRY_DIR"
+  cp "$REAL_FOUNDRY_LEDGER" "$FOUNDRY_DIR/"
+  if [[ -f "$REAL_FOUNDRY_LEDGER_HEAD" ]]; then
+    cp "$REAL_FOUNDRY_LEDGER_HEAD" "$FOUNDRY_DIR/"
+  fi
+fi
+
 export TAPEOLOGY_BAR_DIR="$BAR_DIR"
 export TAPEOLOGY_DESK_UNIVERSE_DIR="$UNIVERSE_DIR"
 export TAPEOLOGY_DESK_PLAYBOOK_DIR="$PLAYBOOK_DIR"

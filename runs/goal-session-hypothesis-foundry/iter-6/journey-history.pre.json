@@ -1,0 +1,115 @@
+{
+  "journeys": {
+    "J-01": {
+      "id": "J-01",
+      "name": "The Foundry opens as a new finite era and the old self-extension loop is inactive",
+      "status": "passing",
+      "last_verified_iter": "goal-hypothesis-foundry-iter-5",
+      "last_passing_iter": "goal-hypothesis-foundry-iter-5",
+      "first_seen_iter": "goal-hypothesis-foundry-iter-0",
+      "last_evidence_path": "reports/qa/goal-hypothesis-foundry-iter-5-evidence/J-01-verify.png",
+      "spec_hash": "59e3ae49662b4b867a8df72a472b4ad02a5fbf79ce36d95bd34fc1f20dd3acd5",
+      "gap": "none. Deterministic golden replay re-ran end-to-end this iteration (UT-J-01, all expects held) even though the panel's top-line 'Source registry hash' changed from the literal not_yet_generated to the real committed hex ed40dbc2...; evaluator spot-read the screenshot and confirmed era open/closed lines, era-open baseline counts and the six Referee module hashes are unchanged."
+    },
+    "J-02": {
+      "id": "J-02",
+      "name": "Ratified sources compile into auditable CandidateSpecs or typed blocks without outcome input",
+      "status": "passing",
+      "last_verified_iter": "goal-hypothesis-foundry-iter-5",
+      "last_passing_iter": "goal-hypothesis-foundry-iter-5",
+      "first_seen_iter": "goal-hypothesis-foundry-iter-0",
+      "last_evidence_path": "reports/qa/goal-hypothesis-foundry-iter-5-evidence/UT-03-result.png",
+      "spec_hash": "1f5990f0ef773d9740a427d44bb5d593ac40ca6d4b65e704ae64270226c273db",
+      "gap": "all 5 numbered steps now demonstrated on screen and read off the screenshot by the evaluator: 8 fixture rows (both fixture-variant-a AND fixture-variant-b, each naming the other under 'Alternatives'), every row showing source ref, quoted span + '@ location', direction derivation, threshold provenance, operative formula refs, superseded fields, aliases/lineage ids and exactly one disposition badge; the outcome-blind pair (effect_bps 12/p 0.5/n 40 vs effect_bps 99/p 0.0001/n 500) producing one identical candidate_spec_hash with 'Hashes match'; and the committed audit-report reference line 'reports/hypothesis-foundry/source-registry-audit.md (committed alongside the real epoch)'. Residual sub-clauses only: (a) the screen carries no explicit exact-quote-lint PASS indicator - the lint is proven only by compile_sources not raising (lint_quoted_spans runs inside it, foundry_compiler.py:261); (b) for the REAL registry the auditor's B3 showed lint_quoted_spans only checks a span against its own record's excerpt, never the cited file - 0 of 11 real excerpts are byte-exact substrings of their source_path (they are faithful normalized ASCII transcriptions; the evaluator independently re-checked Card 9.3 and Card 9.1 against docs/research-directions.md and confirmed content fidelity), now guarded by tests/test_foundry_real_epoch_artifacts.py::test_every_quoted_span_is_traceable_to_the_ratified_source_file_it_cites."
+    },
+    "J-03": {
+      "id": "J-03",
+      "name": "Generic interpretation preserves timing, population symmetry, direction, and exact Scout decisions",
+      "status": "passing",
+      "last_verified_iter": "goal-hypothesis-foundry-iter-5",
+      "last_passing_iter": "goal-hypothesis-foundry-iter-5",
+      "first_seen_iter": "goal-hypothesis-foundry-iter-0",
+      "last_evidence_path": "reports/qa/goal-hypothesis-foundry-iter-5-evidence/J-03-verify.png",
+      "spec_hash": "2df19ba402256be32c1e1bef5ab444f53932d7a6e1910ef1550475f69efc0d05",
+      "gap": "carried, unchanged: residual sub-clause only - step 2's 'raw coordinates remain descriptive provenance' half has no dedicated on-screen rendering. Re-verified this iteration by deterministic golden replay (UT-J-03, all expects held) and spot-checked on the screenshot: Interpreter Fixtures still renders the amber hermetic-fixture banner, fixture-immediate-scalar-equivalence with 'Foundry vs. direct-Scout screens equal: true' and 'Unresolved anchors excluded: 0'."
+    },
+    "J-04": {
+      "id": "J-04",
+      "name": "Foundry owns the denominator, append-only state, freeze barrier, and integrity lock",
+      "status": "passing",
+      "last_verified_iter": "goal-hypothesis-foundry-iter-5",
+      "last_passing_iter": "goal-hypothesis-foundry-iter-5",
+      "first_seen_iter": "goal-hypothesis-foundry-iter-0",
+      "last_evidence_path": "reports/qa/goal-hypothesis-foundry-iter-5-evidence/J-04-verify.png",
+      "spec_hash": "046f4d7aa4cd1a09254c0645b97cce49ff848582688dd49a4911cc2f1fa4a71b",
+      "gap": "carried: residual sub-clause - step 4's 'plus the manifest/source/spec/config identities' is still not surfaced by the freeze_record subview. Re-verified by golden replay (UT-J-04) and spot-checked on the screenshot (amber fixture banner + Family Denominator table single/multiple/at_cap rows all 'Denominator visible: true'). NEW, evaluator-verified this iteration on the REAL committed artifact: docs/hypothesis-foundry/freeze-record.json omits the 'era-open evidence-class contract' that goal.md 8.4 lists as a required freeze-record field (11 keys present, no evidence-class key). Repairable without a new epoch (freeze_set_hash/freeze record are not part of generation_inputs), but it touches a post-barrier frozen artifact - see the iteration-state blocker."
+    },
+    "J-05": {
+      "id": "J-05",
+      "name": "The complete factory passes hermetic known-null, planted-effect, leakage, and honest-stop oracles",
+      "status": "passing",
+      "last_verified_iter": "goal-hypothesis-foundry-iter-5",
+      "last_passing_iter": "goal-hypothesis-foundry-iter-5",
+      "first_seen_iter": "goal-hypothesis-foundry-iter-0",
+      "last_evidence_path": "reports/qa/goal-hypothesis-foundry-iter-5-evidence/UT-04-result.png",
+      "spec_hash": "5b0b7ba56f92f1618b478620a75b4e3e0061935ce90ed66d5ad623f278b06de6",
+      "gap": "the iter-4 blocker is closed and the evaluator read the fix off the screenshot: the kill-type mapping now renders all 7 rows (insufficient -> EVALUATED_INSUFFICIENT; null/direction/concentration/economic/fragile -> EVALUATED_KILLED; survive -> DIAGNOSTIC_SURVIVOR_OOS_RULE_FROZEN), 'Best-of-N disclosure: n_variants_tried=7 - threshold_bps=0.1569542572940126' is on screen next to 'Denominator consistent across rows: true - Canonical order preserved: true', and all five named oracles (all-blocked, all-killed, multi-survivor, crash-resume, protected-data trip fails closed / evidence class immutable) show PASS. outcome_types_present is now row-derived (_derive_outcome_types_present, foundry_hermetic_summary.py:301-317) instead of a hard-coded label dict; evaluator re-ran tests/test_foundry_hermetic_epoch.py + test_foundry_route_hermetic_views.py + test_foundry_route.py (43 passed). Residual note (auditor F2, not a step failure): the field name kill_type_mapping promises finer granularity than 7.2's vocabulary can deliver - five of seven rows legitimately collapse to EVALUATED_KILLED."
+    },
+    "J-06": {
+      "id": "J-06",
+      "name": "One complete real epoch is generated and committed with zero Foundry outcome reads",
+      "status": "passing",
+      "last_verified_iter": "goal-hypothesis-foundry-iter-5",
+      "last_passing_iter": "goal-hypothesis-foundry-iter-5",
+      "first_seen_iter": "goal-hypothesis-foundry-iter-0",
+      "last_evidence_path": "reports/qa/goal-hypothesis-foundry-iter-5-evidence/UT-02-result.png",
+      "spec_hash": "92dd2d434a1cfa8ce4683e1df6b094d67ab5ec88a92febdc1b56a3ec4e4e8aac",
+      "gap": "all 6 numbered steps demonstrated; the evaluator verified the artifact side independently of every report. Read off the screenshot: emerald 'REAL EPOCH - NOT A FIXTURE' banner, 'Status: Committed - Git-visible pre-outcome barrier crossed', epoch_id epoch:afd19e9c11a6534f, six non-empty identity hashes, outcome_access_census 0, exactly 11 source-disposition rows (Card 9.1/Study 2 EXCLUDED_PREVIOUSLY_KILLED, Card 9.2 EXCLUDED_PREREQUISITE_UNMET, Cards 9.8-9.11 EXCLUDED_GATE_CLOSED, both pilot proxies ALIASED_PROXY_ONLY, Card 9.7 ALIASED_VARIANT_VOCABULARY), 'Compiled families (0) - Zero compiled candidates this epoch', and the committed audit-report reference. Verified directly by the evaluator: git show dff64eaa lists exactly the five tracked artifacts in ONE commit; git merge-base --is-ancestor dff64eaa HEAD exits 0; apps/backend/.data/foundry/ contains only era_open_baseline.json (no trial ledger, so real evaluation is genuinely unopened); no exhaust-runner entrypoint exists; the generator's outcome tripwire is a sys.settrace CALL tracer over 17 forbidden modules, not an import check; tests/test_foundry_real_epoch_artifacts.py (14 guards incl. recompiling the 11 records through the real compile_sources and reproducing the committed source_registry_hash) passes. Open gaps, all recorded as blockers rather than dismissed: (a) auditor B1 - freeze-set.json keys all 55 entries by ABSOLUTE machine-local path, so the 8.5 lock is only verifiable in this one checkout; (b) auditor B2 - freeze_commit 55c42ee3 does not contain the science bytes the freeze-set pins (they were still uncommitted at generation time); (c) auditor B7 + evaluator - the freeze set omits the tracked registry/manifest/freeze-record JSONs and the generation CLI that 8.4 names, and freeze-record.json omits the era-open evidence-class contract; (d) auditor B6 - the '11 required source objects' partition collapses each parked study with its pilot proxy and all four Wave-2 cards into single records (constituent ids preserved in alias_refs, confirmed by the independent fresh-context auditor), so TC-4's literal card-9.8..9.11 source_ids do not exist; (e) auditor F1 - families[] is empty, so the family/variant rendering block TC-7 describes has never rendered a row."
+    },
+    "J-07": {
+      "id": "J-07",
+      "name": "Goal Mode deterministically exhausts the frozen real epoch without changing science",
+      "status": "failing",
+      "last_verified_iter": "goal-hypothesis-foundry-iter-3",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-hypothesis-foundry-iter-0",
+      "last_evidence_path": "runs/goal-session-hypothesis-foundry/iter-3/eval.md",
+      "spec_hash": "f3a5ff9577806a161eb3a7cf7d9b695e9e06e581943c436920f5f7868ed37803",
+      "gap": "not targeted this iteration and no exhaust runner exists yet (evaluator confirmed: no CLI, route or __main__ drives foundry_runner outside the hermetic summary). NOW UNBLOCKED - the Binding Execution Order step-7 Git-visible barrier was crossed this iteration (commit dff64eaa, ancestor of HEAD), so J-07 is the next legal target. Because the frozen epoch compiled ZERO candidates, most of J-07's variant clauses are vacuous; the real work is the resumable single-flight runner, the epoch-opening row, the exhaustive-completion proof over an empty ready set, and the all-zero protected/Vault/Referee census."
+    },
+    "J-08": {
+      "id": "J-08",
+      "name": "The operator sees the final Foundry truth and all foundation rails still hold",
+      "status": "failing",
+      "last_verified_iter": "goal-hypothesis-foundry-iter-3",
+      "last_passing_iter": null,
+      "first_seen_iter": "goal-hypothesis-foundry-iter-0",
+      "last_evidence_path": "reports/qa/goal-hypothesis-foundry-iter-3-evidence/J-01-verify.png",
+      "spec_hash": "61cc1f15a3805d73e63bac6d4d109a9fda53ead5e6c75d1618e0eb253f9c0ed8",
+      "gap": "not targeted this iteration; depends on J-07. Its step 3 will take the 'no diagnostic survivor exists' branch, which goal.md's Completion section lists as valid successful ending 1 (zero compiled candidates)."
+    }
+  },
+  "anti_goal_violations": [
+    {
+      "iter": "goal-hypothesis-foundry-iter-4",
+      "anti_goal": "Frozen foundations stay frozen. The existing `v1` strategy, `default` profile, tape engine state vocabulary/thresholds, frozen structure calculations, canonical stores, and archived-era behavior remain additive/versioned, never silently mutated.",
+      "severity": "minor",
+      "evidence": "apps/backend/app/research/foundry_hermetic_summary.py:75-82 and :183-188 — production (non-test) code reassigned the frozen Scout internal `scout._two_sided_p = lambda observed, null: 0.0001` and restored it in a `finally`, inside the live serving process (micro_routes.py builds _HERMETIC_ORACLES_VIEW at import).",
+      "resolved": true,
+      "resolution": "CLOSED in goal-hypothesis-foundry-iter-5 and verified independently by the evaluator, not accepted from a report: `grep -rn \"scout\\._two_sided_p\\s*=\" apps/backend` now returns exactly one hit, a docstring inside tests/test_foundry_hermetic_epoch.py:755 that documents the guard; zero assignments anywhere outside apps/backend/tests/. A broader grep for any `scout.<attr> = ` reassignment under apps/backend/app returns nothing. The fix is a genuine repair, not a relocation: _fragile_killed_anchors_natural() reaches killed_fragile under the real, unmodified scout._two_sided_p, and the composite epoch still reports a real fragility_killed row - the evaluator read 'fragile -> EVALUATED_KILLED' and 'fragility_killed' in outcome_types_present directly off reports/qa/goal-hypothesis-foundry-iter-5-evidence/UT-04-result.png, and re-ran the hermetic suite (43 passed)."
+    },
+    {
+      "iter": "goal-hypothesis-foundry-iter-5",
+      "anti_goal": "No second real generation epoch.",
+      "severity": "minor",
+      "evidence": "reports/hypothesis-foundry/source-registry-audit.md:9-40 (the committed audit report's own POST-AUDIT DISPOSITION header) records that a first real epoch was generated under source_registry_hash ded18b8b896b…, the fresh-context audit proved card-9.6-shuffled-side-persistence's direction_derivation literal \"long\" unsupported, the record was corrected, and the registry was regenerated — changing source_registry_hash to ed40dbc25e8f… and therefore epoch_id to epoch:afd19e9c11a6534f. Two real epoch_ids have therefore existed, against goal.md §8.1 \"This era creates at most one real `epoch_id`\". Auditor finding B5 (docs/handoffs/goal-hypothesis-foundry-iter-5-audit.md) traced the bypass mechanism: _load_existing_manifest_store (apps/backend/scripts/generate_hypothesis_foundry_real_epoch.py:858-875) returns {} when epoch-manifest.json is absent, so generate_or_verify_manifest mints a fresh epoch with no refusal — §8.3's ManifestDriftRefused only fires when the tracked file is present, making deletion a silent bypass. Scored MINOR, not critical, on evidence the evaluator checked directly: git log shows the five tracked artifacts were added in exactly one commit (dff64eaa) so nothing was ever committed under the discarded hash; apps/backend/.data/foundry/ holds only era_open_baseline.json, so no Foundry trial ledger and no candidate outcome read ever existed; §7.3 expressly permits Goal Mode to repair \"only before any real outcome has been read\", which is exactly when this happened; and the whole sequence is disclosed in the committed audit report rather than hidden. UNRESOLVED because the auditor is right that the era's history now contains a discarded real epoch and §8.1's uniqueness guarantee is mechanical in name only. The auditor asks for OWNER RATIFICATION before J-07 runs; the evaluator may not write an owner disposition, so this entry stays blocking until the owner rules or a uniqueness guard lands.",
+      "resolved": false
+    }
+  ],
+  "notes": {
+    "browser_lane_iter_5": "Browser lane fully healthy. No browser-infra.json, no journeys-changed.md, no DEFERRED-BUDGET row, not maintenance isolation. Merged ui-test-results.md = PASS, 12/12 with 0 skipped: 9 LLM browser-qa tests (UT-01..UT-09) plus 3 deterministic golden replays (UT-J-01/J-03/J-04). The raw regression-replay-results.md agrees and carries no reconciliation footer. Walkthrough recording RECORDED with 8 captured steps (reports/demo/goal-hypothesis-foundry-iter-5/), so no evidence_makeup flag was set on any journey. ux-regression-reviewer was shed for wall-clock budget (UX-REGRESSION-SKIPPED, non-blocking by design); browser-QA and phase-closure both ran, so the UI evidence floor is met.",
+    "pipeline_health_iter_5": "Full depth ran (forced by iter-4's ESCALATE) and paid for itself again. Review PASS_WITH_NOTES, QA PASS (3879 passed / 8 skipped / 0 failed, UI Evolution Audit UI-PASS), hard audit PASS_WITH_GAPS, closure CLOSURE-PASS, coherence COHERENCE-PASS. The hard auditor found what every lighter lane missed: the era's one irreplaceable artifact had ZERO automated coverage (B4 - TC-1..TC-6, TC-9, TC-10 unimplemented; fixed in-audit with tests/test_foundry_real_epoch_artifacts.py, 14 read-only guards), §1.4's citation lint never reaches the cited files (B3, fixed by a new cross-file traceability test), freeze_commit does not contain the frozen science bytes (B2), the freeze set is keyed by absolute machine-local paths (B1), and a first real epoch_id was minted and discarded (B5). The evaluator re-ran the auditor's new artifact module (14 passed) and the three touched Foundry test modules (43 passed) rather than citing the audit's own output.",
+    "budget_iter_5": "Iteration ran 02:17:45Z -> 05:25:10Z (~3h07m) on a 1h budget - the sixth consecutive budget breach this session. Under the engine's deterministic depth arbiter a CONTINUE verdict here would have been demoted to lean for iter-6 (both the budget-breach rung and the full-cap rung fire), which is why the iter-5 verdict is ESCALATE: iter-6 writes the §8.5 first-read lock, the era's second irreversible act, with three IMPORTANT freeze-integrity findings still open."
+  },
+  "updated_at": "2026-08-27T07:10:00Z"
+}

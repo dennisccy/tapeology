@@ -231,3 +231,52 @@ should be made first: whether the discarded first epoch is accepted, and whether
 files may be corrected. Escalated rather than continued because a plain continue would have been
 demoted to the lighter pipeline (sixth consecutive budget overrun) right before the era's one-way
 lock is written.
+
+## Iteration 6 — goal-hypothesis-foundry-iter-6
+
+**Date:** 2026-08-27T11:40:00Z
+**Verdict:** CONTINUE
+**Depth dispatched:** full (iter-5's ESCALATE forced it; the engine did not demote it)
+**Journey deltas:**
+- Newly passing: J-07 "Goal Mode exhausts the frozen real epoch" (was failing)
+- Newly failing: none
+- Regressed: none — J-01 through J-06 all replayed and passed (6/6 goldens)
+- Still failing: J-08 "The operator sees the final Foundry truth" (explicitly out of scope this
+  iteration; carried from iter-3, not re-verified)
+- Anti-goal violations: TWO new MINOR, both unresolved and blocking — "Single source of truth"
+  (the same count worked out two ways: micro_routes.py:901 vs
+  run_hypothesis_foundry_real_exhaust.py:225) and "Persistence stays scoped … GET … read-only"
+  (a page visit now writes a lock file, foundry_runner.py:197-201 via :250-254; literal-reading
+  call, operative intent intact). The iter-5 "No second real generation epoch" entry stays
+  blocking; its bypass mechanism is now genuinely closed but the owner's ratification is not.
+  Counts: total=4 / resolved=1 / blocking=3 / non-blocking=0 / critical=0.
+  scan-report CLEAN; store-scope guard CLEAN (11395 files byte-identical); closure CLOSURE-PASS;
+  **coherence COHERENCE-FAIL**.
+
+**Reasoning:** The era's second one-way step really happened, and I proved it myself rather than
+trusting any report. There is exactly one opening row in the Foundry record book; its twelve seal
+fingerprints match the committed seal record character for character; it was written at 06:55:51,
+after the code it points at was committed at 06:40–06:42; and I re-computed the big data
+fingerprint inside it from the real 26 GB store on this machine — 98 datasets, 80 correctly left
+out, 18 counted — and got exactly the value in the row, which is also different from every test
+fixture, so it is real data and not a stand-in. The three seal-bookkeeping faults carried since
+iteration 5 are genuinely closed: 59 entries, no machine-specific paths, every entry's bytes
+present in the pinned commit, and that commit is a real ancestor of the current code. I re-ran the
+three test files myself (44 passed) and opened the Runner/Checkpoint screenshot enlarged to read
+every field. So J-07 is done. It is not "goal achieved" because the structural check failed: the
+same count is now worked out in two places from two different fields of the same file — and I
+checked that the file holding the second copy is one of the 59 sealed files, so the obvious repair
+would break the era's own seal. That is a real crossroads, not a small tidy-up.
+
+**Next-step recommendation:** First settle the duplicated count, using only files that are not
+sealed — put the one true owner in `micro_routes.py` (not sealed) and add a test proving the sealed
+command's own line always gives the same number. Do not let the next iteration edit a sealed file to
+make the check go green; if the legal route is judged not good enough, stop and ask the owner.
+Second, build J-08 "The operator sees the final Foundry truth", the last journey: the final on-screen
+summary, the honest "no survivors" statement, the 80 left-out datasets that today are only printed by
+the command, and the full battery of protective checks. Three calls belong to the owner and the era
+cannot finish without them: accept or reject the first real epoch that was made and thrown away;
+accept the duplicated count as a known harmless flaw or sanction breaking the seal; and accept that a
+page visit writes a small lock file, whose fix also sits in a sealed file. Run the next iteration at
+full depth — a plain continue has been downgraded to the lighter pipeline twice in this session, and
+this is the era's closing act.

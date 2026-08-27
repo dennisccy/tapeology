@@ -338,3 +338,51 @@ def test_j07_step7_fixture_backed_crash_resume_through_the_real_sequence(exhaust
     assert len(intent_rows) == 1  # no duplicate intent row appended on resume
     assert len(terminal_rows) == 1
     assert terminal_rows[0]["candidate_spec_hash"] == spec.candidate_spec_hash
+
+
+# === TC-4, literally: a real call counter over the sanctioned protected-read door ==================
+
+
+def test_tc4_instrumented_micro_accessor_counter_records_zero_protected_reads(exhaust_mod, tmp_path, monkeypatch):
+    """TC-4's literal wording ("given the sanctioned ``micro_accessor`` is instrumented with a call
+    counter"). ``run_real_exhaust`` reports ``protected_read_count`` as a structural ``0`` -- true
+    by construction today (nothing in its call path reaches ``MicroAccessor.read_snapshot_rows``,
+    the ONE door to protected snapshot rows), and already guarded statically by the entrypoint-
+    allowlist test in ``test_foundry_real_epoch_artifacts.py``. This test adds the RUNTIME half:
+    a genuine counter wrapped around that door, so a future refactor that silently introduces a
+    protected read fails here instead of quietly turning the reported ``0`` into a lie.
+
+    Both flavors of run are instrumented under the SAME counter, deliberately: the real committed
+    manifest's vacuous zero-variant pass, and the fixture-backed ONE-variant pass -- the latter is
+    the only one that actually crosses ``run_family``/``run_one_candidate`` into the interpreter,
+    i.e. the code path where such a read could plausibly appear later. Fully isolated: both use a
+    ``tmp_path`` ledger/lock and the committed ``tests/fixtures/datasets`` corpus, never the real
+    runtime Foundry directory."""
+    _require_real_epoch_committed()
+    from app.research import micro_accessor as ma
+
+    calls: list[tuple] = []
+    original = ma.MicroAccessor.read_snapshot_rows
+
+    def _counting_read_snapshot_rows(self, dataset_id, *args, **kwargs):
+        calls.append((dataset_id, args, kwargs))
+        return original(self, dataset_id, *args, **kwargs)
+
+    monkeypatch.setattr(ma.MicroAccessor, "read_snapshot_rows", _counting_read_snapshot_rows)
+
+    real_result = exhaust_mod.run_real_exhaust(
+        tracked_dir=FOUNDRY_DOCS_DIR, repo_root=REPO_ROOT, dataset_dir=str(FIXTURE_DATASET_DIR),
+        foundry_dir=str(tmp_path / "real-foundry"), lock_path=tmp_path / "real-exhaust.lock",
+    )
+    assert real_result["protected_read_count"] == 0
+    assert calls == [], f"the real-manifest exhaust pass read protected snapshot rows: {calls}"
+
+    fixture_result = exhaust_mod.run_real_exhaust(
+        tracked_dir=_build_fixture_tracked_dir(tmp_path), repo_root=REPO_ROOT,
+        dataset_dir=str(FIXTURE_DATASET_DIR), foundry_dir=str(tmp_path / "fixture-foundry"),
+        lock_path=tmp_path / "fixture-exhaust.lock", frozen_ready_families=_one_variant_resolver,
+    )
+    # The variant really was evaluated end-to-end (otherwise "zero reads" would be vacuous).
+    assert fixture_result["terminal_count"] == 1
+    assert fixture_result["protected_read_count"] == 0
+    assert calls == [], f"the one-variant exhaust pass read protected snapshot rows: {calls}"

@@ -142,6 +142,34 @@ def test_b7_freeze_record_carries_the_era_open_evidence_class_contract(freeze_re
     assert freeze_record["era_open_evidence_class_contract"] == "historical_exposed_diagnostic"
 
 
+def test_freeze_record_freeze_set_hash_matches_the_committed_freeze_set(freeze_record, freeze_set):
+    """goal-hypothesis-foundry-iter-6 audit addition (finding B1 in the iter-6 audit report).
+
+    ``freeze-record.json`` is deliberately NOT a freeze-set member (its own content embeds
+    ``freeze_set_hash``, so pinning its file hash inside the very freeze-set that hash is computed
+    over is genuinely circular -- see
+    ``test_b7_freeze_set_covers_the_tracked_registry_and_manifest_plus_both_foundry_clis``). The
+    iter-6 dev handoff justified that exclusion by asserting freeze-record.json's integrity "is
+    instead protected by the existing ``verify_commit_is_ancestor`` + ``freeze_set_hash``
+    field-equality check every reader (the route, the exhaust CLI) already performs" -- but no such
+    field-equality check existed anywhere in the repository: ``verify_freeze_set_unchanged`` only
+    re-hashes the paths ``entries`` enumerates, and neither ``micro_routes.read_epoch_manifest_view``
+    nor ``run_hypothesis_foundry_real_exhaust.run_real_exhaust`` ever compares the two files' own
+    ``freeze_set_hash`` values. This test IS that check, in the one place the era can still add one
+    without touching a frozen science file: a read-only guard over the committed bytes.
+
+    A hand-edit of ``freeze-record.json`` that swapped in a different ``freeze_set_hash`` (the value
+    copied verbatim into the era's one irreversible §8.5 epoch-opening ledger row) would otherwise
+    pass every existing check in this repository."""
+    assert freeze_record["freeze_set_hash"] == freeze_set["freeze_set_hash"], (
+        "freeze-record.json's pinned freeze_set_hash disagrees with the committed freeze-set.json "
+        "it claims to pin -- the two tracked artifacts have drifted apart"
+    )
+    # Belt and braces: the freeze-set's own hash is a pure function of its recorded entries, so the
+    # equality above transitively pins the freeze-record to the enumerated path+sha256 set itself.
+    assert fz._sha256(fz._canonical(freeze_set["entries"])) == freeze_record["freeze_set_hash"]
+
+
 def test_tc8_verify_freeze_set_unchanged_and_commit_ancestry_both_pass_against_the_new_freeze_commit(
     freeze_record, freeze_set,
 ):
@@ -359,6 +387,69 @@ def test_tc10_drifted_generation_inputs_are_refused_rather_than_minting_epoch_2(
     drifted["source_registry_hash"] = "0" * 64
     with pytest.raises(fz.ManifestDriftRefused):
         fz.generate_or_verify_manifest(fresh, drifted)
+
+
+# === goal-hypothesis-foundry-iter-6 TC-7: a DELETED manifest store refuses rather than silently
+# minting a second epoch. The drift guard directly above only fires when an EXISTING slot disagrees
+# with the new inputs -- an EMPTY store has nothing to disagree with, so before this iteration's fix
+# a missing `epoch-manifest.json` looked exactly like a first-ever generation and would have been
+# silently overwritten with whatever the current inputs happened to be. These are the tests that
+# make the refusal itself a standing guarantee rather than a one-time manual verification. ==========
+
+
+def _load_generation_module():
+    """Loads the real generation CLI as a module -- the same importlib load
+    ``test_tc1_registry_hash_and_dispositions_are_reproduced_by_the_real_generator`` performs, so
+    these tests exercise the SHIPPED function rather than a copy. Import-time side effects: none
+    beyond constant/dataclass definition (the script's own work all sits inside ``main``)."""
+    spec = importlib.util.spec_from_file_location(
+        "_generate_real_epoch_for_tc7_test",
+        BACKEND_DIR / "scripts" / "generate_hypothesis_foundry_real_epoch.py",
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_tc7_deleted_manifest_store_refuses_instead_of_silently_minting_a_new_epoch(tmp_path, monkeypatch):
+    """The refusal half of TC-7: ``epoch-manifest.json`` gone while its SIBLING
+    ``freeze-record.json`` (written in the same generation run, immediately after it) still stands
+    as proof a real generation already happened -> typed ``ManifestStoreMissingError``, never an
+    empty store. Fully hermetic: both paths point into ``tmp_path``; the real tracked artifacts are
+    never read, written, or deleted by this test."""
+    module = _load_generation_module()
+    missing_manifest = tmp_path / "epoch-manifest.json"
+    standing_freeze_record = tmp_path / "freeze-record.json"
+    standing_freeze_record.write_text(json.dumps({"freeze_commit": "0" * 40}), encoding="utf-8")
+    monkeypatch.setattr(module, "FREEZE_RECORD_PATH", standing_freeze_record)
+
+    assert not missing_manifest.exists()
+    with pytest.raises(module.ManifestStoreMissingError):
+        module._load_existing_manifest_store(missing_manifest)
+
+
+def test_tc7_first_ever_generation_still_gets_a_genuinely_fresh_store(tmp_path, monkeypatch):
+    """The other half of TC-7 -- the refusal must NOT be a blanket one, or the very first real
+    generation could never run: with NEITHER file on disk (a true fresh install), the loader still
+    returns an empty store."""
+    module = _load_generation_module()
+    monkeypatch.setattr(module, "FREEZE_RECORD_PATH", tmp_path / "freeze-record.json")
+    assert module._load_existing_manifest_store(tmp_path / "epoch-manifest.json") == {}
+
+
+def test_tc7_the_real_committed_manifest_reconstructs_a_populated_replay_store(manifest):
+    """Positive control over the REAL committed artifact (read-only): the loader reconstructs the
+    populated one-slot store that makes a re-run replay-VERIFY, and every reconstructed field is the
+    committed one -- so the refusal above is guarding a path that genuinely works when the file is
+    present."""
+    module = _load_generation_module()
+    store = module._load_existing_manifest_store(module.EPOCH_MANIFEST_PATH)
+    assert list(store) == ["epoch"]
+    record = store["epoch"]
+    assert record.epoch_id == manifest["epoch_id"]
+    assert record.manifest_hash == manifest["manifest_hash"]
+    assert record.inputs_hash == manifest["_inputs_hash"]
+    assert record.payload == manifest["_generation_inputs"]
 
 
 # === §8.4/§8.5: the freeze-set actually pins the science files in THIS checkout ===================

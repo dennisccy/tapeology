@@ -373,3 +373,57 @@ iteration spec's BACKGROUND, precisely so a human watching the run can intervene
 this reading of §7.3 is judged too permissive.
 **Reversible:** no (the first-read lock this iteration writes, and any freeze-set/freeze-record
 regeneration preceding it, are both one-way per §8.5/§9.3 once committed)
+
+## iter-6 — goal-evaluator
+
+**Ambiguity:** the iter-5 anti-goal entry ("No second real generation epoch") recorded its OWN close
+condition as "stays blocking until the owner rules **or a uniqueness guard lands**". A uniqueness
+guard did land this iteration and I verified it directly (`generate_hypothesis_foundry_real_epoch.py:894-909`
+raises a typed `ManifestStoreMissingError`; both TC-7 tests pass under my own run). Methodology B.1
+says a finding is discharged when "a close condition the finding itself recorded" is "proven
+satisfied now" — which would make it `resolved: true`.
+**We chose:** the fail-closed reading — keep it `resolved: false` and BLOCKING. A guard prevents
+recurrence but does not un-mint the discarded `epoch_id`, the iter-5 auditor asked specifically for
+OWNER RATIFICATION, and I may not write an owner disposition. I record that I was genuinely unsure,
+and that the owner can flip this cheaply with a one-line ruling; I also note the auditor's phrasing
+"ratify before J-07 runs" is now moot, since J-07 ran this iteration.
+**Reversible:** yes
+
+**Ambiguity:** the "Persistence stays scoped" rail says `GET /research/desk/micro/foundry` and every
+page-load GET "are read-only and never compute/evaluate a candidate or trigger the exhaust runner".
+The new per-request single-flight probe makes the GET create/truncate a lock file
+(`foundry_runner.py:197-201` via `:250-254`) — so the rail's operative intent (no market data
+recorded, no candidate computed, runner not triggered) is fully intact, but the literal words "are
+read-only" are contradicted.
+**We chose:** record it as a MINOR, unresolved, blocking anti-goal entry on the literal reading,
+rather than describing it in prose only — goal.md's own anti-goal section says findings "are not
+dismissed in prose", and the auditor named three concrete consequences (spurious
+`ConcurrentRunnerRefused` for a concurrent CLI, a 500 on an unwritable Foundry dir, `EACCES`
+mis-reported as "Running"). Disclosed as a literal-reading call so the owner can disposition it in
+one line. It does not change this iteration's verdict, which is already CONTINUE on the coherence
+FAIL.
+**Reversible:** yes
+
+**Ambiguity:** the decision tree's ESCALATE rung (C.4) literally matches — J-08 has now been
+`failing` for six consecutive evaluations — and this session has twice watched the engine's depth
+arbiter demote a CONTINUE to lean (iter-2, iter-4), with a seventh consecutive budget breach this
+run. But my agent contract states twice, unconditionally, that a `COHERENCE-FAIL` iteration must
+"return CONTINUE" with a consolidation recommendation.
+**We chose:** CONTINUE, following the explicit contract rather than the tree rung, and instead flag
+the demotion risk loudly in the Depth Recommendation, the Next-Step Recommendation, and
+`iteration-state.md` so a human can force full depth. Note J-08 was never TARGETED in those six
+iterations (the goal's own execution order sequences it last), so the rung's literal match does not
+carry its intended meaning of "we tried twice and failed".
+**Reversible:** yes
+
+**Ambiguity:** J-07's eight steps are mostly vacuous for a zero-candidate epoch (steps 3, 4, 5, 6
+have nothing to iterate), and step 7 explicitly permits a fixture-backed interrupt rather than a real
+one. The status vocabulary does not say whether a vacuously-satisfied step counts as demonstrated.
+**We chose:** score J-07 `passing`, extending the precedent this session already set for J-06 step 4
+in iter-5 — goal.md's Completion section lists "zero compiled candidates" as valid successful ending
+1, and the screen renders explicit honest text ("zero FROZEN_READY variants this epoch — an honest,
+vacuous completion") rather than a blank. Every non-vacuous step was verified first-hand: the ledger
+row, the independently recomputed real-corpus hash, the freeze bookkeeping, and the crash-resume test
+I re-ran. The one genuinely un-rendered sub-clause (step 4's `withheld_excluded = 80` count) is
+recorded as a gap for J-08 rather than used to cap the journey at `partial`.
+**Reversible:** yes
