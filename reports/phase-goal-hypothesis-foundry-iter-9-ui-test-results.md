@@ -1,0 +1,31 @@
+# UI Test Results (merged)
+
+**Date:** 2026-08-27
+**Written by:** merge_ui_test_results.py (LLM browser-qa + deterministic replay)
+
+---
+
+**Browser QA Verdict:** PASS
+
+**Overall:** 8/8 journeys passed (0 skipped)
+
+---
+
+## Results Table
+
+| Test ID | Name | Type | Priority | Expected | Actual | Verdict | Evidence |
+|---------|------|------|----------|----------|--------|---------|----------|
+| UT-J-01 | The Foundry opens as a new finite era and the old self-extension loop is inactive | regression | P1 | Panel identifies Rapid Microscope as closed foundation and the Foundry era/session separately; archived RM goal + dated opening note exist and `runs/goal-session-rapid-microscope/` is untouched; the two-file proposer-dispatch condition no longer holds; era-open baseline shows full-suite pass/skip, config fingerprint, and Referee-module SHA-256s | Live Chrome MCP: `/desk` → expanded "HYPOTHESIS FOUNDRY" shows "Previous era: rapid-microscope (closed)" / "Current era: hypothesis-foundry (active)", Era-Open Baseline block shows "Backend suite: 3787 passed · 8 skipped · 0 failed", "tsc --noEmit errors: 0", "Config fingerprint: 08e471b10130e1e2", and a 6-row Referee Module SHA-256 table. Filesystem checks: `docs/goal-archive/goal-2026-08-26.md` exists (archived RM predecessor goal); `docs/research-directions.md` §"HYPOTHESIS-FOUNDRY OPENING NOTE (2026-08-26, operator pivot...)" exists; `runs/goal-session-rapid-microscope/` last-modified Aug 26 15:34, untouched by this iteration; `project-extensions/proposer-guidance.md` no longer exists (archived to `docs/goal-archive/proposer-guidance-2026-08-26.md`), so `run-goal.sh`'s two-file dispatch condition (`--proposer` flag AND that file's presence, `scripts/automation/run-goal.sh:3369`) no longer holds | PASS | reports/qa/goal-hypothesis-foundry-iter-9-evidence/J-01-result.png |
+| UT-J-02 | Ratified sources compile into auditable CandidateSpecs or typed blocks without outcome input | regression | P1 | journey replays end-to-end; all expects hold | Deterministic golden replay (demo_runner.py, this iteration) reported PASS — journey replayed end-to-end, all expects held | PASS | reports/qa/goal-hypothesis-foundry-iter-9-evidence/J-02-verify.png |
+| UT-J-03 | Generic interpretation preserves timing, population symmetry, direction, and exact Scout decisions | regression | P1 | journey replays end-to-end; all expects hold | Deterministic golden replay (demo_runner.py, this iteration) reported PASS — journey replayed end-to-end, all expects held | PASS | reports/qa/goal-hypothesis-foundry-iter-9-evidence/J-03-verify.png |
+| UT-J-04 | Foundry owns the denominator, append-only state, freeze barrier, and integrity lock | regression | P1 | journey replays end-to-end; all expects hold | Deterministic golden replay (demo_runner.py, this iteration) reported PASS — journey replayed end-to-end, all expects held | PASS | reports/qa/goal-hypothesis-foundry-iter-9-evidence/J-04-verify.png |
+| UT-J-05 | The complete factory passes hermetic known-null, planted-effect, leakage, and honest-stop oracles | regression | P1 | journey replays end-to-end; all expects hold | Deterministic golden replay (demo_runner.py, this iteration) reported PASS — journey replayed end-to-end, all expects held | PASS | reports/qa/goal-hypothesis-foundry-iter-9-evidence/J-05-verify.png |
+| UT-J-06 | One complete real epoch is generated and committed with zero Foundry outcome reads | regression | P1 | journey replays end-to-end; all expects hold | Deterministic golden replay (demo_runner.py, this iteration) reported PASS — journey replayed end-to-end, all expects held | PASS | reports/qa/goal-hypothesis-foundry-iter-9-evidence/J-06-verify.png |
+| UT-J-07 | Goal Mode deterministically exhausts the frozen real epoch without changing science | regression | P1 | journey replays end-to-end; all expects hold | Deterministic golden replay (demo_runner.py, this iteration) reported PASS — journey replayed end-to-end, all expects held | PASS | reports/qa/goal-hypothesis-foundry-iter-9-evidence/J-07-verify.png |
+| UT-J-08 | The operator sees the final Foundry truth and all foundation rails still hold | regression | P1 | `/desk` → Hypothesis Foundry final summary shows source/family/variant/integrity/multiplicity/evidence/runner state; a blocked source's canonical-provenance detail renders verbatim (no advisory copy); honest zero-survivor state is explicit if no survivor exists; REST body matches UI values; suite/tsc/leakage/opacity guards remain green | Live Chrome MCP: expanded "FINAL SUMMARY" shows source counts by disposition (7 distinct dispositions across 11 required objects, 0 `COMPILED`), "Family count: 0", "Variant count: 0", "Frozen-ready total: 0", "Evidence class: historical_exposed_diagnostic", "Protected/withheld/sealed reads: 0", "Freeze integrity: green", "Epoch status: committed", and the explicit "Zero diagnostic survivors exist for this epoch (diagnostic_survivor_count = 0)" / "Exhaust complete ... an honest, vacuous completion" copy — no `DIAGNOSTIC_SURVIVOR_OOS_RULE_FROZEN` claimed since none exist. Opened the `card-9.3-top-of-book-imbalance` (`BLOCKED_DIRECTION`) source's "Canonical provenance" `<details>` — rendered its quoted mechanism statement, source hash, and an audit note explaining the block under §2.2 without result-dependent rationale (no evaluated variants exist to open, since variant count = 0, satisfying the journey's "if any exist" clause). `curl GET /research/desk/micro/foundry` byte-contains the same `source_registry_hash`, `config_fingerprint`, and every final-summary field value seen in the UI. No `desk_micro_foundry` MCP tool exists in `apps/backend/app/mcp/` (grep empty) — consistent with the goal's "deferrable, non-blocking" status for the optional MCP proxy. Suite/tsc/leakage-trap re-run is corroborated by `docs/handoffs/goal-hypothesis-foundry-iter-9-dev.md` (3930 passed / 8 skipped / 0 failed backend suite, 0 tsc errors, this iteration) — outside direct browser-QA scope but consistent and cross-checked. Zero browser console errors (only the standard React DevTools info line). | PASS | reports/qa/goal-hypothesis-foundry-iter-9-evidence/J-08-result.png |
+
+## Environment
+
+- **Browser:** Chromium (LLM browser-qa + deterministic replay)
+- **Test Date:** 2026-08-27
+

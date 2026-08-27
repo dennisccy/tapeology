@@ -375,3 +375,46 @@ entries in the journey history, then resume. After that, one short iteration can
 walkthrough (its script clicks buttons that do not exist, so it never reached the Foundry panel) and
 correct the blueprint's ownership row, and the era can be certified. In one sentence: please make
 those two decisions and then resume — everything the era set out to build is finished and verified.
+
+## Iteration 9 — goal-hypothesis-foundry-iter-9
+
+**Date:** 2026-08-27T21:55:00Z
+**Verdict:** GOAL_ACHIEVED
+**Depth dispatched:** lean (zero code change; no full-depth trigger held)
+**Journey deltas:**
+- Newly passing: none — all 8 already passed
+- Newly failing: none
+- Regressed: none — J-01 through J-08 all re-verified PASS this iteration, and the evaluator
+  re-ran the whole golden set itself afterwards: 8/8 PASS
+- Anti-goal violations: no new ones. The owner has now written a durable ruling on the two
+  entries that produced iter-8's STALLED. Both stay `resolved: false` — still real, still open,
+  still reported — and are ruled non-blocking for this era.
+  Counts (evaluator's own run of `anti_goal_disposition.py summary`): total=4 / resolved=2 /
+  unresolved_blocking=0 / unresolved_non_blocking=2 / unresolved_critical=0.
+  scan-report CLEAN; product diff EMPTY; coherence COHERENCE-PASS; review PASS;
+  store-scope guard CLEAN (11395 protected files byte-identical);
+  freeze set 59/59 byte-identical (evaluator's own hashes).
+
+**Reasoning:** Nothing was built this time, and nothing needed to be. The work was to check that
+the finished era still stands, and I checked it myself instead of trusting any report. I re-ran
+every one of the eight journey walkthroughs against the live app: all eight passed. I re-ran the
+whole back-end test suite: 3930 passed, 8 skipped, nothing failed. I re-checked the fingerprints
+of all 59 sealed files: none has moved, and the commit they are pinned to really does contain
+every one of them and really is an ancestor of today's code. I re-computed the record book's one
+entry by hand and it matches; there is still exactly one entry and no result was ever read. I
+re-computed the six foundation module fingerprints and they match the screen. I counted the 11
+source rulings straight out of the sealed file and they match the on-screen summary exactly,
+which honestly reports zero families, zero variants and zero survivors. The two honesty findings
+that stopped the era last time are now owner-ruled and no longer block, and I re-tested the facts
+behind both rulings rather than taking them on trust: the thrown-away first batch never entered
+any official file at any point in the project's history and its disclosure is still on record,
+and opening the page really does still write a small lock file while the record book, its
+chain and the era-opening file stay untouched to the byte. So every journey passes, nothing
+blocks, and the era is finished.
+
+**Next-step recommendation:** Halt — goal achieved. Close the era and keep the open findings
+visible in the closing record: the era is finished with two known, owner-deferred honesty
+findings, not with a clean sheet. Two small things belong on a future list and neither was
+touched here: an old, unrelated timing test that will start failing at random as the calendar
+advances (it is not sealed, so it can be fixed later), and the broken demo walkthrough script
+from last iteration. Please review and sign off the closing record.

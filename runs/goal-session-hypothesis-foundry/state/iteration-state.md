@@ -1,37 +1,40 @@
 # Iteration State — hypothesis-foundry
 
-**After iteration:** 8 · **Date:** 2026-08-27 · **Verdict:** STALLED
+**After iteration:** 9 · **Date:** 2026-08-27 · **Verdict:** GOAL_ACHIEVED
 
 ## Journeys
 
-8 passing (J-01..J-08) · 0 failing · 0 unknown — 8 total. J-08 newly passing; zero regressions (evaluator re-ran all 8 goldens itself after the audit's late frontend fix: 8/8 PASS).
+8 passing (J-01..J-08) · 0 failing · 0 unknown — 8 total. All re-verified in iter-9 and
+re-run again by the evaluator itself: 8/8 PASS.
 
 ## Active blockers
 
-- **OWNER** — "No second real generation epoch" (iter-5, MINOR, blocking): ratify or reject the
-  discarded first `epoch_id`. No code can discharge it; the recurrence guard already landed.
-- **OWNER** — "Persistence stays scoped" (iter-6, MINOR, blocking): a page-load GET truncates
-  `.data/foundry/foundry_exhaust_runner.lock`; re-verified live at iter-8, and the sole repair site
-  (`foundry_runner.py` `SingleFlightLock.acquire`) is SEALED with no skip parameter. Options: an
-  `owner_disposition`, or an owner-sanctioned seal break; routing around it recreates the
-  single-source-of-truth violation iter-7 closed.
-- Both entries sit in `state/journey-history.json`; counts total=4 / resolved=2 / blocking=2 / non-blocking=0 / critical=0. The evaluator may never write an `owner_disposition` itself.
-- Non-blocking, carry to closure (never an iteration goal): B2 second per-request ledger read · B3 §8.2 sweep misses the enriched served body (verified clean) · F2 Final Summary needs its own expand · F3 `unresolved_magnitude_words` dangling ref · blueprint names sealed `foundry_runner.py` as owner of `diagnostic_survivor_count` (real owner `micro_routes.py`) · QA-report defects P1/P2 · walkthrough defective (demo script clicks non-existent `desk-section-expand-*` testids; J-08 has `evidence_makeup: true`).
+- none. Two anti-goal findings stay OPEN (`resolved: false`) but are owner-dispositioned
+  non-blocking at commit `2599cb0a`; counts total=4 / resolved=2 / unresolved_blocking=0 /
+  unresolved_non_blocking=2 / unresolved_critical=0. See
+  `reports/hypothesis-foundry/owner-rulings-2026-08-27.md`.
 
 ## Last 2 verdicts
 
-- iter 8: STALLED — all 8 journeys pass, nothing regressed, but the only blockers left are two
-  owner-owned anti-goal rulings; no legal Goal Mode work remains.
-- iter 7: ESCALATE — the duplicated count got its one legal owner, but the QA lane passed without
-  the browser proof its own checklist demanded.
+- iter 9: GOAL_ACHIEVED — zero code change; all 8 journeys re-verified (evaluator's own 8/8
+  replay, own 3930/8/0 suite, own 59/59 seal hashes, own ledger-chain recompute), coherence
+  PASS, scan CLEAN, no blocking anti-goal remains.
+- iter 8: STALLED — all 8 journeys passed but two anti-goal findings were unresolved with no
+  owner disposition, so every unblock path was human-owned.
 
 ## Do not redo
 
-- J-08 Final Summary + per-source provenance drill-in — shipped (`micro_routes.py`
-  `compute_foundry_final_summary`; `desk/page.tsx:8264+`).
-- Freeze set 59/59 byte-identical (re-hashed at iter-8). `foundry_runner.py` and
-  `foundry_source_registry.py` ARE sealed — the iter-8 spec and plan both wrongly routed work there.
-- `frozen_ready_total` single-owner fix (iter-7) + pinning test — settled; the sealed CLI's second
-  formula is permanently un-editable, not a defect to re-fix.
-- Store-scope CLEAN (11395 files); no second real epoch; no post-lock science change; screenshot
-  Foundry via `demo_runner --mode verify`, never Chrome-MCP deep-scroll.
+- The era is CLOSED and certified. Do not plan further Goal Mode work for this goal.
+- Do NOT repair the sealed CLI's duplicate `frozen_ready_total` at
+  `run_hypothesis_foundry_real_exhaust.py:225` — owner-ruled permanent residual; the freeze set
+  must not be weakened to reach it.
+- Do NOT re-record the iter-8 walkthrough, replace the blank iter-8 PNG, or correct the stale
+  iter-8 QA file-list claims — owner-ruled carried, not repaired, not rewritten.
+- Do NOT edit `docs/goal.md`, any of the 59 `docs/hypothesis-foundry/freeze-set.json` members,
+  `foundry_runner.py`, or `foundry_source_registry.py`; do not generate a second epoch.
+- Settled and verified: J-08 final-truth surface shipped; freeze set 59/59 byte-identical;
+  `freeze_commit 5b41d9ef` proven ancestor of HEAD and complete; store-scope guard CLEAN.
+- Future backlog only (NOT this era, not sealed, legal to fix later):
+  `tests/test_tick_recorder.py::test_tr31_format_cli_progress_line_serves_only_the_whitelisted_aggregates`
+  is a wall-clock time-bomb — it asserts forbidden digit substrings against a live
+  elapsed-seconds value measured from a fixed 2026-06-01 literal.
