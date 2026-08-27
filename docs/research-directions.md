@@ -16,7 +16,7 @@ This file is data, not law: the immutable rails in Part 0.3 outrank everything i
 
 ## Table of contents
 
-- **Part 0 — How to use this document** (era protocol, immutable rails, fingerprint protocol, global traps, card template, glossary)
+- **Part 0 — How to use this document** (era protocol, immutable rails, fingerprint protocol, global traps, card template, glossary, source-authoring laws)
 - **Part 1 — The year at a glance** (era table, dependency graph, router pointer)
 - **Part 2 — Era chapters** (Eras 5–16, ~70 idea cards)
 - **Part 3 — Cross-cutting rules** (statistics discipline, cost sensitivity, determinism, escalation)
@@ -222,6 +222,105 @@ Infrastructure cards (plumbing/UI/process) replace Hypothesis/Mechanism/Evaluate
   goal-mode session of N iterations; journeys are its must-have acceptance scenarios.
 - **Feed basis** — `sip` vs `iex` (and later `databento-*`); results from different feeds are
   never pooled.
+## 0.8 Source-authoring laws — post-Foundry (ratified 2026-08-28)
+
+The Hypothesis Foundry era (closed 2026-08-27, `epoch:afd19e9c11a6534f`) froze 11 ratified
+source objects and compiled **zero** of them. That is a valid outcome under that era's own
+goal.md §12, and it measured something real: **the catalog's specification completeness, not
+the market.** These six laws exist so future agents do not repeatedly re-interpret the same
+ambiguous card text and reach the same block by a longer route.
+
+Unlike §0.3, these are NOT test-enforced. They are authoring discipline. **Copy them into every
+future era's Anti-goals alongside the §0.3 rails**, and cite them by number when disposing a
+source.
+
+1. **Hypothesis vs modifier.** A statement of the form "feature X adds confirm/veto
+   information" is NOT a standalone directional hypothesis unless it explicitly names (a) the
+   host setup / eligible population, (b) the relevant side or context, and (c) the directional
+   return thesis. Otherwise it is a modifier / atlas / filter object. A future author may
+   promote it ONLY through a new forward source revision that supplies all three. Never infer
+   the missing host thesis.
+
+2. **Representation fidelity.** A source formula may be represented by implementation code only
+   when the two are formula-equivalent under the ratified methodology, or when an explicit named
+   forward supersession exists. Monotonic similarity, signed/unsigned convenience, and "it is
+   the feature we happen to have built" are NOT implicit supersession.
+
+3. **Qualitative threshold fidelity.** There is no universal qualitative-word → quantile rule,
+   and none may be invented. A load-bearing threshold is legal only if it is source-defined, an
+   existing frozen constant, an exact frozen named construct, a true natural semantic boundary,
+   or a newly owner-ratified value. Otherwise the source blocks. A generic quantile protocol is
+   specifically forbidden: it would silently overwrite source-defined constants (Card 9.4's
+   `z ≥ 4`, Card 9.5's `ratio ≥ 1.5`) while manufacturing values where the source states none
+   (Study 1's "high", Study 3's "extreme").
+
+4. **Proxy lineage.** A historical partial proxy is immutable provenance. A fully specified
+   mechanism is a NEW forward `source_id` with scoped supersession. Never "lift" a proxy into a
+   full mechanism and never screen a proxy under the full mechanism's name.
+
+5. **Engineering on demand.** Do not build a research primitive because a blocked source might
+   one day use it. Engineering is justified only when at least one forward source is otherwise
+   scientifically complete AND that primitive is its remaining blocker. Corollary: a shared
+   primitive serving several blocked sources is still not justified if every one of them is
+   blocked on something else as well.
+
+6. **Prerequisite fidelity.** When a source names another card or spec as the provider of a
+   load-bearing construct, that prerequisite must ACTUALLY define the construct referenced.
+   Conceptual similarity, a matching baseline window, or a shared name is insufficient. If the
+   named prerequisite does not define the referenced construct, **block** — never invent or
+   extend it to fit. Note the two distinct failure modes: a prerequisite that is *unbuilt*
+   (Card 9.2 → Card 8.2), and a prerequisite that is *built-or-buildable but supplies a
+   different construct* (Card 9.4 → Card 5.5, below). Both block; only the first is fixed by
+   building it.
+
+### 0.8.1 Standing dispositions carried forward
+
+Recorded here so a future agent need not re-derive them. **These do not change the sealed
+Foundry artifacts**, which remain the historical record of the closed epoch; they state how the
+same source text is to be read going forward.
+
+Ratifying law 1 **closes** the classification question for the current wording of Cards 9.3,
+9.5 and 9.6 run-length-at-touch: as written, all three are modifier / filter / atlas material,
+and that question is settled, not open. A future promotion is a NEW authoring act — a new
+forward `source_id` that explicitly supplies host setup/population, side/context and a
+directional return thesis — never a reopening of the old source text.
+
+| Source | Standing disposition | Basis |
+|---|---|---|
+| **Card 9.3** — top-of-book imbalance | **Non-standalone — settled** under law 1 for its current confirm/veto wording. Its representation issue is a **standing fidelity constraint, deferred and not currently actionable**: it becomes live only if a new standalone forward revision is actually proposed. For that future reader: the source representation `I_t = EWMA(bid_size/(bid_size+ask_size))`, halflife 5s, round lots, is **NOT** superseded by the current pointwise signed `micro_features.quote_imbalance = (bid−ask)/total`. Two independent divergences — a signed/unsigned reparameterization (law 2 — never implicit), and the absence of any 5s smoothing (no EWMA or halflife construct exists anywhere in `apps/backend/app/research/`), which is a different statistic, not a transform | Laws 1, 2 |
+| **Card 9.5** — spread-dynamics regime | **Modifier / filter — settled** under law 1. Its Evaluate line already says so: *"veto value measured later as a Wave-2/era-7-style registered filter."* Its thresholds are source-defined and legal (`ratio ≥ 1.5`, halflifes 10s/120s) — the block was never thresholds | Law 1 |
+| **Card 9.6** — run-length-at-touch | **Modifier — settled** under law 1 (*"adds confirm information"*; Evaluate: *"then atlas"*). Its backing feature DOES exist — `same_side_run_length` is a live screenable F-FLOW field (`scout.py:202`) — despite the sealed registry's empty `operative_formula_refs`. Any future forward revision would additionally need a run-length threshold; the source's `k ∈ {5,10,20}` belongs to the sibling shuffle study, not to this clause | Law 1 |
+| **Study 1** — range-wall failed aggression | **Blocked as a full mechanism.** Historical proxy record remains an immutable alias. **Do not inherit its stale "unbuilt" statements as current engineering truth**: `micro_readiness.py`'s r14.2 comment predates the Foundry and is now wrong at the observation layer — `refill_consistent` is a real, opposite-side-aware deferred observation (`micro_observer.py:583-630`), `REFILL_M_QUOTES = 20` is a frozen constant, and `RELATION_CONJUNCTION` is a general N-component path. The structural gap **relocated to the compiler**, which refuses any non-`"immediate"` `resolution_join_rule` (`foundry_compiler.py:287-288`). Any forward revision must re-audit current implementation state rather than inherit the old conclusion | Laws 4, 5 |
+| **Study 3** — capitulation exhaustion | **Blocked as a full mechanism.** Proxy remains an immutable alias. Its four owner-facing gaps are named by its own sealed source text (extremity, collapse, then-window, replenishment measure). Engineering gaps, for a future re-audit and not to be built now: `ordered_sequence_lag` is typed-refused (`SUPPORTED_RELATION_KINDS = {direct_scalar_membership, conjunction}`), and `CandidatePopulation.side_filter` exists in the schema but is **read by no consumer** | Laws 4, 5 |
+| **Card 9.4** — burst / climax | **NOT promoted.** Its formula defines `μ_m` as *"expected trades/min at ET minute m from the 5.5 intraday RVOL/arrival baseline (prior 20 sessions, T5)."* Card 5.5 actually defines `rvol_m = vol_m / median(vol_m over the prior 20 sessions of the same symbol)` — a **dimensionless VOLUME ratio**, not an expected trade-arrival-**count** rate. The prior-20-session baseline window aligns; the quantity (volume vs arrivals) and the form (normalized ratio vs Poisson rate parameter) do not, and a dimensionless ratio cannot be substituted into `z = (n_w − μ_m·w/60)/√(μ_m·w/60)` at all — `μ_m·w/60` must be an expected count. **Recorded as a prerequisite-reference / specification mismatch under law 6**, notwithstanding Card 5.5's own claim that its curve "powers 9.4's burst baseline." Card 5.5 is also unbuilt (`research/regimes.py` absent), but building it as specified would not resolve the mismatch. Additionally preserved as unresolved *behind* the earlier magnitude-word block: zone-break identity (≥3 incompatible definitions — `setups.py` `BROKE`, `desk_playbook_detect` opening-range breaks, `backtests` band `breakthrough`; the literal referent, a confluence zone, **carries no side at all** and therefore no break direction), ternary-vs-directional evaluation (Hypothesis says "reversal lift"; Evaluate says "ternary outcomes"), construct identity (burst∧at-extreme vs the volume-climax construct, which already embeds its own extreme condition), and horizon (none named; §2.1 bars mechanical enumeration). **Do not substitute `micro_features.volume_burst` for the Poisson z**: it differs in statistic (ratio vs z-score), quantity (volume vs arrival count), central tendency (median vs mean), and baseline population (trailing same-session windows vs prior sessions) — and that last difference is the exact artifact the card's own Traps line forbids: *"a same-day baseline makes every open a 'burst'"*. The numeric coincidence `BURST_BASELINE_TRAILING_WINDOWS = 20` vs "prior 20 sessions" is a trap, not an alignment | Laws 2, 3, 6 |
+| **Card 9.1 / Study 2** | **Previously killed**, on the merits, in the closed Rapid Microscope era. May not be recompiled, reversed, rethresholded or rerun | — |
+| **Card 9.2** | **Prerequisite-gated** on Card 8.2's delta-by-price binning. No independent reason to build that prerequisite exists | Law 5 |
+| **Card 9.7** | **Variant vocabulary**, superseded by the 2026-08-16 opening note's frozen event-time representations | — |
+| **Cards 9.8–9.11** | **Gate-closed** on absent prior-family `historical_oos`-class evidence | — |
+
+### 0.8.2 What is NOT justified
+
+- **No new Foundry epoch.** No current source revision is scientifically complete under laws
+  1–6, and no new forward source revision has been ratified. Therefore no new Foundry epoch is
+  justified. A future Foundry epoch may be considered only after at least one NEW forward source
+  revision is demonstrably scientifically complete under laws 1–6 **before** epoch generation.
+  Do not generate an epoch merely because a hypothetical future owner ruling could make
+  something compile.
+- **No OOS acquisition.** Zero immutable OOS-ready rules exist — there are zero compiled
+  candidates, so there is nothing to hold out. Acquiring OOS evidence to open the 9.8–9.11 gate
+  would be acquiring data for cards that are themselves unspecified.
+- **No engineering** — not the EWMA construct, the compiler deferred-join path,
+  `ordered_sequence_lag`, `side_filter` wiring, a structure-context extension, an arrival-rate
+  baseline, or Card 8.2's binning. Law 5 bars every one of them until a forward source is
+  otherwise complete.
+
+### 0.8.3 A general caution about block precedence
+
+`compile_source_disposition` applies a fixed precedence and stops at the first match. A
+`BLOCKED_SPEC_GAP` therefore **conceals** anything that would have blocked later. Card 9.4 is
+the worked example: its magnitude-word block masked a prerequisite mismatch, a population
+ambiguity, an internal Hypothesis/Evaluate contradiction, and an unnamed horizon. **Never assume
+that resolving a source's stated block makes it compilable** — re-audit every field.
 
 ---
 
@@ -2043,6 +2142,7 @@ Columns: `date · era/workstream · session id · verdict (done | killed | split
 | 2026-08-13 | operator interlude (outside catalog) — band context | main `9e65bb0`…`83c24a8` | done | Read-side band-context lens v1→v2 (bracket frame)→v3 (basis-bounded cache) + the 9-key cohort vocabulary + refresh-chain steps 6–7 + `/desk` context columns/filters/drill-ins; ratified as R-4 in the era-6 goal. | `docs/playbook-detector-spec.md` §6 version string reconciled v2→v3 (2026-08-14). |
 | 2026-08-16 | 6 (The Referee) | `referee` | done | Fail-closed confirmatory layer shipped (evidence contract, seeded permutation/CI/BH core with oracle attestation, ToD/context-matched nulls, immutable pre-registration boundary, one permanent checkpoint per hypothesis, `pnl_scan` certificate interlock, 3 `/desk` sections, MCP v5 = 22 tools); 12 journeys, zero `corroborated` at close — the system working as designed. | Row appended 2026-08-16 at the rapid-microscope opening (the referee session's closing agent omitted it); §5.3 proposer amendment applied in the same commit. |
 | 2026-08-24 | operator pivot (outside catalog) — "The Rapid Microscope" | `rapid-microscope` | done | Rapid-validation funnel shipped (observer/snapshots, Scout + hash-chained trial ledger, walk-forward, sealed Vault, graduation, MCP → 28 tools): 13 real candidates, 0 survivors (killed_null 10 · killed_economic 6 · killed_insufficient_n 3), Study 2 killed on the merits (p 0.366), Studies 1/3 parked pending owner spec, zero `historical_oos`, Vault sealed/untouched — the funnel kills honestly. | Row appended 2026-08-26 at the hypothesis-foundry opening. |
+| 2026-08-27 | operator pivot (outside catalog) — "The Hypothesis Foundry" | `hypothesis-foundry` | done | Froze a finite hypothesis universe then exhausted it: 11 ratified source objects sealed under one committed epoch (`epoch:afd19e9c11a6534f`, 59-file freeze set, hash-chained trial ledger); hermetic known-null/planted-effect/leakage/honest-stop oracles all green. Capability, by layer — deferred `refill_consistent` OBSERVATION exists (`micro_observer.py`); deferred population/INTERPRETER resolution exists (`foundry_interpreter.py`, unresolved anchors excluded symmetrically); `conjunction` exists; mirrored support-long/resistance-short direction machinery and fixtures exist — **but `foundry_compiler` still refuses non-immediate blueprints and emits no deferred `CandidateSpec`** (`foundry_compiler.py:287-288`), so no deferred source can compile end-to-end. **0 COMPILED, 0 families, 0 variants, 0 diagnostic survivors, `outcome_access_census = 0`** — an honest empty epoch, valid per that era's goal.md §12, which measured catalog specification completeness rather than the market. 8 journeys; closed with 2 owner-dispositioned non-blocking open findings. | Row appended 2026-08-28 (the foundry session's closing agent omitted it — same omission as the referee session). §0.8 source-authoring laws added in the same commit. |
 | _(next session appends here)_ | | | | | |
 
 Protocol: the row is written by the human operator or the session's closing agent AT session
