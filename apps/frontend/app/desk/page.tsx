@@ -90,9 +90,11 @@ import type {
   DeskGraduationResponse,
   FoundryEpochManifest,
   FoundryExhaustProgress,
+  FoundryFinalSummary,
   FoundryFreezeIntegrity,
   FoundryHermeticOracles,
   FoundryInterpreterFixtures,
+  FoundrySourceDisposition,
   FoundrySourcesCompiler,
   DeskMicroSnapshotRunsResponse,
   DeskMicroSnapshotsResponse,
@@ -7962,6 +7964,169 @@ function HermeticOraclesSubsection({ data }: { data: FoundryHermeticOracles }) {
   );
 }
 
+// goal-hypothesis-foundry-iter-8 (J-08): Final Summary -- the one top-level synthesis of the whole
+// real epoch's final state (source/family/variant/survivor/integrity/evidence), rendered VERBATIM
+// from `final_summary` (no client-side recomputation -- see the arithmetic-guard's own
+// `data.family_count`/etc. entries), plus a per-source detail drill-in reading the full §1.4
+// canonical provenance now carried on each `epoch_manifest.source_dispositions[]` entry (same
+// `<details>` disclosure convention `SourcesCompilerSubsection` above already uses).
+function FinalSummarySubsection({
+  data,
+  sourceDispositions,
+}: {
+  data: FoundryFinalSummary;
+  sourceDispositions: FoundrySourceDisposition[];
+}) {
+  const dispositionEntries = Object.entries(data.source_counts_by_disposition);
+  const freezeVerdictClass = data.freeze_integrity_verdict === "green" ? "text-emerald-400" : "text-amber-400";
+  return (
+    <div data-testid="foundry-final-summary">
+      <p className="mb-3 text-xs text-slate-500">
+        The real epoch&rsquo;s complete final state, synthesized from the six subsections below --
+        source dispositions, family/variant counts, diagnostic survivors, freeze integrity, and
+        evidence class -- every value read verbatim, never recomputed here.
+      </p>
+
+      <div data-testid="foundry-final-summary-source-counts" className="mb-3 text-[11px] text-slate-500">
+        <p className="mb-1 font-semibold text-slate-400">
+          Source counts by disposition ({dispositionEntries.length} distinct dispositions)
+        </p>
+        <ul className="space-y-0.5">
+          {dispositionEntries.map(([disposition, count]) => (
+            <li key={disposition}>
+              <span className="font-mono text-slate-300">{disposition}</span>
+              {": "}
+              <span className="font-mono text-slate-300">{count}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div data-testid="foundry-final-summary-counts" className="mb-3 space-y-0.5 text-[11px] text-slate-500">
+        <p data-testid="foundry-final-summary-family-count">
+          Family count: <span className="font-mono text-slate-300">{data.family_count}</span>
+        </p>
+        <p data-testid="foundry-final-summary-variant-count">
+          Variant count: <span className="font-mono text-slate-300">{data.variant_count}</span>
+        </p>
+        <p data-testid="foundry-final-summary-frozen-ready-total">
+          Frozen-ready total: <span className="font-mono text-slate-300">{data.frozen_ready_total}</span>
+        </p>
+        <p data-testid="foundry-final-summary-evidence-class">
+          Evidence class: <span className="font-mono text-slate-300">{data.evidence_class}</span>
+        </p>
+        <p data-testid="foundry-final-summary-protected-read-count">
+          Protected/withheld/sealed reads:{" "}
+          <span className={`font-mono ${data.protected_read_count === 0 ? "text-emerald-400" : "text-rose-400"}`}>
+            {data.protected_read_count}
+          </span>
+        </p>
+        <p data-testid="foundry-final-summary-freeze-integrity-verdict">
+          Freeze integrity: <span className={`font-mono ${freezeVerdictClass}`}>{data.freeze_integrity_verdict}</span>
+        </p>
+        <p data-testid="foundry-final-summary-epoch-status">
+          Epoch status: <span className="font-mono text-slate-300">{data.epoch_status}</span>
+        </p>
+      </div>
+
+      {data.diagnostic_survivor_count === 0 ? (
+        <p data-testid="foundry-final-summary-zero-survivors" className="mb-3 text-[11px] text-slate-500">
+          Zero diagnostic survivors exist for this epoch (diagnostic_survivor_count ={" "}
+          <span className="font-mono text-slate-300">{data.diagnostic_survivor_count}</span>) -- no
+          candidate reached DIAGNOSTIC_SURVIVOR_OOS_RULE_FROZEN this era.
+        </p>
+      ) : (
+        <p data-testid="foundry-final-summary-survivors" className="mb-3 text-[11px] text-amber-400">
+          <span className="font-mono">{data.diagnostic_survivor_count}</span> diagnostic survivor(s)
+          this epoch -- labelled DIAGNOSTIC_SURVIVOR_OOS_RULE_FROZEN only; not OOS evidence, not
+          Referee-ready, not a confirmed outcome.
+        </p>
+      )}
+
+      {data.exhaust_complete ? (
+        <p data-testid="foundry-final-summary-exhaust-complete" className="mb-3 text-[11px] text-emerald-400">
+          Exhaust complete -- every frozen candidate reached a terminal state
+          {/* goal-hypothesis-foundry-iter-8 AUDIT fix: this top-level truth screen is meant to be
+              read INSTEAD of the six subsections below, so it must not state completion more
+              strongly than `RunnerCheckpointSubsection` already does on the SAME served fact.
+              Same vacuity caveat, same `frozen_ready_total === 0` condition (a comparison, never
+              arithmetic -- the numeric anti-recomputation guard still holds). */}
+          {data.frozen_ready_total === 0
+            ? " (zero FROZEN_READY variants this epoch — an honest, vacuous completion)."
+            : "."}
+        </p>
+      ) : (
+        <p data-testid="foundry-final-summary-exhaust-incomplete" className="mb-3 text-[11px] text-amber-400">
+          Exhaust not yet complete for this epoch.
+        </p>
+      )}
+
+      <p className="mb-1 text-[11px] font-semibold text-slate-400">
+        Source detail ({sourceDispositions.length} of 11 required objects)
+      </p>
+      <ul data-testid="foundry-final-summary-source-detail-rows" className="space-y-2">
+        {sourceDispositions.map((row) => (
+          <li key={row.source_id} className="rounded border border-slate-800 p-2">
+            <div className="mb-1 flex flex-wrap items-center gap-2 text-[11px]">
+              <span className="font-mono text-slate-300">{row.source_id}</span>
+              <span className="rounded bg-slate-800 px-1.5 py-0.5 font-mono text-[10px] text-slate-400">
+                {row.disposition}
+              </span>
+            </div>
+            <details data-testid="foundry-final-summary-source-detail">
+              <summary className="cursor-pointer text-[10px] text-slate-600">Canonical provenance</summary>
+              <div className="mt-1 space-y-1 text-[10px] text-slate-500">
+                <p>
+                  Mechanism: <span className="text-slate-400">{row.mechanism_statement ?? "—"}</span>
+                </p>
+                <p>
+                  Audit note: <span className="text-slate-400">{row.audit_note ?? "—"}</span>
+                </p>
+                <p>
+                  Direction derivation:{" "}
+                  <span className="font-mono text-slate-400">{row.direction_derivation ?? "—"}</span>
+                </p>
+                <p>
+                  Comparator derivation:{" "}
+                  <span className="font-mono text-slate-400">{row.comparator_derivation ?? "—"}</span>
+                </p>
+                <p>
+                  Threshold provenance:{" "}
+                  <span className="font-mono text-slate-400">{row.threshold_provenance ?? "(none)"}</span>
+                </p>
+                <p>
+                  Superseded fields:{" "}
+                  <span className="font-mono text-slate-400">
+                    {Object.keys(row.superseded_fields).length > 0
+                      ? Object.entries(row.superseded_fields)
+                          .map(([field, ref]) => `${field} → ${ref}`)
+                          .join("; ")
+                      : "{}"}
+                  </span>
+                </p>
+                <p>
+                  Alternatives:{" "}
+                  <span className="font-mono text-slate-400">
+                    {row.alternatives.length > 0 ? row.alternatives.join(", ") : "(none)"}
+                  </span>
+                </p>
+                <p>
+                  Source hash: <span className="break-all font-mono text-slate-400">{row.source_hash ?? "—"}</span>
+                </p>
+                {row.quoted_spans.map((span, i) => (
+                  <p key={i} className="font-mono text-slate-600">
+                    &ldquo;{span.text}&rdquo; @ {span.location}
+                  </p>
+                ))}
+              </div>
+            </details>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 // goal-hypothesis-foundry-iter-1 (J-01): the Hypothesis Foundry panel header -- era/session
 // identity + the era-open baseline, rendered VERBATIM from `GET /research/desk/micro/foundry`
 // (no client-side recomputation, per the goal's own Product Shape). The `foundry-panel`
@@ -8094,6 +8259,25 @@ function HypothesisFoundrySection({
             </div>
           </div>
         )}
+      </div>
+
+      {/* goal-hypothesis-foundry-iter-8 (J-08): the Final Summary subsection -- the one top-level
+          synthesis of the whole real epoch, positioned above the six existing subsections so an
+          operator sees the complete final state without expanding any of them individually. A
+          SEPARATE block (not nested inside the six-subsection container below), reusing the SAME
+          `openSubsections`/`toggleSubsection` state and the already-fetched `foundry` payload. */}
+      <div className="mt-4">
+        <CollapsibleSection
+          id="foundry-final-summary-section"
+          title="Final Summary"
+          open={openSubsections.has("final-summary")}
+          onToggle={() => toggleSubsection("final-summary")}
+        >
+          <FinalSummarySubsection
+            data={foundry.final_summary}
+            sourceDispositions={foundry.epoch_manifest.source_dispositions}
+          />
+        </CollapsibleSection>
       </div>
 
       {/* goal-hypothesis-foundry-iter-4 (J-02/J-03/J-04/J-05): the four new fixture subsections --

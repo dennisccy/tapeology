@@ -292,8 +292,24 @@ def test_tc6_outcome_access_census_is_zero_in_the_artifact_and_on_the_served_vie
     assert served["outcome_access_census"] == 0
     assert served["epoch_id"] == manifest["epoch_id"]
     assert served["source_registry_hash"] == manifest["source_registry_hash"]
-    assert served["source_dispositions"] == manifest["source_dispositions"]
     assert len(served["source_dispositions"]) == 11
+    # goal-hypothesis-foundry-iter-8 (J-08): the served view no longer equals the raw manifest's
+    # `source_dispositions[]` byte-for-byte -- it ADDITIVELY enriches each entry with the matching
+    # real source-registry record's own §1.4 provenance (see `micro_routes.
+    # _enrich_source_dispositions_with_registry_provenance`). Every base manifest field
+    # (`source_id`/`disposition`/`lineage_refs`/`alias_refs`) must still pass through verbatim,
+    # unchanged, entry-for-entry and in the same order -- proven field-by-field rather than by a
+    # single whole-list equality, which the additive enrichment would now legitimately fail.
+    assert len(served["source_dispositions"]) == len(manifest["source_dispositions"])
+    for served_entry, manifest_entry in zip(served["source_dispositions"], manifest["source_dispositions"]):
+        for key, value in manifest_entry.items():
+            assert served_entry[key] == value, (
+                f"{manifest_entry.get('source_id')!r}.{key} diverged from the raw tracked manifest "
+                "during enrichment"
+            )
+        assert "mechanism_statement" in served_entry, (
+            f"{served_entry.get('source_id')!r} is missing the new §1.4 provenance enrichment"
+        )
     # No outcome-shaped value may appear anywhere in the manifest (§8.2's own closing rule).
     blob = json.dumps(manifest)
     for forbidden in ("p_value", "p_screen", "effect_bps", "forward_return", "observation_count", "pnl"):

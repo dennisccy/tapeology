@@ -491,3 +491,42 @@ unwarranted. Note J-08 has never been TARGETED in the seven iterations it has re
 goal's own execution order sequences it last), so rung C.4's "same journey failed 2+ consecutive
 iterations" clause matches literally but not in meaning, and I did not rely on it.
 **Reversible:** yes
+
+## iter-8 — goal-evaluator
+
+**Ambiguity:** all eight Must-have journeys now pass, zero regressions, coherence WARN, scan CLEAN,
+seal 59/59 intact — the era's build is objectively finished. But two MINOR anti-goal entries are still
+`resolved: false` with no owner disposition, so `anti_goal_disposition.py` classifies them BLOCKING,
+`docs/goal.md`'s Completion section demands "all anti-goals are clear", and the methodology's decision
+tree reaches rung C.2 (every unblock path human-owned) before rung C.3 (GOAL_ACHIEVED). The fork is
+real: STALLED halts the session for two owner rulings; GOAL_ACHIEVED would certify an era with two
+disclosed open honesty findings.
+**We chose:** STALLED, following the tree and the goal's own completion clause, and listing each
+unblock option explicitly. I verified both blockers first-hand rather than inheriting them: two live
+GETs advanced `foundry_exhaust_runner.lock`'s mtime while the trial ledger and its chain-head stayed
+byte-identical, and I read the sealed `read_exhaust_progress`/`SingleFlightLock.acquire` myself to
+confirm it takes no parameter that would let non-sealed code skip the probe — so no legal repair
+exists. I deliberately did NOT re-litigate iter-6's fail-closed call on the discarded-epoch entry to
+manufacture a GOAL_ACHIEVED; flipping a fail-closed ruling to reach the halting verdict I would prefer
+is exactly the rubber-stamp the methodology forbids. The owner can convert this to GOAL_ACHIEVED
+cheaply: one `owner_disposition` on each entry (they stay `resolved: false`, still reported), then
+`--resume`.
+**Reversible:** yes
+
+## iter-8 — goal-evaluator
+
+**Ambiguity:** J-08 step 2 asks the operator to open "one blocked source **and one evaluated variant
+(if any exist)**" and step 3 to check a survivor's labelling "**if a diagnostic survivor exists**".
+The real epoch compiled zero candidates, so both sub-clauses are vacuous, and step 4's MCP limb never
+shipped (the goal itself marks MCP non-blocking). Separately, the browser lane's screenshots predate
+the auditor's own 16:25 fix to the same screen.
+**We chose:** score J-08 `passing`. Both sub-clauses carry their own explicit "if any exist" escape,
+the screen renders honest sentences rather than blanks in both places, and this extends the precedent
+this session already set for J-06 step 4 (iter-5) and all of J-07 (iter-6) — scoring `partial` would
+penalise the honest zero-candidate ending `docs/goal.md` names as valid successful ending 1. On the
+stale-screenshot point I did not rely on the auditor's prose: I re-ran the J-08 golden replay against
+the live post-fix app myself and filed my own capture
+(`reports/qa/goal-hypothesis-foundry-iter-8-evidence/J-08-post-audit-fix-evaluator-verify.png`).
+I also set `evidence_makeup: true` on J-08 for the broken walkthrough recording only — the flag never
+downgrades its status, and re-recording must ride as a passenger task, never as an iteration goal.
+**Reversible:** yes

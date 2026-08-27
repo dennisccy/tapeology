@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "journey": "J-08",
+  "name": "The operator sees the final Foundry truth and all foundation rails still hold",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "journey": "J-08",
+      "action": {"type": "goto", "url": "/desk"},
+      "expect": {"text": "Hypothesis Foundry"}
+    },
+    {
+      "n": 2,
+      "journey": "J-08",
+      "action": {"type": "click", "target": {"testid": "desk-section-expand-hypothesisFoundry"}},
+      "expect": {"text": "Era-Open Baseline"}
+    },
+    {
+      "n": 3,
+      "journey": "J-08",
+      "action": {"type": "click", "target": {"testid": "desk-section-expand-foundry-final-summary-section"}},
+      "expect": {"text": "Zero diagnostic survivors exist for this epoch"}
+    },
+    {
+      "n": 4,
+      "journey": "J-08",
+      "action": {"type": "click", "target": {"text": "Canonical provenance"}},
+      "expect": {"text": "high aggression-into-the-wall"}
+    }
+  ]
+}

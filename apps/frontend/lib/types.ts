@@ -3129,11 +3129,29 @@ export interface FoundryHermeticOracles {
 // hermetic-fixture subview above. `status` degrades honestly to "not_yet_generated" when the
 // tracked `docs/hypothesis-foundry/` artifacts are absent; `families`/`source_dispositions` are
 // served verbatim from the canonical backend read, never recomputed client-side.
+export interface FoundryQuotedSpan {
+  text: string;
+  location: number;
+}
+
+// goal-hypothesis-foundry-iter-8 (J-08): the full §1.4 canonical provenance, read verbatim from
+// the real committed `source-registry.json` by `source_id` -- never a second compile pass.
 export interface FoundrySourceDisposition {
   source_id: string;
   disposition: string;
   lineage_refs: string[];
   alias_refs: string[];
+  quoted_spans: FoundryQuotedSpan[];
+  source_hash: string | null;
+  mechanism_statement: string | null;
+  operative_formula_refs: string[];
+  direction_derivation: string | null;
+  comparator_derivation: string | null;
+  threshold_provenance: string | null;
+  superseded_fields: Record<string, string>;
+  alternatives: string[];
+  audit_note: string | null;
+  lineage_id: string | null;
 }
 
 export interface FoundryVariant {
@@ -3175,6 +3193,9 @@ export interface FoundryExhaustProgress {
   eligible_corpus_manifest_hash: string | null;
   frozen_ready_total: number;
   terminal_count: number;
+  // goal-hypothesis-foundry-iter-8 (J-08): a genuine read of the real trial ledger's terminal rows
+  // whose `foundry_state` is `DIAGNOSTIC_SURVIVOR_OOS_RULE_FROZEN` -- never a copy of `terminal_count`.
+  diagnostic_survivor_count: number;
   checkpoint_ordinal: number;
   protected_read_count: number;
   single_flight_status: "idle" | "running" | "refused_concurrent";
@@ -3182,6 +3203,22 @@ export interface FoundryExhaustProgress {
   // the honest additional state before the exhaust CLI has ever run (never coerced to either).
   freeze_integrity_verdict: string;
   exhaust_complete: boolean;
+}
+
+// goal-hypothesis-foundry-iter-8 (J-08): the one top-level synthesis of the whole real epoch's
+// final state -- every field is a projection of an already-canonically-owned value (never a second
+// computation site); see `micro_routes.compute_foundry_final_summary`'s own docstring.
+export interface FoundryFinalSummary {
+  source_counts_by_disposition: Record<string, number>;
+  family_count: number;
+  variant_count: number;
+  frozen_ready_total: number;
+  diagnostic_survivor_count: number;
+  freeze_integrity_verdict: string;
+  evidence_class: string;
+  protected_read_count: number;
+  exhaust_complete: boolean;
+  epoch_status: string;
 }
 
 export interface DeskFoundryResponse {
@@ -3202,4 +3239,6 @@ export interface DeskFoundryResponse {
   epoch_manifest: FoundryEpochManifest;
   // goal-hypothesis-foundry-iter-6 (J-07): the real exhaust pass's own checkpoint/completion state.
   exhaust_progress: FoundryExhaustProgress;
+  // goal-hypothesis-foundry-iter-8 (J-08): the one top-level "final truth" synthesis.
+  final_summary: FoundryFinalSummary;
 }

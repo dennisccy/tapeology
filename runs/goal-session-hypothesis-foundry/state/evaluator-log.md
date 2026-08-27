@@ -327,3 +327,51 @@ that was made and thrown away; accept that opening the page writes a small lock 
 leftover duplicate inside the sealed command as a permanently allowed exception. In one sentence:
 approve building the final Foundry summary screen next, at full review depth, and make those three
 rulings so the era can be closed.
+
+## Iteration 8 — goal-hypothesis-foundry-iter-8
+
+**Date:** 2026-08-27T17:05:00Z
+**Verdict:** STALLED
+**Depth dispatched:** full (iter-7's ESCALATE forced it; the engine did not demote it)
+**Journey deltas:**
+- Newly passing: J-08 "The operator sees the final Foundry truth" (was failing since iter-0; the era's
+  last journey — all 8 Must-have journeys now pass)
+- Newly failing: none
+- Regressed: none — J-01 through J-07 all replayed and passed (7/7 goldens), and the evaluator re-ran
+  all 8 goldens itself AFTER the auditor's late frontend fix: 8/8 PASS
+- Anti-goal violations: no new ones. The iter-5 "No second real generation epoch" and iter-6
+  "Persistence stays scoped" entries stay open and blocking; both are owner-only.
+  Counts: total=4 / resolved=2 / blocking=2 / non-blocking=0 / critical=0.
+  scan-report CLEAN; store-scope guard CLEAN (11395 protected files byte-identical);
+  freeze set 59/59 byte-identical (evaluator's own hashes); closure CLOSURE-PASS;
+  coherence COHERENCE-WARN (advisory only).
+
+**Reasoning:** The era's last journey is genuinely finished and I proved it myself rather than
+trusting any report. The Desk page now carries one Final Summary panel showing the whole real epoch in
+one place — how each of the 11 ratified sources was ruled on, zero families, zero variants, zero
+survivors, seal green, epoch committed — and each source opens to its full written provenance. I asked
+the running backend for the same data and compared all 11 served records character by character
+against the sealed source file: zero differences, and none of the six forbidden result-shaped words
+appears anywhere in the served payload. The strict review lane again earned its cost: the auditor
+found that the new top-level screen claimed "exhaust complete" without the honesty caveat its own
+sibling section already carried on an epoch where nothing was ever evaluated, and fixed it — but that
+fix landed after the browser lane's pictures were taken, so I re-ran every journey replay myself
+afterwards (8 of 8 passed) and took my own picture of the corrected screen. The era still cannot be
+signed off, and the reason is not the product: two honesty entries remain open and only the owner can
+close them. I re-tested both by hand. Opening the page really does still write a small lock file while
+the real record book stays untouched, and I read the sealed code myself to confirm there is no legal
+way to change it. Goal Mode has no move left on either, so I stopped the loop instead of spending
+another iteration that would end in the same place.
+
+**Next-step recommendation:** Two rulings belong to the owner and the era cannot close without them.
+First, accept or reject the first real batch that was made and thrown away — it was rebuilt before
+anything was published and before any result was read, it was disclosed rather than hidden, and a
+guard now prevents a repeat, but nothing can undo the id that was created. Second, accept that opening
+the page writes a small empty lock file, or approve breaking the era's seal to remove it; no other fix
+is legal. A third, non-blocking ruling is worth writing down: record the permanently un-editable
+second copy of one count inside the sealed command file as an accepted exception, so future work does
+not chase an illegal fix. The cheapest route is a one-line owner ruling written onto each of the two
+entries in the journey history, then resume. After that, one short iteration can re-record the
+walkthrough (its script clicks buttons that do not exist, so it never reached the Foundry panel) and
+correct the blueprint's ownership row, and the era can be certified. In one sentence: please make
+those two decisions and then resume — everything the era set out to build is finished and verified.

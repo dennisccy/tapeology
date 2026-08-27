@@ -180,7 +180,19 @@ def test_frozen_ready_total_sealed_cli_formula_agrees_with_the_canonical_helper(
     transcribed sealed formula agrees with ``micro_routes.compute_frozen_ready_total`` -- the new
     sole canonical owner -- on that same real data. Today this is vacuously ``0 == 0`` (the frozen
     manifest's ``families`` list is ``[]``); the test's permanent value is pinning agreement for
-    this frozen, unchangeable manifest, not proving a non-trivial case."""
+    this frozen, unchangeable manifest, not proving a non-trivial case.
+
+    goal-hypothesis-foundry-iter-8 (J-08) correction, per the iter-7 AUDITOR NOTE: this assertion,
+    BY ITSELF, is not what keeps the two formulas from silently diverging. The two sides read a
+    variant count via DIFFERENT keys (the sealed CLI's ``len(fm.get("variants", []))`` vs. the
+    canonical helper's ``fm["variant_count"]``), which are not proven equal in general -- they only
+    happen to agree here because the real manifest's ``families`` list is empty, so both sides are
+    vacuously ``0``. What actually PREVENTS the two formulas from silently diverging on a real,
+    non-empty future manifest is the freeze-set hash pinning (``docs/hypothesis-foundry/freeze-
+    set.json``): the sealed CLI is one of its 59 enumerated entries, so its line 225 formula cannot
+    be edited without a freeze-set hash mismatch halting the epoch (§8.5/§9.3) -- drift is
+    structurally impossible because the sealed formula itself is frozen, not because this test would
+    catch a hypothetical future disagreement it has never actually exercised."""
     _require_real_epoch_committed()
     manifest = json.loads((FOUNDRY_DOCS_DIR / "epoch-manifest.json").read_text(encoding="utf-8"))
 

@@ -1,0 +1,158 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-hypothesis-foundry-iter-8",
+  "base_url": "http://localhost:3301",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Navigate to the Desk",
+      "narration": "Open the Desk page to access hypothesis testing results.",
+      "point_out": "The Desk page loads with the navigation bar and Hypothesis Foundry panel visible.",
+      "journey": "",
+      "new": false,
+      "verified": false,
+      "section": "highlights",
+      "action": {
+        "type": "goto",
+        "url": "/desk"
+      },
+      "expect": {
+        "text": "Desk"
+      }
+    },
+    {
+      "n": 2,
+      "title": "Expand the Hypothesis Foundry Panel",
+      "narration": "Click the Hypothesis Foundry section header to reveal the panel with epoch analysis.",
+      "point_out": "The panel expands, showing the era-open baseline header and available subsections.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "data-testid": "desk-section-expand-hypothesisFoundry"
+        }
+      },
+      "expect": {
+        "data-testid": "foundry-era-open-baseline"
+      }
+    },
+    {
+      "n": 3,
+      "title": "View the New Final Summary",
+      "narration": "Click to expand Final Summary. This new subsection shows the epoch's complete state at a glance—source counts, family count, freeze status, and more.",
+      "point_out": "The Final Summary section displays source disposition counts summing to 11, family and variant counts of zero, and freeze integrity status showing green.",
+      "journey": "",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "data-testid": "desk-section-expand-foundry-final-summary-section"
+        }
+      },
+      "expect": {
+        "data-testid": "foundry-final-summary"
+      }
+    },
+    {
+      "n": 4,
+      "title": "Explore Source Canonical Provenance",
+      "narration": "Click on a source record to expand and view its full canonical provenance. You can see the mechanism statement, audit note, direction derivation, and quoted text spans that justified its disposition.",
+      "point_out": "The source detail expands showing mechanism, audit note, direction derivation, comparator derivation, threshold provenance, and source hash for this record.",
+      "journey": "",
+      "new": true,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "text": "Canonical provenance"
+        }
+      },
+      "expect": {
+        "text": "Mechanism:"
+      }
+    },
+    {
+      "n": 5,
+      "title": "Verify Sources/Compiler Still Works",
+      "narration": "Expand the Sources/Compiler section to confirm that the new Final Summary feature did not break existing functionality.",
+      "point_out": "The Sources/Compiler section renders correctly, showing that the six pre-existing subsections remain intact.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "data-testid": "desk-section-expand-foundry-sources-compiler-section"
+        }
+      },
+      "expect": {
+        "data-testid": "foundry-sources-compiler"
+      }
+    },
+    {
+      "n": 6,
+      "title": "Check All 11 Source Rows Render",
+      "narration": "Expand Epoch/Manifest to verify all 11 real source-disposition rows still render unchanged and intact from the real committed registry.",
+      "point_out": "The section lists all 11 source records with their disposition badges and lineage references displayed correctly.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "data-testid": "desk-section-expand-foundry-epoch-manifest-section"
+        }
+      },
+      "expect": {
+        "data-testid": "foundry-epoch-source-disposition-rows"
+      }
+    },
+    {
+      "n": 7,
+      "title": "Verify Freeze/Integrity Section",
+      "narration": "Expand Freeze/Integrity to show that the freeze status and integrity checks render correctly alongside the new Final Summary.",
+      "point_out": "The Freeze/Integrity subsection displays the freeze-set validation and hash pinning information without errors.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "data-testid": "desk-section-expand-foundry-freeze-integrity-section"
+        }
+      },
+      "expect": {
+        "text": "Freeze"
+      }
+    },
+    {
+      "n": 8,
+      "title": "Confirm Runner/Checkpoint Verdicts",
+      "narration": "Expand Runner/Checkpoint to verify the freeze integrity verdict and exhaust completion state match what Final Summary displays. This confirms cross-subsection consistency.",
+      "point_out": "The Runner/Checkpoint section shows the freeze integrity verdict as green and the exhaust completion status, matching the values shown in Final Summary.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "data-testid": "desk-section-expand-foundry-runner-checkpoint-section"
+        }
+      },
+      "expect": {
+        "data-testid": "foundry-runner-freeze-integrity-verdict"
+      }
+    }
+  ]
+}

@@ -54,7 +54,8 @@ from .foundry_compiler import sources_compiler_hermetic_fixture_view
 from .foundry_freeze import freeze_integrity_hermetic_fixture_view, verify_commit_is_ancestor
 from .foundry_hermetic_summary import build_hermetic_oracles_summary
 from .foundry_interpreter import interpreter_hermetic_fixture_view
-from .foundry_runner import read_exhaust_progress
+from .foundry_ledger import ROW_KIND_TERMINAL, FoundryLedger
+from .foundry_runner import SCOUT_TO_FOUNDRY_STATE, read_exhaust_progress
 from .foundry_source_registry import (
     foundry_era_identity,
     read_era_open_baseline,
@@ -803,6 +804,46 @@ def _git_path_committed_at_head(repo_root: Path, rel_path: str) -> bool:
     return result.returncode == 0
 
 
+# goal-hypothesis-foundry-iter-8 (J-08): the §1.4 canonical-provenance fields the real committed
+# ``source-registry.json`` already carries per-record (``foundry_source_registry._canonical_source_
+# record``'s own JSON shape -- verified directly against the real committed file, not assumed) but
+# the tracked ``epoch-manifest.json``'s own ``source_dispositions[]`` entries never carried. Read
+# verbatim from the registry payload the SAME ``read_epoch_manifest_view`` call already parses --
+# never a second file read, never ``resolve_foundry_dir()``, never a recompile pass.
+# Every field's own honest-absence default -- ``None`` for a scalar, a fresh empty ``list``/``dict``
+# for a collection (never a shared mutable object: each entry below gets its own literal).
+_SOURCE_REGISTRY_PROVENANCE_DEFAULTS: tuple[tuple[str, object], ...] = (
+    ("quoted_spans", []), ("source_hash", None), ("mechanism_statement", None),
+    ("operative_formula_refs", []), ("direction_derivation", None), ("comparator_derivation", None),
+    ("threshold_provenance", None), ("superseded_fields", {}), ("alternatives", []),
+    ("audit_note", None), ("lineage_id", None),
+)
+_SOURCE_REGISTRY_PROVENANCE_FIELDS = tuple(field for field, _default in _SOURCE_REGISTRY_PROVENANCE_DEFAULTS)
+
+
+def _enrich_source_dispositions_with_registry_provenance(
+    source_dispositions: list[dict], registry_records_by_id: dict[str, dict],
+) -> list[dict]:
+    """Merges each ``source_dispositions[]`` entry (``source_id``/``disposition``/``lineage_refs``/
+    ``alias_refs``, the manifest's own fields) with its matching real source-registry record's own
+    §1.4 provenance fields, looked up by ``source_id`` -- a pure dict merge over two ALREADY-PARSED
+    payloads, zero recomputation of any disposition/hash/derivation. A manifest entry with no
+    matching registry record (should never happen for the real, generated-together epoch, but this
+    function must not crash if it did) degrades honestly: the base manifest fields are preserved and
+    every provenance field renders its own honest-absence value (``None``/``[]``/``{}``), never a
+    fabricated placeholder."""
+    enriched = []
+    for entry in source_dispositions:
+        record = registry_records_by_id.get(entry.get("source_id")) or {}
+        merged = dict(entry)
+        for field, default in _SOURCE_REGISTRY_PROVENANCE_DEFAULTS:
+            # `default` is copied (never the same shared list/dict object reused across entries),
+            # even though this default path is never exercised against real data today.
+            merged[field] = record[field] if field in record else (default.copy() if hasattr(default, "copy") else default)
+        enriched.append(merged)
+    return enriched
+
+
 def read_epoch_manifest_view(*, tracked_dir: Path | None = None, repo_root: Path | None = None) -> dict:
     """Reads the real, Git-tracked ``docs/hypothesis-foundry/`` artifacts VERBATIM -- the literal
     repo-relative paths (see the module comment above). Computed ONCE at module import time
@@ -812,7 +853,12 @@ def read_epoch_manifest_view(*, tracked_dir: Path | None = None, repo_root: Path
 
     ``tracked_dir``/``repo_root`` default to the real repo-relative paths; a test may override
     either to exercise the missing-artifact degrade path against a synthetic empty directory
-    without needing to relocate/hide the actual committed repo files."""
+    without needing to relocate/hide the actual committed repo files.
+
+    goal-hypothesis-foundry-iter-8 (J-08): ``source_dispositions[]`` entries additionally carry the
+    full §1.4 canonical provenance already present per-record in the SAME tracked
+    ``source-registry.json`` this function already required to exist -- see
+    ``_enrich_source_dispositions_with_registry_provenance`` above."""
     tracked_dir = tracked_dir if tracked_dir is not None else _FOUNDRY_TRACKED_DIR
     repo_root = repo_root if repo_root is not None else _REPO_ROOT
     not_yet_generated = {
@@ -838,8 +884,15 @@ def read_epoch_manifest_view(*, tracked_dir: Path | None = None, repo_root: Path
     try:
         manifest_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
         freeze_record_payload = json.loads(freeze_record_path.read_text(encoding="utf-8"))
+        # goal-hypothesis-foundry-iter-8 (J-08): parsed here for the FIRST time -- previously only
+        # `.is_file()`-checked above, never read. Same tracked repo-relative path, same try/except
+        # degrade-honestly discipline as the two files already parsed on the lines above.
+        source_registry_payload = json.loads(source_registry_path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return not_yet_generated
+    registry_records_by_id = {
+        record.get("source_id"): record for record in source_registry_payload.get("records", [])
+    }
 
     freeze_commit = freeze_record_payload.get("freeze_commit")
     head = _git_rev_parse_head(repo_root)
@@ -874,7 +927,9 @@ def read_epoch_manifest_view(*, tracked_dir: Path | None = None, repo_root: Path
         "freeze_commit": freeze_commit,
         "config_fingerprint": manifest_payload.get("config_fingerprint"),
         "outcome_access_census": manifest_payload.get("outcome_access_census", 0),
-        "source_dispositions": manifest_payload.get("source_dispositions", []),
+        "source_dispositions": _enrich_source_dispositions_with_registry_provenance(
+            manifest_payload.get("source_dispositions", []), registry_records_by_id
+        ),
         "families": manifest_payload.get("families", []),
         "source_registry_audit": {"path": _FOUNDRY_AUDIT_REPORT_REL_PATH, "committed": audit_committed},
     }
@@ -923,6 +978,76 @@ def compute_frozen_ready_total(epoch_manifest_view: dict) -> int:
 _FOUNDRY_FROZEN_READY_TOTAL = compute_frozen_ready_total(_EPOCH_MANIFEST_VIEW)
 
 
+# goal-hypothesis-foundry-iter-8 (J-08): `exhaust_progress.diagnostic_survivor_count`. The Data-
+# Contract names `foundry_runner.read_exhaust_progress()` as this field's owner, but
+# ``foundry_runner.py`` is one of the 59 freeze-set-SEALED files
+# (``docs/hypothesis-foundry/freeze-set.json``) since this era's first-read lock -- editing it
+# would trip ``verify_freeze_set_unchanged`` and halt the real epoch (spec §7.3/§9.3, goal.md
+# anti-goal "no science-affecting code/spec/manifest change after the first-read lock"). This
+# module (never sealed) instead reads the SAME Foundry trial ledger directly -- the identical
+# ``FoundryLedger``/``ROW_KIND_TERMINAL``/``foundry_state`` read ``read_exhaust_progress`` itself
+# already performs, filtered on the SAME closed §7.2 survivor state
+# ``foundry_runner.SCOUT_TO_FOUNDRY_STATE["survive"]`` already names (never a second/duplicated
+# literal) -- and the caller below merges this ONE additive field onto ``read_exhaust_progress``'s
+# own UNCHANGED, byte-identical return value. This is the sole owner of this new field; every
+# OTHER ``exhaust_progress`` field still passes through the sealed function verbatim.
+def _compute_diagnostic_survivor_count(foundry_dir: str | Path) -> int:
+    ledger = FoundryLedger(foundry_dir)
+    return len(
+        [
+            row for row in ledger.all_rows()
+            if row["row_kind"] == ROW_KIND_TERMINAL and row["foundry_state"] == SCOUT_TO_FOUNDRY_STATE["survive"]
+        ]
+    )
+
+
+# The one constant scientific label §16/goal.md's own Anti-goals fix for every real Foundry
+# evaluation this era -- never a second literal elsewhere (T-8: no science-affecting constant
+# duplicated across modules).
+_FOUNDRY_EVIDENCE_CLASS = "historical_exposed_diagnostic"
+
+
+# goal-hypothesis-foundry-iter-8 (J-08): the ONE top-level synthesis `final_summary` key -- a PURE
+# projection over already-computed values (`epoch_manifest_view`'s own `source_dispositions`/
+# `families`, `frozen_ready_total` -- `compute_frozen_ready_total`'s own already-computed result,
+# copied verbatim, never re-summed here -- and the per-request `exhaust_progress` result). Zero
+# independent recomputation of any value already owned elsewhere; the only NEW arithmetic this
+# function performs is tallying each ALREADY-DECIDED `disposition` string by value, which is a
+# projection (a count of existing facts), not a scientific recomputation of what any one
+# disposition IS.
+def compute_foundry_final_summary(
+    epoch_manifest_view: dict, *, frozen_ready_total: int, exhaust_progress: dict,
+) -> dict:
+    """Sole canonical owner of the ``final_summary`` Data-Contract key. Every field is either a
+    verbatim copy of a value some other function already owns (``frozen_ready_total``/
+    ``variant_count`` from ``compute_frozen_ready_total``'s own result; ``diagnostic_survivor_count``/
+    ``freeze_integrity_verdict``/``protected_read_count``/``exhaust_complete`` from
+    ``read_exhaust_progress``'s own result), a trivial ``len()``/tally over already-computed
+    collections (``family_count``, ``source_counts_by_disposition``), or the one constant evidence-
+    class label every real Foundry evaluation this era carries (§16)."""
+    source_counts_by_disposition: dict[str, int] = {}
+    for entry in epoch_manifest_view.get("source_dispositions", []):
+        disposition = entry.get("disposition")
+        source_counts_by_disposition[disposition] = source_counts_by_disposition.get(disposition, 0) + 1
+    return {
+        "source_counts_by_disposition": source_counts_by_disposition,
+        "family_count": len(epoch_manifest_view.get("families", [])),
+        # `variant_count` and `frozen_ready_total` are the SAME underlying scalar (the manifest's
+        # own immutable, complete, pre-outcome variant denominator across every family -- it never
+        # shrinks as evaluation proceeds, since the manifest is frozen and evaluation progress lives
+        # only in the runtime ledger `exhaust_progress` already reads) -- both copied verbatim from
+        # the ONE caller-supplied `frozen_ready_total`, never a second `sum()` over `families` here.
+        "variant_count": frozen_ready_total,
+        "frozen_ready_total": frozen_ready_total,
+        "diagnostic_survivor_count": exhaust_progress["diagnostic_survivor_count"],
+        "freeze_integrity_verdict": exhaust_progress["freeze_integrity_verdict"],
+        "evidence_class": _FOUNDRY_EVIDENCE_CLASS,
+        "protected_read_count": exhaust_progress["protected_read_count"],
+        "exhaust_complete": exhaust_progress["exhaust_complete"],
+        "epoch_status": epoch_manifest_view.get("status"),
+    }
+
+
 @router.get("/foundry")
 def get_foundry(foundry_dir: str = Depends(get_foundry_dir)) -> dict:
     """Serves era/session identity (``foundry_source_registry.foundry_era_identity`` -- a static
@@ -949,7 +1074,27 @@ def get_foundry(foundry_dir: str = Depends(get_foundry_dir)) -> dict:
     UNLIKE ``epoch_manifest``, this reflects genuinely runtime-scoped state (the Foundry trial
     ledger the real exhaust CLI writes under this SAME ``foundry_dir``), so it is read PER REQUEST
     (``foundry_runner.read_exhaust_progress``, verbatim, no recomputation of any scientific value)
-    rather than once at import time -- see that function's own docstring."""
+    rather than once at import time -- see that function's own docstring.
+
+    goal-hypothesis-foundry-iter-8 (J-08): ``exhaust_progress`` additionally carries
+    ``diagnostic_survivor_count`` -- ``foundry_runner.read_exhaust_progress`` itself is UNCHANGED
+    (it lives in a freeze-set-sealed file this era may not edit; see
+    ``_compute_diagnostic_survivor_count``'s own docstring), so this handler merges that ONE
+    additive field on top of the sealed function's own verbatim return value.
+
+    goal-hypothesis-foundry-iter-8 (J-08): one more additive top-level key, ``final_summary`` -- the
+    one top-level synthesis of the whole real epoch's final state. Its manifest-derived half
+    (``_EPOCH_MANIFEST_VIEW``/``_FOUNDRY_FROZEN_READY_TOTAL``) is already frozen at module-import
+    time exactly like every hermetic view above; its ``exhaust_progress``-derived half is genuinely
+    runtime-scoped (same reason ``exhaust_progress`` itself is read per request, immediately above),
+    so this handler reuses the SAME per-request ``exhaust_progress`` dict (already including
+    ``diagnostic_survivor_count``) for both keys below -- never a second ledger read for the same
+    request. ``compute_foundry_final_summary`` itself is a zero-cost dict re-assembly over
+    already-owned values, not a second science computation site."""
+    exhaust_progress = {
+        **read_exhaust_progress(foundry_dir, frozen_ready_total=_FOUNDRY_FROZEN_READY_TOTAL),
+        "diagnostic_survivor_count": _compute_diagnostic_survivor_count(foundry_dir),
+    }
     return {
         "era": foundry_era_identity(),
         "era_open_baseline": read_era_open_baseline(foundry_dir),
@@ -960,5 +1105,9 @@ def get_foundry(foundry_dir: str = Depends(get_foundry_dir)) -> dict:
         "interpreter_fixtures": _INTERPRETER_FIXTURES_VIEW,
         "freeze_integrity": _FREEZE_INTEGRITY_VIEW,
         "hermetic_oracles": _HERMETIC_ORACLES_VIEW,
-        "exhaust_progress": read_exhaust_progress(foundry_dir, frozen_ready_total=_FOUNDRY_FROZEN_READY_TOTAL),
+        "exhaust_progress": exhaust_progress,
+        "final_summary": compute_foundry_final_summary(
+            _EPOCH_MANIFEST_VIEW, frozen_ready_total=_FOUNDRY_FROZEN_READY_TOTAL,
+            exhaust_progress=exhaust_progress,
+        ),
     }

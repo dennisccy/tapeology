@@ -365,6 +365,13 @@ _PRICE_ARITHMETIC_FIELDS = (
     # conversion, no withheld/stale share arithmetic, is ever legitimate here.
     r"|snapshot\.(?:row_count|bytes_on_disk)"
     r"|report\.(?:withheld_excluded|stale_excluded)"
+    # goal-hypothesis-foundry-iter-8 (J-08): the new Final Summary subsection's own served
+    # numerics -- `final_summary.*` read verbatim for the first time in the browser
+    # (`FinalSummarySubsection`'s `data.` destructured field, the SAME prop-name convention every
+    # other Foundry subsection already uses). No client-side family/variant/survivor/protected-read
+    # count arithmetic is ever legitimate here.
+    r"|data\.(?:family_count|variant_count|frozen_ready_total|diagnostic_survivor_count"
+    r"|protected_read_count)"
 )
 _PRICE_ARITHMETIC_PATTERN = re.compile(
     rf"({_PRICE_ARITHMETIC_FIELDS})\s*[-+*/]|[-+*/]\s*({_PRICE_ARITHMETIC_FIELDS})"
@@ -2041,3 +2048,25 @@ def test_desk_page_graduation_section_never_derives_a_second_computation_of_the_
         "the Graduation section's referee_handoff_ready copy does not match "
         "micro_graduation.REFEREE_FUTURE_REVISION_SENTENCE byte-for-byte"
     )
+
+
+def test_desk_page_price_arithmetic_guard_catches_foundry_field_arithmetic():
+    """TC-6 (goal-hypothesis-foundry-iter-8, J-08) counter-test: the extended guard catches
+    arithmetic on the new Final Summary subsection's own `data.family_count`/`data.variant_count`/
+    `data.frozen_ready_total`/`data.diagnostic_survivor_count`/`data.protected_read_count`
+    bindings, not just the pre-existing groups -- a client-side "family_count minus one" style
+    derivation is exactly the shape of violation this guard exists to catch."""
+    seeded_family = "const priorFamilyCount = data.family_count - 1;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_family) is not None
+
+    seeded_variant = "const half = data.variant_count / 2;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_variant) is not None
+
+    seeded_frozen_ready = "const doubled = data.frozen_ready_total * 2;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_frozen_ready) is not None
+
+    seeded_survivors = "const remaining = data.frozen_ready_total - data.diagnostic_survivor_count;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_survivors) is not None
+
+    seeded_protected = "const share = data.protected_read_count + 1;"
+    assert _PRICE_ARITHMETIC_PATTERN.search(seeded_protected) is not None

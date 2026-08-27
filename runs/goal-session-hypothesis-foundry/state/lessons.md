@@ -209,3 +209,27 @@ suffer this: it produced a normal 147 KB render of the same page. This is now th
 iteration bitten by blank Foundry captures.
 **Applies to:** any iteration capturing evidence for a `/desk` collapsible subsection — take the
 screenshot through `demo_runner --mode verify`, not the Chrome-MCP screenshot tool.
+
+## iter-8 — 2026-08-27T17:05:00Z
+
+**Verdict:** STALLED
+**Lesson:** When the hard auditor APPLIES a product fix during its own pass, every screenshot the
+browser-QA lane already captured is stale by one change — here `apps/frontend/app/desk/page.tsx` moved
+at 16:25 while all evidence PNGs were taken at 16:08, so the shipped Final Summary carried an honesty
+caveat that no filed screenshot showed. Re-run `demo_runner --mode verify` yourself after any
+audit-applied fix and file your own capture; do not certify a journey on a picture that predates the
+last product edit.
+**Applies to:** any full-depth iteration whose audit report has a non-empty "Fixes Applied During This
+Audit" section touching frontend or route code.
+
+## iter-8 — 2026-08-27T17:06:00Z
+
+**Verdict:** STALLED
+**Lesson:** A walkthrough recording can report `RECORDED_WITH_NOTES` and look complete while showing
+entirely the wrong page: this iteration's demo script clicked `desk-section-expand-*` testids that do
+not exist anywhere in `apps/frontend/app/desk/page.tsx`, all 7 clicks silently failed, and every step
+screenshot captured the top of `/desk` instead of the Foundry panel. The golden journey scripts use
+different, real selectors and replayed 8/8 green — so check the demo script's selectors against the
+golden scripts, not against the spec text, before trusting a recording as showcase evidence.
+**Applies to:** any iteration whose demo-results file carries "couldn't perform click (unresolvable
+target ...)" soft notes.
