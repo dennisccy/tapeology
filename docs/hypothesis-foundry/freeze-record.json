@@ -3,7 +3,7 @@
   "compiler_hash": "dc3a283eb8a4fb2c7a9eb8120a5637af012ec1dd2a5e9d8b896a3f7152465332",
   "config_fingerprint": "08e471b10130e1e2",
   "era_open_evidence_class_contract": "historical_exposed_diagnostic",
-  "freeze_commit": "1573f4578d1dd12ef3d5959f98deab4b3a238338",
+  "freeze_commit": "5b41d9ef68410a6a11221f7317e21abed6754a5e",
   "freeze_set_hash": "0b5a8364589ed06f44b3c3dc47f5454bb3fb57daa08748da744bee56719d5e12",
   "interpreter_hash": "9f024c28c30baf0a9f310ba2191ddf4bc5f4572b5b7e623ead3dda5e8f74ca8f",
   "manifest_hash": "fc22781ce4319968e40dc5b0ee976e5b76382d7f95a89dfa9ce22977690005cb",
