@@ -163,6 +163,43 @@ def test_tc2_second_invocation_verifies_and_appends_no_second_epoch_open_row(exh
     assert len(epoch_open_rows) == 1  # no duplicate first-read-lock row
 
 
+def test_frozen_ready_total_sealed_cli_formula_agrees_with_the_canonical_helper():
+    """goal-hypothesis-foundry-iter-7 equivalence-pinning test (retires
+    ``runs/goal-session-hypothesis-foundry/iter-6/coherence.md``'s DUPLICATE-COMPUTATION FAIL on
+    ``exhaust_progress.frozen_ready_total``): the sealed CLI
+    ``apps/backend/scripts/run_hypothesis_foundry_real_exhaust.py`` (one of the 59 entries in
+    ``docs/hypothesis-foundry/freeze-set.json``, sealed since 2026-08-27T06:55:51Z) computes this
+    same concept independently of the canonical serving path in
+    ``app/research/micro_routes.py``. The sealed file may not be edited or even imported for this
+    check (the spec's explicit instruction), so the formula at its line 225 is TRANSCRIBED
+    LITERALLY, unedited, below -- a future reader can visually diff this line against the frozen
+    source to confirm it has not silently drifted from what the sealed file actually says.
+
+    This test loads the real, committed ``docs/hypothesis-foundry/epoch-manifest.json`` directly
+    via ``json`` (never via ``exhaust_mod``/``importlib`` on the sealed script) and asserts the
+    transcribed sealed formula agrees with ``micro_routes.compute_frozen_ready_total`` -- the new
+    sole canonical owner -- on that same real data. Today this is vacuously ``0 == 0`` (the frozen
+    manifest's ``families`` list is ``[]``); the test's permanent value is pinning agreement for
+    this frozen, unchangeable manifest, not proving a non-trivial case."""
+    _require_real_epoch_committed()
+    manifest = json.loads((FOUNDRY_DOCS_DIR / "epoch-manifest.json").read_text(encoding="utf-8"))
+
+    # --- transcribed VERBATIM from apps/backend/scripts/run_hypothesis_foundry_real_exhaust.py:225
+    # (sealed; do not import/refactor that file for this comparison -- see docstring above) --------
+    sealed_cli_frozen_ready_total = sum(len(fm.get("variants", [])) for fm in manifest.get("families", []))
+    # -------------------------------------------------------------------------------------------------
+
+    from app.research import micro_routes
+
+    canonical_frozen_ready_total = micro_routes.compute_frozen_ready_total(manifest)
+
+    assert sealed_cli_frozen_ready_total == canonical_frozen_ready_total
+    # Documents today's expected value so a future manifest regeneration that changes `families`
+    # cannot silently pass this test with both sides wrong in the same new way without a reviewer
+    # noticing the changed literal below.
+    assert canonical_frozen_ready_total == 0
+
+
 def test_tc6_concurrent_invocation_is_refused_via_the_real_single_flight_lock(exhaust_mod, tmp_path):
     _require_real_epoch_committed()
     from app.research import foundry_runner as fr

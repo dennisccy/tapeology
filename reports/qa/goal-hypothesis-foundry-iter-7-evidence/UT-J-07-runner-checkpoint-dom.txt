@@ -1,0 +1,28 @@
+AUDITOR-CAPTURED EVIDENCE — goal-hypothesis-foundry-iter-7, TC-4 / DoD item 4 (J-07)
+Captured 2026-08-27 by the auditor agent against the live app (frontend :3301, backend :8301),
+Chrome via CDP :9222, viewport 1400x2400.
+
+Path: /desk -> click [data-testid="desk-section-expand-hypothesisFoundry"]
+           -> click [data-testid="desk-section-expand-foundry-runner-checkpoint-section"]
+
+Verbatim innerText of the Runner / Checkpoint subsection (element.innerText, read live):
+
+  RUNNER / CHECKPOINT
+  REAL EPOCH — NOT A FIXTURE
+  First-read lock recorded at: 2026-08-27T06:55:51.071173Z
+  Eligible-corpus manifest hash: da7488f8609c801f7a6f7c27c736e8a2a713e98f53b2d7006956c355df5c3260
+  Checkpoint: 0 of 0
+  Protected/withheld/sealed reads: 0
+  Runner lock: Idle — lock free
+  Freeze integrity: green
+  Exhaust complete — every frozen candidate reached a terminal state (zero FROZEN_READY variants
+  this epoch — an honest, vacuous completion).
+
+"Checkpoint: 0 of 0" is <checkpoint_ordinal> of <frozen_ready_total>; frozen_ready_total renders 0,
+identical to iter-6, after the compute_frozen_ready_total() extraction.
+
+A viewport screenshot of this exact scroll position came back solid navy (the documented deep-scroll
+capture artifact, INDEPENDENTLY REPRODUCED by the auditor) and was therefore NOT kept — a blank PNG
+is not evidence. The non-blank screenshot in this lane is UT-J-07-result.png, produced by the
+deterministic replay lane (demo_runner --mode verify), which also asserted the J-07 golden's own
+step texts and returned PASS.

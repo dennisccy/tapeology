@@ -166,3 +166,46 @@ N distinct views should never resolve to one file; check sizes/hashes before tre
 as evidence, and read journey proof off the `-evidence/` lane.
 **Applies to:** any iteration where the QA report and the browser-QA lane both claim to cover the
 same new surface.
+
+## iter-7 — 2026-08-27T12:55:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** A "Frontend Present: no" iteration is NOT a no-browser iteration. QA read that flag as
+permission to record "Browser Checks: SKIPPED" while still certifying "Definition of Done ✓
+Complete" — and the browser lane that *did* run covered only the regression set J-01..J-06 and
+never replayed J-07, the iteration's own TARGET journey, which DoD item 4 and TC-4 both demanded.
+`status.json` carried `browser_checks_run: false` on top of it. Only the hard auditor caught it
+(`docs/handoffs/goal-hypothesis-foundry-iter-7-audit.md` F1). The flag governs whether the developer
+edits `apps/frontend/**`; it never waives a spec that mandates re-replaying journeys because the
+diff touched the one shared serving module behind all of them.
+**Applies to:** any backend-only iteration whose spec still lists Target journeys or a
+Required-still-passing set — the target journey must be replayed regardless of the frontend flag.
+
+## iter-7 — 2026-08-27T12:56:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** An equivalence-pinning test written against a permanently-empty collection is a
+tautology, and calling it drift protection is wrong in mechanism even when right in conclusion.
+`test_frozen_ready_total_sealed_cli_formula_agrees_with_the_canonical_helper` compares the sealed
+CLI's `sum(len(fm.get("variants", [])) …)` against `micro_routes.compute_frozen_ready_total`'s
+`sum(f["variant_count"] …)` on a manifest whose `families` is `[]`, so both return `0` for *any*
+pair of formulas. The evaluator ran both on synthetic input: `[{variant_count:25, variants:[]}]`
+gives 25 vs 0, and `[{variants:["a","b"]}]` gives `KeyError` vs 2. What actually prevents divergence
+is that both operands are sha256-pinned `freeze-set.json` entries — the freeze-set is the guard, not
+the test.
+**Applies to:** any consolidation that "pins" two implementations with a test; check the fixture is
+non-degenerate before claiming the test detects drift, and say plainly which mechanism supplies the
+guarantee.
+
+## iter-7 — 2026-08-27T12:57:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** The Chrome-MCP deep-scroll capture path reliably returns solid-navy blank PNGs for the
+`/desk` Foundry accordion subsections — four of this iteration's evidence files are the *same* blank
+image (md5 `5167f380a66763a1219c996433733438`), reproduced independently by the auditor even after
+viewport enlargement to 1400×2400 and a `scrollIntoView` confirmed in-viewport by
+`getBoundingClientRect()`. The deterministic replay lane (`demo_runner --mode verify`) does NOT
+suffer this: it produced a normal 147 KB render of the same page. This is now the second consecutive
+iteration bitten by blank Foundry captures.
+**Applies to:** any iteration capturing evidence for a `/desk` collapsible subsection — take the
+screenshot through `demo_runner --mode verify`, not the Chrome-MCP screenshot tool.

@@ -447,3 +447,47 @@ itself does not touch J-08's surface, so nothing about deferring it makes the ev
 harder; it only delays the era's final iteration by one cycle.
 **Reversible:** yes (J-08 is simply built next iteration instead of this one; no code or record is
 foreclosed by this ordering choice)
+
+## iter-7 — goal-evaluator
+
+**Ambiguity:** the iter-6 anti-goal entry "Single source of truth" recorded its OWN close condition —
+"place the single canonical owner in a NON-frozen module that `micro_routes.py` (also not frozen)
+calls, plus a test asserting the frozen CLI's inline expression yields the identical value. If that
+is judged insufficient, this becomes an owner decision." That condition was met literally this
+iteration, and the lane that raised the FAIL (`iter-7/coherence.md`) retired it to COHERENCE-WARN,
+stating "GOAL_ACHIEVED is not blocked by this verdict". But the residual duplicate at the sealed
+`run_hypothesis_foundry_real_exhaust.py:225` is permanent and un-editable, and the hard auditor
+reserved a further judgment ("the coherence-auditor's call and then the owner's", B2).
+**We chose:** `resolved: true`, on the methodology B.1 clause "made impossible … a close condition
+the finding itself recorded, proven satisfied now" — and I verified every limb myself rather than
+accepting a report: one non-sealed computing site by my own repo-wide grep; the pinning test re-run
+by me (21 passed); all 59 freeze-set sha256 hashes recomputed by me (0 mismatched); the live GET
+still serving `0`. The rail's own operative clause ("REST/UI/MCP never independently recompute it")
+is fully satisfied — the residual sits in an operator-run offline CLI, none of those three surfaces
+— and divergence is mechanically impossible because BOTH operands are sha256-pinned and the CLI
+verifies the freeze set before running. I record that I was genuinely unsure. The alternative
+(keeping it blocking) would create exactly the permanent unsatisfiable veto the coherence auditor
+warned about, since the only "full" fix is illegal. To keep the ledger honest I wrote the residual —
+including my own reproduction of the auditor's divergence table (25 vs 0; `KeyError` vs 2) and the
+plain statement that the freeze-set, not the test, supplies the guarantee — into the entry's
+`resolution` field and into `notes.owner_decisions_open_iter_7`, so the closing record can never
+read this as "the duplicate line was deleted".
+**Reversible:** yes (the owner can flip it back to blocking with a one-line ruling)
+
+**Ambiguity:** the decision tree's ESCALATE rung is worded for a LEAN iteration and for a REVIEW-lane
+fail-open; iter-7 ran FULL and its review lane PASSED. Yet the QA lane certified "Definition of Done
+✓ Complete" while recording "Browser Checks: SKIPPED", and the browser lane never replayed J-07 —
+the iteration's own TARGET journey — so a gate emitted PASS without the evidence its own checklist
+demanded, and only the auditor caught it. Separately, a CONTINUE verdict here would be demoted to
+lean by the engine's deterministic depth arbiter (`run-goal.sh:2643-2649`: prior budget-breach marker
++ `PRIOR_VERDICT == CONTINUE` ⇒ forced lean), the same rung that already demoted iter-2 and iter-4 in
+this session, right before the era's closing journey J-08 and its T-9/T-10/T-11 guard battery.
+**We chose:** ESCALATE, matching the rung's fail-open clause on the QA lane rather than the review
+lane, and treating "cross-cutting complexity surfaced" as applying to a full iteration too — the
+precedent this session set at iter-5. I disclose plainly that I was also aware CONTINUE would be
+mechanically demoted to lean; that awareness is not the justification, but a human watching this run
+deserves to know it, and can force the same outcome by other means if they judge the escalation
+unwarranted. Note J-08 has never been TARGETED in the seven iterations it has read `failing` (the
+goal's own execution order sequences it last), so rung C.4's "same journey failed 2+ consecutive
+iterations" clause matches literally but not in meaning, and I did not rely on it.
+**Reversible:** yes

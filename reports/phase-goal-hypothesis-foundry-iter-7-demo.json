@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-hypothesis-foundry-iter-7",
+  "base_url": "http://localhost:3301",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the Desk",
+      "narration": "Go to the Desk page to see your research panels.",
+      "point_out": "The Desk page displays your research panels, including Hypothesis Foundry.",
+      "journey": "",
+      "new": false,
+      "verified": false,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/desk" },
+      "expect": { "text": "Hypothesis Foundry" }
+    },
+    {
+      "n": 2,
+      "title": "Check the Foundry era",
+      "narration": "Expand the Foundry section to see the current research era. It opened as a new era, and the old automatic loop is now stopped.",
+      "point_out": "The current era is hypothesis-foundry (active). The previous era, rapid-microscope, is closed. Backend status is shown below.",
+      "journey": "J-01",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "css": "[data-testid=\"desk-section-expand-hypothesisFoundry\"]" } },
+      "expect": { "text": "Current era: hypothesis-foundry (active)" }
+    },
+    {
+      "n": 3,
+      "title": "Review source specifications",
+      "narration": "Expand Sources. Each source compiles into a specification without reading outcomes first. This proves no bias shapes the specs.",
+      "point_out": "All sources are listed with their types and specifications. The system confirms outcome-blind compilation.",
+      "journey": "J-02",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "css": "[data-testid=\"desk-section-expand-foundry-sources-compiler-section\"]" } },
+      "expect": { "text": "Hashes match — outcome-blind compilation proven" }
+    },
+    {
+      "n": 4,
+      "title": "Check interpretation fidelity",
+      "narration": "Expand Interpreter. The system interprets sources while keeping Scout's original decisions intact.",
+      "point_out": "Each interpreted source matches Scout's original work. Timing and direction are preserved exactly.",
+      "journey": "J-03",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "css": "[data-testid=\"desk-section-expand-foundry-interpreter-fixtures-section\"]" } },
+      "expect": { "text": "Foundry vs. direct-Scout screens equal: true" }
+    },
+    {
+      "n": 5,
+      "title": "Verify integrity and freeze",
+      "narration": "Expand Freeze and Integrity. The system owns the candidate count and prevents late changes after the epoch is frozen.",
+      "point_out": "The Freeze section shows the family count, lock status, and refusal of late insertion attempts.",
+      "journey": "J-04",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "css": "[data-testid=\"desk-section-expand-foundry-freeze-integrity-section\"]" } },
+      "expect": { "text": "Late insertion refused: true" }
+    },
+    {
+      "n": 6,
+      "title": "Test all decision logic",
+      "narration": "Expand Hermetic Oracles. The complete system is tested with all outcome types to ensure it handles null results, planted effects, and edge cases.",
+      "point_out": "Every outcome type is tested. The system counts candidates correctly and survives all safety tests.",
+      "journey": "J-05",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "css": "[data-testid=\"desk-section-expand-foundry-hermetic-oracles-section\"]" } },
+      "expect": { "text": "Denominator consistent across rows: true" }
+    },
+    {
+      "n": 7,
+      "title": "Confirm epoch committed",
+      "narration": "Expand Epoch and Manifest. The real epoch is created and saved without reading any outcomes. All sources are recorded with their disposition.",
+      "point_out": "The epoch is committed and saved. All required sources are listed with their status. The outcome-access count is zero.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "css": "[data-testid=\"desk-section-expand-foundry-epoch-manifest-section\"]" } },
+      "expect": { "text": "Status: Committed — Git-visible pre-outcome barrier crossed" }
+    }
+  ]
+}

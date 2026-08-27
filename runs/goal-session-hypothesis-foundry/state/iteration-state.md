@@ -1,40 +1,40 @@
 # Iteration State — hypothesis-foundry
 
-**After iteration:** 6 · **Date:** 2026-08-27 · **Verdict:** CONTINUE
+**After iteration:** 7 · **Date:** 2026-08-27 · **Verdict:** ESCALATE
 
 ## Journeys
 
-7 passing (J-01..J-07) · 1 failing (J-08) — 8 total
+7 passing (J-01..J-07) · 1 failing (J-08) — 8 total. No status changed; nothing regressed.
 
 ## Active blockers
 
-- **COHERENCE-FAIL (dev, freeze-boxed):** `frozen_ready_total` has two owners — `micro_routes.py:901`
-  (`variant_count`) vs `scripts/run_hypothesis_foundry_real_exhaust.py:225` (`len(variants)`). The CLI
-  is SEALED so the auditor's fix is illegal. Legal route: one owner in a NON-sealed module called by
-  `micro_routes.py` + a test pinning the sealed CLI's line to it; else stop and ask the owner.
-- **FREEZE BOUNDARY (binding):** the 59 files in `docs/hypothesis-foundry/freeze-set.json` are
-  sealed since the first-read lock (06:55:51Z); sha256s pinned in the immutable `epoch_open` row.
-  NOT sealed: `micro_routes.py`, `apps/backend/tests/`, `qa_playbook_*.sh`, all frontend.
-- **J-08 (dev):** era's last journey — final-truth surface, drill-ins, zero-survivor state, the
-  `withheld_excluded = 80` count J-07 omits, T-9/T-10/T-11 guards. Touches no sealed file.
-- **OWNER (3 rulings; era cannot close without them):** ratify/reject the discarded first real epoch;
-  accept the duplicated count or sanction breaking the seal; accept the page-load lock-file write.
-  Ledger: total=4 / resolved=1 / blocking=3 / non-blocking=0 / critical=0.
-- **PERMANENT, unfixable (record in closure):** B2 — no §8.5 runtime-environment metadata on the
-  epoch-opening row; B3 — nothing re-verifies the ledger chain (chain clean, 1 row).
+- **J-08 "The operator sees the final Foundry truth"** (owner: dev) — era's last journey, never
+  targeted: final summary + drill-ins, the honest "no diagnostic survivor exists" line, the
+  `withheld_excluded = 80` count J-06/J-07 leave CLI-only, the T-9/T-10/T-11 guards. No sealed file.
+- **"No second real generation epoch"** (owner: HUMAN, blocking) — ratify or reject the discarded
+  first real epoch. `reports/hypothesis-foundry/source-registry-audit.md:9-40`.
+- **"Persistence stays scoped"** (owner: HUMAN, blocking) — a page-load GET writes a lock file; fix
+  site `apps/backend/app/research/foundry_runner.py:197-201` is SEALED.
+- Ledger: total=4 · resolved=2 · blocking=2 · non-blocking=0 · critical=0. Advisory only: sealed
+  `run_hypothesis_foundry_real_exhaust.py:225` keeps a permanent, un-editable second
+  `frozen_ready_total` formula (coherence = WARN) — worth an owner line in the closing record.
 
 ## Last 2 verdicts
 
-- iter 6: CONTINUE — J-07 done and evaluator-verified end to end (one `epoch_open` row, real-corpus
-  hash `da7488f8…` independently recomputed = MATCH, seal repairs B1/B2/B7 closed), but coherence
-  FAILED on a duplicate computation whose fix site is now sealed.
-- iter 5: ESCALATE — the one real epoch was frozen (zero candidates, an honest valid ending).
+- iter 7: ESCALATE — consolidation landed, seal held (59/59 hashes byte-identical); but QA certified
+  "DoD ✓ Complete" while the browser lane never replayed TARGET J-07 — only the auditor caught it.
+- iter 6: CONTINUE — J-07 passed and the first-read lock was written, but coherence FAILED on the
+  duplicate `frozen_ready_total` computation, forcing this consolidation pass.
 
 ## Do not redo
 
-- Real epoch frozen/one-way: `epoch:afd19e9c11a6534f`, registry+manifest byte-identical since
-  `dff64eaa`. Never regenerate; never write a second first-read lock.
-- Seal bookkeeping B1/B2/B7 closed: 59 relative-path entries, all bytes at `freeze_commit 5b41d9ef`
-  (ancestor of HEAD), `era_open_evidence_class_contract` present. Manifest-store deletion bypass
-  closed too (`ManifestStoreMissingError`, TC-7 + positive control).
-- J-01..J-07 replay green. J-07's proof = `.../iter-6-evidence/UT-02-result.png`, NOT the QA report's own citations (one blank image reused 4x — audit T1).
+- **`frozen_ready_total` consolidation is DONE** — `micro_routes.py:901-920` is the sole non-sealed
+  owner; test `tests/test_run_hypothesis_foundry_real_exhaust.py:166-201`; iter-6 COHERENCE-FAIL
+  retired. Do NOT chase the sealed CLI's copy — that needs breaking the era's seal.
+- **Never edit a freeze-set file to make a check pass** (59 entries, verified byte-identical). Safe:
+  `micro_routes.py`, `apps/backend/tests/**`, frontend. J-01..J-07 all re-verified this iteration
+  (goldens 6/6 + J-07 1/1) — do not re-litigate them.
+- **Capture rule:** screenshot Foundry subsections via `demo_runner --mode verify`, never the
+  Chrome-MCP deep-scroll path — it reliably returns blank PNGs (4 identical blanks this iteration).
+- **Replay the TARGET journey, not just the regression set**; "Frontend Present: no" never waives
+  it. The equivalence test is a tautology (`families: []`) — the freeze-set guards, not the test.

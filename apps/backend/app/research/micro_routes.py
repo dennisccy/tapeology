@@ -898,7 +898,29 @@ _EPOCH_MANIFEST_VIEW = read_epoch_manifest_view()
 # real committed manifest -- the total `FROZEN_READY` variant count across every family. Derived
 # from the SAME `_EPOCH_MANIFEST_VIEW` object already computed above (no second manifest read), so
 # there remains exactly one canonical reader of the tracked manifest file.
-_FOUNDRY_FROZEN_READY_TOTAL = sum(f["variant_count"] for f in _EPOCH_MANIFEST_VIEW.get("families", []))
+def compute_frozen_ready_total(epoch_manifest_view: dict) -> int:
+    """Sole canonical owner of ``exhaust_progress.frozen_ready_total``
+    (goal-hypothesis-foundry-iter-7 consolidation --
+    ``runs/goal-session-hypothesis-foundry/iter-6/coherence.md``, Blocking violation 1). Sums each
+    family's own ``variant_count`` field -- the field the real ``epoch-manifest.json``'s own family
+    entries already carry, exactly as passed through by ``read_epoch_manifest_view``'s ``families``
+    list (itself ``manifest_payload.get("families", [])`` verbatim, never re-derived) -- across
+    every family in the epoch manifest view.
+
+    Before this iteration this was an inline expression at this same call site; iter-7 extracted it
+    into this one named function so this Data-Contract value has exactly one implementation
+    anywhere in the (non-sealed) codebase. The sealed CLI
+    ``apps/backend/scripts/run_hypothesis_foundry_real_exhaust.py:225`` computes the identical
+    concept independently, keyed on a different manifest field (``len(variants)`` vs.
+    ``variant_count``); that file has been frozen since the era's first-read lock
+    (2026-08-27T06:55:51Z, ``docs/hypothesis-foundry/freeze-set.json``) and may not be edited to
+    call this helper. ``test_run_hypothesis_foundry_real_exhaust.py``'s equivalence-pinning test
+    instead proves, permanently, that the sealed CLI's own (transcribed, unedited) formula agrees
+    with this function's output on the real, frozen manifest."""
+    return sum(f["variant_count"] for f in epoch_manifest_view.get("families", []))
+
+
+_FOUNDRY_FROZEN_READY_TOTAL = compute_frozen_ready_total(_EPOCH_MANIFEST_VIEW)
 
 
 @router.get("/foundry")

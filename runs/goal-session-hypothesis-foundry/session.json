@@ -1,7 +1,7 @@
 {
   "session_id": "hypothesis-foundry",
   "started_at": "2026-08-26T18:30:29.535955Z",
-  "current_iter": 7,
+  "current_iter": 8,
   "cli": "claude",
   "agent_backend": "interactive",
   "output_styles": "off",
@@ -11,12 +11,12 @@
     "regression_halt": true
   },
   "status": "in_progress",
-  "last_verdict": "CONTINUE",
+  "last_verdict": "ESCALATE",
   "next_depth": "full",
   "auto_release": false,
   "push_per_iter": true,
   "push_branch": "goal/hypothesis-foundry",
-  "updated_at": "2026-08-27T10:36:36.493482Z",
+  "updated_at": "2026-08-27T12:56:39.405684Z",
   "finished_at": "2026-08-26T18:37:02.448417Z",
   "total_iterations": 0,
   "wall_time_seconds": 12,

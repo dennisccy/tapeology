@@ -280,3 +280,50 @@ accept the duplicated count as a known harmless flaw or sanction breaking the se
 page visit writes a small lock file, whose fix also sits in a sealed file. Run the next iteration at
 full depth — a plain continue has been downgraded to the lighter pipeline twice in this session, and
 this is the era's closing act.
+
+## Iteration 7 — goal-hypothesis-foundry-iter-7
+
+**Date:** 2026-08-27T12:55:00Z
+**Verdict:** ESCALATE
+**Depth dispatched:** full (iter-6's COHERENCE-FAIL forced it; the engine did not demote it)
+**Journey deltas:**
+- Newly passing: none
+- Newly failing: none
+- Regressed: none — J-01 through J-07 all replayed and passed (6/6 goldens plus the target J-07,
+  which the auditor had to run because the browser lane skipped it)
+- Still failing: J-08 "The operator sees the final Foundry truth" (explicitly out of scope this
+  iteration; carried from iter-3, not re-verified)
+- Anti-goal violations: the iter-6 "Single source of truth" entry is RESOLVED against its own
+  recorded close condition, with a permanent disclosed residual. The iter-5 "No second real
+  generation epoch" and iter-6 "Persistence stays scoped" entries stay open and blocking, both
+  owner-only. Counts: total=4 / resolved=2 / blocking=2 / non-blocking=0 / critical=0.
+  scan-report CLEAN; store-scope guard CLEAN (11395 protected files byte-identical);
+  closure CLOSURE-PASS; **coherence COHERENCE-WARN** (iter-6's FAIL retired).
+
+**Reasoning:** The one job of this iteration was done, and I proved it myself instead of trusting
+any report. The number that was being worked out in two places now has exactly one owner in code
+that is legally allowed to change: my own search of the whole project finds a single place that
+calculates it, the page still shows the same value, and I re-ran the tests myself (21 passed). I
+also re-checked the fingerprints of all 59 sealed files by hand — none moved — so the fix really
+did land on the only side of the seal it was allowed to touch. The strict review lane again earned
+its cost: it found that the browser test lane never tested this iteration's own target journey while
+the quality report said every required check was complete, and that the same report denied changing
+a test script it had changed. Neither was a product fault — I checked that the changed script keeps
+the identical pass condition and that both versions pass — but neither would have been caught
+without the strict lane. The honest weakness I verified for myself: the new agreement test only
+reads "0 equals 0" because the frozen list is empty; on made-up data the two formulas give 25 versus
+0 and an error versus 2. So the test does not guard anything — the seal does. I escalated rather
+than continued because the checking lane gave a pass without the proof its own checklist demanded,
+and because the next iteration is the era's closing act.
+
+**Next-step recommendation:** Build J-08 "The operator sees the final Foundry truth", the last
+journey, at the deeper review depth — the final summary screen, the honest "no survivor exists"
+line, the 80 left-out datasets that today only the command prints, and the protective checks. None
+of it touches a sealed file. Carry three habits with it: replay the target journey and not only the
+older ones; take pictures of the Foundry sections through the replay tool, never the browser tool's
+deep-scroll path, which reliably returns blank images; and stop describing the number-agreement test
+as drift protection. Three rulings still belong to the owner: accept or reject the first real batch
+that was made and thrown away; accept that opening the page writes a small lock file; and record the
+leftover duplicate inside the sealed command as a permanently allowed exception. In one sentence:
+approve building the final Foundry summary screen next, at full review depth, and make those three
+rulings so the era can be closed.

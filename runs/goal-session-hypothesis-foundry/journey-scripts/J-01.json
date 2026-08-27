@@ -13,7 +13,7 @@
     {
       "n": 2,
       "journey": "J-01",
-      "action": {"type": "click", "target": {"text": "Hypothesis Foundry"}},
+      "action": {"type": "click", "target": {"testid": "desk-section-expand-hypothesisFoundry"}},
       "expect": {"text": "08e471b10130e1e2"}
     }
   ]
