@@ -37,6 +37,8 @@ __all__ = [
     "run_family",
     "ConcurrentRunnerRefused",
     "SingleFlightLock",
+    "EXHAUST_LOCK_FILENAME",
+    "read_exhaust_progress",
 ]
 
 # --- §7.2's mechanical, closed Scout-decision -> Foundry-state mapping (TC-17) --------------------
@@ -209,3 +211,73 @@ class SingleFlightLock:
         finally:
             fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
             fh.close()
+
+
+# === goal-hypothesis-foundry-iter-6 (J-07/J-08): the `exhaust_progress` Foundry read-surface key ===
+# -- unlike `epoch_manifest` (a Git-tracked literal path, computed once at module-import time),
+# this reflects genuinely RUNTIME-scoped state: the Foundry trial ledger the real exhaust CLI
+# writes under `get_foundry_dir()`/`TAPEOLOGY_FOUNDRY_DIR`-scoped storage, which does not exist
+# until the operator's own exhaust-CLI act runs (the SAME "read verbatim, never fabricate, degrade
+# honestly before the recording act" convention `read_era_open_baseline` already establishes).
+# `micro_routes.get_foundry()` calls this PER REQUEST (via the same `Depends(get_foundry_dir)`
+# `era_open_baseline` already uses), never once at import time -- the whole point is that it must
+# see a LATER exhaust-CLI run without a server restart.
+
+EXHAUST_LOCK_FILENAME = "foundry_exhaust_runner.lock"
+
+
+def read_exhaust_progress(foundry_dir: str | Path, *, frozen_ready_total: int) -> dict:
+    """Reads the Foundry trial ledger under ``foundry_dir`` VERBATIM (no recomputation of any
+    scientific value) and combines it with ``frozen_ready_total`` (the caller's own read of the
+    Git-tracked manifest's total ``FROZEN_READY`` variant count -- this function never opens the
+    manifest itself, so there is exactly one reader of that file, matching every other Foundry
+    subview's single-canonical-owner discipline).
+
+    ``single_flight_status`` is a genuine LIVE probe (a real, immediately-released non-blocking
+    ``SingleFlightLock`` acquire attempt against the SAME lock path the real exhaust CLI uses) --
+    cheap, read-only, and structurally incapable of computing/evaluating anything scientific (it
+    either finds the OS advisory lock free or held; nothing else). ``freeze_integrity_verdict`` is
+    NOT recomputed here (a GET route must never re-verify freeze hashes/ancestry itself -- that is
+    the exhaust CLI's own job, per-invocation): its value is a direct historical fact -- the
+    epoch-opening row could only ever have been appended AFTER the CLI's own
+    ``verify_freeze_set_unchanged``/``verify_commit_is_ancestor`` passed, so the row's mere
+    presence already proves ``"green"`` at the moment it was written; absence honestly renders
+    ``"not_yet_verified"`` (a real state the two-value schema literal ``"green" | <halt code>``
+    does not name, but the pre-lock state is real and must be representable -- never silently
+    coerced to either)."""
+    ledger = fl.FoundryLedger(foundry_dir)
+    lock_path = Path(foundry_dir) / EXHAUST_LOCK_FILENAME
+    try:
+        with SingleFlightLock(lock_path).acquire():
+            single_flight_status = "idle"
+    except ConcurrentRunnerRefused:
+        single_flight_status = "running"
+
+    epoch_open = ledger.epoch_open_row()
+    if epoch_open is None:
+        return {
+            "first_read_lock_recorded": False,
+            "first_read_lock_at": None,
+            "eligible_corpus_manifest_hash": None,
+            "frozen_ready_total": frozen_ready_total,
+            "terminal_count": 0,
+            "checkpoint_ordinal": 0,
+            "protected_read_count": 0,
+            "single_flight_status": single_flight_status,
+            "freeze_integrity_verdict": "not_yet_verified",
+            "exhaust_complete": False,
+        }
+
+    terminal_count = len([r for r in ledger.all_rows() if r["row_kind"] == fl.ROW_KIND_TERMINAL])
+    return {
+        "first_read_lock_recorded": True,
+        "first_read_lock_at": epoch_open["recorded_at"],
+        "eligible_corpus_manifest_hash": epoch_open["eligible_corpus_manifest_hash"],
+        "frozen_ready_total": frozen_ready_total,
+        "terminal_count": terminal_count,
+        "checkpoint_ordinal": terminal_count,
+        "protected_read_count": 0,
+        "single_flight_status": single_flight_status,
+        "freeze_integrity_verdict": "green",
+        "exhaust_complete": terminal_count >= frozen_ready_total,
+    }

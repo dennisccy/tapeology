@@ -165,9 +165,26 @@ def _local_sibling_imports(path: Path) -> set[str]:
     return names
 
 
+def _freeze_set_key(path: Path, repo_root: Path | None) -> str:
+    """goal-hypothesis-foundry-iter-6 (closes audit finding B1): when ``repo_root`` is given AND
+    ``path`` actually lives under it, the key is the REPO-RELATIVE POSIX path (portable across
+    checkouts/worktrees on the same commit -- the whole point of a Git-visible freeze). When
+    ``repo_root`` is omitted (every existing hermetic-fixture call site: ``test_foundry_freeze.py``,
+    this module's own ``freeze_integrity_fixture_dir``/``_first_read_lock`` fixtures) or ``path``
+    does not live under it (a fixture directory outside the repo, e.g. a pytest ``tmp_path`` under
+    the platform temp root), the key falls back to the ABSOLUTE path exactly as before -- so no
+    existing hermetic fixture/test changes behavior."""
+    if repo_root is not None:
+        try:
+            return path.resolve().relative_to(repo_root.resolve()).as_posix()
+        except ValueError:
+            pass
+    return str(path)
+
+
 def generate_freeze_set(
     research_dir: str | Path, *, required_names: Sequence[str] | None = None,
-    extra_paths: Sequence[str | Path] = (),
+    extra_paths: Sequence[str | Path] = (), repo_root: str | Path | None = None,
 ) -> dict:
     """The deterministic freeze-set generator (§8.4): starting from ``required_names`` (default
     ``FREEZE_SET_REQUIRED_MODULES``), transitively walks each covered file's own local sibling
@@ -177,8 +194,13 @@ def generate_freeze_set(
     closed, never silently omits). ``extra_paths`` lets a caller pin additional non-``.py``
     dependencies this scanner cannot discover via import parsing (e.g. a config/version source
     file) -- unused by every test/call site this iteration, present for forward compatibility with
-    the real J-06/J-07 freeze-set (§8.4's "snapshot identity/version/parameter sources")."""
+    the real J-06/J-07 freeze-set (§8.4's "snapshot identity/version/parameter sources").
+
+    ``repo_root``, when given, keys every entry REPO-RELATIVE rather than by absolute path -- see
+    ``_freeze_set_key``'s own docstring. Omitted (the default), this function's entry keys are
+    byte-identical to before this iteration."""
     research_dir = Path(research_dir)
+    repo_root_path = Path(repo_root) if repo_root is not None else None
     names = tuple(required_names) if required_names is not None else FREEZE_SET_REQUIRED_MODULES
 
     entries: dict[str, str] = {}
@@ -195,14 +217,14 @@ def generate_freeze_set(
                 f"required/transitive local science dependency missing on disk: {path} -- freeze "
                 "generation refuses rather than silently omitting it (spec §8.4)"
             )
-        entries[str(path)] = _sha256_file(path)
+        entries[_freeze_set_key(path, repo_root_path)] = _sha256_file(path)
         queue.extend(sorted(_local_sibling_imports(path) - seen))
 
     for extra in extra_paths:
         p = Path(extra)
         if not p.is_file():
             raise FreezeSetDependencyUnproven(f"declared local science dependency missing: {p}")
-        entries[str(p)] = _sha256_file(p)
+        entries[_freeze_set_key(p, repo_root_path)] = _sha256_file(p)
 
     freeze_set_hash = _sha256(_canonical(entries))
     return {"entries": entries, "freeze_set_hash": freeze_set_hash}
@@ -224,12 +246,20 @@ class FreezeRecord:
     scout_screen_source_hash: str
     config_fingerprint: str
     freeze_set_hash: str
+    # goal-hypothesis-foundry-iter-6 (closes audit finding B7): §8.4's own required field list
+    # names "the era-open evidence-class contract" alongside every other pinned hash -- this era is
+    # constitutionally locked to ONE evidence class for every real Foundry evaluation
+    # (`historical_exposed_diagnostic`, goal.md Success Criteria 16 / spec §10.1), so the frozen
+    # value is that literal contract string, not a hash (there is nothing to hash; the CONTRACT
+    # itself, not a file, is what this field pins).
+    era_open_evidence_class_contract: str
 
 
 def build_freeze_record(
     *, freeze_commit: str, manifest_hash: str, source_registry_hash: str, spec_hash: str,
     candidate_spec_schema_hash: str, compiler_hash: str, interpreter_hash: str, runner_hash: str,
     scout_screen_source_hash: str, config_fingerprint: str, freeze_set_hash: str,
+    era_open_evidence_class_contract: str,
 ) -> FreezeRecord:
     """A pure constructor pinning every hash §8.4 requires -- no derivation, no defaults; a caller
     missing one supplies an explicit falsy value and gets a record that visibly fails
@@ -241,6 +271,7 @@ def build_freeze_record(
         compiler_hash=compiler_hash, interpreter_hash=interpreter_hash, runner_hash=runner_hash,
         scout_screen_source_hash=scout_screen_source_hash, config_fingerprint=config_fingerprint,
         freeze_set_hash=freeze_set_hash,
+        era_open_evidence_class_contract=era_open_evidence_class_contract,
     )
 
 
@@ -265,17 +296,28 @@ class FreezeIntegrityHalt(Exception):
     ``FOUNDRY_INTEGRITY_HALT``, never silently patched-and-continued (TC-13)."""
 
 
-def verify_freeze_set_unchanged(freeze_set: Mapping[str, object]) -> None:
+def verify_freeze_set_unchanged(
+    freeze_set: Mapping[str, object], *, repo_root: str | Path | None = None,
+) -> None:
     """Recomputes sha256 for every path ``freeze_set['entries']`` ENUMERATES and compares against
     the pinned digest -- any mismatch, or a pinned path that no longer exists, raises
     ``FreezeIntegrityHalt``. Deliberately looks at NOTHING outside those enumerated paths: a Goal
     Mode session/handoff file or a non-scientific UI-only file was never added to ``entries`` by
     ``generate_freeze_set`` (§8.4's own module-set scope), so this function structurally cannot
     false-refuse on either (TC-13's second and third parts) -- there is no "everything else must
-    also be clean" check anywhere in this function."""
+    also be clean" check anywhere in this function.
+
+    ``repo_root``, when given, resolves a RELATIVE entry key against it before hashing (the
+    counterpart to ``generate_freeze_set(..., repo_root=...)``'s repo-relative keys). An entry key
+    that is already absolute is used exactly as recorded, whether or not ``repo_root`` is given --
+    the hermetic temp-dir fixtures every existing test/fixture uses (``test_foundry_freeze.py``,
+    this module's own ``_first_read_lock``) never pass ``repo_root`` and keep working unmodified."""
     entries = freeze_set["entries"]  # type: ignore[index]
+    repo_root_path = Path(repo_root) if repo_root is not None else None
     for path_str, expected_hash in entries.items():
         path = Path(path_str)
+        if not path.is_absolute() and repo_root_path is not None:
+            path = repo_root_path / path
         if not path.is_file():
             raise FreezeIntegrityHalt(f"freeze-set path missing after first-read lock: {path}")
         actual_hash = _sha256_file(path)
@@ -384,6 +426,7 @@ def _freeze_record() -> dict:
         compiler_hash="fixture-compiler-hash", interpreter_hash="fixture-interpreter-hash",
         runner_hash="fixture-runner-hash", scout_screen_source_hash="fixture-scout-screen-source-hash",
         config_fingerprint="fixture-config-fingerprint", freeze_set_hash=result["freeze_set_hash"],
+        era_open_evidence_class_contract="fixture-era-open-evidence-class-contract",
     )
     return {
         "freeze_set_target_path": "docs/hypothesis-foundry/freeze-set.json",

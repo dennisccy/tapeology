@@ -20,6 +20,7 @@ from .micro_chain_ledger import HashChainedLedger
 __all__ = [
     "ROW_KIND_INTENT",
     "ROW_KIND_TERMINAL",
+    "ROW_KIND_EPOCH_OPEN",
     "ROOT_DEFERRED_COMPOSITE",
     "ConflictingReplayRefused",
     "FoundryLedger",
@@ -31,6 +32,11 @@ _LEDGER_FILENAME = "foundry_trial_ledger.jsonl"
 
 ROW_KIND_INTENT = "evaluation_intent"
 ROW_KIND_TERMINAL = "terminal"
+# goal-hypothesis-foundry-iter-6 (J-07): §8.5's first-read-lock row -- appended exactly once, by
+# the real exhaust CLI, immediately BEFORE the first candidate outcome could ever be read. Shares
+# this SAME physical hash chain (never a second ledger/file) -- discriminated by `row_kind`, the
+# identical convention `ROW_KIND_INTENT`/`ROW_KIND_TERMINAL` already establish.
+ROW_KIND_EPOCH_OPEN = "epoch_open"
 
 # §5.5: "otherwise record the literal `root_deferred_composite`... no composite root is invented
 # in this era."
@@ -76,6 +82,18 @@ _TERMINAL_IDENTITY_FIELDS = (
     "rule_id", "prospective_root_status", "foundry_state",
 )
 
+# The epoch-opening row's own identity fields for the SAME "exact duplicate -> verify-and-return,
+# any difference -> refuse" discipline (§9.2), applied to the one first-read-lock row rather than a
+# per-candidate terminal row. Every pinned freeze hash plus the two facts only THIS invocation
+# supplies (`epoch_id`, `eligible_corpus_manifest_hash`) -- `recorded_at` is deliberately excluded
+# (a replay's own timestamp legitimately differs from the original; that is not a content conflict).
+_EPOCH_OPEN_IDENTITY_FIELDS = (
+    "epoch_id", "freeze_commit", "manifest_hash", "source_registry_hash", "spec_hash",
+    "candidate_spec_schema_hash", "compiler_hash", "interpreter_hash", "runner_hash",
+    "scout_screen_source_hash", "config_fingerprint", "freeze_set_hash",
+    "era_open_evidence_class_contract", "eligible_corpus_manifest_hash",
+)
+
 
 class FoundryLedger:
     """One Foundry epoch's complete trial record -- intent rows (§6 step 4 / §9.2's
@@ -104,6 +122,15 @@ class FoundryLedger:
                 return row
         return None
 
+    def epoch_open_row(self) -> dict | None:
+        """§8.5's first-read-lock row -- at most ONE ever exists per epoch (this ledger holds
+        exactly one epoch's trials, per §8.1's "at most one real epoch_id"). ``None`` before the
+        real exhaust CLI's first invocation -- the honest pre-lock state (T-8: never fabricated)."""
+        for row in reversed(self._chain.all_rows()):
+            if row["row_kind"] == ROW_KIND_EPOCH_OPEN:
+                return row
+        return None
+
     def record_intent(
         self, *, candidate_spec_hash: str, manifest_hash: str, econ_floor_bps: float | None,
         econ_floor_provenance: str, recorded_at: str | None = None,
@@ -122,6 +149,56 @@ class FoundryLedger:
                 "recorded_at": recorded_at or _iso_utc_now(),
             }
         )
+
+    def record_epoch_open(
+        self, *, epoch_id: str, freeze_commit: str, manifest_hash: str, source_registry_hash: str,
+        spec_hash: str, candidate_spec_schema_hash: str, compiler_hash: str, interpreter_hash: str,
+        runner_hash: str, scout_screen_source_hash: str, config_fingerprint: str, freeze_set_hash: str,
+        era_open_evidence_class_contract: str, eligible_corpus_manifest_hash: str,
+        recorded_at: str | None = None,
+    ) -> dict:
+        """§8.5: "Immediately before the first candidate outcome read, the Foundry ledger appends
+        an epoch-opening row that repeats all freeze hashes, records the resolved eligible
+        diagnostic-corpus manifest hash..., and marks the first-read boundary." Pins EVERY
+        ``freeze-record.json`` hash plus the resolved eligible-corpus ``(dataset_id, checksum)``
+        manifest hash the caller already computed (this method never computes it itself -- it only
+        persists whatever it is given, the same discipline ``record_intent``/``record_terminal``
+        already follow).
+
+        Idempotent on replay (§9.2's "already-terminal candidate -> verify and skip", applied here
+        to the ONE epoch-opening row rather than a per-candidate terminal row): a second call whose
+        every identity field matches the existing row returns that EXISTING row untouched (no
+        second first-read-lock row is ever appended -- TC-2). A call whose content differs from the
+        already-recorded row raises ``ConflictingReplayRefused`` -- mirroring ``record_terminal``'s
+        own refuse-rather-than-silently-overwrite discipline -- rather than silently accepting a
+        drifted resume as if it were the same epoch's own lock."""
+        candidate = {
+            "row_kind": ROW_KIND_EPOCH_OPEN,
+            "epoch_id": epoch_id,
+            "freeze_commit": freeze_commit,
+            "manifest_hash": manifest_hash,
+            "source_registry_hash": source_registry_hash,
+            "spec_hash": spec_hash,
+            "candidate_spec_schema_hash": candidate_spec_schema_hash,
+            "compiler_hash": compiler_hash,
+            "interpreter_hash": interpreter_hash,
+            "runner_hash": runner_hash,
+            "scout_screen_source_hash": scout_screen_source_hash,
+            "config_fingerprint": config_fingerprint,
+            "freeze_set_hash": freeze_set_hash,
+            "era_open_evidence_class_contract": era_open_evidence_class_contract,
+            "eligible_corpus_manifest_hash": eligible_corpus_manifest_hash,
+            "recorded_at": recorded_at or _iso_utc_now(),
+        }
+        existing = self.epoch_open_row()
+        if existing is not None:
+            if all(existing[f] == candidate[f] for f in _EPOCH_OPEN_IDENTITY_FIELDS):
+                return existing
+            raise ConflictingReplayRefused(
+                "an epoch-opening (first-read-lock) row already exists with different content -- "
+                "refused rather than appending a second first-read-lock row (spec §8.5/§9.2)"
+            )
+        return self._chain.append_row(candidate)
 
     def record_terminal(
         self, *, candidate_spec_hash: str, manifest_hash: str, foundry_family_id: str,

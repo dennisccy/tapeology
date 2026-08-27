@@ -54,6 +54,7 @@ from .foundry_compiler import sources_compiler_hermetic_fixture_view
 from .foundry_freeze import freeze_integrity_hermetic_fixture_view, verify_commit_is_ancestor
 from .foundry_hermetic_summary import build_hermetic_oracles_summary
 from .foundry_interpreter import interpreter_hermetic_fixture_view
+from .foundry_runner import read_exhaust_progress
 from .foundry_source_registry import (
     foundry_era_identity,
     read_era_open_baseline,
@@ -893,6 +894,11 @@ _HERMETIC_ORACLES_VIEW = build_hermetic_oracles_summary()
 # goal-hypothesis-foundry-iter-5 (J-06): computed once, same convention, but reads real committed
 # files rather than hermetic literals -- see `read_epoch_manifest_view`'s own docstring.
 _EPOCH_MANIFEST_VIEW = read_epoch_manifest_view()
+# goal-hypothesis-foundry-iter-6 (J-07): the ONE Git-tracked fact `exhaust_progress` needs from the
+# real committed manifest -- the total `FROZEN_READY` variant count across every family. Derived
+# from the SAME `_EPOCH_MANIFEST_VIEW` object already computed above (no second manifest read), so
+# there remains exactly one canonical reader of the tracked manifest file.
+_FOUNDRY_FROZEN_READY_TOTAL = sum(f["variant_count"] for f in _EPOCH_MANIFEST_VIEW.get("families", []))
 
 
 @router.get("/foundry")
@@ -915,7 +921,13 @@ def get_foundry(foundry_dir: str = Depends(get_foundry_dir)) -> dict:
     goal-hypothesis-foundry-iter-5: one more additive top-level key, ``epoch_manifest`` -- the
     real, Git-tracked epoch (see ``read_epoch_manifest_view``'s own docstring for why it reads
     literal repo-relative paths rather than the dataset-scoped `foundry_dir` this handler still
-    receives for the (unrelated) era-open baseline)."""
+    receives for the (unrelated) era-open baseline).
+
+    goal-hypothesis-foundry-iter-6 (J-07): one more additive top-level key, ``exhaust_progress`` --
+    UNLIKE ``epoch_manifest``, this reflects genuinely runtime-scoped state (the Foundry trial
+    ledger the real exhaust CLI writes under this SAME ``foundry_dir``), so it is read PER REQUEST
+    (``foundry_runner.read_exhaust_progress``, verbatim, no recomputation of any scientific value)
+    rather than once at import time -- see that function's own docstring."""
     return {
         "era": foundry_era_identity(),
         "era_open_baseline": read_era_open_baseline(foundry_dir),
@@ -926,4 +938,5 @@ def get_foundry(foundry_dir: str = Depends(get_foundry_dir)) -> dict:
         "interpreter_fixtures": _INTERPRETER_FIXTURES_VIEW,
         "freeze_integrity": _FREEZE_INTEGRITY_VIEW,
         "hermetic_oracles": _HERMETIC_ORACLES_VIEW,
+        "exhaust_progress": read_exhaust_progress(foundry_dir, frozen_ready_total=_FOUNDRY_FROZEN_READY_TOTAL),
     }

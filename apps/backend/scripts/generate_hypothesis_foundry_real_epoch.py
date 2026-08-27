@@ -14,11 +14,17 @@ stderr, no implicit git operations: this script never runs ``git add``/``git com
 2. Runs ``foundry_compiler.compile_sources`` over this real batch (no new compiler module, no new
    disposition path -- the exact same mechanical §2 precedence the hermetic fixtures already prove).
 3. Calls ``foundry_freeze.generate_or_verify_manifest`` to mint (or verify/replay) the real
-   ``epoch_id``/``manifest_hash``, ``foundry_freeze.generate_freeze_set`` to build the enumerated
-   path+sha256 freeze-set manifest over the real ``apps/backend/app/research`` directory plus the
-   methodology spec, and ``foundry_freeze.build_freeze_record`` to pin every required hash.
-4. Writes ``docs/hypothesis-foundry/{source-registry,epoch-manifest,freeze-set,freeze-record}.json``
-   at the tracked §8.2 paths.
+   ``epoch_id``/``manifest_hash``.
+4. Writes ``source-registry.json``/``epoch-manifest.json`` FIRST (goal-hypothesis-foundry-iter-6:
+   moved ahead of the freeze-set/freeze-record step so both tracked JSONs already exist on disk
+   when ``foundry_freeze.generate_freeze_set`` scans and hashes them -- closes audit finding B7's
+   freeze-set half). Then calls ``generate_freeze_set`` (repo-relative keys, closing B1) over the
+   real ``apps/backend/app/research`` directory plus ``FREEZE_SET_EXTRA_PATHS`` (the spec, the two
+   just-written tracked JSONs, and both the generation/exhaust CLI scripts -- see that constant's
+   own module-level comment for why ``freeze-record.json``/``freeze-set.json`` themselves are
+   deliberately NOT among them), then ``build_freeze_record`` to pin every required hash plus the
+   §8.4 "era-open evidence-class contract" field (closing B7's freeze-record half), then writes
+   ``freeze-set.json``/``freeze-record.json``.
 5. Records this run's own outcome-access census (a dynamic call-trace over the actual compile/
    freeze-generation calls, counting every function CALL whose defining module is one of the
    forbidden Scout-ledger/walk-forward/Vault/Referee/PnL/Foundry-runner modules) -- must be ``0``,
@@ -80,6 +86,7 @@ load_env()
 from app.config import CONFIG  # noqa: E402
 from app.research import foundry_compiler as fc  # noqa: E402
 from app.research import foundry_freeze as fz  # noqa: E402
+from app.research import scout  # noqa: E402
 from app.research.foundry_source_registry import (  # noqa: E402
     DISPOSITION_ALIASED_VARIANT_VOCABULARY,
     DISPOSITION_EXCLUDED_GATE_CLOSED,
@@ -105,6 +112,21 @@ FREEZE_SET_PATH = FOUNDRY_DOCS_DIR / "freeze-set.json"
 FREEZE_RECORD_PATH = FOUNDRY_DOCS_DIR / "freeze-record.json"
 AUDIT_REPORT_PATH = FOUNDRY_REPORTS_DIR / "source-registry-audit.md"
 SPEC_PATH = REPO_ROOT / "docs" / "hypothesis-foundry-spec.md"
+# goal-hypothesis-foundry-iter-6 (closes audit finding B7's freeze-set half). §8.4's own text names
+# "the Foundry methodology/spec and tracked registry/manifest files" -- the tracked REGISTRY and
+# MANIFEST are `source-registry.json`/`epoch-manifest.json`, never `freeze-record.json`/
+# `freeze-set.json` themselves (§8.4 never names either of those two as freeze-set members, and
+# freeze-record.json COULD NOT be: its own content embeds `freeze_set_hash`, so including its file
+# hash inside the very freeze-set that hash is computed over is the identical self-reference
+# freeze-set.json is already, explicitly, excluded for -- just one hop removed). "every Foundry
+# scientific implementation module/CLI" additionally covers the real generation CLI (this script)
+# and the real exhaust CLI (`run_hypothesis_foundry_real_exhaust.py`) -- both science-affecting,
+# neither a sibling `app/research/*.py` import the scanner would auto-discover.
+EXHAUST_CLI_PATH = BACKEND_DIR / "scripts" / "run_hypothesis_foundry_real_exhaust.py"
+_THIS_GENERATION_CLI_PATH = Path(__file__).resolve()
+FREEZE_SET_EXTRA_PATHS = (
+    SPEC_PATH, SOURCE_REGISTRY_PATH, EPOCH_MANIFEST_PATH, _THIS_GENERATION_CLI_PATH, EXHAUST_CLI_PATH,
+)
 
 # --- §8.1's own import/IO tripwire: every module whose FUNCTIONS could hand this script a real
 # candidate outcome, Scout row, walk-forward result, Vault state, Referee result, or PnL scan.
@@ -855,12 +877,35 @@ def _existing_freeze_commit(path: Path) -> str | None:
     return payload.get("freeze_commit")
 
 
+class ManifestStoreMissingError(Exception):
+    """goal-hypothesis-foundry-iter-6 (TC-7). ``docs/hypothesis-foundry/epoch-manifest.json`` --
+    the ONLY state this script reads to decide "has an epoch already been generated" -- is absent,
+    but a SIBLING tracked artifact (``freeze-record.json``, always written in the SAME generation
+    run immediately after the manifest) proves a real generation already happened. Silently
+    treating this as "no epoch yet" would hand ``generate_or_verify_manifest`` an EMPTY store --
+    which accepts whatever the CURRENT inputs happen to be as if this were the first-ever
+    generation, with no drift check against what was actually frozen before (the drift check only
+    fires when an EXISTING slot disagrees with the new inputs -- an empty slot has nothing to
+    disagree with). That would silently overwrite ``epoch-manifest.json`` rather than genuinely
+    verifying/refusing. Refused instead: restore ``epoch-manifest.json`` from Git history before
+    re-running this script."""
+
+
 def _load_existing_manifest_store(path: Path) -> dict:
     """Reconstructs the ``generate_or_verify_manifest`` in-memory ``store`` from a previously
     written ``epoch-manifest.json`` (if present) -- so a re-run replay-verifies rather than
     silently starting from an empty store (which would look like "no epoch yet" and mint a new
-    one). Returns ``{}`` (a genuinely fresh store) when no file exists yet."""
+    one). Returns ``{}`` (a genuinely fresh store) only on the FIRST-EVER generation (neither this
+    file nor its sibling ``freeze-record.json`` exists yet); raises ``ManifestStoreMissingError``
+    when this file specifically has gone missing while ``freeze-record.json`` still stands as
+    evidence a generation already happened (TC-7) -- see that exception's own docstring."""
     if not path.exists():
+        if FREEZE_RECORD_PATH.exists():
+            raise ManifestStoreMissingError(
+                f"{path} is missing, but {FREEZE_RECORD_PATH} exists -- a prior real-epoch "
+                "generation is already on record and its own replay-detection state must not be "
+                "silently treated as a fresh install (spec §8.1: at most one real epoch_id ever)"
+            )
         return {}
     payload = json.loads(path.read_text(encoding="utf-8"))
     if "epoch_id" not in payload or "_inputs_hash" not in payload:
@@ -909,36 +954,11 @@ def main() -> int:
         manifest_record = fz.generate_or_verify_manifest(store, generation_inputs)
         epoch_id = manifest_record.epoch_id
         is_replay = "epoch" in _load_existing_manifest_store(EPOCH_MANIFEST_PATH)
-
-        # --- §8.4 freeze-set: the real `apps/backend/app/research` directory + the spec. --------
-        freeze_set = fz.generate_freeze_set(
-            BACKEND_DIR / "app" / "research", extra_paths=(SPEC_PATH,)
-        )
-
-        # --- §8.4 freeze record: pins every required science hash. `candidate_spec_schema_hash`
-        # is deliberately equal to `compiler_hash` -- the CandidateSpec dataclass is defined
-        # INSIDE foundry_compiler.py and no separate schema module exists this era, so the
-        # schema's own identity IS that file's hash; a future era's genuine schema separation
-        # would produce a distinct value.
+        # `candidate_spec_schema_hash` is deliberately equal to `compiler_hash` -- the
+        # CandidateSpec dataclass is defined INSIDE foundry_compiler.py and no separate schema
+        # module exists this era, so the schema's own identity IS that file's hash; a future era's
+        # genuine schema separation would produce a distinct value.
         compiler_hash_value = fc.compiler_hash()
-        # `freeze_commit` is pinned ONCE, on the very first generation, and never recomputed on a
-        # later replay/verify run -- a freeze whose own commit identity silently advanced on every
-        # re-run would not be a freeze. `_existing_freeze_commit` is `None` only before the first
-        # generation this repository has ever produced.
-        freeze_commit = _existing_freeze_commit(FREEZE_RECORD_PATH) or _git("rev-parse", "HEAD")
-        freeze_record = fz.build_freeze_record(
-            freeze_commit=freeze_commit,
-            manifest_hash=manifest_record.manifest_hash,
-            source_registry_hash=result.source_registry_hash,
-            spec_hash=_hash_file(SPEC_PATH),
-            candidate_spec_schema_hash=compiler_hash_value,
-            compiler_hash=compiler_hash_value,
-            interpreter_hash=_hash_file(BACKEND_DIR / "app" / "research" / "foundry_interpreter.py"),
-            runner_hash=_hash_file(BACKEND_DIR / "app" / "research" / "foundry_runner.py"),
-            scout_screen_source_hash=_hash_file(BACKEND_DIR / "app" / "research" / "scout.py"),
-            config_fingerprint=CONFIG.config_fingerprint(),
-            freeze_set_hash=freeze_set["freeze_set_hash"],
-        )
 
     census = len(hits)
     if census != 0:
@@ -985,6 +1005,42 @@ def main() -> int:
         json.dumps(epoch_manifest_payload, indent=2, sort_keys=True), encoding="utf-8"
     )
 
+    # --- §8.4 freeze-set: goal-hypothesis-foundry-iter-6 (closes B1/B2/B7's freeze-set half). ------
+    # Computed AFTER `source-registry.json`/`epoch-manifest.json` are on disk (both are covered
+    # entries -- see `FREEZE_SET_EXTRA_PATHS`'s own module-level comment for why `freeze-record.json`
+    # is deliberately NOT one of them), and keyed REPO-RELATIVE (`repo_root=REPO_ROOT`) rather than
+    # by this machine's absolute path -- portable across checkouts/worktrees at the same commit.
+    freeze_set = fz.generate_freeze_set(
+        BACKEND_DIR / "app" / "research", extra_paths=FREEZE_SET_EXTRA_PATHS, repo_root=REPO_ROOT,
+    )
+
+    # --- §8.4 freeze record: pins every required science hash. `freeze_commit` is pinned ONCE, on
+    # the very first generation, and never recomputed on a later replay/verify run -- a freeze whose
+    # own commit identity silently advanced on every re-run would not be a freeze.
+    # `_existing_freeze_commit` is `None` only before the first generation this repository has ever
+    # produced. goal-hypothesis-foundry-iter-6 (closes B2): this iteration's own regeneration is
+    # explicitly run AFTER this iteration's code changes are committed (see NOTES in this module's
+    # own docstring), so a freshly-resolved `freeze_commit` here is a real ancestor commit that
+    # already contains every pinned science file's bytes -- never a stale, pre-code-commit hash.
+    freeze_commit = _existing_freeze_commit(FREEZE_RECORD_PATH) or _git("rev-parse", "HEAD")
+    freeze_record = fz.build_freeze_record(
+        freeze_commit=freeze_commit,
+        manifest_hash=manifest_record.manifest_hash,
+        source_registry_hash=result.source_registry_hash,
+        spec_hash=_hash_file(SPEC_PATH),
+        candidate_spec_schema_hash=compiler_hash_value,
+        compiler_hash=compiler_hash_value,
+        interpreter_hash=_hash_file(BACKEND_DIR / "app" / "research" / "foundry_interpreter.py"),
+        runner_hash=_hash_file(BACKEND_DIR / "app" / "research" / "foundry_runner.py"),
+        scout_screen_source_hash=_hash_file(BACKEND_DIR / "app" / "research" / "scout.py"),
+        config_fingerprint=CONFIG.config_fingerprint(),
+        freeze_set_hash=freeze_set["freeze_set_hash"],
+        # goal-hypothesis-foundry-iter-6 (closes B7's freeze-record half). §10.1/goal.md Success
+        # Criteria 16: every real Foundry evaluation this era is constitutionally locked to the ONE
+        # `historical_exposed_diagnostic` evidence class -- the frozen contract, not a hash.
+        era_open_evidence_class_contract=scout.EVIDENCE_CLASS_HISTORICAL_EXPOSED_DIAGNOSTIC,
+    )
+
     FREEZE_SET_PATH.write_text(json.dumps(freeze_set, indent=2, sort_keys=True), encoding="utf-8")
 
     freeze_record_payload = {
@@ -999,6 +1055,7 @@ def main() -> int:
         "scout_screen_source_hash": freeze_record.scout_screen_source_hash,
         "config_fingerprint": freeze_record.config_fingerprint,
         "freeze_set_hash": freeze_record.freeze_set_hash,
+        "era_open_evidence_class_contract": freeze_record.era_open_evidence_class_contract,
     }
     FREEZE_RECORD_PATH.write_text(
         json.dumps(freeze_record_payload, indent=2, sort_keys=True), encoding="utf-8"

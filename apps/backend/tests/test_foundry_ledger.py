@@ -120,6 +120,55 @@ def test_tc19_deterministic_rule_id_and_cannot_be_renamed(tmp_path):
         )
 
 
+# === goal-hypothesis-foundry-iter-6 (J-07): the epoch-opening / first-read-lock row -- §8.5 ======
+
+
+def _epoch_open_kwargs(**overrides):
+    kwargs = dict(
+        epoch_id="epoch:fixture-e1", freeze_commit="fixture-commit-abc",
+        manifest_hash="fixture-manifest-hash", source_registry_hash="fixture-source-registry-hash",
+        spec_hash="fixture-spec-hash", candidate_spec_schema_hash="fixture-schema-hash",
+        compiler_hash="fixture-compiler-hash", interpreter_hash="fixture-interpreter-hash",
+        runner_hash="fixture-runner-hash", scout_screen_source_hash="fixture-scout-screen-hash",
+        config_fingerprint="fixture-config-fingerprint", freeze_set_hash="fixture-freeze-set-hash",
+        era_open_evidence_class_contract="historical_exposed_diagnostic",
+        eligible_corpus_manifest_hash="fixture-eligible-corpus-manifest-hash",
+    )
+    kwargs.update(overrides)
+    return kwargs
+
+
+def test_epoch_open_row_round_trips(tmp_path):
+    ledger = fl.FoundryLedger(tmp_path)
+    assert ledger.epoch_open_row() is None  # honest pre-lock state
+
+    row = ledger.record_epoch_open(**_epoch_open_kwargs())
+    assert row["row_kind"] == fl.ROW_KIND_EPOCH_OPEN
+    assert row["epoch_id"] == "epoch:fixture-e1"
+    assert row["eligible_corpus_manifest_hash"] == "fixture-eligible-corpus-manifest-hash"
+    assert ledger.epoch_open_row() == row
+    assert ledger.verify_chain()["ok"] is True
+
+
+def test_epoch_open_row_replay_is_idempotent_no_second_row_appended(tmp_path):
+    ledger = fl.FoundryLedger(tmp_path)
+    first = ledger.record_epoch_open(**_epoch_open_kwargs())
+    second = ledger.record_epoch_open(**_epoch_open_kwargs())
+    assert first == second
+    epoch_open_rows = [r for r in ledger.all_rows() if r["row_kind"] == fl.ROW_KIND_EPOCH_OPEN]
+    assert len(epoch_open_rows) == 1  # never a duplicate first-read-lock row
+
+
+def test_epoch_open_row_conflicting_replay_is_refused(tmp_path):
+    ledger = fl.FoundryLedger(tmp_path)
+    ledger.record_epoch_open(**_epoch_open_kwargs())
+    with pytest.raises(fl.ConflictingReplayRefused):
+        ledger.record_epoch_open(**_epoch_open_kwargs(eligible_corpus_manifest_hash="DIFFERENT"))
+    # the refused attempt appended nothing
+    epoch_open_rows = [r for r in ledger.all_rows() if r["row_kind"] == fl.ROW_KIND_EPOCH_OPEN]
+    assert len(epoch_open_rows) == 1
+
+
 def test_tc19_prospective_root_status_scalar_vs_composite():
     from app.research import foundry_compiler as fc
 

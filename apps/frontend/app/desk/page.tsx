@@ -89,6 +89,7 @@ import type {
   DeskFoundryResponse,
   DeskGraduationResponse,
   FoundryEpochManifest,
+  FoundryExhaustProgress,
   FoundryFreezeIntegrity,
   FoundryHermeticOracles,
   FoundryInterpreterFixtures,
@@ -7820,6 +7821,85 @@ function EpochManifestSubsection({ data }: { data: FoundryEpochManifest }) {
   );
 }
 
+// goal-hypothesis-foundry-iter-6 (J-07/J-08): Runner / Checkpoint -- the real exhaust CLI's own
+// checkpoint/completion state, rendered VERBATIM from `exhaust_progress`. UNLIKE
+// `EpochManifestSubsection` above (a Git-tracked literal path), this key is genuinely
+// runtime-scoped -- it can render honestly BOTH before the operator's exhaust-CLI act has ever run
+// (pre-first-read-lock) and after (the honest zero-candidate completion state this era's one real
+// epoch always reaches). No client-side computation anywhere in this component.
+function RunnerCheckpointSubsection({ data }: { data: FoundryExhaustProgress }) {
+  const freezeVerdictClass =
+    data.freeze_integrity_verdict === "green"
+      ? "text-emerald-400"
+      : data.freeze_integrity_verdict === "not_yet_verified"
+        ? "text-amber-400"
+        : "text-rose-400";
+  const singleFlightLabel: Record<FoundryExhaustProgress["single_flight_status"], string> = {
+    idle: "Idle — lock free",
+    running: "Running — lock held by another invocation",
+    refused_concurrent: "Refused — a concurrent invocation was rejected",
+  };
+  return (
+    <div data-testid="foundry-runner-checkpoint">
+      <RealEpochBanner testid="foundry-runner-checkpoint-real-banner" label="Real Epoch — not a fixture" />
+      {!data.first_read_lock_recorded ? (
+        <EmptyState
+          testid="foundry-runner-checkpoint-empty"
+          title="The real exhaust pass has not been run yet — the first-read lock has not been recorded."
+        />
+      ) : (
+        <div className="mb-3 space-y-0.5 text-[11px] text-slate-500">
+          <p data-testid="foundry-runner-first-read-lock">
+            First-read lock recorded at:{" "}
+            <span className="font-mono text-slate-300">{data.first_read_lock_at}</span>
+          </p>
+          <p data-testid="foundry-runner-eligible-corpus-hash">
+            Eligible-corpus manifest hash:{" "}
+            <span className="break-all font-mono text-[10px] text-slate-400">
+              {data.eligible_corpus_manifest_hash}
+            </span>
+          </p>
+        </div>
+      )}
+
+      <div data-testid="foundry-runner-checkpoint-counts" className="mb-3 space-y-0.5 text-[11px] text-slate-500">
+        <p data-testid="foundry-runner-checkpoint-ordinal">
+          Checkpoint:{" "}
+          <span className="font-mono text-slate-300">
+            {data.checkpoint_ordinal} of {data.frozen_ready_total}
+          </span>
+        </p>
+        <p data-testid="foundry-runner-protected-read-count">
+          Protected/withheld/sealed reads:{" "}
+          <span className={`font-mono ${data.protected_read_count === 0 ? "text-emerald-400" : "text-rose-400"}`}>
+            {data.protected_read_count}
+          </span>
+        </p>
+        <p data-testid="foundry-runner-single-flight-status">
+          Runner lock: <span className="font-mono text-slate-300">{singleFlightLabel[data.single_flight_status]}</span>
+        </p>
+        <p data-testid="foundry-runner-freeze-integrity-verdict">
+          Freeze integrity: <span className={`font-mono ${freezeVerdictClass}`}>{data.freeze_integrity_verdict}</span>
+        </p>
+      </div>
+
+      {data.exhaust_complete ? (
+        <p data-testid="foundry-runner-exhaust-complete" className="text-[11px] text-emerald-400">
+          Exhaust complete — every frozen candidate reached a terminal state
+          {data.frozen_ready_total === 0
+            ? " (zero FROZEN_READY variants this epoch — an honest, vacuous completion)."
+            : "."}
+        </p>
+      ) : (
+        <p data-testid="foundry-runner-exhaust-incomplete" className="text-[11px] text-amber-400">
+          Exhaust not yet complete — {data.terminal_count} of {data.frozen_ready_total} candidates
+          terminal.
+        </p>
+      )}
+    </div>
+  );
+}
+
 // goal-hypothesis-foundry-iter-4 (J-05): Hermetic Oracles -- the outcome-type coverage, denominator
 // -consistency/canonical-order flags, and the five named oracle pass/fail results, rendered
 // VERBATIM from `hermetic_oracles`.
@@ -8065,6 +8145,17 @@ function HypothesisFoundrySection({
           onToggle={() => toggleSubsection("epoch-manifest")}
         >
           <EpochManifestSubsection data={foundry.epoch_manifest} />
+        </CollapsibleSection>
+
+        {/* goal-hypothesis-foundry-iter-6 (J-07): the real exhaust CLI's own checkpoint/completion
+            state -- distinct from the frozen manifest above (runtime-scoped, not Git-tracked). */}
+        <CollapsibleSection
+          id="foundry-runner-checkpoint-section"
+          title="Runner / Checkpoint"
+          open={openSubsections.has("runner-checkpoint")}
+          onToggle={() => toggleSubsection("runner-checkpoint")}
+        >
+          <RunnerCheckpointSubsection data={foundry.exhaust_progress} />
         </CollapsibleSection>
       </div>
     </div>

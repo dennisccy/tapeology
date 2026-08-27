@@ -172,6 +172,72 @@ def test_tc13_route_serves_the_recorded_baseline_byte_identically_across_two_cal
     assert set(first["era_open_baseline"]["referee_module_sha256"]) == set(fsr.REFEREE_MODULES)
 
 
+# === goal-hypothesis-foundry-iter-6 (J-07/J-08): `exhaust_progress` -- genuinely runtime-scoped,
+# read PER REQUEST (unlike `epoch_manifest`), degrading honestly before the operator's own
+# exhaust-CLI act has ever run against this scoped `foundry_dir`. ==================================
+
+
+def test_exhaust_progress_degrades_honestly_before_any_exhaust_cli_run(tmp_path, monkeypatch):
+    _scope_dataset_dir(tmp_path, monkeypatch)
+    with TestClient(app) as client:
+        body = client.get("/research/desk/micro/foundry").json()
+    progress = body["exhaust_progress"]
+    assert progress["first_read_lock_recorded"] is False
+    assert progress["first_read_lock_at"] is None
+    assert progress["eligible_corpus_manifest_hash"] is None
+    assert progress["terminal_count"] == 0
+    assert progress["checkpoint_ordinal"] == 0
+    assert progress["protected_read_count"] == 0
+    assert progress["single_flight_status"] == "idle"
+    assert progress["freeze_integrity_verdict"] == "not_yet_verified"
+    assert progress["exhaust_complete"] is False
+
+
+def test_exhaust_progress_reflects_a_real_epoch_open_row_once_one_exists(tmp_path, monkeypatch):
+    """The scoped-runtime-storage discipline this iteration's own carried lesson names: writing
+    directly to the SAME ``foundry_dir`` the route resolves (via ``foundry_ledger.FoundryLedger``,
+    exactly what the real exhaust CLI does) must be visible on the very next GET -- no server
+    restart, no caching, since this key is read PER REQUEST."""
+    dataset_dir = _scope_dataset_dir(tmp_path, monkeypatch)
+    foundry_dir = fsr.resolve_foundry_dir(str(dataset_dir))
+    from app.research import foundry_ledger as fl
+
+    ledger = fl.FoundryLedger(foundry_dir)
+    ledger.record_epoch_open(
+        epoch_id="epoch:test-exhaust-progress", freeze_commit="c" * 40,
+        manifest_hash="mh", source_registry_hash="srh", spec_hash="sh",
+        candidate_spec_schema_hash="csh", compiler_hash="ch", interpreter_hash="ih",
+        runner_hash="rh", scout_screen_source_hash="ssh", config_fingerprint="fp",
+        freeze_set_hash="fsh", era_open_evidence_class_contract="historical_exposed_diagnostic",
+        eligible_corpus_manifest_hash="ecmh",
+    )
+
+    with TestClient(app) as client:
+        body = client.get("/research/desk/micro/foundry").json()
+    progress = body["exhaust_progress"]
+    assert progress["first_read_lock_recorded"] is True
+    assert progress["eligible_corpus_manifest_hash"] == "ecmh"
+    assert progress["freeze_integrity_verdict"] == "green"
+    assert progress["terminal_count"] == 0
+    # the real committed manifest has zero FROZEN_READY variants -- an honest, vacuous completion.
+    assert progress["frozen_ready_total"] == 0
+    assert progress["exhaust_complete"] is True
+
+
+def test_exhaust_progress_single_flight_status_reflects_a_live_held_lock(tmp_path, monkeypatch):
+    dataset_dir = _scope_dataset_dir(tmp_path, monkeypatch)
+    foundry_dir = fsr.resolve_foundry_dir(str(dataset_dir))
+    from pathlib import Path
+
+    from app.research import foundry_runner as fr
+
+    lock_path = Path(foundry_dir) / fr.EXHAUST_LOCK_FILENAME
+    with fr.SingleFlightLock(lock_path).acquire():
+        with TestClient(app) as client:
+            body = client.get("/research/desk/micro/foundry").json()
+    assert body["exhaust_progress"]["single_flight_status"] == "running"
+
+
 def test_foundry_route_is_get_only_no_mutation_endpoint_exists():
     """Product Shape / anti-goals: the Foundry surface is read-only this era -- there must be no
     ``POST``/``PUT``/``DELETE`` sibling under ``/research/desk/micro/foundry``."""

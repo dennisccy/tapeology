@@ -96,6 +96,84 @@ def _require_git_checkout() -> None:
         pytest.skip("not a git checkout -- the Git-visible freeze barrier cannot be verified here")
 
 
+@pytest.fixture(scope="module")
+def freeze_set() -> dict:
+    return _load_json("freeze-set.json")
+
+
+# === goal-hypothesis-foundry-iter-6 (closes audit findings B1/B2/B7): the regenerated freeze-set /
+# freeze-record bookkeeping. Same-iteration read-only guards over the COMMITTED bytes, per the
+# iter-5 lesson this iteration's own BACKGROUND explicitly carries forward. ==========================
+
+
+def test_b1_every_freeze_set_entry_is_repo_relative_not_absolute(freeze_set):
+    entries = freeze_set["entries"]
+    assert entries, "empty freeze set"
+    for key in entries:
+        assert not key.startswith("/"), f"expected a repo-relative freeze-set key, got absolute: {key}"
+
+
+def test_b7_freeze_set_covers_the_tracked_registry_and_manifest_plus_both_foundry_clis(freeze_set):
+    covered = set(freeze_set["entries"])
+    required_suffixes = (
+        "docs/hypothesis-foundry/source-registry.json",
+        "docs/hypothesis-foundry/epoch-manifest.json",
+        "apps/backend/scripts/generate_hypothesis_foundry_real_epoch.py",
+        "apps/backend/scripts/run_hypothesis_foundry_real_exhaust.py",
+    )
+    for suffix in required_suffixes:
+        assert any(entry.endswith(suffix) for entry in covered), f"freeze-set is missing {suffix}"
+    # goal.md §8.4 never names `freeze-record.json`/`freeze-set.json` as freeze-set members (only
+    # "the Foundry methodology/spec and tracked REGISTRY/MANIFEST files") -- and `freeze-record.json`
+    # genuinely CANNOT be a member: its own content embeds `freeze_set_hash`, so pinning its file
+    # hash inside the very freeze-set that hash is computed over is the identical self-reference
+    # `freeze-set.json` is already excluded for, one hop removed. Neither appears.
+    for excluded_suffix in (
+        "docs/hypothesis-foundry/freeze-record.json", "docs/hypothesis-foundry/freeze-set.json",
+    ):
+        assert not any(entry.endswith(excluded_suffix) for entry in covered), (
+            f"{excluded_suffix} must NOT be a freeze-set member (self-reference)"
+        )
+
+
+def test_b7_freeze_record_carries_the_era_open_evidence_class_contract(freeze_record):
+    # §10.1/goal.md Success Criteria 16: every real Foundry evaluation this era is
+    # constitutionally locked to ONE evidence class.
+    assert freeze_record["era_open_evidence_class_contract"] == "historical_exposed_diagnostic"
+
+
+def test_tc8_verify_freeze_set_unchanged_and_commit_ancestry_both_pass_against_the_new_freeze_commit(
+    freeze_record, freeze_set,
+):
+    _require_git_checkout()
+    fz.verify_freeze_set_unchanged(freeze_set, repo_root=REPO_ROOT)  # must not raise
+    head = _git("rev-parse", "HEAD").stdout.strip()
+    assert fz.verify_commit_is_ancestor(freeze_record["freeze_commit"], head, cwd=REPO_ROOT)
+
+
+def test_b2_every_freeze_set_path_hash_matches_the_freeze_commits_own_committed_bytes(freeze_record, freeze_set):
+    """The direct fix for B2: not just ancestry (``freeze_commit`` is *an* ancestor of ``HEAD``),
+    but genuine byte-completeness -- ``git show {freeze_commit}:{path}`` for every pinned entry
+    hashes to EXACTLY the pinned digest, proving ``freeze_commit`` really does contain the bytes
+    the freeze-set was computed over (not merely an unrelated earlier commit that happens to be an
+    ancestor)."""
+    _require_git_checkout()
+    freeze_commit = freeze_record["freeze_commit"]
+    mismatches = []
+    for rel_path, expected_hash in freeze_set["entries"].items():
+        show = _git("show", f"{freeze_commit}:{rel_path}")
+        if show.returncode != 0:
+            mismatches.append((rel_path, "missing from freeze_commit's own tree"))
+            continue
+        actual = hashlib.sha256(show.stdout.encode("utf-8")).hexdigest()
+        # `git show` normalizes line endings identically to how the file was hashed on write
+        # (both are plain `read_bytes()`/`read_text()` UTF-8 -- no CRLF translation anywhere in
+        # this pipeline), so a direct string-encode comparison is valid here.
+        if actual != expected_hash:
+            mismatches.append((rel_path, f"expected {expected_hash}, git show gives {actual}"))
+    assert mismatches == [], f"freeze_commit does not contain the pinned bytes for: {mismatches}"
+
+
 # === TC-1..TC-5: the frozen registry's own content ===============================================
 
 
@@ -218,15 +296,21 @@ def test_tc9_freeze_commit_is_an_ancestor_of_head(freeze_record):
     assert fz.verify_commit_is_ancestor(freeze_record["freeze_commit"], head, cwd=REPO_ROOT)
 
 
-def test_tc9_no_real_exhaust_runner_entrypoint_exists_to_read_a_candidate_outcome():
-    """J-07 is barred from this era's iteration 5: the real exhaust runner must not be able to run.
-    It is satisfied by absence -- no CLI, route, or ``__main__`` anywhere under ``apps/backend``
-    drives ``foundry_runner`` over real data. This guard fails the moment one appears, so the
-    barrier stops being an unexamined claim in a handoff."""
-    # The only non-test caller of the runner's candidate-evaluation entrypoints is the hermetic
-    # oracle summary, which drives purely synthetic fixture anchors. Anything else -- a CLI under
-    # `scripts/`, a route, a manager -- would be a path capable of reading a real outcome.
-    allowed = {"app/research/foundry_runner.py", "app/research/foundry_hermetic_summary.py"}
+def test_tc9_exactly_one_real_exhaust_runner_entrypoint_exists_and_it_is_freeze_gated():
+    """goal-hypothesis-foundry-iter-6 (J-07): this test USED TO be satisfied by absence (no real
+    exhaust entrypoint could exist before step 8 began). This iteration's entire purpose is to add
+    EXACTLY ONE legitimate such entrypoint -- ``scripts/run_hypothesis_foundry_real_exhaust.py`` --
+    so the guard EVOLVES into a positive check (per the iter-3 lesson: an end-to-end claim must be
+    grep-verified to cross the real module boundary, not asserted in prose): still zero offenders
+    beyond the one now-allowed file, AND that file's own call site is reached only AFTER its own
+    freeze-integrity verification and single-flight lock acquisition (line-order, since this
+    module's own real exhaust sequence is a plain top-to-bottom function body with no branching
+    that could reorder those three calls relative to each other)."""
+    allowed = {
+        "app/research/foundry_runner.py",
+        "app/research/foundry_hermetic_summary.py",
+        "scripts/run_hypothesis_foundry_real_exhaust.py",
+    }
     call_site = re.compile(r"\b(run_family|run_one_candidate)\s*\(")
     offenders = []
     for py_file in list((BACKEND_DIR / "app").rglob("*.py")) + list((BACKEND_DIR / "scripts").rglob("*.py")):
@@ -235,7 +319,16 @@ def test_tc9_no_real_exhaust_runner_entrypoint_exists_to_read_a_candidate_outcom
             continue
         if call_site.search(py_file.read_text(encoding="utf-8", errors="ignore")):
             offenders.append(rel)
-    assert offenders == [], f"a Foundry exhaust/runner entrypoint now exists: {offenders}"
+    assert offenders == [], f"an UNEXPECTED Foundry exhaust/runner entrypoint now exists: {offenders}"
+
+    exhaust_cli = (BACKEND_DIR / "scripts" / "run_hypothesis_foundry_real_exhaust.py").read_text(encoding="utf-8")
+    freeze_verify_idx = exhaust_cli.index("fz.verify_freeze_set_unchanged(")
+    single_flight_idx = exhaust_cli.index("fr.SingleFlightLock(")
+    run_family_idx = call_site.search(exhaust_cli).start()
+    assert freeze_verify_idx < single_flight_idx < run_family_idx, (
+        "the real exhaust CLI's own run_family/run_one_candidate call site must be reached only "
+        "AFTER its own freeze-integrity verification and single-flight lock acquisition"
+    )
 
 
 # === TC-10: replay verifies, drift refuses -- no second epoch ====================================
@@ -271,30 +364,26 @@ def test_tc10_drifted_generation_inputs_are_refused_rather_than_minting_epoch_2(
 # === §8.4/§8.5: the freeze-set actually pins the science files in THIS checkout ===================
 
 
-def test_freeze_set_entries_still_match_the_science_files_in_this_checkout():
+def test_freeze_set_entries_still_match_the_science_files_in_this_checkout(freeze_set):
     """Recomputes sha256 for every enumerated freeze-set path and compares against the pinned
     digest -- the §8.5 "recomputed freeze-set hashes are the enforceable primitive" check, run over
     the real committed freeze-set.
 
-    Deliberately resolves each entry RELATIVE to this checkout's root rather than using the key
-    verbatim: the committed ``freeze-set.json`` records absolute, machine-local paths
-    (``/home/.../tapeology/apps/backend/app/research/...``), so ``foundry_freeze.
-    verify_freeze_set_unchanged`` -- which resolves the key literally -- cannot verify this
-    freeze-set from any other checkout, and in a second worktree ON THE SAME MACHINE would verify
-    the ORIGINAL tree's files while a runner executes the worktree's. That is an audit finding
-    against the artifact (see the iter-5 audit report, finding B1), not something this test can
-    repair; this test performs the portable equivalent so the drift guard exists in the meantime.
-    """
-    freeze_set = _load_json("freeze-set.json")
+    goal-hypothesis-foundry-iter-6 (closes audit finding B1): the committed ``freeze-set.json`` now
+    records REPO-RELATIVE paths (``apps/backend/app/research/...``, ``docs/...``), so every entry
+    resolves identically -- and portably, across any checkout/worktree of this same commit -- by
+    joining it directly onto ``REPO_ROOT``, with no marker-based workaround. See
+    ``test_tc8_verify_freeze_set_unchanged_and_commit_ancestry_both_pass_against_the_new_freeze_
+    commit`` for the equivalent check run through the real production ``verify_freeze_set_unchanged``
+    function rather than this test's own direct recompute."""
     entries = freeze_set["entries"]
     assert entries, "empty freeze set"
     # The pinned hash must be a pure function of the recorded entries.
     assert fz._sha256(fz._canonical(entries)) == freeze_set["freeze_set_hash"]
 
     drifted = []
-    for recorded_path, expected in entries.items():
-        marker = "apps/backend/" if "apps/backend/" in recorded_path else "docs/"
-        rel = recorded_path[recorded_path.index(marker):]
+    for rel, expected in entries.items():
+        assert not rel.startswith("/"), f"expected a repo-relative freeze-set key, got: {rel}"
         path = REPO_ROOT / rel
         assert path.is_file(), f"freeze-set path missing from this checkout: {rel}"
         if hashlib.sha256(path.read_bytes()).hexdigest() != expected:

@@ -6,6 +6,7 @@ the first-read-lock drift check (§8.5). TC-11/TC-12/TC-13 in
 from __future__ import annotations
 
 import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -86,13 +87,52 @@ def test_tc12_freeze_record_pins_all_required_hashes_and_commit_ancestry():
         scout_screen_source_hash="ssh",
         config_fingerprint="fp",
         freeze_set_hash="fsh",
+        era_open_evidence_class_contract="historical_exposed_diagnostic",
     )
     for field in (
         "freeze_commit", "manifest_hash", "source_registry_hash", "spec_hash",
         "candidate_spec_schema_hash", "compiler_hash", "interpreter_hash", "runner_hash",
         "scout_screen_source_hash", "config_fingerprint", "freeze_set_hash",
+        "era_open_evidence_class_contract",
     ):
         assert getattr(record, field)
+
+
+# --- goal-hypothesis-foundry-iter-6 (closes audit finding B1): repo-relative freeze-set keys ------
+
+
+def test_repo_relative_freeze_set_keys_when_repo_root_is_given(tmp_path):
+    """``generate_freeze_set(..., repo_root=...)`` keys entries REPO-RELATIVE when the scanned
+    files live under that root, and ``verify_freeze_set_unchanged(..., repo_root=...)`` resolves
+    those relative keys back correctly."""
+    repo_root = tmp_path / "repo"
+    research_dir = repo_root / "apps" / "backend" / "app" / "research"
+    research_dir.mkdir(parents=True)
+    for name in fz.FREEZE_SET_REQUIRED_MODULES:
+        (research_dir / name).write_text("# stub\n", encoding="utf-8")
+
+    result = fz.generate_freeze_set(research_dir, repo_root=repo_root)
+    for key in result["entries"]:
+        assert not key.startswith("/"), f"expected a repo-relative key, got absolute: {key}"
+        assert key.startswith("apps/backend/app/research/"), key
+
+    fz.verify_freeze_set_unchanged(result, repo_root=repo_root)  # must not raise
+
+    (research_dir / fz.FREEZE_SET_REQUIRED_MODULES[0]).write_text("# tampered\n", encoding="utf-8")
+    with pytest.raises(fz.FreezeIntegrityHalt):
+        fz.verify_freeze_set_unchanged(result, repo_root=repo_root)
+
+
+def test_absolute_freeze_set_keys_are_unchanged_when_repo_root_is_omitted(tmp_path):
+    """Backward compatibility: every existing hermetic fixture (``freeze_integrity_fixture_dir``,
+    every other test in this file) never passes ``repo_root`` and must keep getting absolute keys,
+    verified the exact same way as before this iteration."""
+    for name in fz.FREEZE_SET_REQUIRED_MODULES:
+        (tmp_path / name).write_text("# stub\n", encoding="utf-8")
+    result = fz.generate_freeze_set(tmp_path)
+    for key in result["entries"]:
+        assert Path(key).is_absolute(), f"expected an absolute key, got: {key}"
+    fz.verify_freeze_set_unchanged(result)  # must not raise, no repo_root needed
 
 
 def test_commit_ancestry_verification_against_the_real_repo():

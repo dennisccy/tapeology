@@ -3165,6 +3165,25 @@ export interface FoundryEpochManifest {
   source_registry_audit: { path: string; committed: boolean };
 }
 
+// goal-hypothesis-foundry-iter-6 (J-07/J-08): the exhaust CLI's own checkpoint/completion state --
+// UNLIKE `epoch_manifest` (a Git-tracked literal path), this reflects genuinely RUNTIME-scoped
+// state (the Foundry trial ledger the real exhaust CLI writes) and is read PER REQUEST by the
+// backend, never cached at import time. Rendered verbatim -- no client-side computation.
+export interface FoundryExhaustProgress {
+  first_read_lock_recorded: boolean;
+  first_read_lock_at: string | null;
+  eligible_corpus_manifest_hash: string | null;
+  frozen_ready_total: number;
+  terminal_count: number;
+  checkpoint_ordinal: number;
+  protected_read_count: number;
+  single_flight_status: "idle" | "running" | "refused_concurrent";
+  // The backend's own two-value schema is `"green" | <typed halt code>`; `"not_yet_verified"` is
+  // the honest additional state before the exhaust CLI has ever run (never coerced to either).
+  freeze_integrity_verdict: string;
+  exhaust_complete: boolean;
+}
+
 export interface DeskFoundryResponse {
   era: FoundryEraIdentity;
   // `null` on a fresh install before the operator's one-time recording act has run -- never
@@ -3181,4 +3200,6 @@ export interface DeskFoundryResponse {
   hermetic_oracles: FoundryHermeticOracles;
   // goal-hypothesis-foundry-iter-5 (J-06): the real epoch -- see `FoundryEpochManifest`'s own doc.
   epoch_manifest: FoundryEpochManifest;
+  // goal-hypothesis-foundry-iter-6 (J-07): the real exhaust pass's own checkpoint/completion state.
+  exhaust_progress: FoundryExhaustProgress;
 }
