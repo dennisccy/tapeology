@@ -86,3 +86,28 @@ useful; the CLAIM attached to it is broader than the evidence.
 **Applies to:** any crash/resume/cache-invalidation test — ask what state the simulated failure
 actually destroys, and whether the mechanism named in the assertion exists at all. Carry this into
 J-06/J-07 rather than treating checkpoint safety as already proven.
+
+## iter-4 — 2026-08-27T03:05:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** A depth *recommendation* is not binding — the engine's depth arbiter grants FULL only
+after a prior **ESCALATE verdict**, and demotes a spec-declared `Depth: full` to lean on any budget
+breach (engine.log 21:47:43 iter-2, 00:47:55 iter-4; contrast 23:07:44 "FULL pass granted (reason:
+prior-verdict-ESCALATE)"). Every iteration of this session has breached the 3600s budget, so
+recommending `full` from a CONTINUE verdict is a guaranteed no-op: if the next iteration genuinely
+needs an auditor, the verdict itself must be ESCALATE.
+**Applies to:** any goal-mode iteration whose spec declares `Depth: full` in a session that is
+routinely over the wall-clock budget.
+
+## iter-4 — 2026-08-27T03:05:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** A read surface can pass its own tests while still failing the journey, because the tests
+assert the *payload* and the journey asserts the *screen*. Three separate gaps this iteration were
+invisible to a green suite: `sources_compiler` carries `operative_formula_refs`/`superseded_fields`/
+`aliases_lineage_ids` but `SourcesCompilerSubsection` never renders them; `hermetic_oracles` proves
+the Scout-kill→`foundry_state` mapping in code but exposes no per-row state to render; `freeze_record`
+pins the manifest/source/spec/config identities in `build_freeze_record` but the subview drops them.
+When a journey step enumerates fields to "confirm each record shows", diff that list against the JSX,
+not against the payload schema.
+**Applies to:** any iteration building a read surface whose acceptance steps enumerate fields.

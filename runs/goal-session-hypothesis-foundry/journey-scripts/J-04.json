@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "journey": "J-04",
+  "name": "Foundry owns the denominator, append-only state, freeze barrier, and integrity lock",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "journey": "J-04",
+      "action": {"type": "goto", "url": "/desk"},
+      "expect": {"text": "Hypothesis Foundry"}
+    },
+    {
+      "n": 2,
+      "journey": "J-04",
+      "action": {"type": "click", "target": {"testid": "desk-section-expand-hypothesisFoundry"}},
+      "expect": {"text": "Era-Open Baseline"}
+    },
+    {
+      "n": 3,
+      "journey": "J-04",
+      "action": {"type": "click", "target": {"testid": "desk-section-expand-foundry-freeze-integrity-section"}},
+      "expect": {"text": "docs/hypothesis-foundry/freeze-set.json"}
+    }
+  ]
+}

@@ -170,6 +170,35 @@ def test_tc9_already_terminal_fast_path_raises_on_econ_floor_drift(tmp_path):
         fr.run_one_candidate(spec, anchors, ledger=ledger, econ_floor=drifted_floor, manifest_hash="m1", family=family)
 
 
+def test_tc17_intent_without_terminal_crash_path_raises_on_manifest_hash_drift(tmp_path):
+    """goal-hypothesis-foundry-iter-4 Repair 2 (auditor B4): the intent-without-terminal ("crash")
+    branch must ALSO verify the pinned intent row's own `manifest_hash` against the current
+    invocation's `manifest_hash` -- mirroring the already-terminal fast path's own check -- and
+    raise even when `econ_floor_bps` matches exactly."""
+    family = ff.build_family_registry({"family:crash-manifest-drift": ["family:crash-manifest-drift:0"]})[
+        "family:crash-manifest-drift"
+    ]
+    spec = _scalar_spec(0, family_id="family:crash-manifest-drift", family_count=1)
+    anchors = _anchors(10, effect_bps=45.0)
+    ledger = fl.FoundryLedger(tmp_path)
+
+    # Simulate the crash: an intent row pinned under manifest_hash="m1", no terminal row yet.
+    ledger.record_intent(
+        candidate_spec_hash=spec.candidate_spec_hash, manifest_hash="m1",
+        econ_floor_bps=_ECON_FLOOR["floor_bps"], econ_floor_provenance=_ECON_FLOOR["rule"],
+    )
+    assert ledger.terminal_row_for(spec.candidate_spec_hash) is None
+
+    # Resume with a DIFFERENT manifest_hash but the SAME (matching) econ_floor_bps -- must still
+    # halt on the manifest identity mismatch alone.
+    with pytest.raises(fr.FoundryResumeIdentityMismatch):
+        fr.run_one_candidate(
+            spec, anchors, ledger=ledger, econ_floor=_ECON_FLOOR, manifest_hash="m2-drifted", family=family
+        )
+    # fail-closed: no terminal row was ever written for the mismatched resume attempt.
+    assert ledger.terminal_row_for(spec.candidate_spec_hash) is None
+
+
 def test_tc14_single_flight_lock_rejects_a_concurrent_second_runner(tmp_path):
     lock_path = tmp_path / "foundry_runner.lock"
     lock = fr.SingleFlightLock(lock_path)

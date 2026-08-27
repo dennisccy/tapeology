@@ -88,6 +88,10 @@ import type {
   DeskForwardTouch,
   DeskFoundryResponse,
   DeskGraduationResponse,
+  FoundryFreezeIntegrity,
+  FoundryHermeticOracles,
+  FoundryInterpreterFixtures,
+  FoundrySourcesCompiler,
   DeskMicroSnapshotRunsResponse,
   DeskMicroSnapshotsResponse,
   DeskPlaybookAbsence,
@@ -7364,17 +7368,360 @@ function FeatureSnapshotsSection({
   );
 }
 
+// goal-hypothesis-foundry-iter-4 (J-02/J-03/J-04/J-05): shared visual marker for every one of the
+// four new fixture subsections below -- visually distinct from the header's real
+// `foundry-era-open-baseline` block (Design Direction: audit-first, no promotional language;
+// anti-goal: "fixture and real views must be visibly distinguished").
+function HermeticFixtureBanner({ testid }: { testid: string }) {
+  return (
+    <p
+      data-testid={testid}
+      className="mb-3 inline-block rounded border border-amber-700/60 bg-amber-950/40 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-amber-400"
+    >
+      Hermetic Fixture — not the real epoch
+    </p>
+  );
+}
+
+// goal-hypothesis-foundry-iter-4 (J-02): Sources/Compiler -- the 7 hermetic source-fixture
+// archetypes plus the immutability proof, rendered VERBATIM from `sources_compiler` (no
+// client-side recomputation).
+function SourcesCompilerSubsection({ data }: { data: FoundrySourcesCompiler }) {
+  return (
+    <div data-testid="foundry-sources-compiler">
+      <HermeticFixtureBanner testid="foundry-sources-compiler-hermetic-banner" />
+      <p className="mb-3 text-[11px] text-slate-500">
+        {data.fixtures.length} hermetic source fixtures compiled through the real{" "}
+        <span className="font-mono text-slate-400">foundry_compiler.compile_sources</span> — no
+        candidate outcome ever participates in compilation.
+      </p>
+
+      <div
+        data-testid="foundry-immutability-proof"
+        className="mb-4 grid grid-cols-1 gap-2 rounded border border-slate-800 bg-slate-950/40 p-2 sm:grid-cols-2"
+      >
+        <div>
+          <p className="mb-1 text-[10px] uppercase tracking-wider text-slate-600">Compiled with extra A</p>
+          <pre className="mb-1 overflow-x-auto whitespace-pre-wrap break-all text-[10px] text-slate-500">
+            {JSON.stringify(data.immutability_proof.injected_extra_a, null, 2)}
+          </pre>
+          <p className="break-all font-mono text-[10px] text-slate-400">
+            {data.immutability_proof.candidate_spec_hash_a}
+          </p>
+        </div>
+        <div>
+          <p className="mb-1 text-[10px] uppercase tracking-wider text-slate-600">Compiled with extra B</p>
+          <pre className="mb-1 overflow-x-auto whitespace-pre-wrap break-all text-[10px] text-slate-500">
+            {JSON.stringify(data.immutability_proof.injected_extra_b, null, 2)}
+          </pre>
+          <p className="break-all font-mono text-[10px] text-slate-400">
+            {data.immutability_proof.candidate_spec_hash_b}
+          </p>
+        </div>
+        <p
+          data-testid="foundry-immutability-proof-hashes-equal"
+          className={`text-[11px] font-semibold sm:col-span-2 ${
+            data.immutability_proof.hashes_equal ? "text-emerald-400" : "text-rose-400"
+          }`}
+        >
+          {data.immutability_proof.hashes_equal
+            ? "Hashes match — outcome-blind compilation proven."
+            : "Hashes differ — integrity violation."}
+        </p>
+      </div>
+
+      <ul data-testid="foundry-source-fixture-rows" className="space-y-2">
+        {data.fixtures.map((fixture) => (
+          <li key={fixture.source_id} className="rounded border border-slate-800 p-2">
+            <div className="mb-1 flex flex-wrap items-center gap-2 text-[11px]">
+              <span className="font-mono text-slate-300">{fixture.source_id}</span>
+              <span className="rounded bg-slate-800 px-1.5 py-0.5 font-mono text-[10px] text-slate-400">
+                {fixture.disposition}
+              </span>
+            </div>
+            <p className="mb-1 text-[10px] text-slate-500">
+              {fixture.source_path}#{fixture.section_ref} — {fixture.mechanism_statement}
+            </p>
+            {fixture.quoted_spans.map((span, i) => (
+              <p key={i} className="mb-1 font-mono text-[10px] text-slate-600">
+                &ldquo;{span.text}&rdquo; @ {span.location}
+              </p>
+            ))}
+            <p className="mb-1 text-[10px] text-slate-500">
+              Direction: <span className="font-mono text-slate-400">{fixture.direction_derivation}</span>
+              {" · "}Threshold provenance:{" "}
+              <span className="font-mono text-slate-400">{fixture.threshold_provenance ?? "—"}</span>
+            </p>
+            {fixture.alternatives.length > 0 && (
+              <p className="mb-1 text-[10px] text-slate-500">
+                Alternatives: <span className="font-mono text-slate-400">{fixture.alternatives.join(", ")}</span>
+              </p>
+            )}
+            {fixture.block_reason && (
+              <p className="mb-1 text-[10px] text-amber-500">
+                Block reason: <span className="font-mono">{fixture.block_reason}</span>
+              </p>
+            )}
+            {fixture.candidate_spec && (
+              <details>
+                <summary className="cursor-pointer text-[10px] text-slate-600">CandidateSpec detail</summary>
+                <pre className="mt-1 max-w-[640px] overflow-x-auto whitespace-pre-wrap break-all text-[10px] text-slate-500">
+                  {JSON.stringify(fixture.candidate_spec, null, 2)}
+                </pre>
+              </details>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// goal-hypothesis-foundry-iter-4 (J-03): Interpreter fixtures -- the 5 hermetic interpretation
+// scenarios, rendered VERBATIM from `interpreter_fixtures`.
+function InterpreterFixturesSubsection({ data }: { data: FoundryInterpreterFixtures }) {
+  return (
+    <div data-testid="foundry-interpreter-fixtures">
+      <HermeticFixtureBanner testid="foundry-interpreter-fixtures-hermetic-banner" />
+      <ul data-testid="foundry-interpreter-scenario-rows" className="space-y-2">
+        {data.scenarios.map((scenario) => (
+          <li key={scenario.scenario_id} className="rounded border border-slate-800 p-2">
+            <div className="mb-1 flex flex-wrap items-center gap-2 text-[11px]">
+              <span className="font-mono text-slate-300">{scenario.scenario_id}</span>
+              <span className="rounded bg-slate-800 px-1.5 py-0.5 font-mono text-[10px] text-slate-400">
+                {scenario.kind}
+              </span>
+            </div>
+            {scenario.screens_equal !== null && (
+              <p className="mb-1 text-[10px] text-slate-500">
+                Foundry vs. direct-Scout screens equal:{" "}
+                <span className={scenario.screens_equal ? "text-emerald-400" : "text-rose-400"}>
+                  {String(scenario.screens_equal)}
+                </span>
+              </p>
+            )}
+            {scenario.unresolved_excluded_count !== null && (
+              <p className="mb-1 text-[10px] text-slate-500">
+                Unresolved anchors excluded:{" "}
+                <span className="font-mono text-slate-400">{scenario.unresolved_excluded_count}</span>
+              </p>
+            )}
+            {scenario.outcome_start_candidate !== null && (
+              <p className="mb-1 text-[10px] text-slate-500">
+                outcome_start (candidate):{" "}
+                <span className="font-mono text-slate-400">{scenario.outcome_start_candidate}</span>
+                {" · "}(comparator):{" "}
+                <span className="font-mono text-slate-400">{scenario.outcome_start_comparator}</span>
+              </p>
+            )}
+            {scenario.predeclared_sidedness && (
+              <p className="mb-1 text-[10px] text-slate-500">
+                Predeclared sidedness — support/long:{" "}
+                <span className="font-mono text-emerald-400">{scenario.predeclared_sidedness.support_long}</span>
+                {" · "}resistance/short:{" "}
+                <span className="font-mono text-rose-400">{scenario.predeclared_sidedness.resistance_short}</span>
+              </p>
+            )}
+            {scenario.block_reason && (
+              <p className="mb-1 text-[10px] text-amber-500">
+                Typed block: <span className="font-mono">{scenario.block_reason}</span>
+              </p>
+            )}
+            {scenario.foundry_screen !== null && (
+              <details>
+                <summary className="cursor-pointer text-[10px] text-slate-600">Screen detail</summary>
+                <pre className="mt-1 max-w-[640px] overflow-x-auto whitespace-pre-wrap break-all text-[10px] text-slate-500">
+                  {JSON.stringify(scenario.foundry_screen, null, 2)}
+                </pre>
+              </details>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// goal-hypothesis-foundry-iter-4 (J-04): Freeze/Integrity -- the family denominator/late-insertion/
+// generation-replay/freeze-record/first-read-lock/replay fixture proofs, rendered VERBATIM from
+// `freeze_integrity`.
+function FreezeIntegritySubsection({ data }: { data: FoundryFreezeIntegrity }) {
+  return (
+    <div data-testid="foundry-freeze-integrity">
+      <HermeticFixtureBanner testid="foundry-freeze-integrity-hermetic-banner" />
+
+      <h5 className="mb-1 text-[11px] font-semibold text-slate-400">Family Denominator</h5>
+      <div className="mb-3 overflow-x-auto">
+        <table
+          data-testid="foundry-family-denominator-table"
+          className="w-full min-w-[420px] border-collapse text-[11px]"
+        >
+          <thead>
+            <tr className="border-b border-slate-800 text-left text-slate-500">
+              <th className="px-1.5 py-1">Family kind</th>
+              <th className="px-1.5 py-1">Variant count</th>
+              <th className="px-1.5 py-1">Denominator visible</th>
+              <th className="px-1.5 py-1">Over-cap blocked whole</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.family_denominator_fixtures.map((f) => (
+              <tr
+                key={f.family_kind}
+                className={`border-b border-slate-900 ${f.family_kind === "over_cap" ? "bg-rose-950/30" : ""}`}
+              >
+                <td className="px-1.5 py-1 font-mono text-slate-300">{f.family_kind}</td>
+                <td className="px-1.5 py-1 font-mono text-slate-400">{f.variant_count}</td>
+                <td className="px-1.5 py-1 font-mono text-slate-400">
+                  {String(f.denominator_visible_before_result)}
+                </td>
+                <td
+                  className={`px-1.5 py-1 font-mono ${
+                    f.over_cap_blocked_whole ? "text-rose-400" : "text-slate-500"
+                  }`}
+                >
+                  {String(f.over_cap_blocked_whole)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <p data-testid="foundry-late-insertion-refused" className="mb-1 text-[11px] text-slate-500">
+        Late insertion refused:{" "}
+        <span className="font-mono text-slate-300">{String(data.late_insertion_refused)}</span>
+      </p>
+      <p data-testid="foundry-generation-replay" className="mb-3 text-[11px] text-slate-500">
+        Generation replay — identical rerun verified:{" "}
+        <span className="font-mono text-slate-300">{String(data.generation_replay.identical_rerun_verified)}</span>
+        {" · "}drifted rerun refused:{" "}
+        <span className="font-mono text-slate-300">{String(data.generation_replay.drifted_rerun_refused)}</span>
+      </p>
+
+      <div
+        data-testid="foundry-freeze-record"
+        className="mb-3 rounded border border-slate-800 p-2 text-[11px] text-slate-500"
+      >
+        <p className="mb-1">
+          Freeze-set target path (fixture-scoped; not yet the real committed file):{" "}
+          <span className="font-mono text-amber-400">{data.freeze_record.freeze_set_target_path}</span>
+        </p>
+        <p className="mb-1 break-all">
+          Freeze-set hash:{" "}
+          <span className="font-mono text-[10px] text-slate-400">{data.freeze_record.freeze_set_hash}</span>
+        </p>
+        <p className="mb-1">
+          Transitive dependency coverage complete:{" "}
+          <span className="font-mono text-slate-300">
+            {String(data.freeze_record.transitive_dependency_coverage_complete)}
+          </span>
+        </p>
+        <details>
+          <summary className="cursor-pointer text-[10px] text-slate-600">Pinned module hashes</summary>
+          <pre className="mt-1 max-w-[640px] overflow-x-auto whitespace-pre-wrap break-all text-[10px] text-slate-500">
+            {JSON.stringify(data.freeze_record.pinned_hashes, null, 2)}
+          </pre>
+        </details>
+      </div>
+
+      <p data-testid="foundry-first-read-lock" className="mb-1 text-[11px] text-slate-500">
+        First-read lock — hash drift refused:{" "}
+        <span className="font-mono text-slate-300">{String(data.first_read_lock.hash_drift_refused)}</span>
+        {" · "}session dirt ignored:{" "}
+        <span className="font-mono text-slate-300">{String(data.first_read_lock.session_dirt_ignored)}</span>
+        {" · "}non-science file exempted:{" "}
+        <span className="font-mono text-slate-300">{String(data.first_read_lock.non_science_file_exempted)}</span>
+      </p>
+      <p data-testid="foundry-replay-integrity" className="text-[11px] text-slate-500">
+        Replay — idempotent:{" "}
+        <span className="font-mono text-slate-300">{String(data.replay.idempotent)}</span>
+        {" · "}conflicting replay refused:{" "}
+        <span className="font-mono text-slate-300">{String(data.replay.conflicting_replay_refused)}</span>
+        {" · "}concurrent runner refused:{" "}
+        <span className="font-mono text-slate-300">{String(data.replay.concurrent_runner_refused)}</span>
+      </p>
+    </div>
+  );
+}
+
+// goal-hypothesis-foundry-iter-4 (J-05): Hermetic Oracles -- the outcome-type coverage, denominator
+// -consistency/canonical-order flags, and the five named oracle pass/fail results, rendered
+// VERBATIM from `hermetic_oracles`.
+function HermeticOraclesSubsection({ data }: { data: FoundryHermeticOracles }) {
+  const namedOracles: { label: string; ok: boolean }[] = [
+    { label: "All-blocked epoch completed", ok: data.all_blocked_epoch_completed },
+    { label: "All-killed epoch completed", ok: data.all_killed_epoch_completed },
+    { label: "Multi-survivor preserved all", ok: data.multi_survivor_preserved_all },
+    { label: "Crash-resume at scale verified", ok: data.crash_resume_at_scale_verified },
+    {
+      label: "Protected-data trip fails closed / evidence class immutable",
+      ok: data.protected_data_trip_fails_closed && data.evidence_class_immutable,
+    },
+  ];
+  return (
+    <div data-testid="foundry-hermetic-oracles">
+      <HermeticFixtureBanner testid="foundry-hermetic-oracles-hermetic-banner" />
+      <p className="mb-2 text-[11px] text-slate-500">
+        Reads genuine outcomes from{" "}
+        <span className="font-mono text-slate-400">{data.suite_source}</span>&apos;s already
+        -hermetically-proven composite suite — never a second, hand-typed oracle.
+      </p>
+      <p data-testid="foundry-outcome-types-present" className="mb-2 text-[11px] text-slate-500">
+        Outcome types present:{" "}
+        <span className="font-mono text-slate-300">{data.outcome_types_present.join(", ")}</span>
+      </p>
+      <p data-testid="foundry-hermetic-oracle-flags" className="mb-3 text-[11px] text-slate-500">
+        Denominator consistent across rows:{" "}
+        <span className="font-mono text-slate-300">{String(data.denominator_consistent_across_rows)}</span>
+        {" · "}Canonical order preserved:{" "}
+        <span className="font-mono text-slate-300">{String(data.canonical_order_preserved)}</span>
+      </p>
+      <ul data-testid="foundry-named-oracle-rows" className="space-y-1">
+        {namedOracles.map((oracle) => (
+          <li key={oracle.label} className="flex items-center gap-2 text-[11px]">
+            <span className={`font-mono ${oracle.ok ? "text-emerald-400" : "text-rose-400"}`}>
+              {oracle.ok ? "PASS" : "FAIL"}
+            </span>
+            <span className="text-slate-400">{oracle.label}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 // goal-hypothesis-foundry-iter-1 (J-01): the Hypothesis Foundry panel header -- era/session
 // identity + the era-open baseline, rendered VERBATIM from `GET /research/desk/micro/foundry`
 // (no client-side recomputation, per the goal's own Product Shape). The `foundry-panel`
-// data-testid family this iteration's IN SCOPE names; every other Foundry subview (Sources/
-// Compiler, Interpreter, Freeze/Integrity, ...) is deferred to a later, consolidated
-// read-surface iteration (Binding Execution Order step 5).
+// data-testid family this iteration's IN SCOPE names.
+//
+// goal-hypothesis-foundry-iter-4 (J-02/J-03/J-04/J-05): grows to render the four new subsections
+// below the era-open baseline -- Sources/Compiler, Interpreter fixtures, Freeze/Integrity, and
+// Hermetic Oracles -- each its own nested `CollapsibleSection` reusing the sibling pattern already
+// used for `hypothesisFoundry` and every other desk section. Local `useState` toggle state (never
+// lifted to the page-level `expandedSections`/`DeskCollapsibleSection` union, which only tracks
+// TOP-LEVEL desk sections) since these are nested, deferred-body sub-toggles scoped entirely to
+// this one component.
 function HypothesisFoundrySection({
   foundryResult,
 }: {
   foundryResult: { ok: boolean; data: DeskFoundryResponse | null; error?: string } | null;
 }) {
+  // Hooks run unconditionally, before the early returns below (Rules of Hooks) -- four
+  // independent nested-subsection toggles, all starting closed.
+  const [openSubsections, setOpenSubsections] = useState<ReadonlySet<string>>(new Set());
+  function toggleSubsection(id: string) {
+    setOpenSubsections((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }
   if (foundryResult === null) {
     return (
       <div data-testid="foundry-panel">
@@ -7476,6 +7823,47 @@ function HypothesisFoundrySection({
             </div>
           </div>
         )}
+      </div>
+
+      {/* goal-hypothesis-foundry-iter-4 (J-02/J-03/J-04/J-05): the four new fixture subsections --
+          nested CollapsibleSections, each its own GET-never-computes read of an ADDITIVE key on
+          the SAME already-fetched `foundry` payload (no second fetch). */}
+      <div className="mt-4 space-y-3">
+        <CollapsibleSection
+          id="foundry-sources-compiler-section"
+          title="Sources / Compiler"
+          open={openSubsections.has("sources-compiler")}
+          onToggle={() => toggleSubsection("sources-compiler")}
+        >
+          <SourcesCompilerSubsection data={foundry.sources_compiler} />
+        </CollapsibleSection>
+
+        <CollapsibleSection
+          id="foundry-interpreter-fixtures-section"
+          title="Interpreter Fixtures"
+          open={openSubsections.has("interpreter-fixtures")}
+          onToggle={() => toggleSubsection("interpreter-fixtures")}
+        >
+          <InterpreterFixturesSubsection data={foundry.interpreter_fixtures} />
+        </CollapsibleSection>
+
+        <CollapsibleSection
+          id="foundry-freeze-integrity-section"
+          title="Freeze / Integrity"
+          open={openSubsections.has("freeze-integrity")}
+          onToggle={() => toggleSubsection("freeze-integrity")}
+        >
+          <FreezeIntegritySubsection data={foundry.freeze_integrity} />
+        </CollapsibleSection>
+
+        <CollapsibleSection
+          id="foundry-hermetic-oracles-section"
+          title="Hermetic Oracles"
+          open={openSubsections.has("hermetic-oracles")}
+          onToggle={() => toggleSubsection("hermetic-oracles")}
+        >
+          <HermeticOraclesSubsection data={foundry.hermetic_oracles} />
+        </CollapsibleSection>
       </div>
     </div>
   );

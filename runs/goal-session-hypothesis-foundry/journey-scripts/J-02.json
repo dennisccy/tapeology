@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "journey": "J-02",
+  "name": "Ratified sources compile into auditable CandidateSpecs or typed blocks without outcome input",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "journey": "J-02",
+      "action": {"type": "goto", "url": "/desk"},
+      "expect": {"text": "Hypothesis Foundry"}
+    },
+    {
+      "n": 2,
+      "journey": "J-02",
+      "action": {"type": "click", "target": {"testid": "desk-section-expand-hypothesisFoundry"}},
+      "expect": {"text": "Era-Open Baseline"}
+    },
+    {
+      "n": 3,
+      "journey": "J-02",
+      "action": {"type": "click", "target": {"testid": "desk-section-expand-foundry-sources-compiler-section"}},
+      "expect": {"text": "Hashes match — outcome-blind compilation proven."}
+    }
+  ]
+}

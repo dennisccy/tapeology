@@ -111,6 +111,19 @@ def run_one_candidate(
 
     existing_intent = ledger.intent_row_for(spec.candidate_spec_hash)
     if existing_intent is not None:
+        # Repair 2 (auditor B4, iter-4): mirrors the already-terminal fast path's own
+        # `manifest_hash` check three lines above (in the ``existing_terminal`` branch) -- the
+        # intent-without-terminal ("crash") branch previously verified ONLY `econ_floor_bps`,
+        # leaving a resumed candidate whose `manifest_hash` had drifted since the pinned intent row
+        # to re-execute silently under the wrong science identity. Checked FIRST, before the
+        # econ-floor check, for the same reason the terminal branch checks manifest identity before
+        # econ-floor identity: manifest drift is the coarser, more fundamental integrity failure.
+        if existing_intent["manifest_hash"] != manifest_hash:
+            raise FoundryResumeIdentityMismatch(
+                f"resume manifest_hash mismatch for candidate_spec_hash="
+                f"{spec.candidate_spec_hash!r}: pinned intent={existing_intent['manifest_hash']!r}, "
+                f"resumed with={manifest_hash!r}"
+            )
         if existing_intent["econ_floor_bps"] != econ_floor.get("floor_bps"):
             raise FoundryResumeIdentityMismatch(
                 f"resume econ_floor_bps mismatch for candidate_spec_hash="

@@ -459,3 +459,61 @@ def test_source_registry_hash_changes_when_alternatives_changes():
     record = _good_record("alt-hash")
     with_alt = dataclasses.replace(record, alternatives=("some-sibling-source-id",))
     assert fsr.source_registry_hash([record]) != fsr.source_registry_hash([with_alt])
+
+
+# --- TC-16 (goal-hypothesis-foundry-iter-4, Repair 1 / auditor B7): `lint_alternatives` fails
+# closed on a nonexistent, wrong-family, or self-referential `alternatives` reference. -------------
+
+
+def _family_pair(alt_a: tuple[str, ...] = (), alt_b: tuple[str, ...] = ()) -> tuple[fsr.SourceRecord, fsr.SourceRecord]:
+    excerpt = "two already-defined legal outcome horizons enumerated per the frozen vocabulary."
+    span_text = "two already-defined legal outcome horizons"
+    record_a = fsr.SourceRecord(
+        source_id="lint-alt-a", source_path="docs/fixtures/mechanism.md", section_ref="4.1",
+        quoted_spans=(_span(span_text, excerpt),), source_excerpt=excerpt,
+        mechanism_statement="m", operative_formula_refs=(), direction_derivation="long",
+        comparator_derivation="complement", audit_note="note",
+        foundry_family_key="lint-alt-family", variant_ordinal=0, alternatives=alt_a,
+    )
+    record_b = fsr.SourceRecord(
+        source_id="lint-alt-b", source_path="docs/fixtures/mechanism.md", section_ref="4.1",
+        quoted_spans=(_span(span_text, excerpt),), source_excerpt=excerpt,
+        mechanism_statement="m", operative_formula_refs=(), direction_derivation="long",
+        comparator_derivation="complement", audit_note="note",
+        foundry_family_key="lint-alt-family", variant_ordinal=1, alternatives=alt_b,
+    )
+    return record_a, record_b
+
+
+def test_tc16_lint_alternatives_passes_over_a_legal_same_family_reference():
+    record_a, record_b = _family_pair(alt_a=("lint-alt-b",), alt_b=("lint-alt-a",))
+    fsr.lint_alternatives([record_a, record_b])  # must not raise
+
+
+def test_tc16_lint_alternatives_fails_closed_on_a_nonexistent_sibling():
+    record_a, record_b = _family_pair(alt_a=("does-not-exist",))
+    with pytest.raises(fsr.AlternativeReferenceInvalid):
+        fsr.lint_alternatives([record_a, record_b])
+
+
+def test_tc16_lint_alternatives_fails_closed_on_a_wrong_family_sibling():
+    outsider = _good_record("lint-alt-outsider")  # no foundry_family_key at all
+    record_a, record_b = _family_pair(alt_a=("lint-alt-outsider",))
+    with pytest.raises(fsr.AlternativeReferenceInvalid):
+        fsr.lint_alternatives([record_a, record_b, outsider])
+
+
+def test_tc16_lint_alternatives_fails_closed_on_a_self_reference():
+    record_a, record_b = _family_pair(alt_a=("lint-alt-a",))
+    with pytest.raises(fsr.AlternativeReferenceInvalid):
+        fsr.lint_alternatives([record_a, record_b])
+
+
+def test_tc16_lint_alternatives_rejects_any_alternative_when_naming_record_has_no_family_key():
+    solo = _good_record("lint-alt-no-family")
+    import dataclasses
+
+    with_alt = dataclasses.replace(solo, alternatives=("some-other-id",))
+    other = _good_record("some-other-id")
+    with pytest.raises(fsr.AlternativeReferenceInvalid):
+        fsr.lint_alternatives([with_alt, other])

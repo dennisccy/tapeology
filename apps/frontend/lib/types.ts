@@ -2983,6 +2983,145 @@ export interface FoundryEraOpenBaseline {
   referee_module_sha256: Record<string, string>;
 }
 
+// goal-hypothesis-foundry-iter-4 (J-02): one §1.4 source-record fixture entry -- the full
+// `_canonical_source_record` field set plus `disposition` and either `candidate_spec` (compiled)
+// or `block_reason` (every other disposition).
+export interface FoundrySourceFixture {
+  source_id: string;
+  source_path: string;
+  section_ref: string;
+  quoted_spans: { text: string; location: number }[];
+  source_excerpt: string;
+  mechanism_statement: string;
+  operative_formula_refs: string[];
+  direction_derivation: string;
+  comparator_derivation: string;
+  lineage_id: string | null;
+  foundry_family_key: string | null;
+  variant_ordinal: number | null;
+  threshold_provenance: string | null;
+  unresolved_magnitude_words: string[];
+  superseded_fields: Record<string, string>;
+  proxy_of: { parked_study_source_id: string; do_not: string } | null;
+  supersession: { newer_source_ref: string; alias_kind: string } | null;
+  explicit_exclusion: string | null;
+  aliases_lineage_ids: string[];
+  alternatives: string[];
+  source_hash: string;
+  disposition: string;
+  candidate_spec: FoundryCandidateSpecView | null;
+  block_reason: string | null;
+}
+
+// The existing `CandidateSpec` dataclass's own field set, rendered verbatim (§3).
+export interface FoundryCandidateSpecView {
+  foundry_spec_version: string;
+  epoch_id: string;
+  source_ids: string[];
+  lineage_id: string;
+  foundry_family_id: string;
+  variant_id: string;
+  variant_ordinal: number;
+  population: { structure_context_kind: string; side_filter: string | null; setup_context_id: string | null };
+  coordinates: {
+    feature_construct_id: string;
+    semantic_role: string;
+    transform_orientation: string;
+    threshold_corner_predicate: string;
+    threshold_provenance: string | null;
+    aggressor_derived: boolean;
+    unit_basis: string;
+    anchor_at: string;
+    available_at: string;
+    resolution_join_rule: string;
+  }[];
+  relation: { kind: string; parameters: Record<string, unknown> };
+  membership_corner: string;
+  outcome: { horizon_key: string; sidedness: string; measure: string };
+  economic_floor_rule: { rule: string; multiple: number; numeric_floor_bps: number | null };
+  foundry_family_variant_count: number;
+  availability_rule: string;
+  unresolved_component_policy: string;
+  comparator: string;
+  manifest_hash: string | null;
+  source_registry_hash: string;
+  compiler_hash: string;
+  candidate_spec_hash: string;
+}
+
+export interface FoundrySourcesCompiler {
+  fixtures: FoundrySourceFixture[];
+  immutability_proof: {
+    source_id: string;
+    candidate_spec_hash_a: string;
+    candidate_spec_hash_b: string;
+    injected_extra_a: Record<string, unknown>;
+    injected_extra_b: Record<string, unknown>;
+    hashes_equal: boolean;
+  };
+}
+
+// goal-hypothesis-foundry-iter-4 (J-03): one interpreter fixture scenario.
+export interface FoundryInterpreterScenario {
+  scenario_id: string;
+  kind:
+    | "immediate_scalar_equivalence"
+    | "conjunction"
+    | "deferred_refill_consistent"
+    | "mirrored_direction"
+    | "unsupported_ordered_relation";
+  foundry_screen: Record<string, unknown> | null;
+  direct_scout_screen: Record<string, unknown> | null;
+  screens_equal: boolean | null;
+  unresolved_excluded_count: number | null;
+  outcome_start_candidate: string | null;
+  outcome_start_comparator: string | null;
+  block_reason: string | null;
+  predeclared_sidedness: { support_long: string; resistance_short: string } | null;
+}
+
+export interface FoundryInterpreterFixtures {
+  scenarios: FoundryInterpreterScenario[];
+}
+
+// goal-hypothesis-foundry-iter-4 (J-04): the freeze/family/integrity fixture summary.
+export interface FoundryFreezeIntegrity {
+  family_denominator_fixtures: {
+    family_kind: "single" | "multiple" | "at_cap" | "over_cap";
+    variant_count: number;
+    denominator_visible_before_result: boolean;
+    over_cap_blocked_whole: boolean | null;
+  }[];
+  late_insertion_refused: boolean;
+  generation_replay: { identical_rerun_verified: boolean; drifted_rerun_refused: boolean };
+  freeze_record: {
+    freeze_set_target_path: string;
+    freeze_set_hash: string;
+    pinned_hashes: Record<string, string>;
+    transitive_dependency_coverage_complete: boolean;
+  };
+  first_read_lock: {
+    hash_drift_refused: boolean;
+    session_dirt_ignored: boolean;
+    non_science_file_exempted: boolean;
+  };
+  replay: { idempotent: boolean; conflicting_replay_refused: boolean; concurrent_runner_refused: boolean };
+}
+
+// goal-hypothesis-foundry-iter-4 (J-05): the hermetic oracle-suite summary.
+export interface FoundryHermeticOracles {
+  outcome_types_present: string[];
+  denominator_consistent_across_rows: boolean;
+  canonical_order_preserved: boolean;
+  all_blocked_epoch_completed: boolean;
+  all_killed_epoch_completed: boolean;
+  multi_survivor_preserved_all: boolean;
+  crash_resume_at_scale_verified: boolean;
+  protected_data_trip_fails_closed: boolean;
+  evidence_class_immutable: boolean;
+  suite_source: string;
+}
+
 export interface DeskFoundryResponse {
   era: FoundryEraIdentity;
   // `null` on a fresh install before the operator's one-time recording act has run -- never
@@ -2990,4 +3129,11 @@ export interface DeskFoundryResponse {
   era_open_baseline: FoundryEraOpenBaseline | null;
   source_registry_hash: string | null;
   source_registry_status: string;
+  // goal-hypothesis-foundry-iter-4: four additive read-surface subviews -- all HERMETIC FIXTURE
+  // proofs of the compiler/interpreter/freeze/family/ledger/hermetic-oracle machinery; never real
+  // epoch/candidate data (that remains J-06/J-07).
+  sources_compiler: FoundrySourcesCompiler;
+  interpreter_fixtures: FoundryInterpreterFixtures;
+  freeze_integrity: FoundryFreezeIntegrity;
+  hermetic_oracles: FoundryHermeticOracles;
 }

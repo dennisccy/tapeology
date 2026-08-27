@@ -144,3 +144,45 @@ names a sibling which does not exist or is not in its family; extend the restart
 path too; and stop the QA report claiming the J-01 screen check was covered by the backend test run —
 it was covered by the browser replay. Run it at full depth. The operator may still want to raise the
 session cap from 60 to 80 iterations.
+
+## Iteration 4 — goal-hypothesis-foundry-iter-4
+
+**Date:** 2026-08-27T03:05:00Z
+**Verdict:** ESCALATE
+**Depth dispatched:** lean (spec asked for full; the engine's budget rule downgraded it again —
+engine.log 00:47:55, same demotion as iter-2)
+**Journey deltas:**
+- Newly passing: J-03 "Generic interpretation preserves timing, direction and Scout decisions",
+  J-04 "Foundry owns the denominator, ledger, freeze barrier and lock" (both were partly done)
+- Still partly done: J-02 "Sources compile into auditable CandidateSpecs" (three fields its own
+  checklist names are not on screen; last check needs a report only a later stage writes),
+  J-05 "The complete factory passes hermetic oracles" (its kill-type mapping step has no screen at all)
+- Newly failing: none
+- Regressed: none — J-01 "The Foundry opens as a new finite era" replayed and passed
+- Anti-goal violations: ONE new MINOR, unresolved and blocking —
+  `foundry_hermetic_summary.py:75-82,183-188` changes the frozen Scout scoring function
+  `scout._two_sided_p` from production code inside the running backend and restores it afterwards.
+  Counts: total=1 / resolved=0 / blocking=1 / non-blocking=0 / critical=0.
+  scan-report CLEAN; coherence COHERENCE-PASS; store-scope guard CLEAN (11395 files byte-identical).
+
+**Reasoning:** The one Foundry screen the last two verdicts demanded is real, and I checked it rather
+than trusting the reports. Two journeys earned done status: I read every one of J-04's six checks
+straight off its screenshot, and for J-03 I re-ran the interpreter myself and reproduced the exact
+numbers hidden inside its collapsed drill-ins — the long side genuinely dies on direction while the
+mirrored short side genuinely survives. Two journeys did not, for reasons I can name precisely: the
+Sources screen omits three fields its own checklist requires and its final check needs a report that
+does not exist yet, and the Hermetic Oracles screen never shows the kill-type mapping its checklist
+names, while the line an operator reads as proof is built from a fixed label list instead of read
+back off each row. I escalated because a recommendation to use the deeper review pipeline has now
+been overruled twice, only an escalation forces it, the lighter pass missed three "claims a proof it
+does not show" gaps plus a change to a frozen scoring function inside the running backend, and the
+next stage is the one irreversible act of this era.
+
+**Next-step recommendation:** Do the real registry audit and manifest generation (J-06), with no
+candidate results read. Carry four small repairs: put the three missing fields on the Sources screen
+and show both records of the two-variant family; show the kill-type mapping and best-of-N line on the
+Oracles screen and make its outcome list read each row's real result; take the temporary change to
+the frozen scoring function out of the running backend; and optionally add the pinned identities to
+the freeze-record view. Run it at full depth. Two operator decisions remain: every iteration has
+overrun the one-hour budget (this one took over two hours), which is what keeps forcing the lighter
+pipeline, and the session cap may still want raising from 60 to 80.

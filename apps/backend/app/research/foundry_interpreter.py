@@ -38,6 +38,7 @@ raises (goal.md §12) -- is not one of these two closed forms and interpretation
 
 from __future__ import annotations
 
+import random
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import Mapping, Sequence
@@ -61,6 +62,7 @@ __all__ = [
     "project_boolean_membership",
     "read_model",
     "interpret_candidate",
+    "interpreter_hermetic_fixture_view",
 ]
 
 # --- §4.1's two closed relation forms this era's compiled sources can ever need (goal.md §12: "Do
@@ -301,3 +303,307 @@ def interpret_candidate(
         n_variants_tried=n_variants_tried,
     )
     return InterpretationResult(read_model=read_model(resolution), screen=screen)
+
+
+_FIXTURE_ECON_FLOOR: Mapping[str, object] = {
+    "floor_bps": 0.0, "unit": "bps", "rule": "scout_quoted_spread_floor", "multiple": 0.0,
+}
+
+
+def _fixture_spec(*, relation_kind: str, coordinates: tuple, membership_corner: str, sidedness: str = "long"):
+    """A minimal, self-contained ``CandidateSpec`` builder for this module's own hermetic fixture
+    view -- the SAME shape ``test_foundry_interpreter.py``'s own ``_spec`` helper builds, but
+    defined here (not imported from ``tests/``) so this production subview stays self-contained.
+    Local import avoids a module-load-time cycle (``foundry_compiler`` never imports THIS module,
+    so this is safe at any point, but importing lazily keeps the cycle direction obviously one-way
+    to a future reader)."""
+    from . import foundry_compiler as fc
+
+    return fc.CandidateSpec(
+        foundry_spec_version="v1", epoch_id="epoch:hermetic-fixture-interpreter",
+        source_ids=("fixture-interpreter-src",), lineage_id="fixture-interpreter-src",
+        foundry_family_id="family:fixture-interpreter-src", variant_id="family:fixture-interpreter-src:0",
+        variant_ordinal=0,
+        population=fc.CandidatePopulation(structure_context_kind="none", side_filter=None, setup_context_id=None),
+        coordinates=coordinates, relation=fc.CandidateRelation(kind=relation_kind),
+        membership_corner=membership_corner,
+        outcome=fc.CandidateOutcome(horizon_key="trades_20", sidedness=sidedness),
+        economic_floor_rule=fc.EconomicFloorRule(), foundry_family_variant_count=1,
+    ).with_hash()
+
+
+def interpreter_hermetic_fixture_view() -> dict:
+    """The ``interpreter_fixtures`` Foundry read-surface subview (goal-hypothesis-foundry-iter-4,
+    J-03): the SAME 5 hermetic scenario shapes already proven in ``test_foundry_interpreter.py``
+    (immediate-scalar Foundry-vs-direct-Scout equivalence, conjunction, deferred
+    ``refill_consistent``, mirrored support-long/resistance-short, unsupported ordered relation),
+    run through the REAL ``resolve_population``/``interpret_candidate`` pipeline -- never a
+    hand-typed expected screen. A pure, deterministic function (fixed random seeds) --
+    ``micro_routes.py`` calls this exactly ONCE (module-import time), never per request."""
+    from . import foundry_compiler as fc
+
+    scenarios: list[dict] = []
+
+    # --- 1. immediate_scalar_equivalence: byte-identical Foundry-adapter vs. direct-Scout path. ---
+    threshold = 1.0
+    scalar_anchors: list[PopulationAnchor] = []
+    for s in range(2):
+        session = f"2026-08-{10 + s:02d}"
+        for i in range(20):
+            is_member = i % 2 == 0
+            raw_value = 2.0 if is_member else 0.0
+            outcome = 12.0 + (i % 5) if is_member else -1.0 + (i % 5) * 0.1
+            comp = ComponentResolution("q_imbalance", True, float(i), raw_value, raw_value >= threshold)
+            scalar_anchors.append(
+                PopulationAnchor(f"ds-{session}", "AAPL", session, i, "mid", None, outcome, "return_bps", (comp,))
+            )
+    direct_anchors = [
+        {
+            "dataset_id": a.dataset_id, "symbol": a.symbol, "session_date": a.session_date,
+            "anchor_at": a.components[0].available_at, "trade_index": a.trade_index,
+            "feature_value": a.components[0].raw_value, "outcome_bps": a.outcome_bps,
+            "outcome_unit": a.outcome_unit, "tod_bucket": a.tod_bucket, "fallback_frac": a.fallback_frac,
+        }
+        for a in scalar_anchors
+    ]
+    direct_result = scout.screen_candidate(
+        feature_name="foundry_fixture_scalar_q_imbalance", transform="threshold",
+        params={"op": "ge", "value": threshold}, sidedness="long", horizon_key="trades_20",
+        econ_floor=_FIXTURE_ECON_FLOOR, anchors=direct_anchors,
+        family_id="fixture-family-interpreter-scalar", n_variants_tried=1,
+    )
+    scalar_spec = _fixture_spec(
+        relation_kind=RELATION_DIRECT_SCALAR,
+        coordinates=(
+            fc.CandidateCoordinate(
+                feature_construct_id="q_imbalance", semantic_role="candidate_signal",
+                transform_orientation="ge", threshold_corner_predicate="q_imbalance >= 1.0",
+                threshold_provenance="literal_ratified_threshold", aggressor_derived=False,
+                unit_basis="ratio", anchor_at="anchor_at", available_at="anchor_at",
+            ),
+        ),
+        membership_corner="q_imbalance >= 1.0",
+    )
+    scalar_interpretation = interpret_candidate(
+        scalar_spec, scalar_anchors, econ_floor=_FIXTURE_ECON_FLOOR,
+        family_id="fixture-family-interpreter-scalar", n_variants_tried=1,
+    )
+    scenarios.append(
+        {
+            "scenario_id": "fixture-immediate-scalar-equivalence",
+            "kind": "immediate_scalar_equivalence",
+            "foundry_screen": scalar_interpretation.screen,
+            "direct_scout_screen": direct_result,
+            "screens_equal": scalar_interpretation.screen == direct_result,
+            "unresolved_excluded_count": 0,
+            "outcome_start_candidate": None,
+            "outcome_start_comparator": None,
+            "block_reason": None,
+            "predeclared_sidedness": None,
+        }
+    )
+
+    # --- 2. conjunction: only boolean membership crosses the Scout boundary. -----------------------
+    conj_anchors: list[PopulationAnchor] = []
+    for s in range(2):
+        session = f"2026-08-{10 + s:02d}"
+        for i in range(24):
+            both_true = i % 3 == 0
+            c1 = ComponentResolution("c1", True, float(i), 5.0 if both_true else 0.0, both_true)
+            c2 = ComponentResolution("c2", True, float(i) + 0.5, 9.0 if both_true else 1.0, both_true)
+            outcome = 15.0 if both_true else -0.5
+            conj_anchors.append(
+                PopulationAnchor(f"ds-{session}", "AAPL", session, i, "mid", None, outcome, "return_bps", (c1, c2))
+            )
+    conjunction_spec = _fixture_spec(
+        relation_kind=RELATION_CONJUNCTION,
+        coordinates=(
+            fc.CandidateCoordinate(
+                feature_construct_id="c1", semantic_role="candidate_signal", transform_orientation="gt",
+                threshold_corner_predicate="c1 > 0", threshold_provenance="natural_semantic_boundary",
+                aggressor_derived=False, unit_basis="bool", anchor_at="anchor_at", available_at="anchor_at",
+            ),
+            fc.CandidateCoordinate(
+                feature_construct_id="c2", semantic_role="candidate_signal", transform_orientation="gt",
+                threshold_corner_predicate="c2 > 5", threshold_provenance="literal_ratified_threshold",
+                aggressor_derived=False, unit_basis="ratio", anchor_at="anchor_at", available_at="anchor_at",
+            ),
+        ),
+        membership_corner="c1 > 0 and c2 > 5",
+    )
+    conjunction_interpretation = interpret_candidate(
+        conjunction_spec, conj_anchors, econ_floor=_FIXTURE_ECON_FLOOR,
+        family_id="fixture-family-interpreter-conjunction", n_variants_tried=1,
+    )
+    scenarios.append(
+        {
+            "scenario_id": "fixture-conjunction",
+            "kind": "conjunction",
+            "foundry_screen": conjunction_interpretation.screen,
+            "direct_scout_screen": None,
+            "screens_equal": None,
+            "unresolved_excluded_count": sum(conjunction_interpretation.read_model["unavailable_by_reason"].values()),
+            "outcome_start_candidate": None,
+            "outcome_start_comparator": None,
+            "block_reason": None,
+            "predeclared_sidedness": None,
+        }
+    )
+
+    # --- 3. deferred_refill_consistent: unresolved anchors excluded from both cells; symmetric ------
+    # outcome_start timing law. -----------------------------------------------------------------
+    deferred_anchors: list[PopulationAnchor] = []
+    deferred_session = "2026-08-10"
+    for i in range(30):
+        unresolved = i % 5 == 0
+        member = i % 2 == 0
+        if unresolved:
+            comp = ComponentResolution("refill_consistent", False, None, None, None, unavailable_reason="refill_unresolved")
+        else:
+            comp = ComponentResolution("refill_consistent", True, float(i) + 3.0, 1.0 if member else 0.0, member)
+        outcome = 10.0 if member else -2.0
+        deferred_anchors.append(
+            PopulationAnchor(f"ds-{deferred_session}", "AAPL", deferred_session, i, "mid", None, outcome, "return_bps", (comp,))
+        )
+    deferred_spec = _fixture_spec(
+        relation_kind=RELATION_DIRECT_SCALAR,
+        coordinates=(
+            fc.CandidateCoordinate(
+                feature_construct_id="refill_consistent", semantic_role="deferred_conjunct",
+                transform_orientation="boolean", threshold_corner_predicate="refill_consistent == True",
+                threshold_provenance="natural_semantic_boundary", aggressor_derived=False,
+                unit_basis="boolean", anchor_at="touch", available_at="resolution",
+                resolution_join_rule="deferred_via_observer_provenance_id",
+            ),
+        ),
+        membership_corner="refill_consistent == True",
+    )
+    deferred_interpretation = interpret_candidate(
+        deferred_spec, deferred_anchors, econ_floor=_FIXTURE_ECON_FLOOR,
+        family_id="fixture-family-interpreter-deferred", n_variants_tried=1,
+    )
+    scenarios.append(
+        {
+            "scenario_id": "fixture-deferred-refill-consistent",
+            "kind": "deferred_refill_consistent",
+            "foundry_screen": deferred_interpretation.screen,
+            "direct_scout_screen": None,
+            "screens_equal": None,
+            "unresolved_excluded_count": sum(deferred_interpretation.read_model["unavailable_by_reason"].values()),
+            # §4.1: both cells share the SAME `outcome_start = max(component.available_at)` rule --
+            # rendered as the one shared literal both sides use (`foundry_compiler.AVAILABILITY_
+            # RULE`), never a divergent per-side formula.
+            "outcome_start_candidate": fc.AVAILABILITY_RULE,
+            "outcome_start_comparator": fc.AVAILABILITY_RULE,
+            "block_reason": None,
+            "predeclared_sidedness": None,
+        }
+    )
+
+    # --- 4. mirrored_direction: predeclared sidedness on BOTH sides, shown before any outcome. ------
+    mirrored_anchors: list[PopulationAnchor] = []
+    for s in range(4):
+        session = f"2026-08-{10 + s:02d}"
+        order = list(range(40))
+        random.Random(s).shuffle(order)
+        members = set(order[:20])
+        for i in range(40):
+            member = i in members
+            comp = ComponentResolution("wall_reject", True, float(i), 1.0 if member else 0.0, member)
+            outcome = -80.0 + (i % 5) * 0.1 if member else 0.05 * (i % 5)
+            mirrored_anchors.append(
+                PopulationAnchor(f"ds-{session}", "AAPL", session, i, "mid", None, outcome, "return_bps", (comp,))
+            )
+    # A resistance/short thesis realizes a POSITIVE thesis-relative return exactly when the raw
+    # canonical `return_bps` (Constraints: `(mid_horizon - mid_start) / mid_start * 10_000`) is
+    # negative -- shorting profits from a price fall. The support/long side below uses the raw
+    # anchors verbatim; the resistance/short side uses the SAME membership/timing but the sign-
+    # negated outcome a short position would realize on that same market (goal §3.2: "aggression-
+    # toward-wall signing is mechanically buy->resistance / sell->support") -- never a second
+    # statistical rail, only the thesis-relative sign a real short extraction step would already
+    # apply before this era's unchanged Scout direction gate (`effect_bps > 0`) ever runs.
+    mirrored_coord = fc.CandidateCoordinate(
+        feature_construct_id="wall_reject", semantic_role="candidate_signal", transform_orientation="ge",
+        threshold_corner_predicate="wall_reject >= 1", threshold_provenance="natural_semantic_boundary",
+        aggressor_derived=False, unit_basis="bool", anchor_at="anchor_at", available_at="anchor_at",
+    )
+    short_anchors = [
+        PopulationAnchor(
+            a.dataset_id, a.symbol, a.session_date, a.trade_index, a.tod_bucket, a.fallback_frac,
+            -a.outcome_bps, a.outcome_unit, a.components,
+        )
+        for a in mirrored_anchors
+    ]
+    support_long_spec = _fixture_spec(
+        relation_kind=RELATION_DIRECT_SCALAR, coordinates=(mirrored_coord,),
+        membership_corner="wall_reject >= 1", sidedness="long",
+    )
+    resistance_short_spec = _fixture_spec(
+        relation_kind=RELATION_DIRECT_SCALAR, coordinates=(mirrored_coord,),
+        membership_corner="wall_reject >= 1", sidedness="short",
+    )
+    support_long_result = interpret_candidate(
+        support_long_spec, mirrored_anchors, econ_floor=_FIXTURE_ECON_FLOOR,
+        family_id="fixture-family-interpreter-mirrored-long", n_variants_tried=1,
+    )
+    resistance_short_result = interpret_candidate(
+        resistance_short_spec, short_anchors, econ_floor=_FIXTURE_ECON_FLOOR,
+        family_id="fixture-family-interpreter-mirrored-short", n_variants_tried=1,
+    )
+    scenarios.append(
+        {
+            "scenario_id": "fixture-mirrored-support-long-resistance-short",
+            "kind": "mirrored_direction",
+            "foundry_screen": {
+                "support_long": support_long_result.screen,
+                "resistance_short": resistance_short_result.screen,
+            },
+            "direct_scout_screen": None,
+            "screens_equal": None,
+            "unresolved_excluded_count": 0,
+            "outcome_start_candidate": None,
+            "outcome_start_comparator": None,
+            "block_reason": None,
+            # Additive (goal.md's own "canonical values" lists are floors, not ceilings): the
+            # predeclared `long`/`short` sidedness is already fixed on each CandidateSpec BEFORE
+            # either screen above ever ran -- J-03 step 4's own acceptance ("predeclared sidedness
+            # is inside CandidateSpec before the outcome").
+            "predeclared_sidedness": {
+                "support_long": support_long_spec.outcome.sidedness,
+                "resistance_short": resistance_short_spec.outcome.sidedness,
+            },
+        }
+    )
+
+    # --- 5. unsupported_ordered_relation: typed block, never a guessed window/lag. -------------------
+    ordered_coord = fc.CandidateCoordinate(
+        feature_construct_id="thin_then_refill", semantic_role="candidate_signal", transform_orientation="ge",
+        threshold_corner_predicate="ordered lag unresolved", threshold_provenance=None, aggressor_derived=False,
+        unit_basis="bool", anchor_at="anchor_at", available_at="anchor_at",
+    )
+    ordered_spec = _fixture_spec(
+        relation_kind="ordered_sequence_lag", coordinates=(ordered_coord,),
+        membership_corner="ordered_lag_unresolved",
+    )
+    try:
+        interpret_candidate(ordered_spec, [], econ_floor=_FIXTURE_ECON_FLOOR, family_id="f", n_variants_tried=1)
+    except UnsupportedRelationBlocked as exc:
+        block_reason = exc.disposition
+    else:  # pragma: no cover -- this relation kind is never supported
+        block_reason = None
+    scenarios.append(
+        {
+            "scenario_id": "fixture-unsupported-ordered-relation",
+            "kind": "unsupported_ordered_relation",
+            "foundry_screen": None,
+            "direct_scout_screen": None,
+            "screens_equal": None,
+            "unresolved_excluded_count": None,
+            "outcome_start_candidate": None,
+            "outcome_start_comparator": None,
+            "block_reason": block_reason,
+            "predeclared_sidedness": None,
+        }
+    )
+
+    return {"scenarios": scenarios}

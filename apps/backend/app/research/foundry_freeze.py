@@ -15,9 +15,14 @@ import ast
 import hashlib
 import json
 import subprocess
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping, Sequence
+
+from . import foundry_family as _ffam
+from . import foundry_ledger as _fl
+from . import foundry_runner as _frun
 
 __all__ = [
     "FREEZE_SET_REQUIRED_MODULES",
@@ -31,6 +36,8 @@ __all__ = [
     "verify_commit_is_ancestor",
     "FreezeIntegrityHalt",
     "verify_freeze_set_unchanged",
+    "freeze_integrity_fixture_dir",
+    "freeze_integrity_hermetic_fixture_view",
 ]
 
 
@@ -274,3 +281,234 @@ def verify_freeze_set_unchanged(freeze_set: Mapping[str, object]) -> None:
         actual_hash = _sha256_file(path)
         if actual_hash != expected_hash:
             raise FreezeIntegrityHalt(f"freeze-set path changed after first-read lock: {path}")
+
+
+# === goal-hypothesis-foundry-iter-4 (J-04): the `freeze_integrity` Foundry read-surface subview ===
+# -- reuses the EXACT hermetic fixtures already proven in `test_foundry_family.py`/
+# `test_foundry_freeze.py`/`test_foundry_ledger.py`, run through the REAL production functions
+# (`foundry_family.build_family_registry`, this module's own generation/freeze-set/first-read-lock
+# machinery, `foundry_ledger.FoundryLedger`, `foundry_runner.SingleFlightLock`) -- never a second,
+# hand-typed disposition table. A pure, deterministic function -- `micro_routes.py` calls this
+# exactly ONCE (module-import time), never per request (T-8 / goal.md anti-goal 10).
+
+_FREEZE_SET_FIXTURE_DIR_NAME = "tapeology_foundry_freeze_integrity_fixture"
+
+
+def freeze_integrity_fixture_dir() -> Path:
+    """A STABLE (non-random) directory under the platform temp root -- deliberately NOT a
+    ``tempfile.TemporaryDirectory()`` (whose randomized name would make TC-11's "a fresh
+    recomputation... over the SAME fixture module set" unreproducible, since
+    ``generate_freeze_set``'s own ``freeze_set_hash`` is sensitive to the full absolute path
+    string, not just file content). Every one of the ``FREEZE_SET_REQUIRED_MODULES`` stub files is
+    (re)written idempotently on every call with fixed content, so any caller resolving this SAME
+    path (this module's own cached fixture view, or a later verifying test) always sees
+    byte-identical files and therefore recomputes the identical ``freeze_set_hash``. Exported (not
+    private) precisely so a route-level/unit test can call it directly to prove that equality."""
+    fixture_dir = Path(tempfile.gettempdir()) / _FREEZE_SET_FIXTURE_DIR_NAME
+    fixture_dir.mkdir(parents=True, exist_ok=True)
+    for name in FREEZE_SET_REQUIRED_MODULES:
+        (fixture_dir / name).write_text("# hermetic freeze-set fixture stub -- not a real module\n", encoding="utf-8")
+    return fixture_dir
+
+
+def _family_denominator_fixtures() -> list[dict]:
+    """TC-8 (goal-hypothesis-foundry-iter-4): the exact 1/multiple/at-cap/over-cap family fixtures
+    ``test_foundry_family.py`` already proves, through the REAL ``build_family_registry``."""
+    cap = _ffam.SCOUT_MAX_VARIANTS_PER_FAMILY
+    kinds = (("single", 1), ("multiple", 5), ("at_cap", cap), ("over_cap", cap + 1))
+    out = []
+    for kind, count in kinds:
+        family_id = f"family:fixture-denominator-{kind}"
+        variants = [f"{family_id}:{i}" for i in range(count)]
+        family = _ffam.build_family_registry({family_id: variants})[family_id]
+        out.append(
+            {
+                "family_kind": kind,
+                "variant_count": family.variant_count,
+                "denominator_visible_before_result": True,
+                "over_cap_blocked_whole": family.blocked,
+            }
+        )
+    return out
+
+
+def _late_insertion_refused() -> bool:
+    """TC-9: a fixture family already frozen at variant_count=2 refuses a late-insertion attempt
+    and its denominator stays unchanged."""
+    family_id = "family:fixture-late-insertion"
+    family = _ffam.build_family_registry({family_id: [f"{family_id}:0", f"{family_id}:1"]})[family_id]
+    before = family.variant_count
+    try:
+        _ffam.attempt_late_insertion(family, new_variant_ordinal=2)
+    except _ffam.LateInsertionRefused:
+        return family.variant_count == before == 2
+    return False  # pragma: no cover -- attempt_late_insertion always refuses
+
+
+def _generation_replay() -> dict:
+    """TC-10: identical fixture generation inputs run twice verify-idempotently; a changed input
+    is refused rather than silently minting a second epoch."""
+    store: dict = {}
+    inputs = {
+        "source_registry_hash": "fixture-generation-replay-source-registry-hash",
+        "compiler_hash": "fixture-generation-replay-compiler-hash",
+        "config_fingerprint": "fixture-generation-replay-config-fingerprint",
+    }
+    first = generate_or_verify_manifest(store, inputs)
+    second = generate_or_verify_manifest(store, dict(inputs))
+    identical_rerun_verified = first.epoch_id == second.epoch_id and first.manifest_hash == second.manifest_hash
+
+    drifted_rerun_refused = False
+    drifted = {**inputs, "source_registry_hash": "CHANGED"}
+    try:
+        generate_or_verify_manifest(store, drifted)
+    except ManifestDriftRefused:
+        drifted_rerun_refused = True
+
+    return {"identical_rerun_verified": identical_rerun_verified, "drifted_rerun_refused": drifted_rerun_refused}
+
+
+def _freeze_record() -> dict:
+    """TC-11: a fixture freeze record naming the real future target path
+    ``docs/hypothesis-foundry/freeze-set.json`` (visibly fixture-scoped -- no such file is created
+    this iteration, per ``state/assumptions.md`` iter-4) whose ``freeze_set_hash`` is a genuine
+    ``generate_freeze_set`` output over the deterministic fixture module set."""
+    fixture_dir = freeze_integrity_fixture_dir()
+    result = generate_freeze_set(fixture_dir)
+    pinned_hashes = {Path(p).name: h for p, h in result["entries"].items()}
+    transitive_dependency_coverage_complete = set(FREEZE_SET_REQUIRED_MODULES) <= set(pinned_hashes)
+    record = build_freeze_record(
+        freeze_commit="fixture-freeze-commit", manifest_hash="fixture-manifest-hash",
+        source_registry_hash="fixture-source-registry-hash", spec_hash="fixture-spec-hash",
+        candidate_spec_schema_hash="fixture-candidate-spec-schema-hash",
+        compiler_hash="fixture-compiler-hash", interpreter_hash="fixture-interpreter-hash",
+        runner_hash="fixture-runner-hash", scout_screen_source_hash="fixture-scout-screen-source-hash",
+        config_fingerprint="fixture-config-fingerprint", freeze_set_hash=result["freeze_set_hash"],
+    )
+    return {
+        "freeze_set_target_path": "docs/hypothesis-foundry/freeze-set.json",
+        "freeze_set_hash": record.freeze_set_hash,
+        "pinned_hashes": pinned_hashes,
+        "transitive_dependency_coverage_complete": transitive_dependency_coverage_complete,
+    }
+
+
+def _first_read_lock() -> dict:
+    """TC-12: a simulated first-read lock followed by (a) a pinned path's content changing --
+    refused; (b) unrelated Goal Mode session/handoff dirt outside the freeze set -- ignored; and
+    (c) a changed non-scientific UI-only file outside the freeze set -- exempted. Each check runs
+    in its OWN ephemeral directory (never a randomized-name conflict with ``freeze_integrity_
+    fixture_dir`` above -- this function needs no reproducible hash, only the three booleans)."""
+    with tempfile.TemporaryDirectory() as d:
+        pinned = Path(d) / "pinned_module.py"
+        pinned.write_text("original\n", encoding="utf-8")
+        freeze_set = generate_freeze_set(d, required_names=("pinned_module.py",))
+        verify_freeze_set_unchanged(freeze_set)  # clean before drift -- must not raise
+        pinned.write_text("tampered\n", encoding="utf-8")
+        try:
+            verify_freeze_set_unchanged(freeze_set)
+            hash_drift_refused = False
+        except FreezeIntegrityHalt:
+            hash_drift_refused = True
+
+    with tempfile.TemporaryDirectory() as d:
+        pinned = Path(d) / "pinned_module.py"
+        pinned.write_text("original\n", encoding="utf-8")
+        freeze_set = generate_freeze_set(d, required_names=("pinned_module.py",))
+        (Path(d) / "iteration-state.md").write_text("dirty session notes\n", encoding="utf-8")
+        try:
+            verify_freeze_set_unchanged(freeze_set)
+            session_dirt_ignored = True
+        except FreezeIntegrityHalt:
+            session_dirt_ignored = False
+
+    with tempfile.TemporaryDirectory() as d:
+        pinned = Path(d) / "pinned_module.py"
+        pinned.write_text("original\n", encoding="utf-8")
+        freeze_set = generate_freeze_set(d, required_names=("pinned_module.py",))
+        ui_only = Path(d) / "page.tsx"
+        ui_only.write_text("export default function Page() {}\n", encoding="utf-8")
+        try:
+            verify_freeze_set_unchanged(freeze_set)
+            ui_only.write_text("export default function Page() { /* changed */ }\n", encoding="utf-8")
+            verify_freeze_set_unchanged(freeze_set)
+            non_science_file_exempted = True
+        except FreezeIntegrityHalt:
+            non_science_file_exempted = False
+
+    return {
+        "hash_drift_refused": hash_drift_refused,
+        "session_dirt_ignored": session_dirt_ignored,
+        "non_science_file_exempted": non_science_file_exempted,
+    }
+
+
+def _replay() -> dict:
+    """TC-13: a completed fixture terminal row's exact-duplicate replay is idempotent, a
+    conflicting replay is refused, and a concurrent second single-flight acquire is refused."""
+    with tempfile.TemporaryDirectory() as d:
+        ledger = _fl.FoundryLedger(d)
+        ledger.record_intent(
+            candidate_spec_hash="fixture-replay-h1", manifest_hash="fixture-replay-m1",
+            econ_floor_bps=0.0, econ_floor_provenance="scout_quoted_spread_floor",
+        )
+        screen = {
+            "decision": "survive", "reason": "survive", "notes": "hermetic fixture",
+            "screen_result": {"effect_bps": 42.0, "p_screen": 0.01, "n_candidate": 20, "n_comparator": 20},
+        }
+        first = ledger.record_terminal(
+            candidate_spec_hash="fixture-replay-h1", manifest_hash="fixture-replay-m1",
+            foundry_family_id="family:fixture-replay", foundry_family_variant_count=1,
+            screen_result=screen, rule_id="foundry:epoch:fixture-replay:fixture-replay-h1",
+            prospective_root_status="family:fixture-replay", foundry_state="DIAGNOSTIC_SURVIVOR_OOS_RULE_FROZEN",
+        )
+        second = ledger.record_terminal(
+            candidate_spec_hash="fixture-replay-h1", manifest_hash="fixture-replay-m1",
+            foundry_family_id="family:fixture-replay", foundry_family_variant_count=1,
+            screen_result=screen, rule_id="foundry:epoch:fixture-replay:fixture-replay-h1",
+            prospective_root_status="family:fixture-replay", foundry_state="DIAGNOSTIC_SURVIVOR_OOS_RULE_FROZEN",
+        )
+        idempotent = first == second
+
+        conflicting_screen = {**screen, "decision": "killed_null"}
+        try:
+            ledger.record_terminal(
+                candidate_spec_hash="fixture-replay-h1", manifest_hash="fixture-replay-m1",
+                foundry_family_id="family:fixture-replay", foundry_family_variant_count=1,
+                screen_result=conflicting_screen, rule_id="foundry:epoch:fixture-replay:fixture-replay-h1",
+                prospective_root_status="family:fixture-replay", foundry_state="EVALUATED_KILLED",
+            )
+            conflicting_replay_refused = False
+        except _fl.ConflictingReplayRefused:
+            conflicting_replay_refused = True
+
+    with tempfile.TemporaryDirectory() as d:
+        lock_path = Path(d) / "foundry_runner.lock"
+        lock = _frun.SingleFlightLock(lock_path)
+        with lock.acquire():
+            second_lock = _frun.SingleFlightLock(lock_path)
+            try:
+                with second_lock.acquire():
+                    pass  # pragma: no cover -- must never be reached
+                concurrent_runner_refused = False
+            except _frun.ConcurrentRunnerRefused:
+                concurrent_runner_refused = True
+
+    return {
+        "idempotent": idempotent,
+        "conflicting_replay_refused": conflicting_replay_refused,
+        "concurrent_runner_refused": concurrent_runner_refused,
+    }
+
+
+def freeze_integrity_hermetic_fixture_view() -> dict:
+    """The ``freeze_integrity`` Foundry read-surface subview (goal-hypothesis-foundry-iter-4, J-04)
+    -- see the module-level comment above this function group for the shared rationale."""
+    return {
+        "family_denominator_fixtures": _family_denominator_fixtures(),
+        "late_insertion_refused": _late_insertion_refused(),
+        "generation_replay": _generation_replay(),
+        "freeze_record": _freeze_record(),
+        "first_read_lock": _first_read_lock(),
+        "replay": _replay(),
+    }

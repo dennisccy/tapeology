@@ -339,6 +339,24 @@ def test_compiled_record_with_a_deferred_coordinate_produces_no_candidate_spec_t
     assert "fixture-deferred" not in result.candidate_specs
 
 
+# --- TC-16 (goal-hypothesis-foundry-iter-4, Repair 1): `compile_sources` runs the alternatives
+# lint alongside the quoted-span lint, BEFORE building any CandidateSpec. ---------------------------
+
+
+def test_tc16_compile_sources_fails_closed_on_a_self_referential_alternative():
+    excerpt = "one self-referential alternatives fixture"
+    record = fsr.SourceRecord(
+        source_id="fixture-self-alt", source_path="docs/fixtures/mechanism.md", section_ref="3.1",
+        quoted_spans=(), source_excerpt=excerpt, mechanism_statement="m", operative_formula_refs=(),
+        direction_derivation="long", comparator_derivation="complement", audit_note="note",
+        foundry_family_key="fixture-self-alt-family", variant_ordinal=0, alternatives=("fixture-self-alt",),
+    )
+    with pytest.raises(fsr.AlternativeReferenceInvalid):
+        fc.compile_sources(
+            [record], foundry_spec_version="v1", epoch_id="e", blueprints={"fixture-self-alt": _blueprint()}
+        )
+
+
 def test_compiler_hash_is_stable_and_non_empty():
     h1 = fc.compiler_hash()
     h2 = fc.compiler_hash()

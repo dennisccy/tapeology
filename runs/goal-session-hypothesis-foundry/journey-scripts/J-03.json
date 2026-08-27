@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "journey": "J-03",
+  "name": "Generic interpretation preserves timing, population symmetry, direction, and exact Scout decisions",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "journey": "J-03",
+      "action": {"type": "goto", "url": "/desk"},
+      "expect": {"text": "Hypothesis Foundry"}
+    },
+    {
+      "n": 2,
+      "journey": "J-03",
+      "action": {"type": "click", "target": {"testid": "desk-section-expand-hypothesisFoundry"}},
+      "expect": {"text": "Era-Open Baseline"}
+    },
+    {
+      "n": 3,
+      "journey": "J-03",
+      "action": {"type": "click", "target": {"testid": "desk-section-expand-foundry-interpreter-fixtures-section"}},
+      "expect": {"text": "BLOCKED_UNSUPPORTED_RELATION"}
+    }
+  ]
+}

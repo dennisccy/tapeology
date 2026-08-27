@@ -46,6 +46,10 @@ from .desk_playbook import PlaybookStore
 from .desk_playbook_context import BandMapResolver
 from .desk_routes import get_playbook_store, get_universe_store
 from .desk_universe import UniverseStore
+from .foundry_compiler import sources_compiler_hermetic_fixture_view
+from .foundry_freeze import freeze_integrity_hermetic_fixture_view
+from .foundry_hermetic_summary import build_hermetic_oracles_summary
+from .foundry_interpreter import interpreter_hermetic_fixture_view
 from .foundry_source_registry import (
     foundry_era_identity,
     read_era_open_baseline,
@@ -757,6 +761,19 @@ def get_foundry_dir() -> str:
     return resolve_foundry_dir(CONFIG.dataset_dir_resolved())
 
 
+# goal-hypothesis-foundry-iter-4 (J-02/J-03/J-04/J-05): the four consolidated Foundry read-surface
+# subviews -- computed EXACTLY ONCE, here, at module import time, from purely hermetic literals
+# (never real dataset/session state), and served verbatim on every request thereafter. This is
+# what keeps the route itself GET-never-computes (T-8 / goal.md anti-goal 10): the compiler/
+# interpreter/family/freeze/ledger/runner machinery those four builders invoke runs ONCE per
+# process, not once per request -- TC-19's own "two GET responses are byte-identical" proof holds
+# structurally (the same frozen dict object is returned both times), not by chance.
+_SOURCES_COMPILER_VIEW = sources_compiler_hermetic_fixture_view()
+_INTERPRETER_FIXTURES_VIEW = interpreter_hermetic_fixture_view()
+_FREEZE_INTEGRITY_VIEW = freeze_integrity_hermetic_fixture_view()
+_HERMETIC_ORACLES_VIEW = build_hermetic_oracles_summary()
+
+
 @router.get("/foundry")
 def get_foundry(foundry_dir: str = Depends(get_foundry_dir)) -> dict:
     """Serves era/session identity (``foundry_source_registry.foundry_era_identity`` -- a static
@@ -765,10 +782,19 @@ def get_foundry(foundry_dir: str = Depends(get_foundry_dir)) -> dict:
     never fabricated), and the explicit not-yet-generated `source_registry_hash` state. Never
     404/500 before that recording act runs -- the desk router's own never-404-on-absence
     convention: an honest ``era_open_baseline: null`` on a fresh install, exactly like ``GET
-    /vault``'s honest empty ``shards``/``universes`` before the first registration."""
+    /vault``'s honest empty ``shards``/``universes`` before the first registration.
+
+    goal-hypothesis-foundry-iter-4: four ADDITIVE top-level keys -- ``sources_compiler``,
+    ``interpreter_fixtures``, ``freeze_integrity``, ``hermetic_oracles`` -- each served VERBATIM
+    from the module-level frozen views built once above; this handler never calls any compiler/
+    interpreter/family/freeze/runner function itself."""
     return {
         "era": foundry_era_identity(),
         "era_open_baseline": read_era_open_baseline(foundry_dir),
         "source_registry_hash": None,
         "source_registry_status": "not_yet_generated",
+        "sources_compiler": _SOURCES_COMPILER_VIEW,
+        "interpreter_fixtures": _INTERPRETER_FIXTURES_VIEW,
+        "freeze_integrity": _FREEZE_INTEGRITY_VIEW,
+        "hermetic_oracles": _HERMETIC_ORACLES_VIEW,
     }

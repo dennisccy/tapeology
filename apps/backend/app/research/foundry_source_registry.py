@@ -54,8 +54,10 @@ __all__ = [
     "SupersessionDeclaration",
     "SourceRecord",
     "QuoteMismatch",
+    "AlternativeReferenceInvalid",
     "compile_source_disposition",
     "lint_quoted_spans",
+    "lint_alternatives",
     "source_registry_hash",
     "resolve_foundry_dir",
     "record_era_open_baseline",
@@ -236,6 +238,51 @@ def lint_quoted_spans(records: Sequence[SourceRecord]) -> None:
                 raise QuoteMismatch(
                     f"{record.source_id}: quoted span {span.text!r} does not match "
                     f"source_excerpt[{span.location}:{end}] = {actual!r}"
+                )
+
+
+class AlternativeReferenceInvalid(Exception):
+    """Raised by ``lint_alternatives`` (never swallowed -- fail closed, spec §1.4). auditor B7
+    (carried from iter-3): the §1.4 ``alternatives`` disclosure is a scientific claim ("this
+    sibling is a legal alternative representation of the same mechanism") -- a stray id (typo,
+    stale rename, or a reference into an unrelated family) would silently misrepresent that claim
+    if nothing ever checked it, exactly like an unchecked ``QuotedSpan`` would misrepresent a
+    citation."""
+
+
+def lint_alternatives(records: Sequence[SourceRecord]) -> None:
+    """Fail-closed batch lint over ``SourceRecord.alternatives`` (spec §1.4's "every finite
+    alternative the compiler is allowed to enumerate"), alongside ``lint_quoted_spans`` above.
+    Every alternative a record names must:
+
+    1. exist as a ``source_id`` somewhere in THIS SAME batch of ``records`` -- an alternative
+       naming a record that isn't even being compiled cannot be a legal enumerated sibling;
+    2. share the naming record's own ``foundry_family_key`` -- a record with no family key at all
+       (``None``) has no family for a sibling to be "a member of", so ANY alternative it names is
+       invalid;
+    3. not equal the naming record's own ``source_id`` -- a record cannot be its own alternative.
+
+    Raises ``AlternativeReferenceInvalid`` on the first violation found (never silently drops or
+    ignores a bad reference) -- the same fail-closed discipline ``lint_quoted_spans`` already
+    applies to citations."""
+    by_id = {r.source_id: r for r in records}
+    for record in records:
+        for alt_id in record.alternatives:
+            if alt_id == record.source_id:
+                raise AlternativeReferenceInvalid(
+                    f"{record.source_id}: alternatives names its own source_id ({alt_id!r}) -- a "
+                    "record cannot be its own alternative"
+                )
+            alt_record = by_id.get(alt_id)
+            if alt_record is None:
+                raise AlternativeReferenceInvalid(
+                    f"{record.source_id}: alternatives names {alt_id!r}, which does not exist in "
+                    "this registry batch"
+                )
+            if record.foundry_family_key is None or alt_record.foundry_family_key != record.foundry_family_key:
+                raise AlternativeReferenceInvalid(
+                    f"{record.source_id}: alternatives names {alt_id!r}, which is not a member of "
+                    f"the same foundry_family_key ({record.foundry_family_key!r})"
                 )
 
 

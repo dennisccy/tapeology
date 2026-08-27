@@ -21,15 +21,24 @@ from __future__ import annotations
 import hashlib
 import json
 from collections import defaultdict
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace as _dataclasses_replace
 from pathlib import Path
 from typing import Mapping, Sequence
 
 from . import scout
 from .foundry_source_registry import (
     DISPOSITION_COMPILED,
+    QuotedSpan,
+    ProxyDeclaration,
     SourceRecord,
+    SupersessionDeclaration,
+    THRESHOLD_NATURAL_SEMANTIC_BOUNDARY,
+    BLOCKED_DIRECTION_SENTINEL,
+    BLOCKED_UNSUPPORTED_STUDY_FORM_SENTINEL,
+    DISPOSITION_ALIASED_VARIANT_VOCABULARY,
+    _canonical_source_record,
     compile_source_disposition,
+    lint_alternatives,
     lint_quoted_spans,
     source_registry_hash as _registry_hash,
 )
@@ -50,6 +59,8 @@ __all__ = [
     "FamilyOrdinalCollision",
     "compile_sources",
     "compiler_hash",
+    "candidate_spec_view",
+    "sources_compiler_hermetic_fixture_view",
 ]
 
 # --- §3 frozen literal-valued fields -- named constants so a caller/test never re-types the
@@ -241,8 +252,14 @@ def compile_sources(
     (``foundry_source_registry.SourceRecord``) and the §3 ``CandidateSpec`` schema this module
     owns are deliberately two separate schemas (goal.md itself lists them as two distinct
     sections); keeping ``CandidateBlueprint`` out of ``SourceRecord`` avoids a needless import
-    cycle between the two modules and keeps each module's own schema self-contained."""
+    cycle between the two modules and keeps each module's own schema self-contained.
+
+    Repair 1 (auditor B7, iter-4): ``lint_alternatives`` runs alongside ``lint_quoted_spans``,
+    both BEFORE any ``CandidateSpec`` is built -- a stray/self-referential/wrong-family
+    ``alternatives`` entry fails the whole batch closed exactly like a mismatched quoted span
+    does, never silently compiling around it."""
     lint_quoted_spans(records)
+    lint_alternatives(records)
     blueprints = blueprints or {}
     registry_hash = _registry_hash(records)
     this_compiler_hash = compiler_hash()
@@ -307,3 +324,265 @@ def compile_sources(
         specs[record.source_id] = spec
 
     return CompilationResult(source_registry_hash=registry_hash, dispositions=dispositions, candidate_specs=specs)
+
+
+def candidate_spec_view(spec: CandidateSpec) -> dict:
+    """A canonical, plain-dict, JSON-safe projection of a WHOLE ``CandidateSpec`` -- every field
+    the dataclass carries (§3's own schema), rendered once here so every Foundry read-surface
+    caller that needs to serve a compiled spec (Sources/Compiler and Interpreter subviews alike,
+    goal-hypothesis-foundry-iter-4) shares the ONE canonical rendering rather than each hand-rolling
+    its own subset (goal.md anti-goal 6: "single source of truth... REST/UI/MCP never independently
+    recompute it")."""
+    return {
+        "foundry_spec_version": spec.foundry_spec_version,
+        "epoch_id": spec.epoch_id,
+        "source_ids": list(spec.source_ids),
+        "lineage_id": spec.lineage_id,
+        "foundry_family_id": spec.foundry_family_id,
+        "variant_id": spec.variant_id,
+        "variant_ordinal": spec.variant_ordinal,
+        "population": {
+            "structure_context_kind": spec.population.structure_context_kind,
+            "side_filter": spec.population.side_filter,
+            "setup_context_id": spec.population.setup_context_id,
+        },
+        "coordinates": [
+            {
+                "feature_construct_id": c.feature_construct_id,
+                "semantic_role": c.semantic_role,
+                "transform_orientation": c.transform_orientation,
+                "threshold_corner_predicate": c.threshold_corner_predicate,
+                "threshold_provenance": c.threshold_provenance,
+                "aggressor_derived": c.aggressor_derived,
+                "unit_basis": c.unit_basis,
+                "anchor_at": c.anchor_at,
+                "available_at": c.available_at,
+                "resolution_join_rule": c.resolution_join_rule,
+            }
+            for c in spec.coordinates
+        ],
+        "relation": {"kind": spec.relation.kind, "parameters": dict(spec.relation.parameters)},
+        "membership_corner": spec.membership_corner,
+        "outcome": {
+            "horizon_key": spec.outcome.horizon_key,
+            "sidedness": spec.outcome.sidedness,
+            "measure": spec.outcome.measure,
+        },
+        "economic_floor_rule": {
+            "rule": spec.economic_floor_rule.rule,
+            "multiple": spec.economic_floor_rule.multiple,
+            "numeric_floor_bps": spec.economic_floor_rule.numeric_floor_bps,
+        },
+        "foundry_family_variant_count": spec.foundry_family_variant_count,
+        "availability_rule": spec.availability_rule,
+        "unresolved_component_policy": spec.unresolved_component_policy,
+        "comparator": spec.comparator,
+        "manifest_hash": spec.manifest_hash,
+        "source_registry_hash": spec.source_registry_hash,
+        "compiler_hash": spec.compiler_hash,
+        "candidate_spec_hash": spec.candidate_spec_hash,
+    }
+
+
+def _hermetic_fixture_blueprint(horizon: str = "trades_20", sidedness: str = "long") -> CandidateBlueprint:
+    """The SAME one-coordinate ``band_wall_touch``/``quote_imbalance`` blueprint shape
+    ``test_foundry_compiler.py``'s own ``_blueprint`` builds -- copied rather than imported so this
+    module stays self-contained (production code does not import from ``tests/``, unlike the
+    ``hermetic_oracles`` summary's own deliberate exception -- see ``foundry_hermetic_summary.py``)."""
+    return CandidateBlueprint(
+        population=CandidatePopulation(
+            structure_context_kind="band_wall_touch", side_filter=None, setup_context_id=None
+        ),
+        coordinates=(
+            CandidateCoordinate(
+                feature_construct_id="quote_imbalance", semantic_role="primary",
+                transform_orientation="positive_zero_boundary",
+                threshold_corner_predicate="quote_imbalance > 0",
+                threshold_provenance=THRESHOLD_NATURAL_SEMANTIC_BOUNDARY, aggressor_derived=False,
+                unit_basis="ratio", anchor_at="touch", available_at="touch",
+            ),
+        ),
+        relation=CandidateRelation(kind="direct_scalar_membership"),
+        membership_corner="quote_imbalance > 0",
+        outcome=CandidateOutcome(horizon_key=horizon, sidedness=sidedness),
+    )
+
+
+def sources_compiler_hermetic_fixture_view() -> dict:
+    """The ``sources_compiler`` Foundry read-surface subview (goal-hypothesis-foundry-iter-4, J-02):
+    reuses the EXACT 7 hermetic source-fixture archetypes already proven in
+    ``test_foundry_source_registry.py``/``test_foundry_compiler.py`` -- every ``source_excerpt``/
+    ``quoted_spans`` string below is copied verbatim from those tests, never re-invented -- compiled
+    through the REAL ``compile_sources`` batch call (never a second, hand-typed disposition table).
+    A pure, deterministic function of hermetic literals -- ``micro_routes.py`` calls this exactly
+    ONCE (module-import time), never per request (T-8 / goal.md anti-goal 10).
+
+    **Why the array holds exactly 7 entries despite 8 physical ``SourceRecord``s.** J-02 step 2's
+    "two explicitly-frozen legal variants" archetype is a FAMILY of two sibling records. Both are
+    compiled here (so the surfaced record's own ``foundry_family_variant_count`` genuinely reads 2,
+    per §5's own family bookkeeping -- never a fabricated count), but only ONE sibling
+    (``fixture-variant-a``) is surfaced as its own array entry: its ``alternatives`` field already
+    names the other by id (spec §1.4: "an auditor reading ONE record in isolation should not have
+    to reconstruct family membership elsewhere to see legal alternatives"). This is what keeps
+    ``fixtures[]`` at the Data-contract's own "exactly 7 entries" (TC-1) while still faithfully
+    compiling the pair as one real two-variant family."""
+    natural_excerpt = "A signed variable's zero boundary is bid-heavy when quote_imbalance is positive."
+    natural_span = "signed variable's zero boundary is bid-heavy when quote_imbalance is positive"
+    natural_boundary = SourceRecord(
+        source_id="fixture-natural-boundary", source_path="docs/fixtures/mechanism.md", section_ref="2.3",
+        quoted_spans=(QuotedSpan(text=natural_span, location=natural_excerpt.index(natural_span)),),
+        source_excerpt=natural_excerpt,
+        mechanism_statement="quote imbalance zero-crossing implies bid-heavy",
+        operative_formula_refs=("quote_imbalance",),
+        direction_derivation="positive quote_imbalance implies bid-heavy -> long",
+        comparator_derivation="complement_within_same_eligible_population",
+        audit_note="zero boundary intrinsic to the signed variable's own definition, per quoted text",
+        threshold_provenance=THRESHOLD_NATURAL_SEMANTIC_BOUNDARY,
+    )
+
+    def _variant_record(source_id: str, ordinal: int, alternatives: tuple) -> SourceRecord:
+        excerpt = f"{source_id}: trades_20 and trades_100 are both already-legal outcome horizons."
+        span_text = "trades_20 and trades_100 are both already-legal outcome horizons"
+        return SourceRecord(
+            source_id=source_id, source_path="docs/fixtures/mechanism.md", section_ref="4.1",
+            quoted_spans=(QuotedSpan(text=span_text, location=excerpt.index(span_text)),),
+            source_excerpt=excerpt,
+            mechanism_statement="two legal horizon variants of one mechanism",
+            operative_formula_refs=("cumulative_delta",),
+            direction_derivation="positive cumulative_delta -> long",
+            comparator_derivation="complement_within_same_eligible_population",
+            audit_note="two already-defined legal outcome horizons enumerated per the frozen vocabulary, §2.1",
+            foundry_family_key="fixture-family-horizon-variants", variant_ordinal=ordinal,
+            alternatives=alternatives,
+        )
+
+    variant_a = _variant_record("fixture-variant-a", 0, alternatives=("fixture-variant-b",))
+    variant_b = _variant_record("fixture-variant-b", 1, alternatives=("fixture-variant-a",))
+
+    magnitude_excerpt = "A collapse in impact defines a high-aggression signal at the wall."
+    magnitude_span = "collapse in impact defines a high-aggression signal"
+    magnitude_word = SourceRecord(
+        source_id="fixture-magnitude-word", source_path="docs/fixtures/mechanism.md", section_ref="1.9",
+        quoted_spans=(QuotedSpan(text=magnitude_span, location=magnitude_excerpt.index(magnitude_span)),),
+        source_excerpt=magnitude_excerpt,
+        mechanism_statement="impact collapse at the wall implies reversal",
+        operative_formula_refs=("impact_efficiency",),
+        direction_derivation="collapse implies reversal -> long",
+        comparator_derivation="complement_within_same_eligible_population",
+        audit_note="'collapse'/'high' are undefined magnitude words -- no ratified numeric meaning exists",
+        unresolved_magnitude_words=("collapse", "high"),
+    )
+
+    proxy_excerpt = "The frozen pilot proxy stands in for Study 1's impact_efficiency mechanism."
+    proxy_span = "frozen pilot proxy stands in for Study 1's impact_efficiency mechanism"
+    proxy_only = SourceRecord(
+        source_id="fixture-proxy", source_path="docs/fixtures/mechanism.md", section_ref="1.1-proxy",
+        quoted_spans=(QuotedSpan(text=proxy_span, location=proxy_excerpt.index(proxy_span)),),
+        source_excerpt=proxy_excerpt,
+        mechanism_statement="pilot proxy candidate request for Study 1",
+        operative_formula_refs=("impact_efficiency_pilot_proxy",),
+        direction_derivation="long", comparator_derivation="complement_within_same_eligible_population",
+        audit_note="a frozen pilot proxy is provenance only, never the full mechanism",
+        proxy_of=ProxyDeclaration(
+            parked_study_source_id="study-1-range-wall-failed-aggression",
+            do_not="do_not_claim_full_study_1_mechanism",
+        ),
+    )
+
+    unsupported_excerpt = "A shuffled-side persistence statistic is not a supported Scout study form here."
+    unsupported_span = "shuffled-side persistence statistic is not a supported Scout study form"
+    unsupported_stat = SourceRecord(
+        source_id="fixture-unsupported-stat", source_path="docs/fixtures/mechanism.md", section_ref="9.6",
+        quoted_spans=(QuotedSpan(text=unsupported_span, location=unsupported_excerpt.index(unsupported_span)),),
+        source_excerpt=unsupported_excerpt,
+        mechanism_statement="shuffled-side persistence statistic", operative_formula_refs=(),
+        direction_derivation="long", comparator_derivation=BLOCKED_UNSUPPORTED_STUDY_FORM_SENTINEL,
+        audit_note="the existing Scout screen has no shuffled-side permutation null; unsupported study form",
+    )
+
+    alias_excerpt = "Card 9.7 event-time windows are now embodied by the current frozen feature windows."
+    alias_span = "event-time windows are now embodied by the current frozen feature windows"
+    alias_supersession = SourceRecord(
+        source_id="fixture-alias-older", source_path="docs/fixtures/mechanism.md", section_ref="9.7",
+        quoted_spans=(QuotedSpan(text=alias_span, location=alias_excerpt.index(alias_span)),),
+        source_excerpt=alias_excerpt,
+        mechanism_statement="event-time feature windows", operative_formula_refs=("event_time_window",),
+        direction_derivation="long", comparator_derivation="complement_within_same_eligible_population",
+        audit_note="Card 9.7 is variant vocabulary for an already-frozen current feature window, per §1.3",
+        superseded_fields={"event_time_window": "docs/rapid-validation-spec.md#feature-windows"},
+        supersession=SupersessionDeclaration(
+            newer_source_ref="docs/rapid-validation-spec.md#feature-windows",
+            alias_kind=DISPOSITION_ALIASED_VARIANT_VOCABULARY,
+        ),
+    )
+
+    directionless_excerpt = "The mechanism describes co-occurrence with no stated directional implication."
+    directionless_span = "co-occurrence with no stated directional implication"
+    directionless = SourceRecord(
+        source_id="fixture-directionless", source_path="docs/fixtures/mechanism.md", section_ref="9.5",
+        quoted_spans=(QuotedSpan(text=directionless_span, location=directionless_excerpt.index(directionless_span)),),
+        source_excerpt=directionless_excerpt,
+        mechanism_statement="spread-dynamics regime co-occurrence", operative_formula_refs=("spread_regime",),
+        direction_derivation=BLOCKED_DIRECTION_SENTINEL,
+        comparator_derivation="complement_within_same_eligible_population",
+        audit_note="the quoted text states co-occurrence only; no mechanical long/short implication exists",
+    )
+
+    epoch_id = "epoch:hermetic-fixture-sources-compiler"
+    all_records = [
+        natural_boundary, variant_a, variant_b, magnitude_word, proxy_only, unsupported_stat,
+        alias_supersession, directionless,
+    ]
+    result = compile_sources(
+        all_records, foundry_spec_version="v1", epoch_id=epoch_id,
+        blueprints={
+            "fixture-natural-boundary": _hermetic_fixture_blueprint(),
+            "fixture-variant-a": _hermetic_fixture_blueprint(horizon="trades_20"),
+            "fixture-variant-b": _hermetic_fixture_blueprint(horizon="trades_100"),
+        },
+    )
+
+    surfaced = [
+        natural_boundary, variant_a, magnitude_word, proxy_only, unsupported_stat,
+        alias_supersession, directionless,
+    ]
+    fixtures = []
+    for record in surfaced:
+        disposition = result.dispositions[record.source_id]
+        spec = result.candidate_specs.get(record.source_id)
+        fixtures.append(
+            {
+                **_canonical_source_record(record),
+                "disposition": disposition,
+                "candidate_spec": candidate_spec_view(spec) if spec is not None else None,
+                "block_reason": None if disposition == DISPOSITION_COMPILED else disposition,
+            }
+        )
+
+    # --- immutability_proof (TC-3): the SAME compileable fixture, compiled twice with two
+    # different injected `extra` effect/p-value/n values -- `extra` is outside every source input
+    # `compile_source_disposition`/the compiler ever reads, so both hashes must agree. -------------
+    injected_extra_a = {"effect_bps": 12.0, "p_value": 0.5, "n": 40}
+    injected_extra_b = {"effect_bps": 99.0, "p_value": 0.0001, "n": 500}
+    proof_a = compile_sources(
+        [_dataclasses_replace(natural_boundary, extra=injected_extra_a)], foundry_spec_version="v1",
+        epoch_id=epoch_id, blueprints={"fixture-natural-boundary": _hermetic_fixture_blueprint()},
+    )
+    proof_b = compile_sources(
+        [_dataclasses_replace(natural_boundary, extra=injected_extra_b)], foundry_spec_version="v1",
+        epoch_id=epoch_id, blueprints={"fixture-natural-boundary": _hermetic_fixture_blueprint()},
+    )
+    hash_a = proof_a.candidate_specs["fixture-natural-boundary"].candidate_spec_hash
+    hash_b = proof_b.candidate_specs["fixture-natural-boundary"].candidate_spec_hash
+
+    return {
+        "fixtures": fixtures,
+        "immutability_proof": {
+            "source_id": "fixture-natural-boundary",
+            "candidate_spec_hash_a": hash_a,
+            "candidate_spec_hash_b": hash_b,
+            "injected_extra_a": injected_extra_a,
+            "injected_extra_b": injected_extra_b,
+            "hashes_equal": hash_a == hash_b,
+        },
+    }

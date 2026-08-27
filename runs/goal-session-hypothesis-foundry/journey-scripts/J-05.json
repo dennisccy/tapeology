@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "journey": "J-05",
+  "name": "The complete factory passes hermetic known-null, planted-effect, leakage, and honest-stop oracles",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "journey": "J-05",
+      "action": {"type": "goto", "url": "/desk"},
+      "expect": {"text": "Hypothesis Foundry"}
+    },
+    {
+      "n": 2,
+      "journey": "J-05",
+      "action": {"type": "click", "target": {"testid": "desk-section-expand-hypothesisFoundry"}},
+      "expect": {"text": "Era-Open Baseline"}
+    },
+    {
+      "n": 3,
+      "journey": "J-05",
+      "action": {"type": "click", "target": {"testid": "desk-section-expand-foundry-hermetic-oracles-section"}},
+      "expect": {"text": "Protected-data trip fails closed / evidence class immutable"}
+    }
+  ]
+}

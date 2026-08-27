@@ -201,3 +201,43 @@ path only as the schema/wiring destination the eventual REAL freeze-set will occ
 commit it — it does not write, fabricate, or pre-create the real committed file, and the UI must
 visibly label this subview as fixture-scope, distinct from any future real freeze record.
 **Reversible:** yes
+
+## iter-4 — goal-evaluator
+
+**Ambiguity:** the status vocabulary ("partial = only some assertion steps passed") does not say how
+to treat a journey where every numbered acceptance step IS demonstrated but a sub-clause inside one
+step is not (J-03 step 2's "raw coordinates remain descriptive provenance"; J-04 step 4's "plus the
+manifest/source/spec/config identities"), versus one where a whole numbered step has no on-screen
+home at all (J-05 step 3's kill-type mapping; J-02 step 5b's committed audit report).
+**We chose:** a uniform line applied to all four target journeys — `passing` when every numbered step
+has an on-screen demonstration I personally verified, with un-rendered sub-clauses recorded as `gap`
+text; `partial` when any whole numbered step has no on-screen demonstration. That yields J-03/J-04
+`passing` and J-02/J-05 `partial`. The alternative (any missing sub-clause caps a journey at
+`partial`) would leave all four permanently partial and make the era unclosable, since J-02's step 5b
+is structurally impossible before J-06 by the goal's own execution order.
+**Reversible:** yes
+
+**Ambiguity:** two of J-03's five steps prove themselves only inside a collapsed `<details>`
+drill-in, so the screenshot shows the disclosure widget rather than the asserted values, and the
+browser-qa agent verified them by DOM extraction. Methodology A.3 says "the screenshot outranks every
+prose claim" but does not say whether a collapsed-but-present drill-in counts as shown.
+**We chose:** count them, after reproducing them independently rather than accepting the report — I
+re-ran `foundry_interpreter.interpreter_hermetic_fixture_view()` and got exactly the reported values
+(`n_candidate=16`/`n_comparator=32` with `feature_name`/`transform`/`params` all `None`;
+`killed_direction` at `-79.905625` bps versus `survive`). The screenshot and the prose do not
+conflict here, so nothing was overruled; a collapsed disclosure is a real on-screen affordance the
+operator can open, not an absent one.
+**Reversible:** yes
+
+**Ambiguity:** production code temporarily reassigning the frozen `scout._two_sided_p` and restoring
+it in a `finally` (`foundry_hermetic_summary.py:75-82`, `:183-188`) sits between two readings of the
+"Frozen foundations stay frozen … never silently mutated" rail: nothing persists and no research
+result changed, but it is a raw global reassignment of a frozen scientific module inside the serving
+process, which the equivalent test code avoids by using `monkeypatch.setattr`.
+**We chose:** record it in the anti-goal ledger as MINOR and unresolved (therefore blocking) rather
+than describing it in prose only — goal.md's own anti-goal says findings "are not dismissed in
+prose". MINOR rather than critical because I re-ran the composite epoch and confirmed every outcome
+is still correct, nothing persists past the `finally`, and no market data or real candidate is
+involved. It does not change this iteration's verdict; it must be fixed or owner-dispositioned before
+the era can close.
+**Reversible:** yes
