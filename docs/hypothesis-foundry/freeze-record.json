@@ -1,0 +1,13 @@
+{
+  "candidate_spec_schema_hash": "dc3a283eb8a4fb2c7a9eb8120a5637af012ec1dd2a5e9d8b896a3f7152465332",
+  "compiler_hash": "dc3a283eb8a4fb2c7a9eb8120a5637af012ec1dd2a5e9d8b896a3f7152465332",
+  "config_fingerprint": "08e471b10130e1e2",
+  "freeze_commit": "55c42ee3ebc33eda9eaf14da8fd753d90640fa2c",
+  "freeze_set_hash": "70fcd30237b463d5e61ea31ec80987995886531047c9031990a8269da7bb35b2",
+  "interpreter_hash": "9f024c28c30baf0a9f310ba2191ddf4bc5f4572b5b7e623ead3dda5e8f74ca8f",
+  "manifest_hash": "fc22781ce4319968e40dc5b0ee976e5b76382d7f95a89dfa9ce22977690005cb",
+  "runner_hash": "83f340abe577d966fe6e538e29b0857d8e4f93ccb7b739f91be25c685a9131b5",
+  "scout_screen_source_hash": "7fede1f37d688385c83b53c279b63c143cb9664e35ebf4154e8e908056b47ea8",
+  "source_registry_hash": "ed40dbc25e8fdb961258512dc01ccbaa4633e0ddb6f374288c6c78d681bd098d",
+  "spec_hash": "17beb618be5c325144e03eb760ef03e91771456a2e965f5f821009058df8ce82"
+}

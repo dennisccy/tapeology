@@ -1,0 +1,132 @@
+{
+  "_generation_inputs": {
+    "compiler_hash": "dc3a283eb8a4fb2c7a9eb8120a5637af012ec1dd2a5e9d8b896a3f7152465332",
+    "config_fingerprint": "08e471b10130e1e2",
+    "dispositions": {
+      "card-9.1-study-2-delta-divergence-excluded": "EXCLUDED_PREVIOUSLY_KILLED",
+      "card-9.2-delta-by-price-profile-excluded": "EXCLUDED_PREREQUISITE_UNMET",
+      "card-9.3-top-of-book-imbalance": "BLOCKED_DIRECTION",
+      "card-9.4-burst-climax-detection": "BLOCKED_SPEC_GAP",
+      "card-9.5-spread-dynamics-regime": "BLOCKED_DIRECTION",
+      "card-9.6-run-length-at-touch": "BLOCKED_DIRECTION",
+      "card-9.6-shuffled-side-persistence": "BLOCKED_DIRECTION",
+      "card-9.7-event-time-feature-windows": "ALIASED_VARIANT_VOCABULARY",
+      "cards-9.8-9.11-wave2-gate-closed": "EXCLUDED_GATE_CLOSED",
+      "pilot-study-1-range-wall-failed-aggression": "ALIASED_PROXY_ONLY",
+      "pilot-study-3-capitulation-exhaustion": "ALIASED_PROXY_ONLY"
+    },
+    "foundry_spec_version": "v1",
+    "source_registry_hash": "ed40dbc25e8fdb961258512dc01ccbaa4633e0ddb6f374288c6c78d681bd098d"
+  },
+  "_inputs_hash": "afd19e9c11a6534f62c9341ba663a2ce9e0e270163435cf86fd4399f2d328f92",
+  "compiler_hash": "dc3a283eb8a4fb2c7a9eb8120a5637af012ec1dd2a5e9d8b896a3f7152465332",
+  "config_fingerprint": "08e471b10130e1e2",
+  "epoch_id": "epoch:afd19e9c11a6534f",
+  "families": [],
+  "foundry_spec_version": "v1",
+  "manifest_hash": "fc22781ce4319968e40dc5b0ee976e5b76382d7f95a89dfa9ce22977690005cb",
+  "outcome_access_census": 0,
+  "source_dispositions": [
+    {
+      "alias_refs": [],
+      "disposition": "ALIASED_PROXY_ONLY",
+      "lineage_refs": [
+        "range_wall_failed_aggression"
+      ],
+      "source_id": "pilot-study-1-range-wall-failed-aggression"
+    },
+    {
+      "alias_refs": [],
+      "disposition": "ALIASED_PROXY_ONLY",
+      "lineage_refs": [
+        "capitulation_exhaustion"
+      ],
+      "source_id": "pilot-study-3-capitulation-exhaustion"
+    },
+    {
+      "alias_refs": [],
+      "disposition": "BLOCKED_DIRECTION",
+      "lineage_refs": [
+        "card-9.3"
+      ],
+      "source_id": "card-9.3-top-of-book-imbalance"
+    },
+    {
+      "alias_refs": [],
+      "disposition": "BLOCKED_SPEC_GAP",
+      "lineage_refs": [
+        "card-9.4"
+      ],
+      "source_id": "card-9.4-burst-climax-detection"
+    },
+    {
+      "alias_refs": [],
+      "disposition": "BLOCKED_DIRECTION",
+      "lineage_refs": [
+        "card-9.5"
+      ],
+      "source_id": "card-9.5-spread-dynamics-regime"
+    },
+    {
+      "alias_refs": [
+        "card-9.6-run-length-at-touch"
+      ],
+      "disposition": "BLOCKED_DIRECTION",
+      "lineage_refs": [
+        "card-9.6-shuffled-side-persistence"
+      ],
+      "source_id": "card-9.6-shuffled-side-persistence"
+    },
+    {
+      "alias_refs": [
+        "card-9.6-shuffled-side-persistence"
+      ],
+      "disposition": "BLOCKED_DIRECTION",
+      "lineage_refs": [
+        "card-9.6-run-length-at-touch"
+      ],
+      "source_id": "card-9.6-run-length-at-touch"
+    },
+    {
+      "alias_refs": [],
+      "disposition": "ALIASED_VARIANT_VOCABULARY",
+      "lineage_refs": [
+        "card-9.7"
+      ],
+      "source_id": "card-9.7-event-time-feature-windows"
+    },
+    {
+      "alias_refs": [
+        "card-9.1",
+        "study-2-delta-divergence-level-tests"
+      ],
+      "disposition": "EXCLUDED_PREVIOUSLY_KILLED",
+      "lineage_refs": [
+        "card-9.1-study-2-delta-divergence-level-tests"
+      ],
+      "source_id": "card-9.1-study-2-delta-divergence-excluded"
+    },
+    {
+      "alias_refs": [],
+      "disposition": "EXCLUDED_PREREQUISITE_UNMET",
+      "lineage_refs": [
+        "card-9.2"
+      ],
+      "source_id": "card-9.2-delta-by-price-profile-excluded"
+    },
+    {
+      "alias_refs": [
+        "card-9.8",
+        "card-9.9",
+        "card-9.10",
+        "card-9.11"
+      ],
+      "disposition": "EXCLUDED_GATE_CLOSED",
+      "lineage_refs": [
+        "cards-9.8-9.11-wave2-gate-closed"
+      ],
+      "source_id": "cards-9.8-9.11-wave2-gate-closed"
+    }
+  ],
+  "source_registry_hash": "ed40dbc25e8fdb961258512dc01ccbaa4633e0ddb6f374288c6c78d681bd098d"
+}

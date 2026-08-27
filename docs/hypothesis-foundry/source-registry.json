@@ -1,0 +1,428 @@
+{
+  "foundry_spec_version": "v1",
+  "records": [
+    {
+      "aliases_lineage_ids": [],
+      "alternatives": [],
+      "audit_note": "Disposition is ALIASED_PROXY_ONLY under \u00a72 step 1 (proxy_of set): the only operationalized artifact for this study is scout.py's own frozen pilot_study_candidate_grid()['range_wall_failed_aggression'] request (feature_name='failed_aggression_score', op='ge', value=0.5, structure_context_kind='band_touch', sidedness=None) -- a single-feature proxy for the quoted THREE-part conjunction, never the full mechanism itself. The quoted do_not restriction is preserved verbatim per goal.md \u00a71.1 ('these proxies are source objects for provenance, not permission to launder a partial proxy as the full mechanism'). Independently of the proxy disposition, the full mechanism also carries two undefined magnitude words ('high' aggression, 'collapsing' impact efficiency) per \u00a72.2's own listed example -- recorded via unresolved_magnitude_words below so an auditor sees the full mechanism could not compile even absent the proxy rule. No candidate outcome, p-value, effect, sample count, or Scout verdict was read to reach this disposition -- Study 1 was never screened this era (J-07 has not run).",
+      "comparator_derivation": "complement_within_same_eligible_population",
+      "direction_derivation": "BLOCKED_DIRECTION",
+      "disposition": "ALIASED_PROXY_ONLY",
+      "explicit_exclusion": null,
+      "foundry_family_key": null,
+      "lineage_id": "range_wall_failed_aggression",
+      "mechanism_statement": "At band-map wall touches, does high aggression-into-the-wall with collapsing impact efficiency and opposite-side refill_consistent replenishment precede rejection more than comparable touches without that signature (docs/goal-archive/goal-2026-08-26.md J-09 step 1, the Rapid Microscope's own predeclaration of this study, cited here as corroborating provenance for the mechanism's full stated shape; the operative PARKED/proxy ruling itself is micro_readiness.py's, quoted above).",
+      "operative_formula_refs": [
+        "failed_aggression_score"
+      ],
+      "proxy_of": {
+        "do_not": "screen the failed_aggression_score proxy under this mechanism's name",
+        "parked_study_source_id": "range_wall_failed_aggression"
+      },
+      "quoted_spans": [
+        {
+          "location": 0,
+          "text": "`range_wall_failed_aggression` states a THREE-part conjunction: high aggression into the wall, collapsing impact efficiency, AND opposite-side `refill_consistent` replenishment."
+        },
+        {
+          "location": 732,
+          "text": "opposite-side refill_consistent co-occurrence is unbuilt and unspecified"
+        },
+        {
+          "location": 816,
+          "text": "screen the failed_aggression_score proxy under this mechanism's name"
+        }
+      ],
+      "section_ref": "lines 116-158 (PILOT_STUDY_STATUS['range_wall_failed_aggression'])",
+      "source_excerpt": "`range_wall_failed_aggression` states a THREE-part conjunction: high aggression into the wall, collapsing impact efficiency, AND opposite-side `refill_consistent` replenishment. `failed_aggression_score` covers the first two as one composite; the refill co-occurrence is genuinely unbuilt, and `scout.py`'s own frozen comment says so. Neither gap is a coding task. Each needs the owner to SPECIFY the missing mechanism (what counts as \"then\", over what window, with what replenishment measure) before anything can implement it, and inventing that specification here would be choosing the hypothesis after seeing the tape. Both are therefore PARKED, and must not be screened as if they were their full stated mechanisms. || missing: opposite-side refill_consistent co-occurrence is unbuilt and unspecified || do_not: screen the failed_aggression_score proxy under this mechanism's name",
+      "source_hash": "f6f6051eeaa9ddc8c0ac9a2581787b3a0361b7b6e91e785a0def8fd2ecb3aed2",
+      "source_id": "pilot-study-1-range-wall-failed-aggression",
+      "source_path": "apps/backend/app/research/micro_readiness.py",
+      "superseded_fields": {},
+      "supersession": null,
+      "threshold_provenance": "literal_ratified_threshold",
+      "unresolved_magnitude_words": [
+        "high",
+        "collapsing"
+      ],
+      "variant_ordinal": null
+    },
+    {
+      "aliases_lineage_ids": [],
+      "alternatives": [],
+      "audit_note": "Disposition is ALIASED_PROXY_ONLY under \u00a72 step 1 (proxy_of set): the only operationalized artifact for this study is scout.py's own frozen pilot_study_candidate_grid()['capitulation_exhaustion'] request (feature_name='failed_aggression_score', op='ge', value=0.7, structure_context_kind='playbook_signal', setup_id='capitulation', sidedness=None) -- a single, direction-agnostic threshold, never the quoted ordered sell-then-collapse sequence. The quoted do_not restriction is preserved verbatim. Independently of the proxy disposition, the full mechanism also carries two undefined magnitude words ('extreme' sell aggression, 'collapsing' impact efficiency) plus an ordered THEN lag that \u00a72.2 lists as new science ('inventing an ordered-sequence lag/window') --  recorded via unresolved_magnitude_words below. No candidate outcome, p-value, effect, sample count, or Scout verdict was read to reach this disposition -- Study 3 was never screened this era (J-07 has not run).",
+      "comparator_derivation": "complement_within_same_eligible_population",
+      "direction_derivation": "BLOCKED_DIRECTION",
+      "disposition": "ALIASED_PROXY_ONLY",
+      "explicit_exclusion": null,
+      "foundry_family_key": null,
+      "lineage_id": "capitulation_exhaustion",
+      "mechanism_statement": "Do event-level exhaustion signatures (extreme sell aggression then collapsing negative impact efficiency / replenishment) separate capitulation signals that snap back from those that do not (docs/goal-archive/goal-2026-08-26.md J-09 step 1, cited as corroborating provenance for the mechanism's full stated shape; the operative PARKED/proxy ruling itself is micro_readiness.py's, quoted above).",
+      "operative_formula_refs": [
+        "failed_aggression_score"
+      ],
+      "proxy_of": {
+        "do_not": "screen a single direction-agnostic threshold under this mechanism's name",
+        "parked_study_source_id": "capitulation_exhaustion"
+      },
+      "quoted_spans": [
+        {
+          "location": 0,
+          "text": "`capitulation_exhaustion` states an ORDERED SEQUENCE: extreme SELL aggression, THEN collapsing negative impact efficiency / replenishment."
+        },
+        {
+          "location": 689,
+          "text": "the ordered sell-aggression-THEN-collapse sequence is unimplemented and underspecified (no defined then-window, no replenishment measure)"
+        },
+        {
+          "location": 838,
+          "text": "screen a single direction-agnostic threshold under this mechanism's name"
+        }
+      ],
+      "section_ref": "lines 116-158 (PILOT_STUDY_STATUS['capitulation_exhaustion'])",
+      "source_excerpt": "`capitulation_exhaustion` states an ORDERED SEQUENCE: extreme SELL aggression, THEN collapsing negative impact efficiency / replenishment. The available request is a single direction-agnostic threshold at a `capitulation` signal -- no then-sequence, no replenishment term, not sell-specific. Neither gap is a coding task. Each needs the owner to SPECIFY the missing mechanism (what counts as \"then\", over what window, with what replenishment measure) before anything can implement it, and inventing that specification here would be choosing the hypothesis after seeing the tape. Both are therefore PARKED, and must not be screened as if they were their full stated mechanisms. || missing: the ordered sell-aggression-THEN-collapse sequence is unimplemented and underspecified (no defined then-window, no replenishment measure) || do_not: screen a single direction-agnostic threshold under this mechanism's name",
+      "source_hash": "33ee2aa81f9d315018eb87ddb3d4b54cf182631a993afe63035502e9f28e06ce",
+      "source_id": "pilot-study-3-capitulation-exhaustion",
+      "source_path": "apps/backend/app/research/micro_readiness.py",
+      "superseded_fields": {},
+      "supersession": null,
+      "threshold_provenance": "literal_ratified_threshold",
+      "unresolved_magnitude_words": [
+        "extreme",
+        "collapsing"
+      ],
+      "variant_ordinal": null
+    },
+    {
+      "aliases_lineage_ids": [],
+      "alternatives": [],
+      "audit_note": "The quoted hypothesis states the feature 'adds confirm/veto information' -- it is explicitly agnostic about sign (confirm OR veto), never asserting that bid-heavy at support mechanically implies long (or ask-heavy at resistance implies short). \u00a72.2 forbids 'inventing a direction not mechanically implied by the ratified statement'; inventing a long/short mapping here would be exactly that. This is otherwise the cleanest natural-boundary candidate of the five Wave-1 cards: micro_features.quote_imbalance()'s own signed formula ((bid_size - ask_size) / total) makes its zero boundary a genuine intrinsic sign boundary (positive = bid-heavy, per \u00a72.3 category 3 and the quoted parenthetical's own 'bid-heavy' language) -- the block is direction alone, not the threshold. No candidate outcome, p-value, effect, or Scout verdict was read to reach this disposition.",
+      "comparator_derivation": "complement_within_same_eligible_population",
+      "direction_derivation": "BLOCKED_DIRECTION",
+      "disposition": "BLOCKED_DIRECTION",
+      "explicit_exclusion": null,
+      "foundry_family_key": null,
+      "lineage_id": "card-9.3",
+      "mechanism_statement": "L1 top-of-book size imbalance at a zone touch (bid-heavy at support) adds confirm/veto information beyond the existing trade-derived features.",
+      "operative_formula_refs": [
+        "quote_imbalance"
+      ],
+      "proxy_of": null,
+      "quoted_spans": [
+        {
+          "location": 12,
+          "text": "L1 size imbalance at a zone touch (bid-heavy at support) adds confirm/veto information beyond the trade-derived features."
+        }
+      ],
+      "section_ref": "Era 9, Wave 1, Card 9.3 (line 1196)",
+      "source_excerpt": "Hypothesis: L1 size imbalance at a zone touch (bid-heavy at support) adds confirm/veto information beyond the trade-derived features. Formulas: I_t = EWMA(bid_size / (bid_size + ask_size)), halflife 5s (config), sizes in ROUND LOTS on both sides (ratio is unit-safe; never mixed with share counts -- T12). Sampled at arm-eligible events.",
+      "source_hash": "5f0c70925dab31d40bd9c2a2f2619dbb7e8301680a1382eacc3c9321af7ffa79",
+      "source_id": "card-9.3-top-of-book-imbalance",
+      "source_path": "docs/research-directions.md",
+      "superseded_fields": {},
+      "supersession": null,
+      "threshold_provenance": "natural_semantic_boundary",
+      "unresolved_magnitude_words": [],
+      "variant_ordinal": null
+    },
+    {
+      "aliases_lineage_ids": [],
+      "alternatives": [],
+      "audit_note": "Two undefined magnitude/qualitative words appear in the quoted hypothesis without a ratified numeric or structural pin: 'session extremes' (how close to the session high/low counts as AT the extreme is never stated) and 'genuine breaks' ('genuine' is exactly the class of word \u00a72.2 lists -- 'high', 'extreme', 'strong', 'near' -- whose numeric meaning would have to be invented). This is independent of, and prior to, the population question (neither 'session extreme' nor 'zone break' is a currently supported scout.STRUCTURE_CONTEXT_KINDS value: only 'band_touch', 'playbook_signal', and 'none' exist). It is also independent of the fact that the CURRENTLY BUILT feature (micro_features.volume_burst -- a ratio-to-baseline-median) does not implement the quoted Poisson z-score formula verbatim; the current brought-forward feature vocabulary does not preserve a legal climax threshold/context, matching docs/goal.md \u00a712's own example for this card. No candidate outcome, p-value, effect, or Scout verdict was read to reach this disposition.",
+      "comparator_derivation": "complement_within_same_eligible_population",
+      "direction_derivation": "BLOCKED_DIRECTION",
+      "disposition": "BLOCKED_SPEC_GAP",
+      "explicit_exclusion": null,
+      "foundry_family_key": null,
+      "lineage_id": "card-9.4",
+      "mechanism_statement": "Trade-arrival bursts at session extremes mark exhaustion (a reversal signature); bursts at zone breaks mark genuine breaks (a continuation signature).",
+      "operative_formula_refs": [
+        "volume_burst"
+      ],
+      "proxy_of": null,
+      "quoted_spans": [
+        {
+          "location": 12,
+          "text": "trade-arrival bursts at session extremes mark exhaustion (reversal lift); bursts at zone breaks mark genuine breaks (continuation lift)."
+        }
+      ],
+      "section_ref": "Era 9, Wave 1, Card 9.4 (line 1210)",
+      "source_excerpt": "Hypothesis: trade-arrival bursts at session extremes mark exhaustion (reversal lift); bursts at zone breaks mark genuine breaks (continuation lift). Formulas: burst z-score over w = 5s windows: z = (n_w - mu_m*w/60) / sqrt(mu_m*w/60) (Poisson), where mu_m = expected trades/min at ET minute m from the 5.5 intraday RVOL/arrival baseline (prior 20 sessions, T5). Burst iff z >= 4 (config). Volume climax: 1m volume >= p95 of minute-of-day baseline AND price at a session extreme.",
+      "source_hash": "2f004ae23c99edd62df9c223932d57d9e5b225636fa5b5fd30a5d410a6106626",
+      "source_id": "card-9.4-burst-climax-detection",
+      "source_path": "docs/research-directions.md",
+      "superseded_fields": {},
+      "supersession": null,
+      "threshold_provenance": null,
+      "unresolved_magnitude_words": [
+        "extremes",
+        "genuine"
+      ],
+      "variant_ordinal": null
+    },
+    {
+      "aliases_lineage_ids": [],
+      "alternatives": [],
+      "audit_note": "The quoted mechanism is explicitly a co-occurrence/veto statement, never a standalone directional thesis: widening is stated only as 'a veto' (on some other, unnamed setup's entries) and narrowing-plus-imbalance is stated only to 'precede breaks' without naming the break's own direction. No mechanical long/short implication exists in the quoted text -- this is the same directionless archetype the hermetic fixture suite already models for this exact card (foundry_compiler.sources_compiler_hermetic_fixture_view's 'fixture-directionless' record cites section '9.5' verbatim). No candidate outcome, p-value, effect, or Scout verdict was read to reach this disposition.",
+      "comparator_derivation": "complement_within_same_eligible_population",
+      "direction_derivation": "BLOCKED_DIRECTION",
+      "disposition": "BLOCKED_DIRECTION",
+      "explicit_exclusion": null,
+      "foundry_family_key": null,
+      "lineage_id": "card-9.5",
+      "mechanism_statement": "Spread widening marks instability where entries underperform (a veto on some other setup); spread narrowing plus one-sided top-of-book imbalance precedes breaks.",
+      "operative_formula_refs": [
+        "average_spread"
+      ],
+      "proxy_of": null,
+      "quoted_spans": [
+        {
+          "location": 12,
+          "text": "spread widening (EWMA_fast/EWMA_slow >= threshold) marks instability where entries underperform -- a veto; narrowing + one-sided 9.3 imbalance precedes breaks."
+        }
+      ],
+      "section_ref": "Era 9, Wave 1, Card 9.5 (line 1224)",
+      "source_excerpt": "Hypothesis: spread widening (EWMA_fast/EWMA_slow >= threshold) marks instability where entries underperform -- a veto; narrowing + one-sided 9.3 imbalance precedes breaks. Formulas: spread bps EWMAs, halflifes 10s/120s (config); widening iff ratio >= 1.5 (config).",
+      "source_hash": "b938128014424ce35c4efca01a9cdb8ba778f5bfc8c98dff01c8daf30ddacf4d",
+      "source_id": "card-9.5-spread-dynamics-regime",
+      "source_path": "docs/research-directions.md",
+      "superseded_fields": {},
+      "supersession": null,
+      "threshold_provenance": null,
+      "unresolved_magnitude_words": [],
+      "variant_ordinal": null
+    },
+    {
+      "aliases_lineage_ids": [
+        "card-9.6-run-length-at-touch"
+      ],
+      "alternatives": [],
+      "audit_note": "Per \u00a71.3, Card 9.6 contains more than one study statement; this record is the shuffled-side persistence sub-statement (the sibling run-length-at-touch sub-statement is a separate record, card-9.6-run-length-at-touch, cross-referenced via aliases_lineage_ids). This record is DOUBLY blocked, honestly: (1) it has no return/outcome variable at all -- its dependent variable is 'next print's side', never a price return -- so direction_derivation is honestly the BLOCKED_DIRECTION sentinel (the quoted text's own word 'long' is an adjective for run LENGTH, not a trading-direction claim -- a fresh-context audit caught an earlier draft's incorrect reuse of that word as a direction value, corrected here); (2) independently, its quoted evaluation method IS a comparison of an observed conditional probability against a label-shuffled null of the SAME sequence -- a materially different statistical form from scout.screen_candidate's candidate-vs-comparator outcome-mean block-permutation screen, which has no mechanism for a P(event|condition)-vs-shuffle test -- so comparator_derivation is honestly the BLOCKED_UNSUPPORTED_STUDY_FORM sentinel too. Per compile_source_disposition's own fixed, uniform precedence (direction checked before comparator, identically for every record), this record's mechanical disposition is BLOCKED_DIRECTION -- doubly justified, not a disposition picked to be more informative than the mechanical rule would produce. No candidate outcome, p-value, effect, or Scout verdict was read to reach this disposition.",
+      "comparator_derivation": "BLOCKED_UNSUPPORTED_STUDY_FORM",
+      "direction_derivation": "BLOCKED_DIRECTION",
+      "disposition": "BLOCKED_DIRECTION",
+      "explicit_exclusion": null,
+      "foundry_family_key": null,
+      "lineage_id": "card-9.6-shuffled-side-persistence",
+      "mechanism_statement": "Same-side print runs continue beyond chance: the observed conditional continuation probability P(next print same side | run length >= k) is compared against a seeded within-session label-shuffle null, for k in {5, 10, 20}.",
+      "operative_formula_refs": [],
+      "proxy_of": null,
+      "quoted_spans": [
+        {
+          "location": 211,
+          "text": "observed P(next same | run >= k) for k in {5, 10, 20} vs a seeded within-session shuffle of the side sequence (permutation baseline, 1,000 shuffles, seeded)."
+        },
+        {
+          "location": 379,
+          "text": "the permutation comparison IS the study"
+        }
+      ],
+      "section_ref": "Era 9, Wave 1, Card 9.6 (line 1234) -- shuffled-side persistence sub-statement",
+      "source_excerpt": "Hypothesis: long same-side print runs continue beyond chance (flow herding), and run length at a zone touch adds confirm information. Formulas: run = consecutive same-side prints (unknowns break runs, counted); observed P(next same | run >= k) for k in {5, 10, 20} vs a seeded within-session shuffle of the side sequence (permutation baseline, 1,000 shuffles, seeded). Evaluate: the permutation comparison IS the study; then atlas for run-length-at-touch.",
+      "source_hash": "909229f4d65902d226f2e6068aeac0a53d79f4623211f8bbb5aa698d9475ecb3",
+      "source_id": "card-9.6-shuffled-side-persistence",
+      "source_path": "docs/research-directions.md",
+      "superseded_fields": {},
+      "supersession": null,
+      "threshold_provenance": null,
+      "unresolved_magnitude_words": [],
+      "variant_ordinal": null
+    },
+    {
+      "aliases_lineage_ids": [
+        "card-9.6-shuffled-side-persistence"
+      ],
+      "alternatives": [],
+      "audit_note": "Per \u00a71.3, this is Card 9.6's second, distinct study statement (sibling: card-9.6-shuffled-side-persistence). Unlike its sibling, this clause's statistical form (a threshold on run length at a touch) matches the existing Scout screen's supported shape -- but, like Card 9.3, the quoted text states only that run length 'adds confirm information' without naming which run side (buy-run vs sell-run) at which band side (support vs resistance) mechanically implies long vs short; no ratified mirrored-rejection statement (\u00a73.2) exists for this feature either. Inventing that mapping would be a new scientific choice, not a mechanical derivation. docs/goal.md \u00a712 itself frames this exact clause as one that 'may' compile only under 'current source/code evidence at era open' -- that evidence does not resolve direction. No candidate outcome, p-value, effect, or Scout verdict was read to reach this disposition.",
+      "comparator_derivation": "complement_within_same_eligible_population",
+      "direction_derivation": "BLOCKED_DIRECTION",
+      "disposition": "BLOCKED_DIRECTION",
+      "explicit_exclusion": null,
+      "foundry_family_key": null,
+      "lineage_id": "card-9.6-run-length-at-touch",
+      "mechanism_statement": "Same-side print run length at a zone touch adds confirm information.",
+      "operative_formula_refs": [],
+      "proxy_of": null,
+      "quoted_spans": [
+        {
+          "location": 81,
+          "text": "run length at a zone touch adds confirm information"
+        }
+      ],
+      "section_ref": "Era 9, Wave 1, Card 9.6 (line 1234) -- run-length-at-touch sub-statement",
+      "source_excerpt": "Hypothesis: long same-side print runs continue beyond chance (flow herding), and run length at a zone touch adds confirm information.",
+      "source_hash": "1c8f64787dba66b0b4a52193322e23f7b8522865f3c9d8549b87d624d6e4a998",
+      "source_id": "card-9.6-run-length-at-touch",
+      "source_path": "docs/research-directions.md",
+      "superseded_fields": {},
+      "supersession": null,
+      "threshold_provenance": null,
+      "unresolved_magnitude_words": [],
+      "variant_ordinal": null
+    },
+    {
+      "aliases_lineage_ids": [],
+      "alternatives": [],
+      "audit_note": "Per \u00a71.3's own worked example, Card 9.7 is not itself a directional Scout hypothesis -- it is a windowing-representation question ('which windowing has higher |rho| where', per the card's own Evaluate line), so direction_derivation is honestly the BLOCKED_DIRECTION sentinel (harmless here: supersession is checked first). The 2026-08-16 Rapid-Microscope opening note (quoted above) already brought the event-time window representations forward as 'first-class representations at frozen sizes', formula-superseding this card's own open question with an already-decided current representation. Per \u00a71.3's formula-scoped supersession law, the newer frozen rule wins for this field and the older card becomes provenance only -- ALIASED_VARIANT_VOCABULARY, never a fabricated directional candidate manufactured merely to give this card a Scout screen. No candidate outcome, p-value, effect, or Scout verdict was read to reach this disposition.",
+      "comparator_derivation": "complement_within_same_eligible_population",
+      "direction_derivation": "BLOCKED_DIRECTION",
+      "disposition": "ALIASED_VARIANT_VOCABULARY",
+      "explicit_exclusion": null,
+      "foundry_family_key": null,
+      "lineage_id": "card-9.7",
+      "mechanism_statement": "Event-time (last-N-trades / last-X-shares) feature windows may out-perform fixed-seconds windows at the open and lunch, where a fixed window spans wildly different event counts.",
+      "operative_formula_refs": [
+        "event_time_window"
+      ],
+      "proxy_of": null,
+      "quoted_spans": [
+        {
+          "location": 12,
+          "text": "features over the last-N-trades / last-X-shares beat fixed-seconds windows at the open and lunch"
+        },
+        {
+          "location": 170,
+          "text": "9.7 (event-time feature windows -- last-N-trades / last-X-shares are first-class representations at frozen sizes)."
+        }
+      ],
+      "section_ref": "Era 9, Wave 1, Card 9.7 (line 1244)",
+      "source_excerpt": "Hypothesis: features over the last-N-trades / last-X-shares beat fixed-seconds windows at the open and lunch (where a 30s window means wildly different event counts). || 9.7 (event-time feature windows -- last-N-trades / last-X-shares are first-class representations at frozen sizes).",
+      "source_hash": "27e76c29897a7cc1a1c74892c373d54999e8ec7bbcc1ece268cf22a27a7f7fb1",
+      "source_id": "card-9.7-event-time-feature-windows",
+      "source_path": "docs/research-directions.md",
+      "superseded_fields": {
+        "event_time_window": "docs/research-directions.md, Rapid-Microscope opening note (2026-08-16), 'Brought forward' bullet, line 1108"
+      },
+      "supersession": {
+        "alias_kind": "ALIASED_VARIANT_VOCABULARY",
+        "newer_source_ref": "docs/research-directions.md, Rapid-Microscope opening note (2026-08-16), 'Brought forward' bullet, line 1108"
+      },
+      "threshold_provenance": null,
+      "unresolved_magnitude_words": [],
+      "variant_ordinal": null
+    },
+    {
+      "aliases_lineage_ids": [
+        "card-9.1",
+        "study-2-delta-divergence-level-tests"
+      ],
+      "alternatives": [],
+      "audit_note": "goal.md \u00a71.2: 'Card 9.1 / Study 2 -> EXCLUDED_PREVIOUSLY_KILLED. It may not be recompiled, reversed, rethresholded, or rerun in this epoch.' The Rapid-Microscope opening note establishes the identity (Card 9.1 IS pilot Study 2); the closed era's own ledger row records that Study 2 was already killed on the merits during that prior, immutable era. This record's disposition is fixed directly by the explicit exclusion rule, not re-derived from the cited p-value -- the p-value is quoted only as historical provenance of the prior kill, never re-examined, re-weighed, or used to choose this disposition (the disposition is EXCLUDED_PREVIOUSLY_KILLED regardless of what that p-value was).",
+      "comparator_derivation": "complement_within_same_eligible_population",
+      "direction_derivation": "bearish if price_extreme(tau2) > price_extreme(tau1) AND CD(tau2) <= CD(tau1) - delta; bullish mirrored (Card 9.1's own stated rule -- provenance only, not recompiled)",
+      "disposition": "EXCLUDED_PREVIOUSLY_KILLED",
+      "explicit_exclusion": "EXCLUDED_PREVIOUSLY_KILLED",
+      "foundry_family_key": null,
+      "lineage_id": "card-9.1-study-2-delta-divergence-level-tests",
+      "mechanism_statement": "Card 9.1's session cumulative-delta divergence-at-level mechanism is, by the Rapid-Microscope opening note's own identity statement, pilot Study 2 (delta_divergence_level_tests) -- already run through the Scout during the closed Rapid Microscope era and killed.",
+      "operative_formula_refs": [
+        "CD_t"
+      ],
+      "proxy_of": null,
+      "quoted_spans": [
+        {
+          "location": 10,
+          "text": "CD_t = sum over i<=t, side_i != unknown of sign(side_i)*size_i (session-anchored, RTH prints, shares)."
+        },
+        {
+          "location": 505,
+          "text": "it is pilot study 2"
+        },
+        {
+          "location": 772,
+          "text": "Study 2 killed on the merits (p 0.366)"
+        }
+      ],
+      "section_ref": "Era 9 Card 9.1 (line 1157); Rapid-Microscope opening note (line 1099); era ledger row 2026-08-24 (line 2045)",
+      "source_excerpt": "Formulas: CD_t = sum over i<=t, side_i != unknown of sign(side_i)*size_i (session-anchored, RTH prints, shares). Divergence between consecutive touches tau1 < tau2 of the SAME zone: bearish if price_extreme(tau2) > price_extreme(tau1) AND CD(tau2) <= CD(tau1) - delta where delta = 0.25 * median 120s volume (config fraction); bullish mirrored. || 9.1 (the CD_t accumulator verbatim; the symmetric divergence window SUPERSEDED by a trailing as-of definition -- see the dated amendment on the card itself; it is pilot study 2). || Rapid-validation funnel shipped (observer/snapshots, Scout + hash-chained trial ledger, walk-forward, sealed Vault, graduation, MCP -> 28 tools): 13 real candidates, 0 survivors (killed_null 10 . killed_economic 6 . killed_insufficient_n 3), Study 2 killed on the merits (p 0.366), Studies 1/3 parked pending owner spec, zero `historical_oos`, Vault sealed/untouched -- the funnel kills honestly.",
+      "source_hash": "f2ceae850bd1d10568d95e6c76834e6595c6acd9a64d0f85bc5e6bcd0bc11c09",
+      "source_id": "card-9.1-study-2-delta-divergence-excluded",
+      "source_path": "docs/research-directions.md",
+      "superseded_fields": {},
+      "supersession": null,
+      "threshold_provenance": null,
+      "unresolved_magnitude_words": [],
+      "variant_ordinal": null
+    },
+    {
+      "aliases_lineage_ids": [],
+      "alternatives": [],
+      "audit_note": "goal.md \u00a71.2: 'Card 9.2 -> EXCLUDED_PREREQUISITE_UNMET while its required delta-by-price binning prerequisite is absent.' The card's own Build step names Card 8.2's binning as its literal prerequisite; the Rapid-Microscope opening note explicitly confirms this was 'Deferred unchanged' -- the prerequisite was never built. This disposition follows mechanically from that unmet prerequisite alone, not from any candidate outcome (none was ever computed -- the prerequisite absence blocks compilation before any Scout screen could exist).",
+      "comparator_derivation": "complement_within_same_eligible_population",
+      "direction_derivation": "BLOCKED_DIRECTION",
+      "disposition": "EXCLUDED_PREREQUISITE_UNMET",
+      "explicit_exclusion": "EXCLUDED_PREREQUISITE_UNMET",
+      "foundry_family_key": null,
+      "lineage_id": "card-9.2",
+      "mechanism_statement": "Price bins where heavy net (signed) delta produced no price progress (absorption bins) mark defended prices that outperform volume-only bins as levels -- built on Card 8.2's price-binning infrastructure.",
+      "operative_formula_refs": [
+        "delta_wall"
+      ],
+      "proxy_of": null,
+      "quoted_spans": [
+        {
+          "location": 155,
+          "text": "Build: 8.2's binning, accumulating SIGNED volume"
+        },
+        {
+          "location": 393,
+          "text": "Deferred unchanged: 9.2 (delta-by-price profile; still needs Card 8.2's binning)."
+        }
+      ],
+      "section_ref": "Era 9 Card 9.2 (line 1185); Rapid-Microscope opening note (line 1110)",
+      "source_excerpt": "Hypothesis: price bins where heavy net delta produced NO price progress (absorption bins) mark defended prices that outperform volume-only bins as levels. Build: 8.2's binning, accumulating SIGNED volume; absorption bin = |delta_bin| >= p90 of session bins AND price traversal count through the bin >= K (it kept coming back). Level type delta_wall (feeds the zone engine like any source). || Deferred unchanged: 9.2 (delta-by-price profile; still needs Card 8.2's binning).",
+      "source_hash": "675544987eb690eb8dec1d8c600f244f9ea581f71a8576799a9c8bdffe9fb6bf",
+      "source_id": "card-9.2-delta-by-price-profile-excluded",
+      "source_path": "docs/research-directions.md",
+      "superseded_fields": {},
+      "supersession": null,
+      "threshold_provenance": null,
+      "unresolved_magnitude_words": [],
+      "variant_ordinal": null
+    },
+    {
+      "aliases_lineage_ids": [
+        "card-9.8",
+        "card-9.9",
+        "card-9.10",
+        "card-9.11"
+      ],
+      "alternatives": [],
+      "audit_note": "goal.md \u00a71.2: 'Cards 9.8-9.11 -> EXCLUDED_GATE_CLOSED while their catalog gate lacks the required prior OOS-class evidence.' The Rapid-Microscope opening note re-points (never waives) the gate to historical_oos-class evidence; the closed era's own ledger row records zero historical_oos evidence exists anywhere in the corpus. The gate therefore remains closed for all four cards under the identical, unmet condition -- one combined record (mirroring goal.md \u00a71.2's own single-arrow treatment of this foursome, the same structure as 'Card 9.1 / Study 2') rather than four independently-authored records that would all cite the identical unmet-gate fact. This disposition follows mechanically from the gate's own unmet threshold, never from re-examining any candidate outcome.",
+      "comparator_derivation": "complement_within_same_eligible_population",
+      "direction_derivation": "BLOCKED_DIRECTION",
+      "disposition": "EXCLUDED_GATE_CLOSED",
+      "explicit_exclusion": "EXCLUDED_GATE_CLOSED",
+      "foundry_family_key": null,
+      "lineage_id": "cards-9.8-9.11-wave2-gate-closed",
+      "mechanism_statement": "Cards 9.8 (iceberg/defended-level inference), 9.9 (stop-run sweep-and-reclaim detector), 9.10 (large-print analytics v2), and 9.11 (absorption-exhaustion timing) are Wave-2 detectors gated on prior-family historical_oos-class evidence meeting the 6.9-in-spirit thresholds.",
+      "operative_formula_refs": [],
+      "proxy_of": null,
+      "quoted_spans": [
+        {
+          "location": 0,
+          "text": "Wave 2 (9.8-9.11) stays gated. The 6.9 \"atlas\" this era's gate names was never built (executed era 6 re-scoped per evidence family)."
+        },
+        {
+          "location": 133,
+          "text": "The gate is therefore RE-POINTED, not waived: Wave-2 detector cards open only on `historical_oos`-class Scout/walk-forward evidence"
+        },
+        {
+          "location": 430,
+          "text": "zero `historical_oos`, Vault sealed/untouched"
+        }
+      ],
+      "section_ref": "Rapid-Microscope opening note (line 1111); era ledger row 2026-08-24 (line 2045)",
+      "source_excerpt": "Wave 2 (9.8-9.11) stays gated. The 6.9 \"atlas\" this era's gate names was never built (executed era 6 re-scoped per evidence family). The gate is therefore RE-POINTED, not waived: Wave-2 detector cards open only on `historical_oos`-class Scout/walk-forward evidence from the rapid-microscope machinery meeting the same thresholds in spirit (|median rho| >= 0.03 AND sign_consistency >= 0.7 on discovery-class data, per-family). || zero `historical_oos`, Vault sealed/untouched -- the funnel kills honestly.",
+      "source_hash": "2e470703705363caf29372ed54d1378dc9ce842294ce9e5ac41a975094d0ccf7",
+      "source_id": "cards-9.8-9.11-wave2-gate-closed",
+      "source_path": "docs/research-directions.md",
+      "superseded_fields": {},
+      "supersession": null,
+      "threshold_provenance": null,
+      "unresolved_magnitude_words": [],
+      "variant_ordinal": null
+    }
+  ],
+  "source_registry_hash": "ed40dbc25e8fdb961258512dc01ccbaa4633e0ddb6f374288c6c78d681bd098d"
+}
