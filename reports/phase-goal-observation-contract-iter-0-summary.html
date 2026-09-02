@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<title>goal-observation-contract-iter-0 — Iteration Summary</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  margin: 0; padding: 0; color: #1f2328; background: #f6f8fa; line-height: 1.5;
+}
+.container { max-width: 880px; margin: 0 auto; padding: 24px 16px 80px; }
+.hero {
+  background: white; border: 1px solid #d0d7de; border-radius: 8px;
+  padding: 28px; margin-bottom: 16px; text-align: center;
+}
+.hero.pass { border-top: 6px solid #1a7f37; }
+.hero.fail { border-top: 6px solid #cf222e; }
+.hero.inprogress { border-top: 6px solid #d4a72c; }
+.hero h1 { margin: 0 0 6px 0; font-size: 1.6rem; }
+.hero h2 { margin: 0 0 14px 0; font-size: 1rem; color: #57606a; font-weight: 500; }
+.badge-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 10px; }
+.badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 14px; border-radius: 999px; font-weight: 600; font-size: 0.95rem;
+}
+.badge.pass { background: #dafbe1; color: #1a7f37; }
+.badge.fail { background: #ffebe9; color: #cf222e; }
+.badge.inprogress { background: #fff8c5; color: #9a6700; }
+.badge .badge-enum { font-size: 0.68em; opacity: 0.7; font-weight: 500; margin-left: 6px; }
+.signal-badge { padding: 6px 14px; border-radius: 999px; font-weight: 600; font-size: 0.9rem; }
+.signal-badge.improving { background: #dafbe1; color: #1a7f37; }
+.signal-badge.holding { background: #ddf4ff; color: #0969da; }
+.signal-badge.stalling { background: #fff8c5; color: #9a6700; }
+.signal-badge.regressing { background: #ffebe9; color: #cf222e; }
+.signal-badge.na { background: #f6f8fa; color: #57606a; }
+.meta { color: #57606a; font-size: 0.875rem; margin: 10px 0 16px; }
+.journey-row {
+  display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 12px 0 4px;
+}
+.journey-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 999px; font-size: 0.85rem;
+  background: #f6f8fa; border: 1px solid #d0d7de;
+}
+.journey-pill.passing, .journey-pill.already_passing { background: #dafbe1; color: #1a7f37; border-color: #b4e2c0; }
+.journey-pill.failing, .journey-pill.regressed { background: #ffebe9; color: #cf222e; border-color: #f1aeb0; }
+.journey-pill.partial { background: #fff8c5; color: #9a6700; border-color: #eed888; }
+.journey-pill.unknown { background: #f6f8fa; color: #57606a; }
+.hero-image { margin-top: 18px; }
+.hero-image img { max-width: 100%; height: auto; border-radius: 6px; border: 1px solid #d0d7de; }
+details {
+  background: white; border: 1px solid #d0d7de; border-radius: 8px;
+  margin-bottom: 12px;
+}
+details > summary {
+  cursor: pointer; padding: 14px 18px; font-weight: 600; font-size: 1.05rem;
+  list-style: none; user-select: none; display: flex; align-items: center; gap: 8px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: '▶'; transition: transform 0.15s; font-size: 0.75rem; color: #57606a;
+}
+details[open] > summary::before { transform: rotate(90deg); }
+.accordion-body { padding: 0 18px 18px; }
+.accordion-body h3 { font-size: 0.95rem; color: #57606a; margin: 16px 0 6px; }
+.why-text { background: #f6f8fa; padding: 10px 12px; border-radius: 6px; margin: 4px 0 12px; }
+ul.bullets { margin: 6px 0 14px; padding-left: 22px; }
+ul.bullets li { margin-bottom: 4px; }
+ol.steps { padding-left: 0; list-style: none; counter-reset: step; }
+ol.steps > li {
+  counter-increment: step; padding: 12px 0 12px 44px;
+  border-top: 1px solid #eaeef2; position: relative;
+}
+ol.steps > li:first-child { border-top: none; }
+ol.steps > li::before {
+  content: counter(step); position: absolute; left: 0; top: 14px;
+  width: 30px; height: 30px; border-radius: 50%;
+  background: #0969da; color: white; display: flex;
+  align-items: center; justify-content: center; font-size: 0.85rem; font-weight: 600;
+}
+.step-shot { margin-top: 10px; }
+.step-shot img { max-width: 100%; height: auto; border-radius: 6px; border: 1px solid #d0d7de; }
+.next-step-box {
+  background: #ddf4ff; padding: 12px 16px; border-radius: 6px;
+  border-left: 4px solid #0969da; margin: 12px 0;
+}
+.drill-table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+.drill-table th, .drill-table td {
+  text-align: left; padding: 8px 6px; border-bottom: 1px solid #eaeef2;
+}
+.drill-table th { background: #f6f8fa; }
+.verdict-cell.PASS, .verdict-cell.CLOSURE-PASS, .verdict-cell.GOAL_ACHIEVED { color: #1a7f37; font-weight: 600; }
+.verdict-cell.FAIL, .verdict-cell.CLOSURE-FAIL, .verdict-cell.REGRESSION { color: #cf222e; font-weight: 600; }
+.verdict-cell.CONTINUE, .verdict-cell.ESCALATE, .verdict-cell.STALLED { color: #9a6700; font-weight: 600; }
+.verdict-cell.SKIPPED, .verdict-cell.UNKNOWN, .verdict-cell.IN-PROGRESS { color: #57606a; }
+.footer-note { text-align: center; color: #6e7781; font-size: 0.8rem; margin-top: 24px; }
+.iter-card {
+  background: white; border: 1px solid #d0d7de; border-radius: 8px;
+  padding: 16px 18px; margin-bottom: 12px; display: flex; align-items: center; gap: 14px;
+}
+.iter-card .left { flex-shrink: 0; }
+.iter-card .body { flex: 1 1 auto; }
+.iter-card .body .title { font-weight: 600; }
+.iter-card .body .sub { color: #57606a; font-size: 0.88rem; margin-top: 2px; }
+.iter-card a.open { color: #0969da; text-decoration: none; font-weight: 500; }
+.iter-card a.open:hover { text-decoration: underline; }
+.matrix { width: 100%; border-collapse: collapse; margin: 12px 0 22px; font-size: 0.88rem; }
+.matrix th, .matrix td { padding: 6px 8px; border: 1px solid #d0d7de; text-align: center; }
+.matrix th:first-child, .matrix td:first-child { text-align: left; }
+.matrix .cell-passing, .matrix .cell-already_passing { background: #dafbe1; color: #1a7f37; }
+.matrix .cell-failing, .matrix .cell-regressed { background: #ffebe9; color: #cf222e; }
+.matrix .cell-partial { background: #fff8c5; color: #9a6700; }
+.matrix .cell-unknown { background: #f6f8fa; color: #57606a; }
+.no-summary {
+  background: #fff8c5; border: 1px solid #eed888; padding: 14px 18px;
+  border-radius: 8px; color: #9a6700; margin-bottom: 14px;
+}
+/* Plain-language layer — the primary, non-technical view. */
+.plain-words {
+  background: linear-gradient(180deg, #ffffff 0%, #f6fbff 100%);
+  border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 22px 24px; margin: 18px 0 6px;
+  box-shadow: 0 1px 2px rgba(20, 40, 80, 0.04);
+}
+.plain-words .pw-heading {
+  margin: 0 0 14px; font-size: 1.15rem; color: #0969da;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.pw-grid {
+  display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+.pw-card {
+  background: white; border-radius: 8px; padding: 14px 16px;
+  border: 1px solid #e3eaf3;
+}
+.pw-card .pw-label {
+  font-size: 0.78rem; font-weight: 600; color: #57606a;
+  text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px;
+}
+.pw-card .pw-text {
+  margin: 0; font-size: 1rem; color: #1f2328; line-height: 1.45;
+}
+.pw-empty { color: #8c959f; font-style: italic; font-size: 0.95rem; }
+.tech-divider {
+  margin: 18px 0 8px; text-align: center;
+  color: #6e7781; font-size: 0.82rem; font-style: italic;
+  border-top: 1px dashed #d0d7de; padding-top: 12px;
+}
+/* Watch-it-work — narrated screenshot gallery from demo-narrator. */
+.watch-it-work {
+  background: white; border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 18px 22px; margin: 10px 0 6px;
+}
+.wiw-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; margin-bottom: 14px; flex-wrap: wrap;
+}
+.wiw-heading {
+  margin: 0; font-size: 1.05rem; color: #0969da;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.demo-badge {
+  font-size: 0.75rem; font-weight: 600; padding: 4px 10px; border-radius: 12px;
+  border: 1px solid transparent; letter-spacing: 0.04em;
+}
+.demo-badge.demo-recorded { background: #dafbe1; color: #1a7f37; border-color: #aceebb; }
+.demo-badge.demo-notes    { background: #fff8c5; color: #9a6700; border-color: #e8d97e; }
+.demo-badge.demo-skipped  { background: #f6f8fa; color: #57606a; border-color: #d0d7de; }
+.demo-badge.demo-pending  { background: #ddf4ff; color: #0969da; border-color: #b6e3ff; }
+.demo-grid {
+  display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+.demo-step {
+  margin: 0; padding: 12px; background: #f6f8fa;
+  border: 1px solid #d0d7de; border-radius: 8px;
+}
+.demo-step-head {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+  font-size: 0.9rem;
+}
+.demo-step-num {
+  font-weight: 600; color: #57606a; font-variant-numeric: tabular-nums;
+}
+.demo-step-title { color: #1f2328; font-weight: 500; }
+.demo-new {
+  background: #ddf4ff; color: #0969da; font-size: 0.7rem; font-weight: 700;
+  padding: 2px 6px; border-radius: 4px; letter-spacing: 0.06em;
+}
+.demo-shot { margin-bottom: 8px; }
+.demo-shot img {
+  width: 100%; height: auto; border-radius: 4px; border: 1px solid #d0d7de;
+  display: block;
+}
+.demo-narration {
+  margin: 0; color: #1f2328; font-size: 0.92rem; line-height: 1.4;
+}
+.demo-empty {
+  margin: 8px 0 0; color: #57606a; font-style: italic;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.demo-notes-wrap { margin-top: 14px; }
+.demo-notes-wrap summary {
+  cursor: pointer; color: #9a6700; font-weight: 500; font-size: 0.9rem;
+}
+.demo-notes-wrap[open] summary { margin-bottom: 6px; }
+/* Story so far + latest demo (session index plain-language top). */
+.story-so-far {
+  background: linear-gradient(180deg, #ffffff 0%, #f6fbff 100%);
+  border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 22px 26px; margin: 14px 0 6px;
+  box-shadow: 0 1px 2px rgba(20, 40, 80, 0.04);
+}
+.story-heading {
+  margin: 0 0 12px; font-size: 1.1rem; color: #0969da;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.story-body { font-size: 1rem; color: #1f2328; line-height: 1.55; }
+.story-body .story-h { margin: 14px 0 6px; color: #1f2328; }
+.story-body p { margin: 0 0 10px; }
+.session-demo {
+  background: white; border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 0; margin: 8px 0 6px; overflow: hidden;
+}
+.session-demo-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; padding: 12px 22px;
+  background: #f6f8fa; border-bottom: 1px solid #d6e4f0;
+  font-weight: 600; color: #1f2328; font-size: 0.95rem;
+}
+.session-demo-head a.open { color: #0969da; text-decoration: none; font-weight: 500; font-size: 0.9rem; }
+.session-demo-head a.open:hover { text-decoration: underline; }
+.session-demo .watch-it-work {
+  border: none; border-radius: 0; box-shadow: none; margin: 0;
+}
+/* Delivered link banner — sits on the session index when GOAL_ACHIEVED. */
+.delivered-link {
+  margin: 14px 0; padding: 14px 22px;
+  background: #dafbe1; border: 1px solid #aceebb; border-radius: 10px;
+  color: #1a7f37; font-size: 1rem;
+}
+.delivered-link a {
+  color: #1a7f37; font-weight: 600; text-decoration: none; margin-left: 8px;
+}
+.delivered-link a:hover { text-decoration: underline; }
+.delivered-back {
+  margin: 8px 0 14px; padding: 0; font-size: 0.9rem;
+}
+.delivered-back a { color: #0969da; text-decoration: none; }
+.delivered-back a:hover { text-decoration: underline; }
+.delivered-body {
+  background: white; border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 22px 28px; margin: 12px 0;
+}
+.delivered-body h2.story-h { margin-top: 0; }
+/* Feature manual (session index, top of page). */
+.cover-vision {
+  margin: 8px 0 14px; color: #57606a; font-size: 1.02rem;
+  font-style: italic; max-width: 60ch;
+}
+.feature-toc {
+  background: white; border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 20px 26px; margin: 14px 0;
+  box-shadow: 0 1px 2px rgba(20, 40, 80, 0.04);
+}
+.feature-toc-heading {
+  margin: 0 0 14px; font-size: 1.05rem; color: #0969da;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.feature-toc-list {
+  margin: 0; padding-left: 22px; font-size: 1rem; line-height: 1.7;
+}
+.feature-toc-list li { padding: 2px 0; }
+.feature-toc-list a {
+  color: #1f2328; text-decoration: none; font-weight: 500;
+}
+.feature-toc-list a:hover { color: #0969da; text-decoration: underline; }
+.toc-extra-header {
+  list-style: none; margin: 10px 0 4px -22px;
+  font-size: 0.82rem; color: #57606a; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.feature-manual { margin: 14px 0; }
+.feature-section {
+  background: white; border: 1px solid #d6e4f0; border-radius: 10px;
+  padding: 22px 26px; margin: 16px 0;
+  box-shadow: 0 1px 2px rgba(20, 40, 80, 0.04);
+  scroll-margin-top: 12px;
+}
+.feature-heading {
+  margin: 0 0 10px; font-size: 1.2rem; color: #1f2328;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+.feature-description {
+  margin: 0 0 16px; color: #1f2328; font-size: 1rem; line-height: 1.55;
+}
+.feature-description-label {
+  font-weight: 600; color: #57606a; margin-right: 4px;
+}
+.feature-note {
+  margin: 8px 0 12px; padding: 8px 12px;
+  background: #fff8c5; border: 1px solid #eed888; border-radius: 6px;
+  color: #9a6700; font-size: 0.88rem;
+}
+.feature-source {
+  margin: 12px 0 0; font-size: 0.88rem; color: #57606a;
+}
+.feature-source a { color: #0969da; text-decoration: none; }
+.feature-source a:hover { text-decoration: underline; }
+.feature-empty {
+  margin: 10px 0; padding: 12px 16px;
+  background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 6px;
+  color: #57606a; font-style: italic;
+}
+.status-pill {
+  font-size: 0.78rem; font-weight: 600; padding: 3px 10px; border-radius: 12px;
+  letter-spacing: 0.04em; white-space: nowrap; display: inline-block;
+}
+.status-pill-passing { background: #dafbe1; color: #1a7f37; border: 1px solid #aceebb; }
+.status-pill-failing { background: #ffebe9; color: #cf222e; border: 1px solid #f2b8b5; }
+.status-pill-regressed { background: #ffebe9; color: #cf222e; border: 1px solid #f2b8b5; }
+.status-pill-partial { background: #fff8c5; color: #9a6700; border: 1px solid #e8d97e; }
+.status-pill-unknown { background: #f6f8fa; color: #57606a; border: 1px solid #d0d7de; }
+.status-pill-coming-soon { background: #f6f8fa; color: #57606a; border: 1px solid #d0d7de; }
+.developer-view {
+  margin: 28px 0 6px;
+  border: 1px dashed #d0d7de; border-radius: 8px;
+}
+.developer-view > summary {
+  cursor: pointer; padding: 12px 16px;
+  color: #57606a; font-size: 0.92rem; font-weight: 500;
+  background: #f6f8fa; border-radius: 8px;
+}
+.developer-view[open] > summary {
+  border-bottom: 1px dashed #d0d7de;
+  border-radius: 8px 8px 0 0;
+}
+.developer-view-body { padding: 12px 18px; }
+</style>
+</head><body><div class='container'>
+<section class='hero inprogress'><div class='badge-row'><div class='badge inprogress'><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+<circle cx="12" cy="12" r="11" fill="#d4a72c"/>
+<path d="M12 6v6l4 2.5" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+</svg><span>Building — on track</span><span class='badge-enum'>CONTINUE</span></div><span class='signal-badge holding'>Direction: holding</span></div><h1>Iteration 0  ·  session observation-contract</h1><h2>This was the baseline check of a brand-new era.</h2><div class='meta'>2026-09-02 · goal-lean</div><div class='meta'>Journeys: 0/6 passing</div><div class='journey-row'><span class='journey-pill failing' title='The artifact is a pure projection with semantic identity, provenance and integrity — failing'>J-01 · ✗ broken</span><span class='journey-pill failing' title='Market-event time, measured availability and generation time are three distinct, honest instants, read atomically — failing'>J-02 · ✗ broken</span><span class='journey-pill failing' title='Lifecycle, feed basis and session identity stay honest — failing'>J-03 · ✗ broken</span><span class='journey-pill failing' title='Ingestion-path equivalence under an identical valid event stream — failing'>J-04 · ✗ broken</span><span class='journey-pill failing' title='One read-only machine path — failing'>J-05 · ✗ broken</span><span class='journey-pill partial' title='Guards and the regression sentinel — partial'>J-06 · ~ partial</span></div><div class='hero-image'><img src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABpMAAATsCAIAAADjCe0GAAABC2lDQ1BfAAB4nJWQsUrDUBSGv6oggqCDg4PDHVyVakEcnKoQXGOE6pbEGIUkDUlKVwfdHVzcRHwGfQwHwcGpj+Cis/9twHTp0HM593yc+3Puz4HWCMVCG9KsKlyna3pn52ZxREtnHH5Y5kwPqX4/a+3HFrPH0kVUhqrfSq/Q5xp5JF6La+5ZDmpOLA+rvBLfWC4891D8IF6NJziY4DAvrP5FfJAmg7DxzXKUnZ6o7is3KHFx6GJ0+6QMqMRDrlWvRLtsKw0ehd4z6S+JsJZNPbL/rFE/MH/f9IJHeLuD9a+mt/kEK7fw+t70mh3mfuH/b2eu05ni2Yw9O/R1YhI5MRzLVSiX1mubHfb+AG2PRTfRfbehAAAQAElEQVR4nOzdf3DXd4Hn8a/CJCip3ykZU9NdYNu5dFoNq2K8ZsoZzkboSK8dy+kpo4z15JShzra1K2xr4dy2WxeVLa2WYT160lIHKpV26ELXQBgTxQs2pbikB+fXkSPskWmc0PuW9CAZmLkESKXd8qv2x2udx+MP+Obz/Xzf3x+f/57zfn/eo5uamgoAAAAAQJi3FwAAAACAPModAAAAACQaXeAsVFVVXXbZZeeff/6pTnj++ed37drV399fAAAAAIDXwx9zuau4dPY9d0195m9uWvHMHxrUhrJdT0/PL3/5y1OdMH78+KFznnrqqQIAAAAAvB7eXnhH3ZwVbSds2bBm6fxPN1RXFF6Tqvo5f7/u/s/Xv+LlFRd/+p5HH5rXUFV4k/U9u/mJTV2/Gzybc2un37nmh7c31b76s+eff/6+fftO8/KhZ08zIw8AAAAAztWx+9wd7e/ZuHDmtGmfuWVZe6Fx3tfnX33xa2x3UQZ/t/2xBx/p+OezKncAAAAAEOWk1bJHB3ue2fDQqLrGuxrr/uS8wm/7Kv706juXfrHQ3lHxwcm1551XPaprxfyFj5QGq+qunnPD7Gl/Xlt1aG/Hj5ctfbijp1D7sbnzP9NQWzuxuqr29hX/frDQ3/XQd5ZuPjh5zl/NafqTcRPfXX3JXy5rPFQ4uOexpX/32N7zPjb/O/POW3fzwh/vHe5q726cv2T+xJYFNz9cetXMNrzu9VvXVf62pzCuuuqdgz2bV3zrwfaeQ8NPVX9k/v1fndjR3l/fMLHqvOrz/vmRBbeu6CpMnv21edMuqq2t7nnk1pHVsqOqGm9esfB9e7vK1bXvqa0+tH3N/UtXdfZV/fmnF9xwdV1Nbe24wk3fuWTO4GDPT5fd+fD2/qMFAAAAAHirvPw+d++onXx5ffWhvaX/c/DEkYrqyQ2FpXfO2VAarL74kqr/W6iYePWCO+fV/a81i+e197xn2ry5N91UXrjwx6XN9928uap+zpI7PviLu25+sGskwHWsmN/x0MWfXvytq0vfmbesc+R+c4eeaX+m/6aPNE7cuLd0qFD9vqbJ79z7yLa9p5sdV1E97tCqBfMe21t79cI7b7rpdz1Db3ri/HH1jdXL7pq3oKu/auKltf1DRW9w+6rb5zxy7D53rximamJtzx0LFm4rNN6w+KbPz3hm96quf3pk4ZcfqZ1+5z2fH1j2l3e19xQAAAAA4C13bLXsqKraGXeu29LW9o9r7vxExf94eMWmlxra0f6uf3hsU2mouA32/bZr74HCxMs/Nnn09lX//ZH23XtLP1uz6mf9dR+ZPPEdhXNztG/7z7b3/2lT48VVhYraDzZNrii1bz9tuCsM9mz/SfvQBxn8bcemZwbrLq+vfWlFb39p8483dJWHP+3eZ0t9px2mf3f75s6ewUN9pf+5d3DcxHHnFQAAAAAg0LE5d8P3uVt8w3fa+/7l+tCjB/t6D5yUwirOG1dd9e7J8x/aNP+lY3u7zhuKaIcK56R/9+b2vqbGy/9sY//Eqe8tPPtQR8/xt3lH3eyly+ZcOpzl+loW/pe/HflURwf7Dw0cezDQ3z9YeXH18Jsef8mhvr4DZ3kzu8GB/r6Dw+cODg4NNqqyYtRLowAAAABAkNFneP7IK/4ePHigr++32++6Zen2A4WzNpzGXrnnRfnXHT/rmfGRjzUeqq072rXsmZGpcodKq748bdW/HGNURdU7KoeK31Buq6qqGCj3HTz68jcAAAAAgD8ibz/H8wf3btv8bEXT7P/YWDu8Qraiqq6x6YMj61YHD/aVC9UTJ9a+YvHsoYN9A1W1F9dWvXyoX29r31sz7Yv/qb7wT+3P9p4pvlXUTr6qqa6qUHFx47QPVpS2dfWc4yy/0ztY7ht8Z+0l76kqAAAAAECAcy13Q+luw+JvLCvVzVuxvq2tbdOGpfOaJo7UrsGejic2918x/6F/HHrm/tmXjgS93o6NLXvrb1ixYegVP5g3ufjSUB2bdxeqiwc7fvps3xk3cj3U11Nx9dINbZu+O7vqp0uXbiydOvVVTJw+//4VD61Y+Jn6d9ddt2DZQz+4//ZP1FWcdvj+Zzc89mz17KXDn3HdgqbqUQUAAAAAeAu9rampqfBWGVU1ee7S29/XsWj+iq7+051YcWyX2Gf/9qbf70775vrwhz/c09Ozb9++U50wfvz42trap556qgAAAAAAr4cz3efujVRx8bTrPjKutHbTr9+aHHcOdu3addlll733ve891QnPP//80DkFAAAAAHidvEXlrqL2Y391/8Lm6r5frFi0eW/+/hL9/f3m0wEAAADwZnpLV8sCAAAAAKdwzjtUAAAAAABvgre1tLQUAAAAAIAwb6utrS0AAAAAAGGslgUAAACARModAAAAACRS7gAAAAAgkXIHAAAAAImUOwAAAABIpNwBAAAAQCLlDgAAAAASKXcAAAAAkEi5AwAAAIBEyh0AAAAAJFLuAAAAACCRcgcAAAAAiZQ7AAAAAEik3AEAAABAot+Xu+KH5q7YsmNP956WrzUUz/LV46Ysatmxdt6kysLranTNjL/r6Hhg1oSRcWs+8b0d+49pv3vKuAKv7syXo3LSl9bu6t6zo33VjVec7UUGAAAA4C0xUu5G10z57PVTDm+8YfoHrvl2Z/nYseIVC1q2rb3+/ZPmruloubXhNZeeykvnru1sW9R01gMcKZfaV6/e1FU+euJA7+Nf+cCFF11119beI68ce9K8tTueWNBQP3PF1rYlH685w8iVE2Y90NH2zea6aXe3bV0x66LhxlVsWtTWvX/PYzdOGv6AlXWfXbWj88RTpzS62Pztth0PXl93Fs1y+OuX9p9sx30za0YX3mCv+ssM7Pz+pxqb56zumzTrc80TXufgCgAAAMDraSQgjSrWVI8p7/5552/KA4W33EDp8XvvLbyJjhYq62de9/6VO9sPF94IA70bb712zqPdhQDlUufPf1WeVV9TOXTxAy42AAAAAK/qpPvcjTrLl1TWXbNo7bY9+7t3dTwwt2HcyccXrNqya8/+/Xu2rV30iWPT0WqaFzzc0vLA3CkX1s369vq2LW3rl11/fGpbTdPcux9s2VHaPzzOE9+be0XNiUE+uWT9lrah4ztOWi37mlTWfWbJ+ifOblnoi91bny40f/KV09Aqxzff+EDb8Fcqdaz/5qzjn3zSZ7+3vmX9kk/U1TTdtGpTW1vL2kVnnOv3qsbWzbh9VceuY7/Aw4tmHJ+/V2xYsHHH+q81HP+j+ZttO9bMrRt7/PiujkdXrN3Y1rFjV8eaRTNOzAo81eU4szEFAAAAAHKdKHeVEyY1XFT5wu96B05ajnq4p3PdmnVdv3uu84nV67b1Hp+NVln/hbvvnFXcctu102cv3zeh4cLiiQGuuXvFt2YVnvz6p6ZeNefB8ozbl8y9vFjobV38uenTv7h86/7S6q9dO/XKqdfOW7nz2FrcMWMry9uW33BN49TPLd5SaF7wjbnHbmA3UHr0lmunf+q2J7rPbvLbwHM7Nvzg8c7e3tLGNatb95RPfq5YWzfpQ5MmFE+qcUfLXZtWr27v7v3fP1+9prXr9/MLB0qbNvbWX3dl3Uk5a2zdrLv+5gvF1q9/cupVX17ZffmCJTc314we2PnDr1w7/dpbHi/1ti+dPW3q1OmfuuPJ3sI5KzZ86e67P15Y/dWrpl5zy+qjM+7+5twzLEgeXZzwZ4V1X50+dcacjWNnLvjP/644+lSX4/S/zOEXensrxzfUX2S5LAAAAECuofYzYeZ96793Tc1A18o5D+48OfAM7Gldfs+xRz+8t/PEscpLrmiuG2i9Y9m6zn0DO7+7vPmKRcOtq/KCKf+huebZ5V9Ztm7ni4XC/nvrp626elr9ym1by6/+vgPdT967+PjD3SuXj2u48tYJQ4lt64FzXr3Z+4uV9/5i+EH3d3e+4i0677n2ontefuxIeeeae4+dV1peetkzh/dsXLd7xqyP1z+9f+Srjp9y9fsLrQuXr3t6KMx1//37Zqy6rrluXGvva8h0lTUz7uvYf9/xP7pXfu6q256e0HxlfXnTnJVPDv3mO1c+0DDzvuYp/2Zl529OM0q59OTqjb8ZGCiUtu4uz5wwvmZU5ZhXvRxn+mV2Prp05bQVS1r23P2LO6Z/fnnpxQIAAAAAad4+1NDW3TC18ZO3tY6dcf3Hz7g+dUxldbGy3Pvci8OJbaDcve+FY61tdLFYUyxesegnx7diKP1kweU1NTXFylPvw1Bz+fVL1rQMrxXdv79j2cwJ76osvOGbNpzWkedaH9s65qMzPzSy4HRM8YLi0FccmZd3+IVyYWzNBZWvaZ7aQO/Gv2i88ITG27aUh1pesVgo971wfGrh4XK5XCheMO60gx8ZKL9QPnxk+EFh6N/KMYXRp7gcZ1A54YpZ113Yecdnpn7gs7IdAAAAQKhjq2WPlLt/tfXn+woTLp1QPEM+OzzQVx4YUywen9lVecG7xlYeH2EoH3U//pXGiy58yQf+YuPIVrDDeepld1UrNnzhvy6YcmDd1z/VeNlFFzXOW9d9Nv3o+GhvVOAb6P3lutb/1zCz4YLj/exw+bmhmjah5vj60zHFoWr3Yu9zAwMv+zB/wLsNt7oLa8Yc+zpDgxdHl587MJTkBg4fLQwdHP65RldWjj19KDzF5TiDMePrLxmzv3Pr06WE7UgAAAAAeFUjO1QcGd5mtHLUGbvPwK+3tZbeOWXmR+sqRxcnffy65vHHotFA99bHtwz827lzrzm2z8LoYt0VM5ovHbnn2osvPDdQHD+UBV8aZlRlZaG8b8fWn3d1l0dPmDK9YcKZt0sYeG5Pqfyuukm1Z7HjxLBz2aHiuPLOdU921320/ni+HNi3dcOvCg3XzJhUHF45O3Nazb721tKBY2ceOVzuLRfGXzKh5rXeKq7c3bqlVGy6rvmiysLYuubrrizubt36m/JQA92373DN+xuGfqzKmobmD11QebpSeYrLcUajKwtHB96YbXQBAAAAeH38fm/Z4dlXZzGdbeBXP7jtrzcW563d1tn2364Zs+/ExhWF7if/evbC1povrd29f3iz1JZvz6ofWXY60NO6+tFSwzd+Mrw0dsui4Z0oDnSu/P6W4rwfbWtva3l4UfOo3hPDjJty4wMtbS1r775mwoQrF/xo07FnLzwxTm/78sU/Pnz940PD7Fr1+bozNrNX2aHiTF+uu+Wx1t6R3+HF0urbb/nBkVk/2rF/z5ZF9U8vvuWe1pFZhAM7/2Fl6+hZq7btGf4wn60794BX7vz+Lbc9ecH89Xv271p/47s23nbr8s7y8EdoXXZv69i5P2rrWPutmcXe8sBpJ/ed6nKcwag/eM4gAAAAAG+wt9XW1g7/P7pmxjfXL3nfY3M+t3jrgQJ/zIqT5j6w6vreO669eV2v1bIAAAAAqV5aLdu79dHVnRfeuLZrf8vXGs56fSn/ulRO+tLaPbt+I4KsMgAAEABJREFUsujS0uqHW2U7AAAAgGQjc+4AAAAAgCRvLwAAAAAAeZQ7AAAAAEik3AEAAABAIuUOAAAAABIpdwAAAACQSLkDAAAAgETKHQAAAAAkUu4AAAAAIJFyBwAAAACJlDsAAAAASKTcAQAAAEAi5Q4AAAAAEil3AAAAAJBIuQMAAACARModAAAAACRS7gAAAAAgkXIHAAAAAImUOwAAAABIpNwBAAAAQCLlDgAAAAASKXcAAAAAkEi5AwAAAIBEyh0AAAAAJFLuAAAAACCRcgcAAAAAiZQ7AAAAAEik3AEAAABAIuUOAAAAABIpdwAAAACQSLkDAAAAgETKHQAAAAAkUu4AAAAAIJFyBwAAAACJlDsAAAAASKTcAQAAAEAi5Q4AAAAAEil3AAAAAJBIuQMAAACARModAAAAACRS7gAAAAAgkXIHAAAAAImUOwAAAABIpNwBAAAAQCLlDgAAAAASKXcAAAAAkEi5AwAAAIBEyh0AAAAAJFLuAAAAACCRcgcAAAAAiZQ7AAAAAEik3AEAAABAIuUOAAAAABIpdwAAAACQSLkDAAAAgETKHQAAAAAkUu4AAAAAIJFyBwAAAACJlDsAAAAASKTcAQAAAEAi5Q4AAAAAEil3AAAAAJBIuQMAAACARModAAAAACRS7gAAAAAgkXIHAAAAAImUOwAAAABIpNwBAAAAQCLlDgAAAAASKXcAAAAAkEi5AwAAAIBEyh0AAAAAJFLuAAAAACCRcgcAAAAAiZQ7AAAAAEik3AEAAABAIuUOAAAAABIpdwAAAACQSLkDAAAAgETKHQAAAAAkUu4AAAAAIJFyBwAAAACJlDsAAAAASKTcAQAAAEAi5Q4AAAAAEil3AAAAAJBIuQMAAACARModAAAAACRS7gAAAAAgkXIHAAAAAImUOwAAAABIpNwBAAAAQCLlDgAAAAASKXcAAAAAkEi5AwAAAIBEyh0AAAAAJFLuAAAAACCRcgcAAAAAiZQ7AAAAAEik3AEAAABAIuUOAAAAABIpdwAAAACQSLkDAAAAgETKHQAAAAAkUu4AAAAAIJFyBwAAAACJlDsAAAAASKTcAQAAAEAi5Q4AAAAAEil3AAAAAJBIuQMAAACARModAAAAACRS7gAAAAAgkXIHAAAAAImUOwAAAABIpNwBAAAAQCLlDgAAAAASKXcAAAAAkEi5AwAAAIBEyh0AAAAAJFLuAAAAACCRcgcAAAAAiZQ7AAAAAEik3AEAAABAIuUOAAAAABIpdwAAAACQSLkDAAAAgETKHQAAAAAkUu4AAAAAIJFyBwAAAACJlDsAAAAASKTcAQAAAEAi5Q4AAAAAEil3AAAAAJBIuQMAAACARModAAAAACRS7gAAAAAgkXIHAAAAAImUOwAAAABIpNwBAAAAQCLlDgAAAAASKXcAAAAAkEi5AwAAAIBEyh0AAAAAJFLuAAAAACCRcgcAAAAAiZQ7AAAAAEik3AEAAABAIuUOAAAAABIpdwAAAACQSLkDAAAAgETKHQAAAAAkUu4AAAAAIJFyBwAAAACJlDsAAAAASKTcAQAAAEAi5Q4AAAAAEil3AAAAAJBIuQMAAACARModAAAAACRS7gAAAAAgkXIHAAAAAImUOwAAAABIpNwBAAAAQCLlDgAAAAASKXcAAAAAkEi5AwAAAIBEyh0AAAAAJFLuAAAAACCRcgcAAAAAiZQ7AAAAAEik3AEAAABAIuUOAAAAABIpdwAAAACQSLkDAAAAgETKHQAAAAAkUu4AAAAAIJFyBwAAAACJlDsAAAAASKTcAQAAAEAi5Q4AAAAAEil3AAAAAJBIuQMAAACARModAAAAACRS7gAAAAAgkXIHAAAAAImUOwAAAABIpNwBAAAAQCLlDgAAAAASKXcAAAAAkEi5AwAAAIBEyh0AAAAAJFLuAAAAACCRcgcAAAAAiZQ7AAAAAEik3AEAAABAIuUOAAAAABIpdwAAAACQSLkDAAAAgETKHQAAAAAkUu4AAAAAIJFyBwAAAACJlDsAAAAASKTcAQAAAEAi5Q4AAAAAEil3AAAAAJBIuQMAAACARModAAAAACRS7gAAAAAgkXIHAAAAAImUOwAAAABIpNwBAAAAQCLlDgAAAAASKXcAAAAAkEi5AwAAAIBEyh0AAAAAJFLuAAAAACCRcgcAAAAAiZQ7AAAAAEik3AEAAABAIuUOAAAAABIpdwAAAACQSLkDAAAAgETKHQAAAAAkUu4AAAAAIJFyBwAAAACJlDsAAAAASKTcAQAAAEAi5Q4AAAAAEil3AAAAAJBIuQMAAACARModAAAAACRS7gAAAAAgkXIHAAAAAImUOwAAAABIpNwBAAAAQCLlDgAAAAASKXcAAAAAkEi5AwAAAIBEyh0AAAAAJFLuAAAAACCRcgcAAAAAiZQ7AAAAAEik3AEAAABAIuUOAAAAABIpdwAAAACQSLkDAAAAgETKHQAAAAAkUu4AAAAAIJFyBwAAAACJlDsAAAAASKTcAQAAAEAi5Q4AAAAAEil3AAAAAJBIuQMAAACARModAAAAACRS7gAAAAAgkXIHAAAAAImUOwAAAABIpNwBAAAAQCLlDgAAAAASKXcAAAAAkEi5AwAAAIBEyh0AAAAAJFLuAAAAACCRcgcAAAAAiZQ7AAAAAEik3AEAAABAIuUOAAAAABIpdwAAAACQSLkDAAAAgETKHQAAAAAkUu4AAAAAIJFyBwAAAACJlDsAAAAASKTcAQAAAEAi5Q4AAAAAEil3AAAAAJBIuQMAAACARModAAAAACRS7gAAAAAgkXIHAAAAAImUOwAAAABIpNwBAAAAQCLlDgAAAAASKXcAAAAAkEi5AwAAAIBEyh0AAAAAJFLuAAAAACCRcgcAAAAAiZQ7AAAAAEik3AEAAABAIuUOAAAAABIpdwAAAACQSLkDAAAAgETKHQAAAAAkUu4AAAAAIJFyBwAAAACJlDsAAAAASKTcAQAAAEAi5Q4AAAAAEil3AAAAAJBIuQMAAACARModAAAAACRS7gAAAAAgkXIHAAAAAImUOwAAAABIpNwBAAAAQCLlDgAAAAASKXcAAAAAkEi5AwAAAIBEyh0AAAAAJFLuAAAAACCRcgcAAAAAiZQ7AAAAAEik3AEAAABAIuUOAAAAABIpdwAAAACQSLkDAAAAgETKHQAAAAAkUu4AAAAAIJFyBwAAAACJlDsAAAAASKTcAQAAAEAi5Q4AAAAAEil3AAAAAJBIuQMAAACARModAAAAACRS7gAAAAAgkXIHAAAAAImUOwAAAABIpNwBAAAAQCLlDgAAAAASKXcAAAAAkEi5AwAAAIBEyh0AAAAAJFLuAAAAACCRcgcAAAAAiZQ7AAAAAEik3AEAAABAIuUOAAAAABIpdwAAAACQSLkDAAAAgETKHQAAAAAkUu4AAAAAIJFyBwAAAACJlDsAAAAASKTcAQAAAEAi5Q4AAAAAEil3AAAAAJBIuQMAAACARModAAAAACRS7gAAAAAgkXIHAAAAAImUOwAAAABIpNwBAAAAQCLlDgAAAAASKXcAAAAAkEi5AwAAAIBEyh0AAAAAJFLuAAAAACCRcgcAAAAAiZQ7AAAAAEik3AEAAABAIuUOAAAAABIpdwAAAACQSLkDAAAAgETKHQAAAAAkUu4AAAAAIJFyBwAAAACJlDsAAAAASKTcAQAAAEAi5Q4AAAAAEil3AAAAAJBIuQMAAACARModAAAAACRS7gAAAAAgkXIHAAAAAImUOwAAAABIpNwBAAAAQCLlDgAAAAASKXcAAAAAkEi5AwAAAIBEyh0AAAAAJFLuAAAAACCRcgcAAAAAiZQ7AAAAAEik3AEAAABAIuUOAAAAABIpdwAAAACQSLkDAAAAgETKHQAAAAAkUu4AAAAAIJFyBwAAAACJlDsAAAAASKTcAQAAAEAi5Q4AAAAAEil3AAAAAJBIuQMAAACARModAAAAACRS7gAAAAAgkXIHAAAAAImUOwAAAABIpNwBAAAAQCLlDgAAAAASKXcAAAAAkEi5AwAAAIBEyh0AAAAAJFLuAAAAACCRcgcAAAAAiZQ7AAAAAEik3AEAAABAIuUOAAAAABIpdwAAAACQSLkDAAAAgETKHQAAAAAkUu4AAAAAIJFyBwAAAACJlDsAAAAASKTcAQAAAEAi5Q4AAAAAEil3AAAAAJBIuQMAAACARModAAAAACRS7gAAAAAgkXIHAAAAAImUOwAAAABIpNwBAAAAQCLlDgAAAAASKXcAAAAAkEi5AwAAAIBEyh0AAAAAJFLuAAAAACCRcgcAAAAAiZQ7AAAAAEik3AEAAABAIuUOAAAAABIpdwAAAACQSLkDAAAAgETKHQAAAAAkUu4AAAAAIJFyBwAAAACJlDsAAAAASKTcAQAAAEAi5Q4AAAAAEil3AAAAAJBIuQMAAACARModAAAAACRS7gAAAAAgkXIHAAAAAImUOwAAAABIpNwBAAAAQCLlDgAAAAASKXcAAAAAkEi5AwAAAIBEyh0AAAAAJFLuAAAAACCRcgcAAAAAiZQ7AAAAAEik3AEAAABAIuUOAAAAABIpdwAAAACQSLkDAAAAgETKHQAAAAAkUu4AAAAAIJFyBwAAAACJlDsAAAAASKTcAQAAAEAi5Q4AAAAAEil3AAAAAJBIuQMAAACARModAAAAACRS7gAAAAAgkXIHAAAAAImUOwAAAABIpNwBAAAAQCLlDgAAAAASKXcAAAAAkEi5AwAAAIBEyh0AAAAAJFLuAAAAACCRcgcAAAAAiZQ7AAAAAEik3AEAAABAIuUOAAAAABIpdwAAAACQSLkDAAAAgETKHQAAAAAkUu4AAAAAIJFyBwAAAACJlDsAAAAASKTcAQAAAEAi5Q4AAAAAEil3AAAAAJBIuQMAAACARModAAAAACRS7gAAAAAgkXIHAAAAAImUOwAAAABIpNwBAAAAQCLlDgAAAAASKXcAAAAAkEi5AwAAAIBEyh0AAAAAJFLuAAAAACCRcgcAAAAAiZQ7AAAAAEik3AEAAABAIuUOAAAAABIpdwAAAACQSLkDAAAAgETKHQAAAAAkUu4AAAAAIJFyBwAAAACJlDsAAAAASKTcAQAAAEAi5Q4AAAAAEil3AAAAAJBIuQMAAACARModAAAAACRS7gAAAAAgkXIHAAAAAImUOwAAAABIpNwBAAAAQCLlDgAAAAASKXcAAAAAkEi5AwAAAIBEyh0AAAAAJFLuAAAAACCRcgcAAAAAiZQ7AAAAAEik3AEAAABAIuUOAAAAABIpdwAAAACQSLkDAAAAgETKHQAAAAAkUu4AAAAAIJFyBwAAAACJlDsAAAAASKTcAQAAAEAi5Q4AAAAAEil3AAAAAJBIuQMAAACARModAAAAACRS7gAAAAAgkXIHAAAAAImUOwAAAABIpNwBAAAAQCLlDgAAAAASKXcAAAAAkEi5AwAAAIBEyh0AAAAAJFLuAAAAACCRcnXLlTAAABAASURBVAcAAAAAiZQ7AAAAAEik3AEAAABAIuUOAAAAABIpdwAAAACQSLkDAAAAgETKHQAAAAAkUu4AAAAAIJFyBwAAAACJlDsAAAAASKTcAQAAAEAi5Q4AAAAAEil3AAAAAJBIuQMAAACARModAAAAACRS7gAAAAAgkXIHAAAAAImUOwAAAABIpNwBAAAAQCLlDgAAAAASKXcAAAAAkEi5AwAAAIBEyh0AAAAAJFLuAAAAACCRcgcAAAAAiZQ7AAAAAEik3AEAAABAIuUOAAAAABIpdwAAAACQSLkDAAAAgETKHQAAAAAkUu4AAAAAIJFyBwAAAACJlDsAAAAASKTcAQAAAEAi5Q4AAAAAEil3AAAAAJBIuQMAAACARModAAAAACRS7gAAAAAgkXIHAAAAAImUOwAAAABIpNwBAAAAQCLlDgAAAAASKXcAAAAAkEi5AwAAAIBEyh0AAAAAJFLuAAAAACCRcgcAAAAAiZQ7AAAAAEik3AEAAABAIuUOAAAAABIpdwAAAACQSLkDAAAAgETKHQAAAAAkUu4AAAAAIJFyBwAAAACJlDsAAAAASKTcAQAAAEAi5Q4AAAAAEil3AAAAAJBIuQMAAACARModAAAAACRS7gAAAAAgkXIHAAAAAImUOwAAAABIpNwBAAAAQCLlDgAAAAASKXcAAAAAkEi5AwAAAIBEyh0AAAAAJFLuAAAAACCRcgcAAAAAiZQ7AAAAAEik3AEAAABAIuUOAAAAABIpdwAAAACQSLkDAAAAgETKHQAAAAAkUu4AAAAAIJFyBwAAAACJlDsAAAAASKTcAQAAAEAi5Q4AAAAAEil3AAAAAJBIuQMAAACARModAAAAACRS7gAAAAAgkXIHAAAAAImUOwAAAABIpNwBAAAAQCLlDgAAAAASKXcAAAAAkEi5AwAAAIBEyh0AAAAAJFLuAAAAACCRcgcAAAAAiZQ7AAAAAEik3AEAAABAIuUOAAAAABIpdwAAAACQSLkDAAAAgETKHQAAAAAkUu4AAAAAIJFyBwAAAACJlDsAAAAASKTcAQAAAEAi5Q4AAAAAEil3AAAAAJBIuQMAAACARModAAAAACRS7gAAAAAgkXIHAAAAAImUOwAAAABIpNwBAAAAQCLlDgAAAAASKXcAAAAAkEi5AwAAAIBEyh0AAAAAJFLuAAAAACCRcgcAAAAAiZQ7AAAAAEik3AEAAABAIuUOAAAAABIpdwAAAACQSLkDAAAAgETKHQAAAAAkUu4AAAAAIJFyBwAAAACJlDsAAAAASKTcAQAAAEAi5Q4AAAAAEil3AAAAAJBIuQMAAACARModAAAAACRS7gAAAAAgkXIHAAAAAImUOwAAAABIpNwBAAAAQCLlDgAAAAASKXcAAAAAkEi5AwAAAIBEyh0AAAAAJFLuAAAAACCRcgcAAAAAiZQ7AAAAAEik3AEAAABAIuUOAAAAABIpdwAAAACQSLkDAAAAgETKHQAAAAAkUu4AAAAAIJFyBwAAAACJlDsAAAAASKTcAQAAAEAi5Q4AAAAAEil3AAAAAJBIuQMAAACARModAAAAACRS7gAAAAAgkXIHAAAAAImUOwAAAABIpNwBAAAAQCLlDgAAAAASKXcAAAAAkEi5AwAAAIBEyh0AAAAAJFLuAAAAACCRcgcAAAAAiZQ7AAAAAEik3AEAAABAIuUOAAAAABIpdwAAAACQSLkDAAAAgETKHQAAAAAkUu4AAAAAIJFyBwAAAACJlDsAAAAASKTcAQAAAEAi5Q4AAAAAEil3AAAAAJBIuQMAAACARModAAAAACRS7gAAAAAgkXIHAAAAAImUOwAAAABIpNwBAAAAQCLlDgAAAAASKXcAAAAAkEi5AwAAAIBEyh0AAAAAJFLuAAAAACCRcgcAAAAAiZQ7AAAAAEik3AEAAABAIuUOAAAAABIpdwAAAACQSLkDAAAAgETKHQAAAAAkUu4AAAAAIJFyBwAAAACJlDsAAAAASKTcAQAAAEAi5Q4AAAAAEil3AAAAAJBIuQMAAACARModAAAAACRS7gAAAAAgkXIHAAAAAImUOwAAAABIpNwBAAAAQCLlDgAAAAASKXcAAAAAkEi5AwAAAIBEyh0AAAAAJFLuAAAAACCRcgcAAAAAiZQ7AAAAAEik3AEAAABAIuUOAAAAABIpdwAAAACQSLkDAAAAgETKHQAAAAAkUu4AAAAAIJFyBwAAAACJlDsAAAAASKTcAQAAAEAi5Q4AAAAAEil3AAAAAJBIuQMAAACARModAAAAACRS7gAAAAAgkXIHAAAAAImUOwAAAABIpNwBAAAAQCLlDgAAAAASKXcAAAAAkEi5AwAAAIBEyh0AAAAAJFLuAAAAACCRcgcAAAAAiZQ7AAAAAEik3AEAAABAIuUOAAAAABIpdwAAAACQSLkDAAAAgETKHQAAAAAkUu4AAAAAIJFyBwAAAACJlDsAAAAASKTcAQAAAEAi5Q4AAAAAEil3AAAAAJBIuQMAAACARModAAAAACRS7gAAAAAgkXIHAAAAAImUOwAAAABIpNwBAAAAQCLlDgAAAAASKXcAAAAAkEi5AwAAAIBEyh0AAAAAJFLuAAAAACCRcgcAAAAAiZQ7AAAAAEik3AEAAABAIuUOAAAAABIpdwAAAACQSLkDAAAAgETKHQAAAAAkUu4AAAAAIJFyBwAAAACJlDsAAAAASKTcAQAAAEAi5Q4AAAAAEil3AAAAAJBIuQMAAACARModAAAAACRS7gAAAAAgkXIHAAAAAImUOwAAAABIpNwBAAAAQCLlDgAAAAASKXcAAAAAkEi5AwAAAIBEyh0AAAAAJFLuAAAAACCRcgcAAAAAiZQ7AAAAAEik3AEAAABAIuUOAAAAABIpdwAAAACQSLkDAAAAgETKHQAAAAAkUu4AAAAAIJFyBwAAAACJlDsAAAAASKTcAQAAAEAi5Q4AAAAAEil3AAAAAJBIuQMAAACARModAAAAACRS7gAAAAAgkXIHAAAAAImUOwAAAABIpNwBAAAAQCLlDgAAAAASKXcAAAAAkEi5AwAAAIBEyh0AAAAAJFLuAAAAACCRcgcAAAAAiZQ7AAAAAEik3AEAAABAIuUOAAAAABIpdwAAAACQSLkDAAAAgETKHQAAAAAkUu4AAAAAIJFyBwAAAACJlDsAAAAASKTcAQAAAEAi5Q4AAAAAEil3AAAAAJBIuQMAAACARModAAAAACRS7gAAAAAgkXIHAAAAAImUOwAAAABIpNwBAAAAQCLlDgAAAAASKXcAAAAAkEi5AwAAAIBEyh0AAAAAJFLuAAAAACCRcgcAAAAAiZQ7AAAAAEik3AEAAABAIuUOAAAAABIpdwAAAACQSLkDAAAAgETKHQAAAAAkUu4AAAAAIJFyBwAAAACJlDsAAAAASKTcAQAAAEAi5Q4AAAAAEil3AAAAAJBIuQMAAACARModAAAAACRS7gAAAAAgkXIHAAAAAImUOwAAAABIpNwBAAAAQCLlDgAAAAASKXcAAAAAkEi5AwAAAIBEyh0AAAAAJFLuAAAAACCRcgcAAAAAiZQ7AAAAAEik3AEAAABAIuUOAAAAABIpdwAAAACQSLkDAAAAgETKHQAAAAAkUu4AAAAAIJFyBwAAAACJlDsAAAAASKTcAQAAAEAi5Q4AAAAAEil3AAAAAJBIuQMAAACARModAAAAACRS7gAAAAAgkXIHAAAAAImUOwAAAABIpNwBAAAAQCLlDgAAAAASKXcAAAAAkEi5AwAAAIBEyh0AAAAAJFLuAAAAACCRcgcAAAAAiZQ7AAAAAEik3AEAAABAIuUOAAAAABIpdwAAAACQSLkDAPj/7NixAAAAAMAgf+tp7CiMAADgyNwBAAAAwJG5AwAAAIAjcwcAAAAAR+YOAAAAAI7MHQAAAAAcmTsAAAAAODJ3AAAAAHBk7gAAAADgyNwBAAAAwJG5AwAAAIAjcwcAAAAAR+YOAAAAAI7MHQAAAAAcmTsAAAAAODJ3AAAAAHBk7gAAAADgyNwBAAAAwJG5AwAAAIAjcwcAAAAAR+YOAAAAAI7MHQAAAAAcmTsAAAAAODJ3AAAAAHBk7gAAAADgyNwBAAAAwJG5AwAAAIAjcwcAAAAAR+YOAAAAAI7MHQAAAAAcmTsAAAAAODJ3AAAAAHBk7gAAAADgyNwBAAAAwJG5AwAAAIAjcwcAAAAAR+YOAAAAAI7MHQAAAAAcmTsAAAAAODJ3AAAAAHBk7gAAAADgyNwBAAAAwJG5AwAAAIAjcwcAAAAAR+YOAAAAAI7MHQAAAAAcmTsAAAAAODJ3AAAAAHBk7gAAAADgyNwBAAAAwJG5AwAAAIAjcwcAAAAAR+YOAAAAAI7MHQAAAAAcmTsAAAAAODJ3AAAAAHBk7gAAAADgyNwBAAAAwJG5AwAAAIAjcwcAAAAAR+YOAAAAAI7MHQAAAAAcmTsAAAAAODJ3AAAAAHBk7gAAAADgyNwBAAAAwJG5AwAAAIAjcwcAAAAAR+YOAAAAAI7MHQAAAAAcmTsAAAAAODJ3AAAAAHBk7gAAAADgyNwBAAAAwJG5AwAAAIAjcwcAAAAAR+YOAAAAAI7MHQAAAAAcmTsAAAAAODJ3AAAAAHBk7gAAAADgyNwBAAAAwJG5AwAAAIAjcwcAAAAAR+YOAAAAAI7MHQAAAAAcmTsAAAAAODJ3AAAAAHBk7gAAAADgyNwBAAAAwJG5AwAAAIAjcwcAAAAAR+YOAAAAAI7MHQAAAAAcmTsAAAAAODJ3AAAAAHBk7gAAAADgyNwBAAAAwJG5AwAAAIAjcwcAAAAAR+YOAAAAAI7MHQAAAAAcmTsAAAAAODJ3AAAAAHBk7gAAAADgyNwBAAAAwJG5AwAAAIAjcwcAAAAAR+YOAAAAAI7MHQAAAAAcmTsAAAAAODJ3AAAAAHBk7gAAAADgyNwBAAAAwJG5AwAAAIAjcwcAAAAAR+YOAAAAAI7MHQAAAAAcmTsAAAAAODJ3AAAAAHBk7gAAAADgyNwBAAAAwJG5AwAAAIAjcwcAAAAAR+YOAAAAAI7MHQAAAAAcmTsAAAAAODJ3AAAAAHBk7gAAAADgyNwBAAAAwJG5AwAAAIAjcwcAAAAAR+YOAAAAAI7MHQAAAAAcmTsAAAAAODJ3AAAAAHBk7gAAAADgyNwBAAAAwJG5AwAAAIAjcwcAAAAAR+YOAAAAAI7MHQAAAAAcmTsAAAAAODJ3AAAAAHBk7gAAAADgyNwBAAAAwJG5AwAAAIAjcwcAAAAAR+YOAAAAAI7MHQAAAAAcmTsAAAAAODJ3AAAAAHBk7gAAAADgyNwBAAAAwJG5AwAAAIAjcwcAAAAAR+YOAAAAAI7MHQAAAAAcmTsAAAAAODJ3AAAAAHBk7gAAAADgyNwBAAAAwJG5AwAAAIAjcwcAAAAAR+YOAAAAAI7MHQAAAAAcmTsAAAAAODJ3AAAAAHBk7gAAAADgyNwBAAAAwJErl7cNAAAC1ElEQVS5AwAAAIAjcwcAAAAAR+YOAAAAAI7MHQAAAAAcmTsAAAAAODJ3AAAAAHBk7gAAAADgyNwBAAAAwJG5AwAAAIAjcwcAAAAAR+YOAAAAAI7MHQAAAAAcmTsAAAAAODJ3AAAAAHBk7gAAAADgyNwBAAAAwJG5AwAAAIAjcwcAAAAAR+YOAAAAAI7MHQAAAAAcmTsAAAAAODJ3AAAAAHBk7gAAAADgyNwBAAAAwJG5AwAAAIAjcwcAAAAAR+YOAAAAAI7MHQAAAAAcmTsAAAAAODJ3AAAAAHBk7gAAAADgyNwBAAAAwJG5AwAAAIAjcwcAAAAAR+YOAAAAAI7MHQAAAAAcmTsAAAAAODJ3AAAAAHBk7gAAAADgyNwBAAAAwJG5AwAAAIAjcwcAAAAAR+YOAAAAAI7MHQAAAAAcmTsAAAAAODJ3AAAAAHBk7gAAAADgyNwBAAAAwJG5AwAAAIAjcwcAAAAAR+YOAAAAAI7MHQAAAAAcmTsAAAAAODJ3AAAAAHBk7gAAAADgyNwBAAAAwJG5AwAAAIAjcwcAAAAAR+YOAAAAAI7MHQAAAAAcmTsAAAAAODJ3AAAAAHBk7gAAAADgyNwBAAAAwJG5AwAAAIAjcwcAAAAAR+YOAAAAAI7MHQAAAAAcmTsAAAAAODJ3AAAAAHBk7gAAAADgyNwBAAAAwJG5AwAAAIAjcwcAAAAAR+YOAAAAAI7MHQAAAAAcmTsAAAAAODJ3AAAAAHBk7gAAAADgyNwBAAAAwJG5AwAAAIAjcwcAAAAAR+YOAAAAAI7MHQAAAAAcmTsAAAAAODJ3AAAAAHBk7gAAAADgyNwBAAAAwJG5AwAAAIAjcwcAAAAAR+YOAAAAAI7MHQAAAAAcmTsAAAAAODJ3AAAAAHBk7gAAAADgyNwBAAAAwJG5AwAAAIAjcwcAAAAAR+YOAAAAAI7MHQAAAAAcmTsAAAAAOAoAAP//HRxyUQAAAAZJREFUAwCnbCv2Bb3S1gAAAABJRU5ErkJggg==' alt='Hero screenshot'></div></section>
+<section class='plain-words'><h2 class='pw-heading'>In plain words</h2><div class='pw-grid'><div class='pw-card'><div class='pw-label'>What you can do now</div><p class='pw-text'>Just getting started — nothing for users to try yet.</p></div><div class='pw-card'><div class='pw-label'>What changed this time</div><p class='pw-text'>Behind-the-scenes work — nothing visibly new this round: the team checked the honest starting point for a brand-new feature (a single trustworthy summary of what the tape is doing, called an &quot;observation&quot;) and confirmed the rest of the app — the Cockpit, Structure and Desk pages — still works exactly as before.</p></div><div class='pw-card'><div class='pw-label'>What&#x27;s next</div><p class='pw-text'>Next we&#x27;ll start building the internal piece that assembles a single observation record with a tamper-evident fingerprint — groundwork that lands before anything becomes visible to users.</p></div></div></section>
+<div class='tech-divider'><span>Technical detail below — open if you want the developer view.</span></div>
+<details><summary>What was done</summary><div class='accordion-body'><ul class='bullets'><li>No product change this iteration.</li><li>Verified via browser QA that the not-yet-built pieces are genuinely absent: the `observation_contract` module, the `/tape/{ticker}/observation` route, `WatchManager.get_observation_source`, and any `test_tape_observation_*.py` file.</li><li>Confirmed the two era-open artifacts already in place (`docs/goal-archive/goal-2026-09-02.md`, `docs/observation-contract-spec.md`) plus the dated `docs/research-directions.md` note are committed and unchanged.</li><li>Re-ran the full backend test suite (3930 passed / 8 skipped / 0 failed) and the frontend type check (0 errors), matching the prior era&#x27;s closing baseline exactly.</li><li>Confirmed the project&#x27;s config fingerprint (`08e471b10130e1e2`) and the MCP tool count (28) are unchanged.</li><li>Recorded J-01 through J-05 as failing and J-06 as partial in the journey tracker — the honest starting line for this era.</li><li>Verified 0 of 6 target journeys pass browser QA this iteration (expected for a verify-only baseline).</li></ul></div></details>
+<details><summary>What's left + Next step</summary><div class='accordion-body'><h3>Still open</h3><ul class='bullets'><li>Journey J-01 (&quot;The artifact is a pure projection with semantic identity, provenance and integrity&quot;) failing</li><li>Journey J-02 (&quot;Market-event time, measured availability and generation time are three distinct, honest instants, read atomically&quot;) failing</li><li>Journey J-03 (&quot;Lifecycle, feed basis and session identity stay honest&quot;) failing</li><li>Journey J-04 (&quot;Ingestion-path equivalence under an identical valid event stream&quot;) failing</li><li>Journey J-05 (&quot;One read-only machine path&quot;) failing</li><li>Journey J-06 (&quot;Guards and the regression sentinel&quot;) partial — era-open paperwork and unchanged pages confirmed done; the guard-suite test file has not been written yet</li></ul><h3>Next step</h3><div class='next-step-box'>Build the first block of the era&#x27;s required order: the constants, the builder that assembles the observation, and the two hash rules, together with the test file `apps/backend/tests/test_tape_observation_projection.py` — this is journey J-01, &quot;the artifact is a pure projection with identity, provenance and integrity.&quot; Do not start the web address `/tape/{ticker}/observation` yet; the goal&#x27;s binding order puts the route fifth, after time, lifecycle and path-equivalence work. Because there is no route yet, the browser step for the next iteration can only show the same &quot;Not Found&quot; page, so J-01 will stay failing until the route lands — that is expected and is not a reason to reorder the work. Next iteration should run at lean depth, writing backend code and tests only, changing nothing a user can see.</div></div></details>
+<details><summary>Assumptions made</summary><div class='accordion-body'><ul class='bullets'><li>iter-0 · goal-evaluator — Ambiguity: J-06 also requires the full backend suite recorded green, but browser QA&#x27;s own re-run did not finish and it honestly recorded &quot;unknown&quot;. We chose: to treat the developer&#x27;s and reviewer&#x27;s independent full runs (3930 passed / 8 skipped / 0 failed) plus the evaluator&#x27;s own re-collection (3938 collected) as sufficient evidence that the foundation is unchanged, while still leaving J-06 partial on the missing guard module, so this call cannot have promoted any journey. Reversible: yes</li><li>iter-0 · goal-evaluator — Ambiguity: J-06&#x27;s Acceptance is one long conjunction (pages unchanged + three era-open documents exist + guard suite green + full suite green + fingerprint pinned), and the goal text doesn&#x27;t say how to score a journey whose sub-checks split. We chose: &quot;partial&quot; in the journey tracker (not &quot;failing&quot;), because the era-open and unchanged-pages sub-checks are genuinely verified done and only the guard-test file is missing, matching the iteration spec&#x27;s own prediction and the &quot;only some assertion steps passed&quot; definition of partial. Neither status counts as passing, so no gate is loosened by this choice. Reversible: yes</li></ul></div></details>
+<details><summary>Direction signal</summary><div class='accordion-body'><div class='why-text'><strong>Why:</strong> This is the first-ever evaluator-log entry for this session, so no journey has passed yet by design (this iteration made zero code changes on purpose) and nothing has regressed either, since there is no prior state to regress from. &quot;Stalling&quot; doesn&#x27;t apply because it requires three consecutive iterations of no journey movement, and only one iteration exists so far; the evaluator&#x27;s own next step targets a specific, ordered next journey (J-01), so this reads as a clean, honest starting line rather than stagnation.</div><h3>Trend</h3><ul class='bullets'><li>Newly passing this iter: none</li><li>Newly passing in last 1 iters total: none</li><li>Regressions in last 1 iters: none</li><li>Anti-goal violations in last 1 iters: none</li><li>Iters with no journey state change: 0 of last 1</li></ul><h3>Latest evaluator reasoning</h3><div class='why-text'>This was the baseline check of a brand-new era. No code was written on purpose, and none was written: the change scan and my own check both show zero changes under the product folders. The browser check confirmed what the plan predicted — the new machine-readable page `/tape/SIM-BIDABS/observation` does not exist yet (the server answers &quot;Not Found&quot;), so the first five journeys fail, and the sixth is half done: the era&#x27;s paperwork and the three existing pages are fine, but its guard test file has not been written. Nothing went wrong; we now have an honest starting line.</div></div></details>
+<details><summary>Artifacts</summary><div class='accordion-body'><table class='drill-table'><thead><tr><th>Report</th><th>Verdict</th><th>Path</th></tr></thead><tbody><tr><td>Iter spec</td><td><span class='verdict-cell —'>—</span></td><td><a href='../docs/phases/goal-observation-contract-iter-0.md'>docs/phases/goal-observation-contract-iter-0.md</a></td></tr><tr><td>Dev handoff</td><td><span class='verdict-cell —'>—</span></td><td><a href='../docs/handoffs/goal-observation-contract-iter-0-dev.md'>docs/handoffs/goal-observation-contract-iter-0-dev.md</a></td></tr><tr><td>Review</td><td><span class='verdict-cell PASS'>PASS</span></td><td><a href='reviews/goal-observation-contract-iter-0-review.md'>reports/reviews/goal-observation-contract-iter-0-review.md</a></td></tr><tr><td>Browser QA</td><td><span class='verdict-cell FAIL'>FAIL</span></td><td><a href='phase-goal-observation-contract-iter-0-ui-test-results.md'>reports/phase-goal-observation-contract-iter-0-ui-test-results.md</a></td></tr><tr><td>Goal evaluation</td><td><span class='verdict-cell CONTINUE'>CONTINUE</span></td><td><a href='../runs/goal-session-observation-contract/iter-0/eval.md'>runs/goal-session-observation-contract/iter-0/eval.md</a></td></tr><tr><td>Journey history</td><td><span class='verdict-cell —'>—</span></td><td><a href='../runs/goal-session-observation-contract/state/journey-history.json'>runs/goal-session-observation-contract/state/journey-history.json</a></td></tr></tbody></table></div></details>
+<details><summary>Timing — where this iteration's wall time went</summary><div class='accordion-body'><pre>== Wall-time report: session observation-contract
+  goal-observation-contract-iter-0  depth=?  verdict=?  wall=?  (incomplete/interrupted attempt)
+      goal-decomposer              0.0m  calls=1  failures=1
+  goal-observation-contract-iter-0  depth=lean  verdict=CONTINUE  wall=63.9m
+      reviewer                    29.3m  calls=1
+      browser-qa-agent            28.4m  calls=1
+      goal-evaluator               5.0m  calls=1
+      goal-decomposer              0.8m  calls=1
+      browser-qa-replay            0.6m  calls=1
+      developer                    0.3m  calls=1
+      [engine] lean-pipeline      58.1m  (contains agent time above)
+      [engine] showcase-join       0.0m  (contains agent time above)
+      pump-wait                  0.4m
+      overlap saved              0.5m  (parallel steps)</pre></div></details>
+<div class='footer-note'>Generated 2026-09-02 23:08 by <code>render_iteration_summary.py</code> · source: <a href='phase-goal-observation-contract-iter-0-iteration-summary.md'>phase-goal-observation-contract-iter-0-iteration-summary.md</a></div>
+</div></body></html>

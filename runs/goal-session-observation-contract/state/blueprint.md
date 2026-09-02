@@ -65,13 +65,15 @@ condensed index into it, not a second copy. No other endpoint, page or tool may 
 
 | Value / entity (partition, §6) | Computed by (single module/function) | Served by (single endpoint) | Notes |
 |---|---|---|---|
-| Machine observation semantics — `schema_version`, `provider`, `ticker`, `tape_state`, `confidence`, `warm`, `primary_window`, `features`, `trade_event_count`, `market.*`, `observed_at_utc`, `timing.logical_timestamp`, `timing.epoch_anchor`, `engine_identity.*` | `EngineSnapshot` (existing engine, unchanged, the one semantic producer) projected verbatim by `build_tape_observation` in `apps/backend/app/observation_contract.py` (planned, not yet built) | `GET /tape/{ticker}/observation` (planned) | drives `observation_hash`; zero recomputation — no second classifier/feature/confidence path |
+| Machine observation semantics — `schema_version`, `provider`, `ticker`, `tape_state`, `confidence`, `warm`, `primary_window`, `features`, `trade_event_count`, `market.*`, `observed_at_utc`, `timing.logical_timestamp`, `timing.epoch_anchor`, `engine_identity.*` | `EngineSnapshot` (existing engine, unchanged, the one semantic producer) projected verbatim by `build_tape_observation` in `apps/backend/app/observation_contract.py` (iter-1: builder module built in-process; not yet served) | `GET /tape/{ticker}/observation` (planned — route lands iter-5) | drives `observation_hash`; zero recomputation — no second classifier/feature/confidence path |
 | Provenance / source / lifecycle metadata — `available_at_utc`, `availability_basis`, `generated_at_utc`, `timing.settled_at_utc`, `timing.delivery_lag_seconds`, `lifecycle.*`, `source.*`, `implementation_provenance.*` | `WatchManager.get_observation_source(ticker)` atomic settled-pair read in `apps/backend/app/watch_manager.py` (planned, not yet built) + `build_tape_observation` | `GET /tape/{ticker}/observation` (planned) | `data_feed` from the one existing `data_feed_for_scenario`; `source_revision`/`worktree_dirty` resolved once per process, never per request |
 | Explanatory metadata — `observations[]` | `EngineSnapshot.observations` (existing engine, unchanged) | `GET /tape/{ticker}/observation` (planned) | prose only; never machine identity |
-| Integrity — `observation_hash`, `artifact_hash` | `build_tape_observation` hash laws over the §6 canonical encoding (planned, not yet built) | `GET /tape/{ticker}/observation` (planned) | `observation_hash` = machine-observation equivalence identity; `artifact_hash` = exact evidence-instance identity |
+| Integrity — `observation_hash`, `artifact_hash` | `build_tape_observation` hash laws over the §6 canonical encoding (iter-1: built in-process; not yet served) | `GET /tape/{ticker}/observation` (planned — route lands iter-5) | `observation_hash` = machine-observation equivalence identity; `artifact_hash` = exact evidence-instance identity |
 
-No row is implemented yet at baseline — the entire table is `(planned)`; iteration 1+ builds it
-incrementally per `docs/goal.md`'s Binding Execution Order (constants/builder/hashes → time law/atomic
-read → descriptor/lifecycle/provenance → ingestion-path equivalence → route → guards/sentinel). No
-shared canonical value outside this one endpoint is introduced by this era; every existing Cockpit/
-Structure/Desk Data Contract value from prior eras is unread, unchanged foundation here.
+No row was implemented at baseline — the entire table was `(planned)`. Iter-1 built the machine-observation-semantics and integrity rows' computing module (`build_tape_observation`, the schema/partition
+constants and both hash laws) in-process, per `docs/goal.md`'s Binding Execution Order step 1; none of
+the four rows are SERVED yet (no route exists — that is step 5). Subsequent iterations build the
+remaining rows incrementally (time law/atomic read → descriptor/lifecycle/provenance → ingestion-path
+equivalence → route → guards/sentinel). No shared canonical value outside this one endpoint is
+introduced by this era; every existing Cockpit/Structure/Desk Data Contract value from prior eras is
+unread, unchanged foundation here.
