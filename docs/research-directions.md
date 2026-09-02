@@ -1248,6 +1248,41 @@ a documented basis decision.
 >   Part 5.3's amendments remain historical record.
 >
 > This note is the dated record required by §5.6.
+>
+> **OBSERVATION-CONTRACT OPENING NOTE (2026-09-02, operator pivot, under §5.6 "goal.md wins").**
+> The Hypothesis Foundry is CLOSED — GOAL_ACHIEVED 2026-08-27 (session `hypothesis-foundry`,
+> `epoch:afd19e9c11a6534f`; an honest empty epoch; its sealed artifacts, trial ledger and the §0.8
+> standing dispositions are immutable). The operator opened **"Observation Contract v1"**
+> (constitution `docs/goal.md`; consumer-facing spec `docs/observation-contract-spec.md`; predecessor
+> archived at `docs/goal-archive/goal-2026-09-02.md`) — a contract-hardening era that exposes the
+> EXISTING immutable `EngineSnapshot` as one versioned external artifact, `TapeObservation`
+> (`GET /tape/{ticker}/observation`, schema `tape-observation-v1`), for a future composite-policy
+> consumer that lives in its own repository. Binding rules, from `docs/goal.md`:
+>
+> - No new tape engine, classifier, threshold, feature, strategy condition or research primitive
+>   (§0.8 law 5 is not applicable: an operator pivot outside the catalog that builds no research
+>   engineering). No trading or actionability semantics of any kind — Tapeology says what the tape
+>   observed, never "therefore trade".
+> - Three time concepts stay distinct and honest: `observed_at_utc` (market/event time of the latest
+>   processed quote or trade), `available_at_utc` (only a manager-measured settled wall-clock instant on
+>   the live basis; NULL with `availability_basis = historical_arrival_unknown` for historical and
+>   dataset replay, NULL with `simulated_not_applicable` for simulation), and `generated_at_utc`
+>   (artifact projection time). No historical arrival latency is modelled or guessed; retrospective
+>   evidence establishes compatibility, not prospective proof.
+> - Every artifact carries feed basis (`sim|iex|sip`, never pooled), watch `session_id`, semantic
+>   identity (`engine_semantics_version`, `config_fingerprint`, `profile_id`) and implementation
+>   provenance (`engine_source_hash`, `source_revision`, `worktree_dirty`); `observation_hash` is the
+>   machine-observation equivalence identity and `artifact_hash` the exact evidence-instance identity
+>   that downstream references must use.
+> - Ingestion-path equivalence is claimed only under an identical valid ordered event stream — never as
+>   equality between independently sourced IEX and SIP data.
+> - Mandatory evidence is deterministic and local (Sim mode, committed fixtures, provider harnesses); no
+>   journey depends on Alpaca, the network, credentials or market hours.
+> - `config_fingerprint` stays `08e471b10130e1e2` (zero Config fields); no UI change; no named MCP tool
+>   (the existing `get_endpoint` proxy suffices); the goal-proposer is retired at framework level
+>   (`3d0d07c2`) and the journey set is finite (J-01…J-06).
+>
+> This note is the dated record required by §5.6.
 
 ---
 
