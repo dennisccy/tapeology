@@ -48,3 +48,21 @@ passing on my own re-run; 5 `test_counterexample_*` tests present), while steps 
 unmet (the route 404s). This matches the "only some assertion steps passed" definition and the same
 convention iter-0 applied to J-06. `partial` never counts toward GOAL_ACHIEVED, so no gate is loosened.
 **Reversible:** yes
+
+## iter-2 — goal-decomposer
+
+**Ambiguity:** Binding Execution Order step 2 names `get_observation_source` as J-02's deliverable, but
+Key Capability 3 in `docs/goal.md` describes its return as carrying "the settled `EngineSnapshot`, its
+source/session descriptor, its settled wall-clock time and the engine's `end_reason`" — and step 3
+separately owns "Descriptor, lifecycle and provenance. Source/session descriptor...". It is not explicit
+whether `get_observation_source` must return the FULL descriptor-bearing shape this iteration or may
+return a narrower shape that iteration 3 extends.
+**We chose:** `get_observation_source(ticker)` is introduced this iteration returning only what the
+atomic settled pair itself carries — the settled snapshot, `settled_at_utc`, and `end_reason` — with the
+source/session descriptor fields (mode, scenario, window, session id, session start, data feed) added
+onto the SAME method by iteration 3 without re-reading the pair. This keeps iteration 2's change set to
+`watch_manager.py` plus one test file, matching the evaluator's own next-step wording ("the watch
+manager's single atomic read of the settled pair, the three time fields, `availability_basis`") which
+names none of the descriptor fields.
+**Reversible:** yes — iteration 3 extends the same method's return value; no field owner or semantic
+changes.

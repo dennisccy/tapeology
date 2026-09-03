@@ -1,17 +1,17 @@
 # Project story so far
 
-Tapeology is a market-tape reading tool that watches trading activity and reports what it observed — never what to trade.
+Tapeology watches trading activity and reports exactly what the tape observed — it never says what to trade.
 
 ## How it has grown
 
-This is the opening of a brand new chapter for the product. On day one, the team drew the starting line for a new capability: a single, trustworthy summary of what the tape is doing at any moment, called an "observation," that another program could one day read without having to reconstruct or guess anything for itself. Before any of it was built, they checked the current state of the whole app by hand and wrote down exactly what already existed and what didn't.
+This chapter opened with a clear goal: give the tape's built-in observation a single, trustworthy summary — called an "observation" — that another program could read without guessing or reconstructing anything for itself. The team started by checking the whole app by hand and confirming that nothing of the new feature existed yet, while everything else — the pages, the full test suite, the app's configuration — stayed exactly as it was.
 
-Two pieces of groundwork were already in place before this chapter began: the written plan for the new feature, and a note in the project's research log marking the change of direction. Everything else — the actual logic that builds an observation, and the web address where it would be found — was confirmed to not exist yet, exactly as expected for a fresh start. The team also double-checked that nothing else in the app broke: the existing pages, the full behind-the-scenes test suite, and the app's internal configuration all came back unchanged.
+Next, the team built the actual engine-room piece: the code that assembles one observation record and stamps it with two tamper-evident fingerprints, one for the trading facts and one for the whole record. This module passed its own dedicated test file — 38 checks, all green, including five tests proving the safety checks can genuinely fail — and the full app-wide test suite still passed with nothing broken. Still nothing is visible on any screen: the web address where this record will eventually be served on purpose doesn't exist yet, because building the address first, before the record itself is trustworthy, is against the plan.
 
-Nothing is visible to users yet. The very next step is to start building the internal piece that puts a single observation together and gives it a tamper-evident fingerprint — invisible groundwork that has to exist before any page or address can show it.
+Right now the product looks and works exactly as it did before this chapter began. What's new is entirely behind the scenes: the core piece that will eventually feed a trustworthy observation to the outside world now exists and is proven correct in isolation. Next, the team will teach the system to read time honestly — pinning the moment something happened, the moment it was noticed, and the moment the report was written, all from one single, tamper-proof snapshot, so those three clocks can never quietly disagree.
 
 ## What it can do today
 
-The product lets users watch simulated and historical tape data on the Cockpit, Structure and Desk pages exactly as before. The new observation-summary feature has not been built yet, so there is nothing new to try in this area so far.
+The product lets users watch live simulated or historical tape data on the Cockpit page, browse market structure on the Structure page, and review desk screens on the Desk page — unchanged from before this chapter began. The new observation-summary feature exists internally but is not yet reachable by any person or outside program.
 
-_Last updated: 2026-09-02 after iteration 0._
+_Last updated: 2026-09-03 after iteration 1._
