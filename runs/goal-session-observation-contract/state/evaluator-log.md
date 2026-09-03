@@ -52,3 +52,34 @@ manager's single atomic read of the settled pair, the three time fields, `availa
 the new test file `apps/backend/tests/test_tape_observation_time.py`. Do not move the web address
 earlier to make a journey look green; it is step 5 of the goal's required order. Next iteration
 should be lean, backend only, with no visible change on screen.
+
+## Iteration 2 — goal-observation-contract-iter-2
+
+**Date:** 2026-09-03T11:05:00Z
+**Verdict:** CONTINUE
+**Depth dispatched:** lean
+**Journey deltas:**
+- Newly passing: none
+- Newly partial: J-02 (was failing — its new test file passes; its served web address is still missing)
+- Newly failing: none
+- Regressed: none
+- Unchanged: J-01 partial, J-06 partial (both re-checked this round); J-03, J-04, J-05 failing (not worked on)
+- Anti-goal violations: none (scan-report CLEAN; coherence COHERENCE-PASS with one advisory note; ledger totals 0/0/0/0)
+
+**Reasoning:** I checked the work myself rather than trusting the reports. My own run of the new file
+`apps/backend/tests/test_tape_observation_time.py` gives 33 checks, all pass, with 9 "counter-example"
+checks present that prove the rules can really fail. My own run of the whole backend test set gives
+4001 pass, 8 skipped, 0 fail — the previous 3968 plus exactly the 33 new ones — and the settings
+fingerprint still reads 08e471b10130e1e2. The screenshots agree with the report: the Cockpit shows
+SIM-BIDABS live on the simulated feed, the page returns to the idle "No ticker watched" screen after
+Stop, and the address `/tape/SIM-BIDABS/observation` still answers "Not Found". That missing address
+is one half of what J-02 asks for, so J-02 moves to partial, not passing. The change set is one
+backend file plus one new test file; no page, no settings, no guard file was touched.
+
+**Next-step recommendation:** Build the next block — J-03 "Lifecycle, feed basis and session identity
+stay honest": the real source and session description for each watch, honest lifecycle wording for all
+seven statuses, and the new test file `apps/backend/tests/test_tape_observation_lifecycle_feed.py`.
+While that work is open, also fix the one small problem the reviewer found: the settle helper stores
+its record under the ticker name only, so an old, cancelled feed can briefly overwrite a freshly
+restarted watch's record; it must be fixed before the web address is built at step 5. Do not move the
+web address earlier. Next iteration should be lean, backend only, with no visible change on screen.

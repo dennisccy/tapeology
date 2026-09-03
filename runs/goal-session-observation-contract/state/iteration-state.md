@@ -1,40 +1,40 @@
 # Iteration State — observation-contract
 
-**After iteration:** 1 · **Date:** 2026-09-03 · **Verdict:** CONTINUE
+**After iteration:** 2 · **Date:** 2026-09-03 · **Verdict:** CONTINUE
 
 ## Journeys
 
-0 passing · 4 failing (J-02 J-03 J-04 J-05) · 2 partial (J-01 J-06) — 6 total
+0 passing · 3 failing (J-03 J-04 J-05) · 3 partial (J-01 J-02 J-06) — 6 total
 
 ## Active blockers
 
-- none human-owned. All remaining work is dev-owned build work, in the goal's required
-  order: `WatchManager.get_observation_source` + the atomic settled pair (J-02), the real
-  source/session descriptor (J-03), path equivalence (J-04), the route
-  `/tape/{ticker}/observation` in `apps/backend/app/main.py` (J-05), the guards module
-  `apps/backend/tests/test_tape_observation_guards.py` (J-06) — all confirmed absent.
-- J-01 and J-06 stay partial ONLY because the route does not exist yet: step 5 of the
-  Binding Execution Order, not a defect.
+- none human-owned. Remaining work is dev-owned, in the goal's required order: source/session
+  descriptor + lifecycle/feed honesty (J-03), path equivalence (J-04), the route
+  `/tape/{ticker}/observation` in `app/main.py` (J-05), the guards module
+  `tests/test_tape_observation_guards.py` (J-06) — all confirmed absent. J-01/J-02/J-06 are
+  partial ONLY because that route does not exist yet (step 5), not because of a defect.
+- Carry-forward MINOR (reviewer, iter-2): `_settle` at `apps/backend/app/watch_manager.py:341`
+  keys its write by ticker with no check that the engine is still the registered one — a
+  cancelled feeder can clobber a freshly re-watched ticker's pair; untested (sync harness only).
+  Fix + a real running-task switch test before the route lands at step 5.
 
 ## Last 2 verdicts
 
-- iter 1: CONTINUE — J-01 failing→partial; builder module + 38/38 tests verified by the
-  evaluator's own re-run; full suite 3968 pass / 8 skip / 0 fail; scan CLEAN;
-  `iter-1/coherence.md` COHERENCE-PASS.
-- iter 0: CONTINUE — verify-only baseline; every observation surface confirmed unbuilt,
-  zero product diff, zero anti-goal findings.
+- iter 2: CONTINUE — J-02 failing→partial; atomic settled pair + `get_observation_source` built;
+  evaluator re-ran `test_tape_observation_time.py` 33/33 (9 counter-examples) and the full suite
+  4001 pass / 8 skip / 0 fail; scan CLEAN; `iter-2/coherence.md` COHERENCE-PASS.
+- iter 1: CONTINUE — J-01 failing→partial; builder + 38/38 tests re-run by the evaluator; suite
+  3968/8/0; scan CLEAN; coherence PASS.
 
 ## Do not redo
 
-- Binding Execution Order step 1 is DONE and verified: `apps/backend/app/observation_contract.py`
-  (schema constants, four-group partition, `canonical_encode`, both hash laws, memoized
-  `resolve_implementation_provenance`, `build_tape_observation`), `ENGINE_SEMANTICS_VERSION`
-  in `app/engine/tape_engine.py`, `apps/backend/tests/test_tape_observation_projection.py`
-  (38 tests, 5 `test_counterexample_*`). Do not rebuild or re-verify it.
-- Settled iter-1 design calls (dev handoff §Design decisions, review PASS): `source.scenario`
-  read off the snapshot; `TAPE_STATE_VOCABULARY` a literal tuple cross-checked by a test, not
-  a classifier import; `settled_at_utc`/`generated_at_utc` pass-through ISO. Do not relitigate.
-- Foundation intact at iter-1 — do not re-pin: `config_fingerprint` = `08e471b10130e1e2`,
-  suite 3968 passed / 8 skipped / 0 failed (3976 collected), `tsc --noEmit` 0 errors.
-- Do not move the route earlier to make journeys demonstrable; a flat journey table through
-  iterations 2-4 is the expected signal. Zero frontend changes this era — no UI work.
+- Order step 1 DONE (iter-1): `app/observation_contract.py` (schema constants, partition,
+  `canonical_encode`, both hash laws, `build_tape_observation`) + 38-test
+  `tests/test_tape_observation_projection.py`. Untouched at iter-2 by design.
+- Order step 2 DONE (iter-2): per-ticker atomic settled pair, the one `_settle` helper wired
+  through all five feeders + `pause()`/`resume()` + four `watch*` cold resets,
+  `get_observation_source`, `_iso_utc`, 33-test `tests/test_tape_observation_time.py`.
+- Settled iter-2 calls (review PASS_WITH_NOTES, coherence PASS): cold reset at each fresh engine;
+  `end_reason` read live off the engine; `_iso_utc` duplicate guarded by a cross-check test.
+- Do not re-pin: fingerprint `08e471b10130e1e2`, suite 4001/8/0, tsc 0 errors. Do not move the
+  route earlier — a flat journey table through iterations 3-4 is expected. No frontend work.

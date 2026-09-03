@@ -4,20 +4,20 @@
       "id": "J-01",
       "name": "The artifact is a pure projection with semantic identity, provenance and integrity",
       "status": "partial",
-      "last_verified_iter": "goal-observation-contract-iter-2",
+      "last_verified_iter": "goal-observation-contract-iter-1",
       "last_passing_iter": null,
       "first_seen_iter": "goal-observation-contract-iter-0",
-      "last_evidence_path": "reports/qa/goal-observation-contract-iter-2-evidence/UT-J-02-observation-404.png",
+      "last_evidence_path": "reports/qa/goal-observation-contract-iter-1-evidence/UT-J-01-observation-404.png",
       "spec_hash": "c2a2448307dfa576e097ed70a48a00d4806e137e484472163fd6441a4ed54d3b"
     },
     "J-02": {
       "id": "J-02",
       "name": "Market-event time, measured availability and generation time are three distinct, honest instants, read atomically",
-      "status": "partial",
-      "last_verified_iter": "goal-observation-contract-iter-2",
+      "status": "failing",
+      "last_verified_iter": "goal-observation-contract-iter-0",
       "last_passing_iter": null,
       "first_seen_iter": "goal-observation-contract-iter-0",
-      "last_evidence_path": "reports/qa/goal-observation-contract-iter-2-evidence/UT-J-02-observation-404.png",
+      "last_evidence_path": "reports/qa/goal-observation-contract-iter-0-evidence/J-02-fail.png",
       "spec_hash": "e1a1ea0799c8cab3f30807f36d687cae0d7db15a7896e55bb03e379d535580bf"
     },
     "J-03": {
@@ -54,13 +54,13 @@
       "id": "J-06",
       "name": "Guards and the regression sentinel",
       "status": "partial",
-      "last_verified_iter": "goal-observation-contract-iter-2",
+      "last_verified_iter": "goal-observation-contract-iter-1",
       "last_passing_iter": null,
       "first_seen_iter": "goal-observation-contract-iter-0",
-      "last_evidence_path": "reports/qa/goal-observation-contract-iter-2-evidence/UT-J-02-desk-unchanged.png",
+      "last_evidence_path": "reports/qa/goal-observation-contract-iter-1-evidence/UT-J-01-desk-unchanged.png",
       "spec_hash": "a3424f6495d4437d6f09e4d35af4ec6102d106f7a86164966f9756354e4fc222"
     }
   },
   "anti_goal_violations": [],
-  "updated_at": "2026-09-03T11:05:00Z"
+  "updated_at": "2026-09-03T09:05:00Z"
 }
