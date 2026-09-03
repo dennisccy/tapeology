@@ -29,6 +29,14 @@ from .snapshot import EngineSnapshot, TradeRow
 # research type, so logging a failure leaks no research concept into the engine.
 logger = logging.getLogger(__name__)
 
+# The engine's SEMANTIC identity (Observation Contract v1, Constitution §6/§7): bumped ONLY by
+# an explicit owner act when classifier, feature, aggressor or warm-up semantics change -- never
+# by an automated inference. `app/observation_contract.py`'s `engine_identity.engine_semantics_
+# version` reads this constant verbatim (never a second copy). It is distinct from
+# `implementation_provenance.engine_source_hash` (exact source bytes, changes on comment edits
+# too): a changed source hash never by itself claims a semantic change.
+ENGINE_SEMANTICS_VERSION = "tape-engine-v1"
+
 
 class TapeEngine:
     def __init__(

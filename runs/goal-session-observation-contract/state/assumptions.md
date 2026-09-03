@@ -35,3 +35,16 @@ Required Trap Coverage item 13 ("four-group partition covers every leaf path exa
 satisfiable this iteration at all, since the partition spans every field in the schema.
 **Reversible:** yes — a later iteration could split the builder further without changing any field's
 owner or semantics.
+
+## iter-1 — goal-evaluator
+
+**Ambiguity:** J-01's Acceptance is a conjunction — the served JSON at `/tape/SIM-BIDABS/observation`
+AND `tests/test_tape_observation_projection.py` passing with its counter-example tests. The iter spec
+itself left the scoring open ("Expect the evaluator to record J-01 as still `failing` or move it to
+`partial`"). The goal text does not say how to score a journey when one conjunct is fully met and the
+other is blocked by the goal's own required build order.
+**We chose:** `partial` — steps 1, 4 and 5 are verified met (live Sim watch screenshot; 38/38 tests
+passing on my own re-run; 5 `test_counterexample_*` tests present), while steps 2 and 3 are verified
+unmet (the route 404s). This matches the "only some assertion steps passed" definition and the same
+convention iter-0 applied to J-06. `partial` never counts toward GOAL_ACHIEVED, so no gate is loosened.
+**Reversible:** yes

@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "journey": "J-01",
+  "name": "The artifact is a pure projection with semantic identity, provenance and integrity",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {"n": 1, "journey": "J-01", "action": {"type": "goto", "url": "/"}, "expect": {"text": "No ticker watched"}},
+    {"n": 2, "journey": "J-01", "action": {"type": "click", "target": {"role": "button", "name": "Simulated"}}},
+    {"n": 3, "journey": "J-01", "action": {"type": "fill", "target": {"placeholder": "Ticker e.g. SIM-BUYER"}, "text": "SIM-BIDABS"}},
+    {"n": 4, "journey": "J-01", "action": {"type": "click", "target": {"role": "button", "name": "Watch"}}, "expect": {"text": "Live"}},
+    {"n": 5, "journey": "J-01", "action": {"type": "goto", "url": "/tape/SIM-BIDABS/observation"}, "expect": {"text": "Not Found"}}
+  ]
+}

@@ -31,3 +31,18 @@ appears. Also budget for it: the full suite runs longer than a browser-QA dispat
 had to record it `unknown` this iteration).
 **Applies to:** any iteration recording backend suite counts, especially J-06 sentinel runs and any
 browser-qa dispatch that tries to re-run the full suite itself.
+
+## iter-1 — 2026-09-03T09:05:00Z
+
+**Verdict:** CONTINUE
+**Lesson:** The recompute guard forbids `observation_contract.py` from importing
+`app.engine.classifier`, yet Constitution §1 requires the artifact to carry the classifier's closed
+five-state name list. The resolution that survived review and the coherence audit: duplicate the
+names as a literal tuple in the guarded module (`observation_contract.py:54-60`) and put the
+single-source-of-truth check in the TEST module, which is unrestricted and CAN import the classifier
+(`test_tape_state_vocabulary_matches_classifier_states`). Pattern: when a guard forbids an import
+that a contract needs the value of, move the cross-check to the test side rather than weakening the
+guard or importing anyway.
+**Applies to:** any later iteration whose builder must expose an engine-owned vocabulary or enum it
+is forbidden to import — iterations 2 and 3 (`availability_basis` values, lifecycle/feed-basis
+vocabularies) most likely, and the iteration-6 guard module that will re-assert all of them.
