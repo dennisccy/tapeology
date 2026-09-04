@@ -69,3 +69,28 @@ date, and fails whenever those digits happen to contain one of its own fixture c
 substring (it hit "4253" for the developer today; my own full-suite run was clean). A single failure
 in that one test is not a regression signal — re-run before treating it as one.
 **Applies to:** any iteration that records a full backend suite count, especially J-06 sentinel runs.
+
+## iter-3 — 2026-09-04T22:35:00Z
+
+**Verdict:** CONTINUE
+**Lesson:** A spec item phrased "all N values are pairwise distinguishable" invites a tautological
+summary test: `test_seven_lifecycle_statuses_plus_watch_stopped_are_pairwise_distinguishable`
+(`apps/backend/tests/test_tape_observation_lifecycle_feed.py:513`) asserts `len({...seven literals}) == 7`
+and never touches `WatchManager` — the real proof lives entirely in the eight sibling tests above it.
+The reviewer caught it; the suite would have stayed green forever without it meaning anything.
+**Applies to:** any iteration writing "every one of N states/values is distinct" coverage — especially
+iteration 6's `test_tape_observation_guards.py` (lexicon, compound-identifier ban, English-only,
+external-system scan), whose whole value depends on the scan being non-vacuous over real inputs.
+
+## iter-3 — 2026-09-04T22:35:00Z
+
+**Verdict:** CONTINUE
+**Lesson:** `runs/goal-observation-contract-iter-3/status.json` already read `current_step: dev_complete`
+with the implementation and new test module fully present in the working tree, but no dev handoff file
+existed — a prior developer session had finished the code and died before writing its artifact. The
+second dev session correctly re-verified the tree against the spec instead of either trusting the status
+flag or rebuilding from scratch; both shortcuts would have been wrong (double-build, or an unverified
+"done").
+**Applies to:** any resumed/re-dispatched iteration where `status.json` claims a step is complete but
+that step's own output artifact (handoff, report) is missing — verify the working tree, do not redo and
+do not assume.

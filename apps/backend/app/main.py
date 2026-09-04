@@ -263,6 +263,16 @@ def _parse_window_dt(value: str) -> datetime:
     return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=timezone.utc)
 
 
+def _iso_utc(dt: datetime) -> str:
+    """The repository's pinned ISO instant format (Observation Contract v1 Constitution §2),
+    matching ``watch_manager._iso_utc`` / ``observation_contract._iso_utc`` byte-for-byte -- this
+    module's own small formatter per the established per-module convention (each module owns its
+    own tiny ISO formatter rather than importing a private cross-module name). Used ONLY to thread
+    the already-parsed real historical request window into the manager's source descriptor
+    (iter-3 IN SCOPE) -- no other route behavior changes."""
+    return dt.astimezone(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")
+
+
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok"}
@@ -391,7 +401,13 @@ async def _watch_historical(
                 timeout=CONFIG.vendor_call_timeout_seconds,
             )
             provider = HistoricalProvider(ticker, window, scenario)
-            engine = manager.watch_with_provider(ticker, provider, speed)
+            engine = manager.watch_with_provider(
+                ticker,
+                provider,
+                speed,
+                window_start_utc=_iso_utc(start),
+                window_end_utc=_iso_utc(end),
+            )
         else:
             # Long window: fetch ONLY the first chunk under the budget (decoupled first-data), then
             # background-fetch the rest. The first chunk is fetched via the same lazy generator the
@@ -411,7 +427,12 @@ async def _watch_historical(
                 ]
 
             engine = manager.watch_with_progressive_historical(
-                ticker, first_provider, _fetch_remaining, speed
+                ticker,
+                first_provider,
+                _fetch_remaining,
+                speed,
+                window_start_utc=_iso_utc(start),
+                window_end_utc=_iso_utc(end),
             )
     except (asyncio.TimeoutError, VendorTimeout):
         # Only the FIRST chunk's load is gated here; a genuinely un-loadable first chunk -> the

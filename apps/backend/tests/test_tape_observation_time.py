@@ -150,7 +150,7 @@ def test_get_observation_source_pairs_snapshot_with_its_own_settled_time(monkeyp
 
     result = manager.get_observation_source("SIM-BIDABS")
     assert result is not None
-    snapshot, settled_at_utc, end_reason = result
+    snapshot, settled_at_utc, end_reason, _descriptor = result
     assert snapshot.timestamp == event.timestamp
     assert settled_at_utc == watch_manager._iso_utc(clock[0])
     assert end_reason is None
@@ -169,20 +169,20 @@ def test_atomic_read_never_mispairs_snapshot_n_plus_1_with_settled_time_n(monkey
     event_n = next(stream)
     engine.process_event(event_n)
     manager._settle(engine, new_event=True)
-    snapshot_n, settled_n, _ = manager.get_observation_source("SIM-BIDABS")
+    snapshot_n, settled_n, _, _ = manager.get_observation_source("SIM-BIDABS")
     assert snapshot_n.timestamp == event_n.timestamp
 
     clock[0] += 5.0  # wall clock advances -- but N+1 has not been settled yet
     event_n1 = next(stream)
     engine.process_event(event_n1)  # the engine's OWN internal snapshot now reflects N+1
 
-    still_snapshot, still_settled, _ = manager.get_observation_source("SIM-BIDABS")
+    still_snapshot, still_settled, _, _ = manager.get_observation_source("SIM-BIDABS")
     assert still_snapshot is snapshot_n  # STILL the exact N object, never a fresher N+1 read
     assert still_settled == settled_n  # STILL settled-time N, never re-stamped early
     assert engine.snapshot() is not still_snapshot  # the LIVE engine has already moved to N+1
 
     manager._settle(engine, new_event=True)  # now settle N+1
-    snapshot_n1, settled_n1, _ = manager.get_observation_source("SIM-BIDABS")
+    snapshot_n1, settled_n1, _, _ = manager.get_observation_source("SIM-BIDABS")
     assert snapshot_n1 is engine.snapshot()
     assert snapshot_n1.timestamp == event_n1.timestamp
     assert settled_n1 != settled_n
@@ -201,7 +201,7 @@ def test_counterexample_naive_read_mispairs_snapshot_and_settled_time(monkeypatc
     event_n = next(stream)
     engine.process_event(event_n)
     manager._settle(engine, new_event=True)
-    settled_snapshot_n, settled_n, _ = manager.get_observation_source("SIM-BIDABS")
+    settled_snapshot_n, settled_n, _, _ = manager.get_observation_source("SIM-BIDABS")
 
     event_n1 = next(stream)
     engine.process_event(event_n1)  # engine.snapshot() now reflects N+1; settle NOT yet called
@@ -220,7 +220,7 @@ def test_counterexample_naive_read_mispairs_snapshot_and_settled_time(monkeypatc
     # The atomic manager read, in contrast, NEVER exhibits this: it always returns the exact
     # settled snapshot object paired with its own settled_at -- never engine.snapshot()'s
     # current, possibly-fresher object.
-    atomic_snapshot, atomic_settled_at, _ = manager.get_observation_source("SIM-BIDABS")
+    atomic_snapshot, atomic_settled_at, _, _ = manager.get_observation_source("SIM-BIDABS")
     assert atomic_snapshot is settled_snapshot_n
     assert atomic_settled_at == naive_settled_at
     assert atomic_snapshot is not naive_snapshot  # the concrete mis-pair the naive tuple carries
@@ -237,11 +237,11 @@ def test_pause_carries_forward_settled_time_unchanged(monkeypatch):
     event = next(SimulatedProvider("SIM-BIDABS", "bid_absorption").stream())
     engine.process_event(event)
     manager._settle(engine, new_event=True)
-    pre_pause_snapshot, pre_pause_settled, _ = manager.get_observation_source("SIM-BIDABS")
+    pre_pause_snapshot, pre_pause_settled, _, _ = manager.get_observation_source("SIM-BIDABS")
 
     clock[0] += 120.0  # wall clock advances well past the pause
     assert manager.pause("SIM-BIDABS") is True
-    post_pause_snapshot, post_pause_settled, _ = manager.get_observation_source("SIM-BIDABS")
+    post_pause_snapshot, post_pause_settled, _, _ = manager.get_observation_source("SIM-BIDABS")
     assert post_pause_settled == pre_pause_settled
     assert post_pause_snapshot.tape_state == pre_pause_snapshot.tape_state
 
@@ -271,7 +271,7 @@ def test_rewatch_before_first_settle_never_returns_a_prior_watchs_stale_pair(mon
     event = next(SimulatedProvider("SIM-BIDABS", "bid_absorption").stream())
     first_engine.process_event(event)
     manager._settle(first_engine, new_event=True)
-    first_snapshot, first_settled, _ = manager.get_observation_source("SIM-BIDABS")
+    first_snapshot, first_settled, _, _ = manager.get_observation_source("SIM-BIDABS")
     assert first_settled is not None
 
     assert manager.stop("SIM-BIDABS") is True
@@ -281,7 +281,7 @@ def test_rewatch_before_first_settle_never_returns_a_prior_watchs_stale_pair(mon
 
     # BEFORE the fresh engine has processed any event, the settled pair must be a COLD read for
     # THIS engine -- never the prior watch's stale settled snapshot/time.
-    second_snapshot, second_settled, _ = manager.get_observation_source("SIM-BIDABS")
+    second_snapshot, second_settled, _, _ = manager.get_observation_source("SIM-BIDABS")
     assert second_snapshot is second_engine.snapshot()
     assert second_snapshot is not first_snapshot
     assert second_settled is None  # nothing has settled yet on the fresh engine
@@ -401,7 +401,7 @@ async def test_live_available_at_utc_equals_settled_at_utc_from_manager_clock(mo
     engine = manager.watch_with_async_provider("PGLIVE1", provider)
     try:
         await _until(lambda: engine.snapshot().event_count >= 1)
-        snapshot, settled_at_utc, _ = manager.get_observation_source("PGLIVE1")
+        snapshot, settled_at_utc, _, _ = manager.get_observation_source("PGLIVE1")
         assert settled_at_utc == watch_manager._iso_utc(fixed_now)
 
         observation = _build_for_snapshot(
@@ -434,7 +434,7 @@ async def test_counterexample_deriving_available_at_utc_from_observed_plus_lag_i
     engine = manager.watch_with_async_provider("PGLIVE2", provider)
     try:
         await _until(lambda: engine.snapshot().event_count >= 1)
-        snapshot, settled_at_utc, _ = manager.get_observation_source("PGLIVE2")
+        snapshot, settled_at_utc, _, _ = manager.get_observation_source("PGLIVE2")
         assert snapshot.delivery_lag_seconds == 0.0  # clamped -- never a fabricated negative lag
 
         observation = _build_for_snapshot(
@@ -471,7 +471,7 @@ async def test_settled_minus_observed_agrees_with_delivery_lag_seconds_telemetry
     engine = manager.watch_with_async_provider("PGLAG", provider)
     try:
         await _until(lambda: engine.snapshot().event_count >= 1)
-        snapshot, settled_at_utc, _ = manager.get_observation_source("PGLAG")
+        snapshot, settled_at_utc, _, _ = manager.get_observation_source("PGLAG")
         observed_epoch = snapshot.epoch_anchor + snapshot.timestamp
         settled_epoch = _parse_iso(settled_at_utc)
         assert snapshot.delivery_lag_seconds is not None

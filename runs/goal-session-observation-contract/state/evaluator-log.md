@@ -83,3 +83,39 @@ While that work is open, also fix the one small problem the reviewer found: the 
 its record under the ticker name only, so an old, cancelled feed can briefly overwrite a freshly
 restarted watch's record; it must be fixed before the web address is built at step 5. Do not move the
 web address earlier. Next iteration should be lean, backend only, with no visible change on screen.
+
+## Iteration 3 — goal-observation-contract-iter-3
+
+**Date:** 2026-09-04T22:35:00Z
+**Verdict:** CONTINUE
+**Depth dispatched:** lean
+**Journey deltas:**
+- Newly passing: none
+- Newly partial: J-03 "Lifecycle, feed basis and session identity stay honest" (was failing — its new
+  test file passes; its served web address is still missing)
+- Newly failing: none
+- Regressed: none
+- Unchanged: J-01, J-02, J-06 partial (all re-checked this round); J-04, J-05 failing (not worked on)
+- Anti-goal violations: none (scan-report CLEAN; coherence COHERENCE-PASS with one advisory note;
+  ledger totals 0 total / 0 resolved / 0 blocking / 0 non-blocking / 0 critical)
+
+**Reasoning:** I checked the work myself instead of trusting the reports. My own run of the new file
+`apps/backend/tests/test_tape_observation_lifecycle_feed.py` gives 30 checks, all pass, including the
+five "counter-example" checks that prove the rules can really fail. My own run of the whole backend test
+set finishes clean (4039 checks collected, 0 failures, 8 skipped) — the previous 4009 plus exactly the 30
+new ones — the settings fingerprint still reads 08e471b10130e1e2, and the frontend type check reports 0
+errors. I read the code myself: the address `/tape/{ticker}/observation` is still not registered, so the
+"look at the served JSON" half of J-03 remains unmet and J-03 moves to partial, not passing. The
+screenshot agrees with the report: the Cockpit shows SIM-BIDABS watched and live after the full
+Watch → Pause → Resume → Stop → Watch cycle, with no new panel or control. The change set is two backend
+files, one new test file, and one mechanical update to an older test file; no page, no settings, no
+protected guard file was touched.
+
+**Next-step recommendation:** Build the next block in the goal's required order — J-04 "Ingestion-path
+equivalence under an identical valid event stream": feed one identical event stream through the replay
+path and through the live path and prove both produce the same content identity while the source and
+session details honestly differ. While that work is open, also fix two small things found this round:
+one summary test only checks a hand-written list of seven words and never calls the real code, so it
+proves nothing; and the new date-formatting helper in the web layer claims in a comment that it matches
+the two older copies but nothing tests that claim. Do not build the web address early — it is step 5 of
+the required order. Next iteration should be lean, backend only, with no visible change on screen.

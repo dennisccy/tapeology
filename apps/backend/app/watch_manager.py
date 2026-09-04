@@ -11,17 +11,20 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import dataclasses
 import logging
 import os
 import time
+import uuid
 from datetime import datetime, timezone
 from typing import Callable
 
-from .config import Config
+from .config import Config, PROFILE_DEFAULT
 from .engine.snapshot import EngineSnapshot
 from .engine.tape_engine import TapeEngine
 from .providers.base import AsyncProvider, Provider
 from .providers.simulated import build_provider
+from .research.feed_basis import data_feed_for_scenario
 
 # Wall-clock seconds between delivered events in live mode (delivery pacing only).
 FEED_PACE_SECONDS = float(os.environ.get("TAPEOLOGY_FEED_PACE", "0.04"))
@@ -102,6 +105,33 @@ def _provider_anchor(provider: object) -> float | None:
     return getattr(provider, "epoch_anchor", None)
 
 
+@dataclasses.dataclass(frozen=True)
+class SourceDescriptor:
+    """The manager-recorded per-watch source/session descriptor (Observation Contract v1
+    Constitution §1/§3, iter-3 IN SCOPE) -- every caller-resolved parameter
+    ``build_tape_observation`` (iteration 1) already accepts, now genuinely populated at watch
+    creation instead of a placeholder the (still-unbuilt) route would have to invent. Recorded
+    ONCE per ``watch*`` constructor call using the SAME "cold reset for a fresh engine" pattern
+    already used for ``WatchManager._settled`` (see its ``__init__`` docstring) -- a re-watched
+    ticker never reads a PRIOR watch's stale descriptor. Read verbatim by
+    ``get_observation_source`` -- never re-derived, never re-parsed from the scenario string a
+    second time (Constitution §3: "never re-derived by a second scenario-prefix parser").
+
+    ``source.scenario`` is NOT a field here -- its single owner stays ``EngineSnapshot.scenario``
+    (Constitution §1), never a second, possibly-divergent copy.
+    """
+
+    source_mode: str
+    data_feed: str
+    window_start_utc: "str | None"
+    window_end_utc: "str | None"
+    dataset_id: "str | None"
+    dataset_checksum: "str | None"
+    session_id: str
+    session_started_at_utc: str
+    profile_id: str
+
+
 class WatchManager:
     def __init__(
         self,
@@ -135,6 +165,12 @@ class WatchManager:
         # construction (below) so a re-watched ticker can never read a PRIOR watch's stale
         # settled pair before its own first tick.
         self._settled: dict[str, "tuple[EngineSnapshot, float | None]"] = {}
+        # Per-ticker source/session descriptor (Observation Contract v1 Constitution §1/§3,
+        # iter-3 IN SCOPE): ``{ticker: SourceDescriptor}``. Recorded ONCE at each fresh engine
+        # construction (below), the SAME cold-reset-per-fresh-engine pattern as ``_settled`` --
+        # a re-watched ticker never reads a PRIOR watch's stale descriptor. Read verbatim by
+        # ``get_observation_source`` (no re-fetch, no second read).
+        self._sources: dict[str, SourceDescriptor] = {}
 
     def set_on_engine_created(
         self, hook: "Callable[[str, TapeEngine], None] | None"
@@ -155,6 +191,35 @@ class WatchManager:
         except Exception:
             logger.exception("on_engine_created hook failed for %s", ticker)
 
+    def _record_source(
+        self,
+        ticker: str,
+        *,
+        source_mode: str,
+        scenario: str,
+        window_start_utc: "str | None" = None,
+        window_end_utc: "str | None" = None,
+    ) -> None:
+        """Record THIS fresh engine's source/session descriptor (Constitution §1/§3, iter-3 IN
+        SCOPE) -- called once per ``watch*`` constructor, right alongside the ``_settled``
+        cold-reset above it. Mints a fresh ``session_id``/``session_started_at_utc`` (no existing
+        per-watch identifier to reuse, confirmed by direct inspection) and resolves ``data_feed``
+        via the ONE existing ``data_feed_for_scenario`` -- never a second scenario-prefix parser.
+        ``dataset_id``/``dataset_checksum`` are always ``None`` here: ``dataset_replay`` is a
+        distinct in-process caller outside the manager (Constitution §3), never a managed watch.
+        """
+        self._sources[ticker] = SourceDescriptor(
+            source_mode=source_mode,
+            data_feed=data_feed_for_scenario(scenario, self._config),
+            window_start_utc=window_start_utc,
+            window_end_utc=window_end_utc,
+            dataset_id=None,
+            dataset_checksum=None,
+            session_id=uuid.uuid4().hex,
+            session_started_at_utc=_iso_utc(time.time()),
+            profile_id=PROFILE_DEFAULT,
+        )
+
     def is_known(self, ticker: str) -> bool:
         return build_provider(ticker) is not None
 
@@ -174,6 +239,7 @@ class WatchManager:
         # Cold-reset the settled pair for THIS fresh engine (never a prior watch's stale pair --
         # see the ``_settled`` docstring in ``__init__``). Nothing has settled yet.
         self._settled[ticker] = (engine.snapshot(), None)
+        self._record_source(ticker, source_mode="sim", scenario=provider.scenario)
         # Attach research observers (if any) BEFORE the feeder starts so the monitor sees the first
         # event/status. Exception-isolated — a hook failure never breaks the watch.
         self._announce_engine(ticker, engine)
@@ -186,7 +252,13 @@ class WatchManager:
         return engine
 
     def watch_with_provider(
-        self, ticker: str, provider: Provider, speed: float = 1.0
+        self,
+        ticker: str,
+        provider: Provider,
+        speed: float = 1.0,
+        *,
+        window_start_utc: "str | None" = None,
+        window_end_utc: "str | None" = None,
     ) -> TapeEngine:
         """Watch ``ticker`` fed by an arbitrary ``Provider`` (e.g. the historical replay),
         WITHOUT touching the simulated registry.
@@ -194,6 +266,12 @@ class WatchManager:
         Any existing watch for the ticker is torn down first (a switch/re-watch cancels the
         prior feeder and starts a fresh, cold engine — the orphaned-watch lesson). The replay
         feeder is registered in ``self._tasks`` so ``stop()`` and a switch already cancel it.
+
+        ``window_start_utc`` / ``window_end_utc`` (iter-3 IN SCOPE, optional, pinned-ISO) are the
+        caller's already-parsed real request window -- recorded verbatim into the source
+        descriptor (Constitution §3: "request identity, distinct from the observed extent");
+        ``None`` (the default) preserves the exact prior signature/behavior for every existing
+        caller that does not pass them.
         """
         self.stop(ticker)  # tear down any prior watch for this ticker (no orphaned feeder)
         engine = TapeEngine(
@@ -201,6 +279,13 @@ class WatchManager:
         )
         self._engines[ticker] = engine
         self._settled[ticker] = (engine.snapshot(), None)  # cold-reset (see __init__ docstring)
+        self._record_source(
+            ticker,
+            source_mode="historical",
+            scenario=provider.scenario,
+            window_start_utc=window_start_utc,
+            window_end_utc=window_end_utc,
+        )
         self._announce_engine(ticker, engine)  # attach research observers before the feeder starts
         # Register the per-ticker mutable speed cell BEFORE the feeder starts so ``set_speed`` (and
         # the feeder's per-iteration read) share the one holder. A non-positive speed is normalised
@@ -223,6 +308,9 @@ class WatchManager:
         first_chunk_provider: Provider,
         fetch_remaining,
         speed: float = 1.0,
+        *,
+        window_start_utc: "str | None" = None,
+        window_end_utc: "str | None" = None,
     ) -> TapeEngine:
         """Watch a LONG historical window progressively (J-37): replay the FIRST chunk immediately
         while the REMAINING chunks are fetched in the background and appended in epoch order.
@@ -236,6 +324,10 @@ class WatchManager:
         single-source-of-truth preserved (the engine bins on its logical timeline regardless of chunk
         boundaries). Any existing watch is torn down first (orphaned-watch lesson); the feeder is
         registered so stop()/switch/shutdown cancel it.
+
+        ``window_start_utc`` / ``window_end_utc`` (iter-3 IN SCOPE, optional, pinned-ISO): see
+        ``watch_with_provider``'s docstring -- the SAME whole-request window, shared by every
+        stitched chunk (Constitution §3).
         """
         self.stop(ticker)
         engine = TapeEngine(
@@ -246,6 +338,13 @@ class WatchManager:
         )
         self._engines[ticker] = engine
         self._settled[ticker] = (engine.snapshot(), None)  # cold-reset (see __init__ docstring)
+        self._record_source(
+            ticker,
+            source_mode="historical",
+            scenario=first_chunk_provider.scenario,
+            window_start_utc=window_start_utc,
+            window_end_utc=window_end_utc,
+        )
         self._announce_engine(ticker, engine)  # attach research observers before the feeder starts
         speed_cell = [speed if speed > 0 else 1.0]
         self._speeds[ticker] = speed_cell
@@ -276,6 +375,7 @@ class WatchManager:
         )
         self._engines[ticker] = engine
         self._settled[ticker] = (engine.snapshot(), None)  # cold-reset (see __init__ docstring)
+        self._record_source(ticker, source_mode="live", scenario=provider.scenario)
         self._announce_engine(ticker, engine)  # attach research observers before the feeder starts
         try:
             loop = asyncio.get_running_loop()
@@ -292,10 +392,12 @@ class WatchManager:
 
     def get_observation_source(
         self, ticker: str
-    ) -> "tuple[EngineSnapshot, str | None, str | None] | None":
-        """The ONE atomic managed-observation read (Observation Contract v1 Constitution §1/§2,
-        iter-2 IN SCOPE): returns ``(settled EngineSnapshot, pinned-ISO settled_at_utc-or-None,
-        end_reason)`` from the ONE manager-held settled pair for ``ticker``.
+    ) -> "tuple[EngineSnapshot, str | None, str | None, SourceDescriptor] | None":
+        """The ONE atomic managed-observation read (Observation Contract v1 Constitution §1/§2/§3,
+        iter-2/iter-3 IN SCOPE): returns ``(settled EngineSnapshot, pinned-ISO
+        settled_at_utc-or-None, end_reason, SourceDescriptor)`` -- the settled pair PLUS the
+        source/session descriptor recorded once at watch creation, both read from the SAME
+        per-ticker state (no re-fetch, no second read of the settled pair, iter-3 IN SCOPE).
 
         This NEVER calls ``engine.snapshot()`` (never re-snapshots the engine at read time) --
         it returns exactly what ``_settle`` captured together in ONE dict-item write, so the
@@ -315,7 +417,7 @@ class WatchManager:
             return None
         snapshot, settled_at_epoch = self._settled[ticker]
         settled_at_utc = _iso_utc(settled_at_epoch) if settled_at_epoch is not None else None
-        return snapshot, settled_at_utc, engine.end_reason
+        return snapshot, settled_at_utc, engine.end_reason, self._sources[ticker]
 
     def _settle(self, engine: TapeEngine, *, new_event: bool) -> None:
         """The ONE helper that writes the manager-held atomic settled pair (Constitution §2,
@@ -337,8 +439,20 @@ class WatchManager:
         "now". Stays ``None`` until the first-ever settle (an honest "nothing settled yet"),
         exactly the pre-existing "no fabricated engine" idiom extended to "no fabricated
         settlement".
+
+        IDENTITY CHECK (iter-3 IN SCOPE, the reviewer's carried-forward MINOR): a stale/superseded
+        engine's write is a silent no-op, never an exception, never a state mutation. Every
+        feeder's ``except asyncio.CancelledError`` branch calls this on the OLD engine object,
+        and that branch only actually runs when the cancelled task next reaches an await point --
+        which can happen AFTER a switch/re-watch has already cold-reset ``self._settled[ticker]``
+        (and ``self._sources[ticker]``) for a FRESH engine. Without this check the late write would
+        silently clobber the new watch's settled pair with the old engine's stale snapshot (proven
+        reproducible by ``tests/test_tape_observation_lifecycle_feed.py``'s
+        ``test_counterexample_*`` that reverts this check).
         """
         ticker = engine.snapshot().ticker
+        if self._engines.get(ticker) is not engine:
+            return  # stale/superseded engine (already stopped, or replaced by a switch) -- no-op
         if new_event:
             settled_at_epoch = time.time()
         else:

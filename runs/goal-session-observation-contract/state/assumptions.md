@@ -66,3 +66,61 @@ manager's single atomic read of the settled pair, the three time fields, `availa
 names none of the descriptor fields.
 **Reversible:** yes — iteration 3 extends the same method's return value; no field owner or semantic
 changes.
+
+## iter-3 — goal-decomposer
+
+**Ambiguity:** Key Capability 4 lists `profile_id` among the manager-owned provenance fields "recorded
+at watch creation" alongside mode/scenario/window/session id/session start, but engine_identity is a
+route-time projection (Constitution §1) and no live/replay watch path in this repo currently supports
+profile selection (`profile_id` is used only by an explicit offline backtest run). It is not explicit
+whether the per-ticker descriptor this iteration builds must itself store `profile_id`, or whether that
+field can simply be a literal `PROFILE_DEFAULT` the iteration-5 route supplies inline at read time.
+**We chose:** store `profile_id = PROFILE_DEFAULT` as a constant field of the SAME per-ticker descriptor
+recorded at watch creation (alongside `source_mode`/`data_feed`/window/session fields), matching Key
+Capability 4's literal wording, even though its value never varies for any watch built by this
+iteration. This keeps `get_observation_source`'s return the single place iteration 5 reads every
+descriptor field from, rather than splitting provenance across two call sites.
+**Reversible:** yes — a future profile-selectable watch path would only need to set a non-default value
+at the same recording site; no consumer of `get_observation_source` needs to change shape.
+
+## iter-3 — goal-decomposer
+
+**Ambiguity:** Required Trap Coverage item 31 ("no actionability field or token") is listed under both
+J-03 and J-06, but the reusable copy-discipline/compound-identifier-ban guard module
+(`test_tape_observation_guards.py`) is explicitly Binding Execution Order step 6 (iteration 6). It is
+not explicit whether J-03's own test module must build a second, independent scan this iteration or may
+defer the check entirely to iteration 6.
+**We chose:** J-03's own test module (`test_tape_observation_lifecycle_feed.py`) ships a SCOPED grep
+over one fully-built artifact dict for the same fixed token list Constitution's era-specific anti-goals
+name, satisfying J-03's own acceptance step now; the general-purpose, lexicon-driven, non-vacuous guard
+(`find_violations` over the module/tests/served-artifact with comment/docstring stripping and a `SELF`
+exclusion) remains iteration 6's own module, built once, not duplicated.
+**Reversible:** yes — the scoped J-03 check and the general iteration-6 guard test different things
+(one artifact instance vs. every module/test/served surface) and can coexist without a rename.
+
+## iter-3 — goal-evaluator
+
+**Ambiguity:** J-03's literal Steps 1-5 are browser steps that read fields out of the served JSON at
+`/tape/SIM-BIDABS/observation`. That route does not exist until iteration 5, so browser-qa scored its
+single row `UT-J-03` as **PASS on a narrowed "regression-smoke" scope** (Watch → Pause → Resume → Stop →
+re-Watch on `/`, plus the route answering 404 throughout) rather than on the journey's literal steps. The
+goal text does not say how to score a results row whose scope is deliberately narrower than the journey.
+**We chose:** to accept that row as evidence only for the browser sub-steps it actually executed, and to
+treat every JSON-field assertion in Steps 1-5 as unmet — so J-03 becomes `partial` (its deterministic
+half verified by my own 30/30 run of `tests/test_tape_observation_lifecycle_feed.py`, its served half
+verified absent by my own grep of `apps/backend/app/main.py`), never `passing`. Same convention already
+applied to J-01 (iter-1) and J-02 (iter-2). `partial` never counts toward GOAL_ACHIEVED, so no gate is
+loosened.
+**Reversible:** yes
+
+## iter-3 — goal-evaluator
+
+**Ambiguity:** Only one screenshot was captured for a five-step browser sequence
+(`UT-J-03-result.png`, the final re-watched-live state). The intermediate `paused` and post-Stop idle
+states are described in prose but not independently captured. It is not stated whether that counts as a
+capture defect (`evidence_makeup`) or simply as incomplete journey evidence.
+**We chose:** NOT to set `evidence_makeup: true`. J-03 is `partial` for a substantive reason (the route
+is absent), and its full browser evidence must be re-taken at iteration 5 anyway once the JSON
+assertions become checkable — scheduling a make-up capture now would add noise without adding proof.
+The gap is recorded in `iter-3/eval.md` and folded into the iteration-5 next-step instead.
+**Reversible:** yes
