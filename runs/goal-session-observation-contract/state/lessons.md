@@ -94,3 +94,27 @@ flag or rebuilding from scratch; both shortcuts would have been wrong (double-bu
 **Applies to:** any resumed/re-dispatched iteration where `status.json` claims a step is complete but
 that step's own output artifact (handoff, report) is missing — verify the working tree, do not redo and
 do not assume.
+
+## iter-4 — 2026-09-04T22:58:00Z
+
+**Verdict:** CONTINUE
+**Lesson:** Three stored golden replay scripts now assert that `/tape/SIM-BIDABS/observation` is
+ABSENT — `journey-scripts/J-01.json` step 5 and `J-03.json` step 11 expect `"Not Found"`, and the
+new `J-04.json` steps 8-9 expect `"404"`. The moment iteration 5 registers the route, every one of
+those replays will fail for the wrong reason (the assertion encodes the temporary absence, not the
+journey). Whoever ships the route must rewrite those three scripts in the SAME iteration.
+**Applies to:** any iteration that makes a previously-404 route real, and generally any golden
+script written while a journey's target surface does not exist yet.
+
+## iter-4 — 2026-09-04T22:58:00Z
+
+**Verdict:** CONTINUE
+**Lesson:** The tautological-summary-test failure mode reappeared in the very iteration that removed
+it. `test_tape_observation_path_equivalence.py::test_counterexample_field_partition_drift_is_detected`
+builds `widened = _FROZEN_SEMANTIC_FIELDS + ("source.session_id",)` and asserts it differs from
+`_FROZEN_SEMANTIC_FIELDS` — two hand-written literals; it would still pass if
+`observation_contract.MACHINE_OBSERVATION_SEMANTIC_FIELDS` were deleted. The primary TC-6 test IS
+non-vacuous (real constants vs frozen literal), so nothing is unproven — but a counter-example that
+never touches the real subject proves nothing about the guard.
+**Applies to:** any `test_counterexample_*` written for a "constant X has not drifted" guard — the
+counter-example must perturb (or stand in for) the REAL constant, not a second copy of the literal.

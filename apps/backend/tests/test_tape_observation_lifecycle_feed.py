@@ -510,13 +510,16 @@ async def test_lifecycle_failed_distinguishable_null_end_reason_and_retained_sta
     assert snapshot.event_count == 0  # no fabricated trade past the raise
 
 
-def test_seven_lifecycle_statuses_plus_watch_stopped_are_pairwise_distinguishable():
-    # The closed vocabulary this iteration's scenarios above actually exercise (Constitution §4).
-    statuses = {"connecting", "waiting", "live", "stale", "paused", "closed", "failed"}
-    assert len(statuses) == 7
-    # `watch_stopped` is the in-process 8th case: `get_observation_source` returns `None`, never a
-    # dict carrying any of the seven strings -- distinguishable by TYPE, not just by value.
-    assert None not in statuses
+# NOTE (iter-4 fixup, reviewer's carried-forward MINOR): a prior
+# ``test_seven_lifecycle_statuses_plus_watch_stopped_are_pairwise_distinguishable`` asserted only
+# ``len({seven hand-written literals}) == 7`` and never called ``WatchManager`` -- a vacuous
+# summary disconnected from real captured state (the iter-3 lessons entry: "a spec item phrased
+# 'all N values are pairwise distinguishable' invites a tautological summary test"). It is REMOVED
+# here rather than rewritten: the nine tests directly above (lines 370-510) already exercise every
+# one of the seven ``lifecycle.stream_status`` values plus the in-process ``watch_stopped`` case
+# non-vacuously, each via a real ``WatchManager``/``TapeEngine`` call and a real
+# ``assert snapshot.stream_status == "<value>"`` -- the "all seven are distinguishable" coverage
+# this test wanted to represent already exists, honestly, without a second literal-only copy.
 
 
 # === TC-9: (data_feed, availability_basis) pairs are pairwise distinct, never pooled ===========

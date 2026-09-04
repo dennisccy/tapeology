@@ -1,7 +1,7 @@
 {
   "session_id": "observation-contract",
   "started_at": "2026-09-02T20:56:28.458337Z",
-  "current_iter": 4,
+  "current_iter": 5,
   "cli": "claude",
   "agent_backend": "interactive",
   "output_styles": "off",
@@ -12,7 +12,7 @@
   },
   "status": "in_progress",
   "last_verdict": "CONTINUE",
-  "next_depth": "lean",
+  "next_depth": "full",
   "auto_release": false,
   "push_per_iter": true,
   "push_branch": "goal/observation-contract",
@@ -20,5 +20,5 @@
   "total_iterations": 3,
   "wall_time_seconds": 9,
   "quota_pause_count": 0,
-  "updated_at": "2026-09-04T21:22:22.925592Z"
+  "updated_at": "2026-09-04T22:59:04.811489Z"
 }

@@ -119,3 +119,42 @@ one summary test only checks a hand-written list of seven words and never calls 
 proves nothing; and the new date-formatting helper in the web layer claims in a comment that it matches
 the two older copies but nothing tests that claim. Do not build the web address early — it is step 5 of
 the required order. Next iteration should be lean, backend only, with no visible change on screen.
+
+## Iteration 4 — goal-observation-contract-iter-4
+
+**Date:** 2026-09-04T22:58:00Z
+**Verdict:** CONTINUE
+**Depth dispatched:** lean
+**Journey deltas:**
+- Newly passing: none
+- Newly partial: J-04 "Ingestion-path equivalence under an identical valid event stream" (was
+  failing — its new test file passes; its served web address is still missing)
+- Newly failing: none
+- Regressed: none
+- Unchanged: J-01, J-02, J-03, J-06 partial (all re-checked this round); J-05 failing (not worked
+  on — it is the next step of the required order)
+- Anti-goal violations: none (scan-report CLEAN; coherence COHERENCE-PASS with the iter-3 ISO
+  advisory now closed; ledger totals 0 total / 0 resolved / 0 blocking / 0 non-blocking / 0 critical)
+
+**Reasoning:** I checked the work myself instead of trusting the reports. My own run of the new file
+`apps/backend/tests/test_tape_observation_path_equivalence.py` gives 6 checks, all pass, and I read
+the code to confirm the comparison reads real built records on both sides — not a hand-written pair
+— and that the mutation check really makes it fail. My own run of the whole backend test set gives
+4036 pass, 8 skipped, 0 fail (exit code 0), which is the previous 4039 collected plus 6 new minus the
+1 empty check that was removed; the settings fingerprint still reads 08e471b10130e1e2 and my own
+frontend type check reports 0 errors. I confirmed by hand that `apps/backend/app/observation_contract.py`
+is byte-identical to its iteration-1 version, so the field grouping could not have been widened to
+manufacture the match. The screenshot agrees with the report: the address
+`/tape/SIM-BIDABS/observation` still answers "404". That missing address is one half of what J-04
+asks for, so J-04 moves to partial, not passing. The change set is three test files; no page, no
+settings, no production file, no protected guard file was touched.
+
+**Next-step recommendation:** Build the web address — `GET /tape/{ticker}/observation` and
+`tests/test_tape_observation_route.py` — which is J-05 "One read-only machine path" and step 5 of the
+goal's required order. The address must read the watch manager's single atomic read and never touch
+the engine directly. In the same round, rewrite the three saved replay scripts that still expect the
+address to be missing (`journey-scripts/J-01.json` step 5, `J-03.json` step 11, `J-04.json` steps
+8-9), or later automatic replays will report false failures. Also repair one empty check in the new
+test file (`test_counterexample_field_partition_drift_is_detected` compares two hand-written lists
+and never reads the real ones). Next iteration should run at full depth: it is the first round of
+this era that changes a real served surface and makes five journeys checkable in the browser at once.

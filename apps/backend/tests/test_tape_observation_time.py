@@ -33,7 +33,7 @@ from pathlib import Path
 
 import pytest
 
-from app import observation_contract, watch_manager
+from app import main, observation_contract, watch_manager
 from app.config import CONFIG
 from app.engine.snapshot import EngineSnapshot
 from app.engine.tape_engine import TapeEngine
@@ -536,17 +536,32 @@ def test_watch_manager_iso_helper_matches_observation_contract_byte_for_byte():
     # This module necessarily duplicates the pinned ISO formatter (this repo's established
     # convention -- see watch_manager._iso_utc's own docstring); cross-check it never drifts
     # from the canonical Constitution §2 format (the TAPE_STATE_VOCABULARY iter-1 precedent).
+    # THREE-WAY (iter-4 IN SCOPE / coherence-auditor advisory): also cross-checks
+    # ``app.main._iso_utc`` -- its signature takes a ``datetime`` (unlike the other two's
+    # ``epoch: float``), so the same representative epochs are converted with
+    # ``datetime.fromtimestamp(epoch, timezone.utc)`` before calling it, per main._iso_utc's own
+    # docstring claim that it matches the other two byte-for-byte -- now actually tested.
     for epoch in (1_725_000_000.654321, 0.0, 1_800_000_500.5):
-        assert watch_manager._iso_utc(epoch) == observation_contract._iso_utc(epoch)
+        watch_manager_iso = watch_manager._iso_utc(epoch)
+        observation_contract_iso = observation_contract._iso_utc(epoch)
+        main_iso = main._iso_utc(datetime.fromtimestamp(epoch, tz=timezone.utc))
+        assert watch_manager_iso == observation_contract_iso
+        assert main_iso == observation_contract_iso
+        assert main_iso == watch_manager_iso
 
 
 def test_counterexample_iso_round_trip_detects_a_hand_formatted_string():
-    # A hand-formatted string (no microseconds, no "Z"/offset) never equals the pinned function's
-    # own output for the same instant -- proving the round-trip equality check is non-vacuous.
+    # A hand-formatted string (no microseconds, no "Z"/offset) never equals any of the THREE
+    # pinned functions' own output for the same instant -- proving the round-trip equality check
+    # is non-vacuous for the full three-way comparison (iter-4 IN SCOPE).
     epoch = 1_725_000_000.123456
     hand_formatted = datetime.fromtimestamp(epoch, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
     with pytest.raises(AssertionError):
         assert hand_formatted == observation_contract._iso_utc(epoch)
+    with pytest.raises(AssertionError):
+        assert hand_formatted == watch_manager._iso_utc(epoch)
+    with pytest.raises(AssertionError):
+        assert hand_formatted == main._iso_utc(datetime.fromtimestamp(epoch, tz=timezone.utc))
 
 
 # --- TC-12: two independent DatasetStore.replay reruns yield identical observation_hash ------

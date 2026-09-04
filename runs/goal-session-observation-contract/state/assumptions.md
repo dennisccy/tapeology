@@ -124,3 +124,18 @@ is absent), and its full browser evidence must be re-taken at iteration 5 anyway
 assertions become checkable — scheduling a make-up capture now would add noise without adding proof.
 The gap is recorded in `iter-3/eval.md` and folded into the iteration-5 next-step instead.
 **Reversible:** yes
+
+## iter-4 — goal-evaluator
+
+**Ambiguity:** The era anti-goal "No pooling, equating or silent conversion between `sim`, `iex` and
+`sip`" versus the goal's own §5, which requires the seeded sim scenario to be fed through the replay
+feeder and the live feeder. Doing so materialises seeded-simulator events as raw records and runs
+them through entry points whose recorded descriptors read `historical`/`sip` and `live`/`iex`, so
+inside the test the sim events carry non-sim feed labels.
+**We chose:** to score this anti-goal OK. The goal's §5 prescribes exactly these two mechanisms for
+the sim leg; the two legs' feed bases stay distinct and are excluded from the compared semantic set
+(never pooled or equated); and no such observation is served, persisted or displayed — it exists
+only inside `apps/backend/tests/test_tape_observation_path_equivalence.py`. If a later iteration
+ever serves an artifact built this way, the labelling would become dishonest and this call must be
+revisited.
+**Reversible:** yes
