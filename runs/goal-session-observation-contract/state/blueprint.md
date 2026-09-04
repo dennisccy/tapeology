@@ -76,7 +76,11 @@ built the atomic-settled-pair half of the provenance/source/lifecycle-metadata r
 (`WatchManager.get_observation_source`: settled snapshot + `settled_at_utc` + `end_reason` from one
 manager-held atomic read). Iter-3 completes that row's computing module with the source/session
 descriptor half (`source_mode`, `data_feed`, window bounds, session id/start, `profile_id`) — still
-none of the four rows are SERVED yet (no route exists — that is step 5). Remaining work is
-ingestion-path equivalence (iter-4) → route (iter-5) → guards/sentinel (iter-6). No shared canonical
+none of the four rows are SERVED yet (no route exists — that is step 5). Iter-4 adds the
+deterministic ingestion-path-equivalence proof (`tests/test_tape_observation_path_equivalence.py`)
+showing the frozen engine yields an identical machine-observation semantic set and `observation_hash`
+whether the replay feeder or the live feeder delivers an identical valid event stream — a proof over
+these ALREADY-registered computing modules, introducing no new row, no new computing module and no
+new serving endpoint. Remaining work is the route (iter-5) → guards/sentinel (iter-6). No shared canonical
 value outside this one endpoint is introduced by this era; every existing Cockpit/Structure/Desk Data
 Contract value from prior eras is unread, unchanged foundation here.

@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-observation-contract-iter-3",
+  "base_url": "http://localhost:3301",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open Cockpit",
+      "narration": "This iteration is backend-only with no visible product changes. We confirm the watch lifecycle transitions still work correctly after internal manager changes.",
+      "point_out": "The Cockpit homepage with the watch controls (Simulated source already selected by default).",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/" },
+      "expect": { "text": "Simulated" }
+    },
+    {
+      "n": 2,
+      "title": "Watch a simulated ticker",
+      "narration": "Enter a ticker symbol and start watching to confirm the watch creation still works after manager changes.",
+      "point_out": "Status dot changes to 'live' and the Tape State panel shows tape events.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "fill", "target": { "placeholder": "Enter ticker symbol" }, "text": "SIM-BIDABS" }
+    },
+    {
+      "n": 3,
+      "title": "Click Watch",
+      "narration": "Begin watching the ticker to verify the watch lifecycle begins correctly.",
+      "point_out": "Status transitions to 'live' and the Tape State panel starts showing bid absorption events.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "live" }
+    },
+    {
+      "n": 4,
+      "title": "Pause the watch",
+      "narration": "Pause the live stream to confirm pause transitions work correctly.",
+      "point_out": "Status dot changes to 'paused' and the Pause button relabels to Resume.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": /Pause|Resume/ } },
+      "expect": { "text": "paused" }
+    },
+    {
+      "n": 5,
+      "title": "Resume watching",
+      "narration": "Resume the stream to verify the resume transition works.",
+      "point_out": "Status returns to 'live' and the button relabels back to Pause.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Resume" } },
+      "expect": { "text": "live" }
+    },
+    {
+      "n": 6,
+      "title": "Stop the watch",
+      "narration": "Stop the watch to confirm the lifecycle transitions to closed state.",
+      "point_out": "Status returns to 'idle' and the Cockpit resets to 'No ticker watched' placeholder.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Stop" } },
+      "expect": { "text": "idle" }
+    },
+    {
+      "n": 7,
+      "title": "Verify Structure page unchanged",
+      "narration": "Check that the Structure page still renders normally — no visible product change from this backend-only iteration.",
+      "point_out": "The Structure page loads with its heading and controls intact.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "goto", "url": "/structure" },
+      "expect": { "text": "Structure" }
+    },
+    {
+      "n": 8,
+      "title": "Verify Desk page unchanged",
+      "narration": "Confirm the Desk page also renders normally.",
+      "point_out": "The Desk page loads with its heading and controls.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "full_tour",
+      "action": { "type": "goto", "url": "/desk" },
+      "expect": { "text": "Desk" }
+    }
+  ]
+}
