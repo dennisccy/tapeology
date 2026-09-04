@@ -43,11 +43,11 @@ Cockpit only to start/control a Sim watch before reading the artifact by URL):
 
 | Feature / journey | Canonical home | Nav section |
 |---|---|---|
-| J-01 Pure projection: identity, provenance, integrity | `GET /tape/{ticker}/observation` (planned) | machine path only — Cockpit `/` used only to start the watch |
-| J-02 Three honest time concepts, atomic read | `GET /tape/{ticker}/observation` (planned) | machine path only |
-| J-03 Lifecycle, feed basis, session identity | `GET /tape/{ticker}/observation` (planned) + existing Cockpit Watch/Pause/Resume/Stop controls (unchanged) | machine path + Cockpit (controls only, no new Cockpit UI) |
-| J-04 Ingestion-path equivalence (replay vs. live) | `GET /tape/{ticker}/observation` (planned) + in-process test harness (no UI) | machine path only |
-| J-05 One read-only machine path (route + MCP parity) | `GET /tape/{ticker}/observation` (planned) + existing MCP `get_endpoint` proxy (unchanged, byte-identical) | machine path + MCP |
+| J-01 Pure projection: identity, provenance, integrity | `GET /tape/{ticker}/observation` (iter-5) | machine path only — Cockpit `/` used only to start the watch |
+| J-02 Three honest time concepts, atomic read | `GET /tape/{ticker}/observation` (iter-5) | machine path only |
+| J-03 Lifecycle, feed basis, session identity | `GET /tape/{ticker}/observation` (iter-5) + existing Cockpit Watch/Pause/Resume/Stop controls (unchanged) | machine path + Cockpit (controls only, no new Cockpit UI) |
+| J-04 Ingestion-path equivalence (replay vs. live) | `GET /tape/{ticker}/observation` (iter-5) + in-process test harness (no UI) | machine path only |
+| J-05 One read-only machine path (route + MCP parity) | `GET /tape/{ticker}/observation` (iter-5) + existing MCP `get_endpoint` proxy (unchanged, byte-identical) | machine path + MCP |
 | J-06 Guards + regression sentinel | N/A — cross-cutting; confirms `/`, `/structure`, `/desk` render with zero new panel/link/control | Cockpit / Structure / Desk (unchanged, verified only) |
 
 No page is introduced anywhere in this era; every journey's home is the single new machine-readable
@@ -65,10 +65,10 @@ condensed index into it, not a second copy. No other endpoint, page or tool may 
 
 | Value / entity (partition, §6) | Computed by (single module/function) | Served by (single endpoint) | Notes |
 |---|---|---|---|
-| Machine observation semantics — `schema_version`, `provider`, `ticker`, `tape_state`, `confidence`, `warm`, `primary_window`, `features`, `trade_event_count`, `market.*`, `observed_at_utc`, `timing.logical_timestamp`, `timing.epoch_anchor`, `engine_identity.*` | `EngineSnapshot` (existing engine, unchanged, the one semantic producer) projected verbatim by `build_tape_observation` in `apps/backend/app/observation_contract.py` (iter-1: builder module built in-process; not yet served) | `GET /tape/{ticker}/observation` (planned — route lands iter-5) | drives `observation_hash`; zero recomputation — no second classifier/feature/confidence path |
-| Provenance / source / lifecycle metadata — `available_at_utc`, `availability_basis`, `generated_at_utc`, `timing.settled_at_utc`, `timing.delivery_lag_seconds`, `lifecycle.*`, `source.*`, `implementation_provenance.*` | `WatchManager.get_observation_source(ticker)` atomic settled-pair read in `apps/backend/app/watch_manager.py` (iter-2: settled snapshot + `settled_at_utc` + `end_reason`; iter-3: adds the per-ticker source/session descriptor recorded once at watch creation — `source_mode`, `data_feed`, `window_start_utc`/`window_end_utc`, `session_id`, `session_started_at_utc`, `profile_id` — returned from the SAME atomic read, no re-fetch, plus an identity check in `_settle` fixing a stale-feeder clobber the iter-2 reviewer found) + `build_tape_observation` | `GET /tape/{ticker}/observation` (planned — route lands iter-5) | `data_feed` from the one existing `data_feed_for_scenario`; `source_revision`/`worktree_dirty` resolved once per process, never per request; `dataset_id`/`dataset_checksum` stay `null` for every WatchManager-managed watch (only the distinct in-process `dataset_replay` path populates them) |
-| Explanatory metadata — `observations[]` | `EngineSnapshot.observations` (existing engine, unchanged) | `GET /tape/{ticker}/observation` (planned) | prose only; never machine identity |
-| Integrity — `observation_hash`, `artifact_hash` | `build_tape_observation` hash laws over the §6 canonical encoding (iter-1: built in-process; not yet served) | `GET /tape/{ticker}/observation` (planned — route lands iter-5) | `observation_hash` = machine-observation equivalence identity; `artifact_hash` = exact evidence-instance identity |
+| Machine observation semantics — `schema_version`, `provider`, `ticker`, `tape_state`, `confidence`, `warm`, `primary_window`, `features`, `trade_event_count`, `market.*`, `observed_at_utc`, `timing.logical_timestamp`, `timing.epoch_anchor`, `engine_identity.*` | `EngineSnapshot` (existing engine, unchanged, the one semantic producer) projected verbatim by `build_tape_observation` in `apps/backend/app/observation_contract.py` (iter-1: builder module built in-process; served by the route from iter-5) | `GET /tape/{ticker}/observation` (iter-5) | drives `observation_hash`; zero recomputation — no second classifier/feature/confidence path |
+| Provenance / source / lifecycle metadata — `available_at_utc`, `availability_basis`, `generated_at_utc`, `timing.settled_at_utc`, `timing.delivery_lag_seconds`, `lifecycle.*`, `source.*`, `implementation_provenance.*` | `WatchManager.get_observation_source(ticker)` atomic settled-pair read in `apps/backend/app/watch_manager.py` (iter-2: settled snapshot + `settled_at_utc` + `end_reason`; iter-3: adds the per-ticker source/session descriptor recorded once at watch creation — `source_mode`, `data_feed`, `window_start_utc`/`window_end_utc`, `session_id`, `session_started_at_utc`, `profile_id` — returned from the SAME atomic read, no re-fetch, plus an identity check in `_settle` fixing a stale-feeder clobber the iter-2 reviewer found) + `build_tape_observation` | `GET /tape/{ticker}/observation` (iter-5) | `data_feed` from the one existing `data_feed_for_scenario`; `source_revision`/`worktree_dirty` resolved once per process, never per request; `dataset_id`/`dataset_checksum` stay `null` for every WatchManager-managed watch (only the distinct in-process `dataset_replay` path populates them) |
+| Explanatory metadata — `observations[]` | `EngineSnapshot.observations` (existing engine, unchanged) | `GET /tape/{ticker}/observation` (iter-5) | prose only; never machine identity |
+| Integrity — `observation_hash`, `artifact_hash` | `build_tape_observation` hash laws over the §6 canonical encoding (iter-1: built in-process; served by the route from iter-5) | `GET /tape/{ticker}/observation` (iter-5) | `observation_hash` = machine-observation equivalence identity; `artifact_hash` = exact evidence-instance identity |
 
 No row was implemented at baseline — the entire table was `(planned)`. Iter-1 built the machine-observation-semantics and integrity rows' computing module (`build_tape_observation`, the schema/partition
 constants and both hash laws) in-process, per `docs/goal.md`'s Binding Execution Order step 1. Iter-2
@@ -81,6 +81,12 @@ deterministic ingestion-path-equivalence proof (`tests/test_tape_observation_pat
 showing the frozen engine yields an identical machine-observation semantic set and `observation_hash`
 whether the replay feeder or the live feeder delivers an identical valid event stream — a proof over
 these ALREADY-registered computing modules, introducing no new row, no new computing module and no
-new serving endpoint. Remaining work is the route (iter-5) → guards/sentinel (iter-6). No shared canonical
-value outside this one endpoint is introduced by this era; every existing Cockpit/Structure/Desk Data
-Contract value from prior eras is unread, unchanged foundation here.
+new serving endpoint. Iter-5 (`docs/phases/goal-observation-contract-iter-5.md`) registers the route
+itself: a transport-only `GET /tape/{ticker}/observation` handler in `apps/backend/app/main.py` over
+the already-built `WatchManager.get_observation_source` + `build_tape_observation` — no new computing
+module, no new row, no new `Config` field. The existing generic MCP `get_endpoint` proxy already
+allowlists the `/tape/` prefix (`apps/backend/app/mcp/__init__.py`), so it reaches the new route
+automatically with zero MCP registry change. All four Data Contract rows above move from `(planned)`
+to served by this one addition. Remaining work after this iteration is guards/sentinel (iter-6, J-06).
+No shared canonical value outside this one endpoint is introduced by this era; every existing
+Cockpit/Structure/Desk Data Contract value from prior eras is unread, unchanged foundation here.
