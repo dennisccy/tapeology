@@ -34,9 +34,10 @@ Processing the FULL PG fixture on both legs is intentionally slow (tens of secon
 milliseconds) -- the goal's own Constraints call for "waits of at least 30 s" on the live leg's
 completion poll for exactly this reason; this module's ``_until`` default timeout is 60 s.
 
-No test needs a running uvicorn server or network access -- the route does not exist until
-iteration 5, and no test contacts Alpaca (only ``HistoricalProvider``/``LiveProvider`` over the
-committed fixture and the seeded simulator).
+No test needs a running uvicorn server or network access -- the route
+(``GET /tape/{ticker}/observation``, proven separately by ``test_tape_observation_route.py``) is
+not exercised here, and no test contacts Alpaca (only ``HistoricalProvider``/``LiveProvider``
+over the committed fixture and the seeded simulator).
 """
 
 from __future__ import annotations

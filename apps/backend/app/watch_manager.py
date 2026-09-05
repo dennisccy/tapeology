@@ -109,8 +109,8 @@ def _provider_anchor(provider: object) -> float | None:
 class SourceDescriptor:
     """The manager-recorded per-watch source/session descriptor (Observation Contract v1
     Constitution §1/§3, iter-3 IN SCOPE) -- every caller-resolved parameter
-    ``build_tape_observation`` (iteration 1) already accepts, now genuinely populated at watch
-    creation instead of a placeholder the (still-unbuilt) route would have to invent. Recorded
+    ``build_tape_observation`` (iteration 1) accepts, genuinely populated at watch creation so
+    the transport-only ``GET /tape/{ticker}/observation`` route never has to invent one. Recorded
     ONCE per ``watch*`` constructor call using the SAME "cold reset for a fresh engine" pattern
     already used for ``WatchManager._settled`` (see its ``__init__`` docstring) -- a re-watched
     ticker never reads a PRIOR watch's stale descriptor. Read verbatim by

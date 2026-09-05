@@ -4,8 +4,8 @@ Covers ``app/observation_contract.py``'s pure builder, schema constants, four-gr
 and the two hash laws. TC references below match the iteration spec
 (``docs/phases/goal-observation-contract-iter-1.md``) and goal.md's J-01 Steps.4 list. Every
 guard/law test ships a named ``test_counterexample_*`` proving it can fail (never a vacuous
-assertion). No test in this module needs a running uvicorn server or network access (the route
-does not exist until a later iteration -- ``/tape/SIM-BIDABS/observation`` still 404s).
+assertion). No test in this module needs a running uvicorn server or network access (the route,
+``GET /tape/{ticker}/observation``, is proven separately by ``test_tape_observation_route.py``).
 """
 
 from __future__ import annotations

@@ -1,9 +1,14 @@
 """``TapeObservation`` v1 -- the pure projection builder, schema constants and the two hash
 laws (Observation Contract v1, Binding Execution Order step 1; docs/goal.md).
 
-This module is a free-standing, in-process building block. Nothing here is served by any route
-yet -- the ``GET /tape/{ticker}/observation`` route is step 5 (a later iteration). This module
-contains, and only:
+This module is a free-standing, in-process building block: the pure ``TapeObservation`` v1
+projection plus its hash and provenance semantics, and nothing else. It is served by exactly one
+route, ``GET /tape/{ticker}/observation`` (``app/main.py``; Binding Execution Order step 5,
+implemented). That route is transport ONLY: it consumes the ONE atomic managed-observation read
+(``WatchManager.get_observation_source`` -- the owner of the settled snapshot, its settled time
+and the per-watch source/session descriptor) and passes those values verbatim into
+``build_tape_observation``; the route computes no Tapeology semantics, and this module knows
+nothing about any route. This module contains, and only:
 
   * the schema constants (``OBSERVATION_SCHEMA_VERSION``, ``PROVIDER``);
   * the four-group field partition (Constitution §6) as dotted leaf-path tuples;
@@ -320,9 +325,10 @@ def build_tape_observation(
 
     ``source.*`` descriptor fields (``window_start_utc`` .. ``session_started_at_utc``),
     ``settled_at_utc``, ``end_reason``, ``generated_at_utc`` and ``provenance`` are verbatim
-    pass-through of the caller's already-resolved inputs -- this iteration computes the time/
-    availability LAW correctly from them; the machinery that makes them genuinely atomic/live-
-    correct (the manager's settled pair, ``get_observation_source``) is a later iteration.
+    pass-through of the caller's already-resolved inputs -- this function computes only the time/
+    availability LAW from them; the machinery that makes them genuinely atomic and live-correct
+    is ``WatchManager``'s settled pair + source descriptor, read together by
+    ``get_observation_source`` and handed in unchanged by ``GET /tape/{ticker}/observation``.
     ``source.scenario`` is read from ``snapshot.scenario`` (its Constitution §1 owner), never
     accepted as a second, possibly-divergent parameter.
 

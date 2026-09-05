@@ -8,8 +8,9 @@ engine's late write must never clobber a fresher watch's settled pair), and the 
 seven ``lifecycle.stream_status`` values plus the three feed bases. TC references below match
 the iteration spec (``docs/phases/goal-observation-contract-iter-3.md``) and goal.md's J-03
 Steps.6 list. Every guard/law test ships a named ``test_counterexample_*`` proving it can fail.
-No test needs a running uvicorn server or network access -- the route does not exist until
-iteration 5, and no test contacts Alpaca (only ``HistoricalProvider``/``LiveProvider``/
+No test needs a running uvicorn server or network access -- the route
+(``GET /tape/{ticker}/observation``, proven separately by ``test_tape_observation_route.py``) is
+not exercised here, and no test contacts Alpaca (only ``HistoricalProvider``/``LiveProvider``/
 ``FakeAdapter`` over committed fixtures and monkeypatched/fake harnesses).
 """
 

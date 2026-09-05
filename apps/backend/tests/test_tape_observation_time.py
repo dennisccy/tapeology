@@ -8,8 +8,9 @@ pinned ISO function), proven honest against real sim, historical-fixture, datase
 live-fixture data. TC references below match the iteration spec
 (``docs/phases/goal-observation-contract-iter-2.md``) and goal.md's J-02 Steps.2 list. Every
 guard/law test ships a named ``test_counterexample_*`` proving it can fail. No test needs a
-running uvicorn server or network access -- the route does not exist until iteration 5, and no
-test contacts Alpaca (only ``HistoricalProvider``/``LiveProvider`` over committed fixtures).
+running uvicorn server or network access -- the route (``GET /tape/{ticker}/observation``, proven
+separately by ``test_tape_observation_route.py``) is not exercised here, and no test contacts
+Alpaca (only ``HistoricalProvider``/``LiveProvider`` over committed fixtures).
 
 TC-1..TC-4 (the atomic-read interleaving proof) use a deterministic SYNC harness:
 ``WatchManager.watch()``/``watch_with_provider()`` called from a plain (non-async) test function
