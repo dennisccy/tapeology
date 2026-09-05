@@ -173,3 +173,17 @@ produce a false PASS as well as false FAILs — `journey-scripts/J-02.json` neve
 claims to verify.)
 **Applies to:** any iteration shipping an AST/structural guard; anyone regenerating the golden
 journey scripts.
+
+## iter-7 — 2026-09-05T07:05:00Z
+
+**Verdict:** GOAL_ACHIEVED
+**Lesson:** A seeded Sim watch CLOSES on its own once the scenario's event stream is exhausted, and
+the Cockpit then honestly drops the `Pause watching` control (only `Stop` remains) — so the demo
+recorder's `Locator.wait_for: Timeout 4000ms` on demo steps 06/07 (`reports/demo/goal-observation-contract-iter-7/step-06.png`
+shows `Watching SIM-BIDABS [Stop]`, lag 34.2s, red dot `Closed`) is a recorder-pacing artifact
+against CORRECT behaviour, not a broken Pause button. The browser-qa lane clicked Pause fine minutes
+earlier (`UT-J-04-reload-1.png` shows `"stream_status":"paused","paused":true`). Never read a demo
+locator timeout on a Sim watch as a product regression without checking `lifecycle.stream_status` in
+the same frame.
+**Applies to:** any iteration whose demo/walkthrough lane drives a Sim-mode Watch → Pause → Resume
+sequence, and any evaluator scoring `RECORDED_WITH_NOTES` demo results.

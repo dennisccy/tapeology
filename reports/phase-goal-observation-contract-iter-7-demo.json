@@ -1,0 +1,149 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-observation-contract-iter-7",
+  "base_url": "http://localhost:3301",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the Cockpit",
+      "narration": "We start at the Cockpit, where traders watch live market activity. Let's open the dashboard.",
+      "point_out": "The Cockpit page shows the watch controls and live chart.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "goto",
+        "url": "/"
+      },
+      "expect": {
+        "text": "Cockpit"
+      }
+    },
+    {
+      "n": 2,
+      "title": "Select Simulated data",
+      "narration": "We start with simulated data, which lets us test the system without a live broker connection.",
+      "point_out": "The data source selector now shows 'Simulated' selected.",
+      "journey": "J-03",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "role": "button",
+          "name": "Simulated"
+        }
+      }
+    },
+    {
+      "n": 3,
+      "title": "Enter ticker and watch",
+      "narration": "We'll watch SIM-BIDABS, a simulated ticker. Enter it and click Watch to start receiving observations.",
+      "point_out": "A ticker input field appears where you can type the symbol.",
+      "journey": "J-03",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "placeholder": "Ticker"
+        }
+      }
+    },
+    {
+      "n": 4,
+      "title": "Type the ticker symbol",
+      "narration": "Let's type SIM-BIDABS, the symbol we want to observe.",
+      "point_out": "The ticker input now contains 'SIM-BIDABS'.",
+      "journey": "J-03",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "fill",
+        "target": {
+          "placeholder": "Ticker"
+        },
+        "text": "SIM-BIDABS"
+      }
+    },
+    {
+      "n": 5,
+      "title": "Click Watch to start observing",
+      "narration": "Now we click Watch to start receiving live observations about this ticker's market activity.",
+      "point_out": "The watch control starts loading, and the status changes to 'live' when ready.",
+      "journey": "J-03",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "role": "button",
+          "name": "Watch"
+        }
+      },
+      "expect": {
+        "text": "live"
+      }
+    },
+    {
+      "n": 6,
+      "title": "Pause the observation",
+      "narration": "Once watching is active, you can pause to freeze the observation snapshot at this exact moment—a useful way to inspect a market moment without new events changing the state.",
+      "point_out": "The Pause button is now visible, and clicking it freezes the observation.",
+      "journey": "J-03",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "role": "button",
+          "name": "Pause"
+        }
+      }
+    },
+    {
+      "n": 7,
+      "title": "Resume observing",
+      "narration": "Resume resumes watching—the observation stays consistent, but live events flow through again.",
+      "point_out": "The Resume button was clicked and the live status resumes.",
+      "journey": "J-03",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "click",
+        "target": {
+          "role": "button",
+          "name": "Resume"
+        }
+      },
+      "expect": {
+        "text": "live"
+      }
+    },
+    {
+      "n": 8,
+      "title": "Visit Structure to see market levels",
+      "narration": "The observation contract powers the entire system. Let's verify that the Structure page still works correctly, showing market levels and trade setups.",
+      "point_out": "The Structure page loads with market level analysis.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": {
+        "type": "goto",
+        "url": "/structure"
+      },
+      "expect": {
+        "text": "Structure"
+      }
+    }
+  ]
+}

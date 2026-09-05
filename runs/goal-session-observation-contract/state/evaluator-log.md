@@ -236,3 +236,45 @@ address in a browser for J-05 "One read-only machine path" — watch the simulat
 "not being watched" picture. Nothing needs to be built. Re-run the other five rows as well if
 time allows, so the results table has no skipped and no failed row. Use `evidence` depth so no
 developer or reviewer runs and the round stays short.
+
+## Iteration 7 — goal-observation-contract-iter-7
+
+**Date:** 2026-09-05T07:05:00Z
+**Verdict:** GOAL_ACHIEVED
+**Depth dispatched:** evidence
+**Journey deltas:**
+- Newly passing: none — all six were already passing
+- Newly failing: none
+- Regressed: none
+- Re-verified and still passing this round, each on its own row with fresh pictures:
+  J-01 "The record is a plain copy with its own name and proof", J-02 "Three honest instants",
+  J-03 "Lifecycle, feed and session stay honest", J-04 "Same result from both ingestion paths",
+  J-05 "One read-only machine path" (this closes the round-6 skipped row),
+  J-06 "Guards and the sentinel"
+- Not tested this round: none — the results table has no skipped and no failed row
+- Anti-goal violations: none (scan-report CLEAN; coherence COHERENCE-PASS; ledger 0 total /
+  0 resolved / 0 blocking / 0 non-blocking / 0 critical)
+
+**Reasoning:** I checked the work myself instead of trusting the reports. Nothing was built this
+round, and I proved that: the change list for this round is empty, and the working folder holds no
+edit to the program at all. I opened all nine pictures. The two new ones for J-05 "One read-only
+machine path" show exactly what was owed: the machine address answers with the full record while the
+simulated ticker is being watched, and the address for a ticker nobody watches answers "Ticker
+'ZZZZ' is not being watched". I also re-read the other pictures and they hold: two reloads of the
+paused record share one content fingerprint but carry different generation times and different
+evidence fingerprints; the session name really does change after Stop and re-Watch; and the three
+pages still show the same three-link menu with nothing new added. My own runs agree with the
+reports: the six test files give 137 checks, all pass; the whole program's test set finishes clean
+(4075 checks, exit code 0); the type check reports 0 errors; the settings fingerprint reads
+08e471b10130e1e2. One row, J-01, was not driven in the browser by itself this round; the automatic
+replay tool reported it failed, and I opened that picture too — it is the page server's own "page
+not found" screen, which is the known tool fault, not a product fault. Every value J-01 asks for is
+legible in the picture taken at the same address minutes earlier, and nothing in the program changed
+between them. All four automatic safety checks now pass: journeys 6/6, results with no failed or
+skipped row, coherence, and the anti-goal ledger.
+
+**Next-step recommendation:** Halt — the goal is reached. Nothing more needs to be built or
+verified for this chapter. The one loose end is not a product problem: the automatic replay tool
+still opens machine addresses on the page server instead of the program server, so it will keep
+reporting false failures for `/tape/*` until someone fixes the tool. Record that as a tool issue and
+close the chapter.

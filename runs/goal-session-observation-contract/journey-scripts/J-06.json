@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "journey": "J-06",
+  "name": "Guards and the regression sentinel",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {"n": 1, "journey": "J-06", "action": {"type": "goto", "url": "/"}, "expect": {"text": "No ticker watched"}},
+    {"n": 2, "journey": "J-06", "action": {"type": "click", "target": {"role": "button", "name": "Simulated"}}},
+    {"n": 3, "journey": "J-06", "action": {"type": "fill", "target": {"placeholder": "Ticker e.g. SIM-BUYER"}, "text": "SIM-BIDABS"}},
+    {"n": 4, "journey": "J-06", "action": {"type": "click", "target": {"role": "button", "name": "Watch"}}, "expect": {"text": "Watching"}},
+    {"n": 5, "journey": "J-06", "action": {"type": "goto", "url": "/structure"}, "expect": {"text": "Structure"}},
+    {"n": 6, "journey": "J-06", "action": {"type": "goto", "url": "/desk"}, "expect": {"text": "Desk"}}
+  ]
+}

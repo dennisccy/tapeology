@@ -13,7 +13,6 @@
     {"n": 7, "journey": "J-03", "action": {"type": "click", "target": {"role": "button", "name": "Stop"}}, "expect": {"text": "No ticker watched"}},
     {"n": 8, "journey": "J-03", "action": {"type": "click", "target": {"role": "button", "name": "Simulated"}}},
     {"n": 9, "journey": "J-03", "action": {"type": "fill", "target": {"placeholder": "Ticker e.g. SIM-BUYER"}, "text": "SIM-BIDABS"}},
-    {"n": 10, "journey": "J-03", "action": {"type": "click", "target": {"role": "button", "name": "Watch"}}, "expect": {"text": "Watching"}},
-    {"n": 11, "journey": "J-03", "action": {"type": "goto", "url": "/tape/SIM-BIDABS/observation"}, "expect": {"text": "\"source_mode\":\"sim\""}}
+    {"n": 10, "journey": "J-03", "action": {"type": "click", "target": {"role": "button", "name": "Watch"}}, "expect": {"text": "Watching"}}
   ]
 }

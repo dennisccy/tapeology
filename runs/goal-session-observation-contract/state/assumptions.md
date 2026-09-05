@@ -221,3 +221,40 @@ DEFERRED-BUDGET rule and the deterministic gate, which blocks GOAL_ACHIEVED on t
 on the substance (`goal_gate.py results` → rc 1, while `journeys` → 6/6 passing). The cheaper,
 honest fix is one short verification-only round rather than certifying an era on a row nobody ran.
 **Reversible:** yes
+
+## iter-7 — goal-evaluator
+
+**Ambiguity:** J-01's own row (`UT-J-01`) was NOT independently driven in the browser this round —
+the dispatch instructed the LLM lane to leave it to the deterministic replay, and that replay then
+FAILed for the known `normalize_url()` tooling fault (I opened `J-01-verify.png`: it is Next.js's
+own 404 page served from `:3301`, not the backend). The merged row therefore cites a sibling row's
+capture (`UT-J-02-result.png`). The goal text does not say whether a journey may be certified for a
+CLOSING verdict on a same-session capture taken under another row's id.
+**We chose:** `passing`, on two independent bases. (a) The image I opened was taken at exactly the
+address J-01 Step 2 prescribes, minutes earlier in the same watch session, and every one of J-01's
+Acceptance values is legible in it: `"schema_version":"tape-observation-v1"`,
+`engine_semantics_version":"tape-engine-v1"`, `config_fingerprint":"08e471b10130e1e2"`, non-empty
+`session_id":"27fcf1e5…"`, 64-hex `observation_hash` and `artifact_hash`, all 15 top-level keys.
+(b) Methodology A.6 evidence durability: this iteration's product diff is EMPTY (I confirmed with
+`git diff --stat` and `git status --porcelain -- apps/`), so J-01's OWN iteration-6 capture
+(`reports/qa/goal-observation-contract-iter-6-evidence/UT-J-01-result.png`) remains valid on its
+own. The no-screenshot rail is met either way. My own run of
+`tests/test_tape_observation_projection.py` gives 38 passed / 0 failed with 5 `test_counterexample_*`.
+**Reversible:** yes
+
+## iter-7 — goal-evaluator
+
+**Ambiguity:** The walkthrough recording came back `RECORDED_WITH_NOTES`: demo steps 06 (`Pause the
+observation`) and 07 (`Resume observing`) could not perform their click and captured the page
+anyway. Methodology A.7 lists "the walkthrough recording is missing or badly cropped" as a
+capture defect warranting `evidence_makeup: true`, but it does not say whether a frame that
+captured a DIFFERENT-but-honest state counts, nor what the flag means on a closing iteration where
+no next iteration exists to ride the make-up.
+**We chose:** NOT to set `evidence_makeup: true` on any journey. I opened `step-06.png` and the
+cause is honest product behaviour, not a defective capture of a working feature: the Sim stream had
+already closed (`lag 34.2s`, red dot `Closed`), so the Cockpit correctly showed only `Stop`, and the
+recorder's Pause locator had nothing to click. J-03's and J-04's own paused-state evidence was
+captured properly in the browser-qa lane this same round (`UT-J-04-reload-1.png` /
+`UT-J-04-reload-2.png` both show `"stream_status":"paused","paused":true`), so nothing is owed.
+The demo note is recorded in `iter-7/eval.md` as a non-blocking showcase note instead.
+**Reversible:** yes
