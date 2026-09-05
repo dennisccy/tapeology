@@ -172,3 +172,24 @@ for the same law. That is what the era's Constitution §4 rule actually protects
 rebuild must not fabricate a new settled time — so I scored J-03 `passing` rather than holding it
 `partial` on a clock race the product cannot control.
 **Reversible:** yes
+
+## iter-6 — goal-decomposer
+
+**Ambiguity:** Key Capability 8 in `docs/goal.md` lists six guard types the era's guard suite must
+ship ("recompute guard, mutator-call-site guard, copy-discipline and compound-identifier ban,
+external-system reference guard, English-only guard, real-provider isolation guard, each with a
+seeded counter-test"), but J-06's own Steps/Acceptance text for the new
+`apps/backend/tests/test_tape_observation_guards.py` module names only five mechanisms, omitting
+"recompute guard" from that specific module's required contents.
+**We chose:** not to require a second recompute guard inside `test_tape_observation_guards.py`.
+Required Trap Coverage item 2 ("No feature, state, confidence or freshness is recomputed (AST guard
++ counter-test) [J-01]") is already tagged to J-01, and I confirmed by reading the file that it is
+already built in iteration 1's `test_tape_observation_projection.py`
+(`test_recompute_guard_no_classifier_or_feature_import_or_threshold_literal` plus two
+`test_counterexample_*` functions, lines 108-173) — part of the "Do not redo" set. Key Capability 8's
+six-item list is read as the era's cumulative guard inventory across all modules, not a mandate that
+every guard live in one file; iteration 6's file matches J-06's own literal five-item enumeration
+exactly.
+**Reversible:** yes — if the reviewer or evaluator finds the existing recompute guard insufficient in
+scope or location, a sixth mechanism can be added to this same module without moving or renaming
+anything already built.
