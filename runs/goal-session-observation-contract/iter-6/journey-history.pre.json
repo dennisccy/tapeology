@@ -4,40 +4,40 @@
       "id": "J-01",
       "name": "The artifact is a pure projection with semantic identity, provenance and integrity",
       "status": "passing",
-      "last_verified_iter": "goal-observation-contract-iter-6",
-      "last_passing_iter": "goal-observation-contract-iter-6",
+      "last_verified_iter": "goal-observation-contract-iter-5",
+      "last_passing_iter": "goal-observation-contract-iter-5",
       "first_seen_iter": "goal-observation-contract-iter-0",
-      "last_evidence_path": "reports/qa/goal-observation-contract-iter-6-evidence/UT-J-01-result.png",
+      "last_evidence_path": "reports/qa/goal-observation-contract-iter-5-evidence/UT-J-01-result.png",
       "spec_hash": "c2a2448307dfa576e097ed70a48a00d4806e137e484472163fd6441a4ed54d3b"
     },
     "J-02": {
       "id": "J-02",
       "name": "Market-event time, measured availability and generation time are three distinct, honest instants, read atomically",
       "status": "passing",
-      "last_verified_iter": "goal-observation-contract-iter-6",
-      "last_passing_iter": "goal-observation-contract-iter-6",
+      "last_verified_iter": "goal-observation-contract-iter-5",
+      "last_passing_iter": "goal-observation-contract-iter-5",
       "first_seen_iter": "goal-observation-contract-iter-0",
-      "last_evidence_path": "reports/qa/goal-observation-contract-iter-6-evidence/UT-06-result.png",
+      "last_evidence_path": "reports/qa/goal-observation-contract-iter-5-evidence/UT-J-01-result.png",
       "spec_hash": "e1a1ea0799c8cab3f30807f36d687cae0d7db15a7896e55bb03e379d535580bf"
     },
     "J-03": {
       "id": "J-03",
       "name": "Lifecycle, feed basis and session identity stay honest",
       "status": "passing",
-      "last_verified_iter": "goal-observation-contract-iter-6",
-      "last_passing_iter": "goal-observation-contract-iter-6",
+      "last_verified_iter": "goal-observation-contract-iter-5",
+      "last_passing_iter": "goal-observation-contract-iter-5",
       "first_seen_iter": "goal-observation-contract-iter-0",
-      "last_evidence_path": "reports/qa/goal-observation-contract-iter-6-evidence/UT-J-03-result.png",
+      "last_evidence_path": "reports/qa/goal-observation-contract-iter-5-evidence/UT-J-03-result.png",
       "spec_hash": "ab96405a6d537a298202b889191283ef8df2132e09f45f199d860951bfe3251b"
     },
     "J-04": {
       "id": "J-04",
       "name": "Ingestion-path equivalence under an identical valid event stream",
-      "status": "passing",
-      "last_verified_iter": "goal-observation-contract-iter-6",
-      "last_passing_iter": "goal-observation-contract-iter-6",
+      "status": "partial",
+      "last_verified_iter": "goal-observation-contract-iter-5",
+      "last_passing_iter": null,
       "first_seen_iter": "goal-observation-contract-iter-0",
-      "last_evidence_path": "reports/qa/goal-observation-contract-iter-6-evidence/TC-04-observation-reload-2.png",
+      "last_evidence_path": "reports/qa/goal-observation-contract-iter-5-evidence/J-04-verify.png",
       "spec_hash": "a6538069aeb0f61f89d40d9e8a3acb9ab19e4f8c4b976ad378c36a2448337387"
     },
     "J-05": {
@@ -53,14 +53,14 @@
     "J-06": {
       "id": "J-06",
       "name": "Guards and the regression sentinel",
-      "status": "passing",
-      "last_verified_iter": "goal-observation-contract-iter-6",
-      "last_passing_iter": "goal-observation-contract-iter-6",
+      "status": "partial",
+      "last_verified_iter": "goal-observation-contract-iter-4",
+      "last_passing_iter": null,
       "first_seen_iter": "goal-observation-contract-iter-0",
-      "last_evidence_path": "reports/qa/goal-observation-contract-iter-6-evidence/UT-02-result.png",
+      "last_evidence_path": "reports/qa/goal-observation-contract-iter-4-evidence/UT-J-04-result.png",
       "spec_hash": "a3424f6495d4437d6f09e4d35af4ec6102d106f7a86164966f9756354e4fc222"
     }
   },
   "anti_goal_violations": [],
-  "updated_at": "2026-09-05T05:45:00Z"
+  "updated_at": "2026-09-05T02:40:00Z"
 }

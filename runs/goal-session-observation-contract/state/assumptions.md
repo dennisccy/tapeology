@@ -193,3 +193,31 @@ exactly.
 **Reversible:** yes — if the reviewer or evaluator finds the existing recompute guard insufficient in
 scope or location, a sixth mechanism can be added to this same module without moving or renaming
 anything already built.
+
+## iter-6 — goal-evaluator
+
+**Ambiguity:** The iteration spec's Definition of Done asks that J-02 be "verified via its OWN
+numbered browser steps this round, not a screenshot borrowed from J-01's test id". The lane did run
+J-02's own row (UT-06) with its own recorded five field values and its own evidence path, but the
+image file is byte-identical (md5 `9730432a…`) to UT-04/UT-09/UT-J-01 — one browser sequence and one
+page load served four rows. The goal text does not say whether "own steps" means a separately
+captured image or a separately executed and recorded reading.
+**We chose:** to accept it as J-02's own verification. The sequence executed IS J-02 Step 1
+(Simulated → SIM-BIDABS → Watch → live → open `/tape/SIM-BIDABS/observation`), UT-06 is J-02's own
+row, and every one of its five acceptance values is legible in the image I opened and matches the row
+text exactly. This differs from the iteration-5 situation (no J-02 row existed at all). A second,
+independent reading also exists in `TC-04`'s sibling `TC-02-observation-fields.md`.
+**Reversible:** yes
+
+## iter-6 — goal-evaluator
+
+**Ambiguity:** J-05's own row was shed as `DEFERRED-BUDGET`, yet all three of its acceptance clauses
+were demonstrably exercised this round under other row ids (UT-04's served JSON, UT-07's 404 body,
+`tests/test_tape_observation_route.py` inside my green full-suite run). It is not stated whether an
+evaluator may treat that cross-id coverage as a re-verification.
+**We chose:** no. J-05 keeps `passing` (never `unknown`/`regressed`), but its `last_verified_iter`
+and `last_passing_iter` stay at iteration 5 and the verdict stays CONTINUE — matching the
+DEFERRED-BUDGET rule and the deterministic gate, which blocks GOAL_ACHIEVED on the ROW rather than
+on the substance (`goal_gate.py results` → rc 1, while `journeys` → 6/6 passing). The cheaper,
+honest fix is one short verification-only round rather than certifying an era on a row nobody ran.
+**Reversible:** yes

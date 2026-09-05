@@ -198,3 +198,41 @@ browser tester open the observation address itself for J-04 "Same result from bo
 its own steps. Also fix or write down the replay tool's wrong-address problem, because it will keep
 reporting false failures. Next iteration must run at full depth: it is the final block and it carries
 the whole-product re-check.
+
+## Iteration 6 — goal-observation-contract-iter-6
+
+**Date:** 2026-09-05T05:45:00Z
+**Verdict:** CONTINUE
+**Depth dispatched:** full
+**Journey deltas:**
+- Newly passing: J-04 "Same result from both ingestion paths", J-06 "Guards and the sentinel"
+  (both were partial)
+- Newly failing: none
+- Regressed: none
+- Re-verified and still passing: J-01 "The artifact is a pure projection", J-02 "Three honest
+  instants" (this time through its own test row, which retires the iter-5 borrowed-evidence
+  note), J-03 "Lifecycle, feed and session stay honest"
+- Not tested this round: J-05 "One read-only machine path" — its row says DEFERRED-BUDGET, so it
+  keeps its earlier passing status and its earlier verification date
+- Anti-goal violations: none (scan-report CLEAN; coherence COHERENCE-PASS with two non-blocking
+  advisory notes; ledger totals 0 total / 0 resolved / 0 blocking / 0 non-blocking / 0 critical)
+
+**Reasoning:** I checked the work myself instead of trusting the reports. My own run of the new
+guard file gives 23 checks, all pass, and I read the code: each of the five guards scans real
+source, the real app folder, or a real served answer, and each failure-proof check spoils a copy
+of the real file rather than a hand-written stand-in. My own run of the whole backend test set
+finishes clean (4075 collected, exit code 0, 8 skipped), my own type check reports 0 errors, and
+my own reading of the settings fingerprint is 08e471b10130e1e2. Most of all I opened the
+pictures: two reloads of the paused machine address show the same content fingerprint with a
+different generation time and a different evidence fingerprint, which is exactly what J-04 asks
+for, and the three pages render with the same three-link menu and no new panel. One thing was
+not done: J-05's own row was dropped because the round ran out of time. Its substance was
+exercised under other row ids and I opened those pictures too, but the automatic safety check
+refuses to sign off while any row says "deferred", so this cannot be the closing round.
+
+**Next-step recommendation:** Run one short verification-only round that re-opens the machine
+address in a browser for J-05 "One read-only machine path" — watch the simulated ticker, open
+`/tape/SIM-BIDABS/observation`, save a picture, then open `/tape/ZZZZ/observation` and save the
+"not being watched" picture. Nothing needs to be built. Re-run the other five rows as well if
+time allows, so the results table has no skipped and no failed row. Use `evidence` depth so no
+developer or reviewer runs and the round stays short.

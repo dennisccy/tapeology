@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "phase_id": "goal-observation-contract-iter-6",
+  "base_url": "http://localhost:3301",
+  "default_timeout_ms": 8000,
+  "steps": [
+    {
+      "n": 1,
+      "title": "Open the Tapeology dashboard",
+      "narration": "Start by opening the main Tapeology dashboard. Here you'll find controls to select your data source and choose a ticker to watch.",
+      "point_out": "The header displays 'Tapeology' with a data source selection group and ticker input field visible.",
+      "journey": "",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/" },
+      "expect": { "text": "Tapeology" }
+    },
+    {
+      "n": 2,
+      "title": "Select the Simulated data source",
+      "narration": "Choose Simulated mode to work with built-in market data that doesn't require external subscriptions.",
+      "point_out": "The 'Simulated' button is now selected, with the Ticker field ready for input.",
+      "journey": "J-01",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Simulated" } }
+    },
+    {
+      "n": 3,
+      "title": "Enter the simulated ticker symbol",
+      "narration": "Type SIM-BIDABS, a built-in ticker that demonstrates how the system streams and analyzes market observations.",
+      "point_out": "The Ticker field now shows 'SIM-BIDABS'.",
+      "journey": "J-01",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "fill", "target": { "label": "Ticker" }, "text": "SIM-BIDABS" }
+    },
+    {
+      "n": 4,
+      "title": "Click the Watch button to start streaming",
+      "narration": "Press the green Watch button to begin streaming market observations for the ticker.",
+      "point_out": "The dashboard shows 'Watching SIM-BIDABS' with a status indicator. Within seconds, the status indicator changes to 'live' as the stream connects.",
+      "journey": "J-03",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "click", "target": { "role": "button", "name": "Watch" } },
+      "expect": { "text": "Watching SIM-BIDABS" }
+    },
+    {
+      "n": 5,
+      "title": "Navigate to the Structure analysis page",
+      "narration": "Click the Structure link in the top navigation to view support and resistance levels and price zone analysis.",
+      "point_out": "The page displays the Structure heading with level and zone information as before.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/structure" },
+      "expect": { "text": "Structure" }
+    },
+    {
+      "n": 6,
+      "title": "Check the Desk workspace",
+      "narration": "Navigate to the Desk section to view intraday market conditions and detected trading setups.",
+      "point_out": "The Desk page displays the trading workspace with market analysis and setup information.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/desk" },
+      "expect": { "text": "Desk" }
+    },
+    {
+      "n": 7,
+      "title": "Return to the Cockpit to confirm the watch is still active",
+      "narration": "Click the Cockpit link to return to the main dashboard. Notice that the navigation bar has remained stable with exactly three links.",
+      "point_out": "The dashboard shows the active SIM-BIDABS watch, and the top navigation displays exactly three links: Cockpit, Structure, and Desk.",
+      "journey": "J-06",
+      "new": false,
+      "verified": true,
+      "section": "highlights",
+      "action": { "type": "goto", "url": "/" },
+      "expect": { "text": "Watching SIM-BIDABS" }
+    }
+  ]
+}

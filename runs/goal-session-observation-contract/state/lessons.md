@@ -147,3 +147,29 @@ journeys that were fully verified — always check for a `.canary.md` sibling wh
 FAILs were voided.
 **Applies to:** any iteration where `regression-replay-results.md` carries a VOIDED / mass-false-FAIL
 breaker footer, or where more than one browser-qa dispatch runs.
+
+## iter-6 — 2026-09-05T05:45:00Z
+
+**Verdict:** CONTINUE
+**Lesson:** In a would-be closing iteration, the wall-clock budget trim is expensive in a way that
+is easy to miss: J-05's substance was fully exercised this round under other row ids (UT-04 served
+JSON, UT-07 404 body, `test_tape_observation_route.py` green), but its OWN row was shed as
+`DEFERRED-BUDGET`, and `goal_gate.py results` blocks GOAL_ACHIEVED on the ROW, not on the substance
+(verified: `results_rc=1` while `journeys` returns 6/6 passing). Run the cheap already-passing
+journey rows FIRST in any closing round — a skipped row costs an entire extra iteration.
+**Applies to:** any iteration expected to be the last one of an era; any iteration where
+`reports/phase-*-ui-test-results.md` ends with a "Deferred (iteration budget)" section.
+
+## iter-6 — 2026-09-05T05:45:00Z
+
+**Verdict:** CONTINUE
+**Lesson:** A guard can be honestly named, honestly described, green — and still not check the
+invariant its specification names. The shipped mutator-call-site guard admitted ANY `WatchManager`
+method (location), while `docs/goal.md` J-06 step 3 says "methods **that re-settle**"; `WatchManager.stop`
+mutates without re-settling and sailed through. The auditor's fix derives the allowed set from the
+scanned file's own AST (`self._settle(...)` call sites) with one documented carve-out. Read a guard's
+predicate against the spec's verb, not its test name. (Related: the deterministic replay lane can
+produce a false PASS as well as false FAILs — `journey-scripts/J-02.json` never opens the address it
+claims to verify.)
+**Applies to:** any iteration shipping an AST/structural guard; anyone regenerating the golden
+journey scripts.
