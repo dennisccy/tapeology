@@ -3,51 +3,51 @@
     "J-01": {
       "id": "J-01",
       "name": "The artifact is a pure projection with semantic identity, provenance and integrity",
-      "status": "passing",
-      "last_verified_iter": "goal-observation-contract-iter-5",
-      "last_passing_iter": "goal-observation-contract-iter-5",
+      "status": "partial",
+      "last_verified_iter": "goal-observation-contract-iter-4",
+      "last_passing_iter": null,
       "first_seen_iter": "goal-observation-contract-iter-0",
-      "last_evidence_path": "reports/qa/goal-observation-contract-iter-5-evidence/UT-J-01-result.png",
+      "last_evidence_path": "reports/qa/goal-observation-contract-iter-4-evidence/UT-J-04-result.png",
       "spec_hash": "c2a2448307dfa576e097ed70a48a00d4806e137e484472163fd6441a4ed54d3b"
     },
     "J-02": {
       "id": "J-02",
       "name": "Market-event time, measured availability and generation time are three distinct, honest instants, read atomically",
-      "status": "passing",
-      "last_verified_iter": "goal-observation-contract-iter-5",
-      "last_passing_iter": "goal-observation-contract-iter-5",
+      "status": "partial",
+      "last_verified_iter": "goal-observation-contract-iter-4",
+      "last_passing_iter": null,
       "first_seen_iter": "goal-observation-contract-iter-0",
-      "last_evidence_path": "reports/qa/goal-observation-contract-iter-5-evidence/UT-J-01-result.png",
+      "last_evidence_path": "reports/qa/goal-observation-contract-iter-4-evidence/UT-J-04-result.png",
       "spec_hash": "e1a1ea0799c8cab3f30807f36d687cae0d7db15a7896e55bb03e379d535580bf"
     },
     "J-03": {
       "id": "J-03",
       "name": "Lifecycle, feed basis and session identity stay honest",
-      "status": "passing",
-      "last_verified_iter": "goal-observation-contract-iter-5",
-      "last_passing_iter": "goal-observation-contract-iter-5",
+      "status": "partial",
+      "last_verified_iter": "goal-observation-contract-iter-4",
+      "last_passing_iter": null,
       "first_seen_iter": "goal-observation-contract-iter-0",
-      "last_evidence_path": "reports/qa/goal-observation-contract-iter-5-evidence/UT-J-03-result.png",
+      "last_evidence_path": "reports/qa/goal-observation-contract-iter-4-evidence/UT-J-04-result.png",
       "spec_hash": "ab96405a6d537a298202b889191283ef8df2132e09f45f199d860951bfe3251b"
     },
     "J-04": {
       "id": "J-04",
       "name": "Ingestion-path equivalence under an identical valid event stream",
       "status": "partial",
-      "last_verified_iter": "goal-observation-contract-iter-5",
+      "last_verified_iter": "goal-observation-contract-iter-4",
       "last_passing_iter": null,
       "first_seen_iter": "goal-observation-contract-iter-0",
-      "last_evidence_path": "reports/qa/goal-observation-contract-iter-5-evidence/J-04-verify.png",
+      "last_evidence_path": "reports/qa/goal-observation-contract-iter-4-evidence/UT-J-04-result.png",
       "spec_hash": "a6538069aeb0f61f89d40d9e8a3acb9ab19e4f8c4b976ad378c36a2448337387"
     },
     "J-05": {
       "id": "J-05",
       "name": "One read-only machine path",
-      "status": "passing",
-      "last_verified_iter": "goal-observation-contract-iter-5",
-      "last_passing_iter": "goal-observation-contract-iter-5",
+      "status": "failing",
+      "last_verified_iter": "goal-observation-contract-iter-4",
+      "last_passing_iter": null,
       "first_seen_iter": "goal-observation-contract-iter-0",
-      "last_evidence_path": "reports/qa/goal-observation-contract-iter-5-evidence/UT-J-05-result.png",
+      "last_evidence_path": "reports/qa/goal-observation-contract-iter-4-evidence/UT-J-04-result.png",
       "spec_hash": "624fb3037e1f1a98f3aadca4cc7840c9e985e833f4e0a1a1c9390d02b56b4469"
     },
     "J-06": {
@@ -62,5 +62,5 @@
     }
   },
   "anti_goal_violations": [],
-  "updated_at": "2026-09-05T02:40:00Z"
+  "updated_at": "2026-09-04T22:58:00Z"
 }

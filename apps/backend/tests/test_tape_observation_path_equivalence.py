@@ -398,10 +398,17 @@ def test_field_partition_groups_are_unchanged_from_iteration_1():
     assert observation_contract.INTEGRITY_FIELDS == _FROZEN_INTEGRITY_FIELDS
 
 
-def test_counterexample_field_partition_drift_is_detected():
-    # Proves the check above is non-vacuous: a widened semantic-fields tuple (one metadata field
-    # smuggled in, the "manufacture equivalence by widening the partition" anti-goal) must NOT
-    # equal the frozen reference.
-    widened = _FROZEN_SEMANTIC_FIELDS + ("source.session_id",)
+def test_counterexample_field_partition_drift_is_detected(monkeypatch):
+    # TC-16 (iter-5 fix): the prior version of this counter-example built a `widened` tuple and
+    # compared it only to a second hand-written literal (`_FROZEN_SEMANTIC_FIELDS`), never touching
+    # the real subject -- vacuous (the iter-4 evaluator finding; the lessons entry: "the
+    # counter-example must perturb ... the REAL constant, not a second copy of the literal").
+    # Perturb the REAL `observation_contract.MACHINE_OBSERVATION_SEMANTIC_FIELDS` attribute (one
+    # metadata field smuggled in, the "manufacture equivalence by widening the partition"
+    # anti-goal) via monkeypatch, and show the module's OWN real partition-equality check --
+    # `test_field_partition_groups_are_unchanged_from_iteration_1`'s own assertion -- fails against
+    # the perturbed value.
+    widened = observation_contract.MACHINE_OBSERVATION_SEMANTIC_FIELDS + ("source.session_id",)
+    monkeypatch.setattr(observation_contract, "MACHINE_OBSERVATION_SEMANTIC_FIELDS", widened)
     with pytest.raises(AssertionError):
-        assert widened == _FROZEN_SEMANTIC_FIELDS
+        assert observation_contract.MACHINE_OBSERVATION_SEMANTIC_FIELDS == _FROZEN_SEMANTIC_FIELDS

@@ -30,6 +30,7 @@ from pydantic import BaseModel
 from .config import CONFIG
 from .env import load_env
 from .meta import router as meta_router
+from .observation_contract import build_tape_observation, resolve_implementation_provenance
 from .providers.adapters import MarketDataAdapter, get_adapter
 from .providers.adapters.base import (
     NoDataForWindow,
@@ -271,6 +272,16 @@ def _iso_utc(dt: datetime) -> str:
     the already-parsed real historical request window into the manager's source descriptor
     (iter-3 IN SCOPE) -- no other route behavior changes."""
     return dt.astimezone(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")
+
+
+def _now_utc() -> datetime:
+    """The wall clock ``GET /tape/{ticker}/observation`` reads for ``generated_at_utc``
+    (Observation Contract v1 Constitution §2: "the wall clock at which this artifact projection
+    was generated") -- the ONLY clock read that route performs; ``build_tape_observation`` itself
+    reads no clock. A tiny per-module seam (mirrors ``_iso_utc``'s own convention) so a test can
+    freeze it via ``monkeypatch.setattr(main, "_now_utc", ...)`` rather than patching the stdlib
+    ``datetime`` class."""
+    return datetime.now(timezone.utc)
 
 
 @app.get("/health")
@@ -633,6 +644,43 @@ def get_history(
     # Pass the engine's canonical display/epoch anchor (row 13, J-31) through to the projection so
     # the chart renders TRUE clock time (`epoch_anchor + bar.time`). Read verbatim — no recompute.
     return serialize_history(engine.history, effective_bar, epoch_anchor=engine.epoch_anchor)
+
+
+@app.get("/tape/{ticker}/observation")
+def get_observation(ticker: str) -> dict:
+    """``GET /tape/{ticker}/observation`` -- Observation Contract v1 Binding Execution Order step 5
+    (J-05; docs/goal.md Constitution §7), the one read-only machine path for the ``TapeObservation``
+    v1 artifact. Transport ONLY: the route consumes the ONE atomic managed-observation read
+    (``manager.get_observation_source``) and calls ``build_tape_observation`` with the route's own
+    ``now`` -- it calls no ``TapeEngine`` method, performs no computation, and recomputes no field
+    (the critical Binding-Order violation this route must never commit: a direct engine-snapshot
+    read here -- ``tests/test_tape_observation_route.py``'s AST guard proves it never happens).
+    404s in the exact ``_engine_or_404`` shape for a not-currently-watched ticker (never
+    fabricated) -- ``get_observation_source`` returns ``None`` under the identical
+    ``self._engines.get(ticker) is None`` condition ``_engine_or_404`` itself checks, so this
+    mirrors every other ``/tape/*`` sibling above byte-for-byte.
+    """
+    source = manager.get_observation_source(ticker)
+    if source is None:
+        raise HTTPException(status_code=404, detail=f"Ticker '{ticker}' is not being watched")
+    snapshot, settled_at_utc, end_reason, descriptor = source
+    return build_tape_observation(
+        snapshot=snapshot,
+        source_mode=descriptor.source_mode,
+        data_feed=descriptor.data_feed,
+        window_start_utc=descriptor.window_start_utc,
+        window_end_utc=descriptor.window_end_utc,
+        dataset_id=descriptor.dataset_id,
+        dataset_checksum=descriptor.dataset_checksum,
+        session_id=descriptor.session_id,
+        session_started_at_utc=descriptor.session_started_at_utc,
+        settled_at_utc=settled_at_utc,
+        end_reason=end_reason,
+        generated_at_utc=_iso_utc(_now_utc()),
+        profile_id=descriptor.profile_id,
+        config=CONFIG,
+        provenance=resolve_implementation_provenance(),
+    )
 
 
 @app.websocket("/tape/{ticker}/stream")

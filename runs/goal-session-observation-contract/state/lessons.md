@@ -118,3 +118,32 @@ non-vacuous (real constants vs frozen literal), so nothing is unproven — but a
 never touches the real subject proves nothing about the guard.
 **Applies to:** any `test_counterexample_*` written for a "constant X has not drifted" guard — the
 counter-example must perturb (or stand in for) the REAL constant, not a second copy of the literal.
+
+## iter-5 — 2026-09-05T02:40:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** The deterministic replay lane cannot reach a backend-only URL. `replay-lane.sh` always
+calls `demo_runner.py --base-url "$FRONTEND_URL"`, and `normalize_url()` rewrites even an ABSOLUTE
+`localhost:8301` URL onto that single origin — so every golden `goto` to `/tape/{ticker}/observation`
+renders Next.js's own 404 page and false-FAILs. Proof this iteration: `J-01-verify.png`,
+`J-03-verify.png` and `J-04-verify.png` are byte-identical (md5 `cdcf05e2748…`) captures of that one
+error screen. Journeys asserting on machine-JSON paths must be routed to the LLM browser-qa lane
+(which navigates the backend origin directly), and a golden script for such a journey is worse than
+none.
+**Applies to:** any iteration whose journeys assert on a backend-served path (`/tape/*`,
+`/research/*`, `/meta/*`) rather than a rendered page; anyone regenerating
+`runs/goal-session-observation-contract/journey-scripts/` (J-01, J-03, J-04 are queued in
+`state/goldens-regen-pending`, J-05 in `state/golden-gaps`).
+
+## iter-5 — 2026-09-05T02:41:00Z
+
+**Verdict:** ESCALATE
+**Lesson:** Two browser-qa dispatches in one iteration silently destroy each other's evidence. The
+canary dispatch wrote `reports/phase-…-iter-5-ui-test-results.llm.md` with J-01/J-03 **PASS**; a
+second, J-05-only dispatch then OVERWROTE that same `llm.md`; the merge at the end therefore produced
+a `ui-test-results.md` showing J-01 and J-03 as SKIP. The real PASS rows survive only in
+`…-ui-test-results.canary.md`. An evaluator reading only the merged file would have under-scored two
+journeys that were fully verified — always check for a `.canary.md` sibling when the replay lane's
+FAILs were voided.
+**Applies to:** any iteration where `regression-replay-results.md` carries a VOIDED / mass-false-FAIL
+breaker footer, or where more than one browser-qa dispatch runs.

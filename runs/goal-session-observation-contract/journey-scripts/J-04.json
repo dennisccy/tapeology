@@ -9,9 +9,7 @@
     {"n": 3, "journey": "J-04", "action": {"type": "fill", "target": {"placeholder": "Ticker e.g. SIM-BUYER"}, "text": "SIM-BIDABS"}},
     {"n": 4, "journey": "J-04", "action": {"type": "click", "target": {"role": "button", "name": "Watch"}}, "expect": {"text": "live"}},
     {"n": 5, "journey": "J-04", "action": {"type": "click", "target": {"role": "button", "name": "Pause"}}, "expect": {"text": "paused"}},
-    {"n": 6, "journey": "J-04", "action": {"type": "click", "target": {"role": "button", "name": "Resume"}}, "expect": {"text": "live"}},
-    {"n": 7, "journey": "J-04", "action": {"type": "click", "target": {"role": "button", "name": "Stop"}}, "expect": {"text": "No ticker watched"}},
-    {"n": 8, "journey": "J-04", "action": {"type": "goto", "url": "/tape/SIM-BIDABS/observation"}, "expect": {"text": "404"}},
-    {"n": 9, "journey": "J-04", "action": {"type": "goto", "url": "/tape/SIM-BIDABS/observation"}, "expect": {"text": "404"}}
+    {"n": 6, "journey": "J-04", "action": {"type": "goto", "url": "/tape/SIM-BIDABS/observation"}, "expect": {"text": "\"observation_hash\""}},
+    {"n": 7, "journey": "J-04", "action": {"type": "goto", "url": "/tape/SIM-BIDABS/observation"}, "expect": {"text": "\"observation_hash\""}}
   ]
 }

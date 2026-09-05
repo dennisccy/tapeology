@@ -139,3 +139,36 @@ only inside `apps/backend/tests/test_tape_observation_path_equivalence.py`. If a
 ever serves an artifact built this way, the labelling would become dishonest and this call must be
 revisited.
 **Reversible:** yes
+
+## iter-5 — goal-evaluator
+
+**Ambiguity:** No browser row exercised J-02's own numbered steps this iteration — the merged results
+table records `UT-J-02` as SKIP, and the replay lane's `UT-J-02` PASS runs `journey-scripts/J-02.json`,
+which I read: it only clicks Watch/Pause/Resume/Stop and never navigates to
+`/tape/SIM-BIDABS/observation`, so it cannot check J-02's Acceptance. The goal text does not say
+whether a journey may be scored from a screenshot captured under a sibling journey's test id.
+**We chose:** `passing`. The canary dispatch executed exactly the browser sequence J-02 Step 1
+prescribes (Simulated → SIM-BIDABS → Watch → live → open the observation URL), and the resulting
+capture `reports/qa/goal-observation-contract-iter-5-evidence/UT-J-01-result.png` shows every one of
+J-02's Acceptance values legibly: `observed_at_utc":"2024-01-02T14:31:08.500000Z"`,
+`available_at_utc":null`, `availability_basis":"simulated_not_applicable"`, and both
+`timing…settled_at_utc` and `generated_at_utc` on 2026-09-05. The deterministic half is my own run
+(33 passed, interleaving test present by name). The screenshot-exists rail is met; only the row's
+label differs. Recorded so the next iteration can re-run J-02's own steps and retire this call.
+**Reversible:** yes
+
+## iter-5 — goal-evaluator
+
+**Ambiguity:** J-03 Step 2 asks that `timing.settled_at_utc` be "unchanged from step 1" across the
+Pause. SIM-BIDABS is a continuously ticking sim (~2 events/s), so any real time between the step-1
+read and the Pause click legitimately advances that value — the literal comparison is inherently
+racy in a browser and the goal text does not say how to resolve that.
+**We chose:** to accept the invariant in its non-racy form. The canary lane's tighter
+Resume→read→Pause→read sequence, then a second reload while still paused, returned a byte-identical
+`settled_at_utc` (`2026-09-05T00:40:47.770540Z` twice), and `tape_state` ("bid_absorption") was
+identical across every read of both passes; the clock-controlled
+`tests/test_tape_observation_lifecycle_feed.py` (29 passed on my own run) is the race-free authority
+for the same law. That is what the era's Constitution §4 rule actually protects — a lifecycle-only
+rebuild must not fabricate a new settled time — so I scored J-03 `passing` rather than holding it
+`partial` on a clock race the product cannot control.
+**Reversible:** yes

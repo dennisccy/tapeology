@@ -158,3 +158,43 @@ address to be missing (`journey-scripts/J-01.json` step 5, `J-03.json` step 11, 
 test file (`test_counterexample_field_partition_drift_is_detected` compares two hand-written lists
 and never reads the real ones). Next iteration should run at full depth: it is the first round of
 this era that changes a real served surface and makes five journeys checkable in the browser at once.
+
+## Iteration 5 — goal-observation-contract-iter-5
+
+**Date:** 2026-09-05T02:40:00Z
+**Verdict:** ESCALATE
+**Depth dispatched:** lean
+**Journey deltas:**
+- Newly passing: J-01 "The artifact is a pure projection", J-02 "Three honest instants",
+  J-03 "Lifecycle, feed and session stay honest", J-05 "One read-only machine path"
+- Newly failing: none
+- Regressed: none
+- Unchanged: J-04 "Same result from both ingestion paths" partial (its test half is green, but
+  nobody opened the web address in a browser this round); J-06 "Guards and the sentinel" partial
+  (carried over — its row says DEFERRED-BUDGET, so it was not tested at all this round)
+- Anti-goal violations: none (scan-report CLEAN; coherence COHERENCE-PASS with no advisory notes;
+  ledger totals 0 total / 0 resolved / 0 blocking / 0 non-blocking / 0 critical)
+
+**Reasoning:** I checked the work myself instead of trusting the reports. My own run of the five
+observation test files gives 114 checks, all pass, 0 failures — 8 new for the web address, plus the
+38 + 33 + 29 + 6 already there. I read the new address's code myself: its only data call is the watch
+manager's single atomic read, and the guard that proves this introspects the real engine class and
+scans the real route text, with a counter-example that injects a real engine call and shows the scan
+catches it. I ran the settings fingerprint myself: still 08e471b10130e1e2. I checked by hand that no
+page file, no settings file and none of the nine protected guard files were touched. Most of all I
+opened the pictures: three screenshots show the complete record served from the backend, and the
+session name really does change after Stop and re-Watch, which is what J-03 asks for. Two things did
+not get checked: nobody opened the address in a browser for J-04, and the whole-product re-check for
+J-06 was cut for time. I also found that the automatic replay tool always opens web addresses on the
+page server, which has no such address — proved by the fact that its three "failure" pictures are one
+and the same error screen, byte for byte. That is a tooling fault, not a product fault, and the
+pipeline was right to void those three failures.
+
+**Next-step recommendation:** Build the last block — J-06 "Guards and the regression sentinel": the
+missing guard test file and the whole-product re-check (all backend tests, the frontend compile check,
+the fingerprint, and the three pages loading with nothing new on them). In the same round, have the
+browser tester open the observation address itself for J-04 "Same result from both ingestion paths"
+(watch, pause, reload twice, save a picture of each reload) and run J-02 "Three honest instants" as
+its own steps. Also fix or write down the replay tool's wrong-address problem, because it will keep
+reporting false failures. Next iteration must run at full depth: it is the final block and it carries
+the whole-product re-check.
